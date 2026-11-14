@@ -11,7 +11,6 @@
 	import { releaseDayLabel } from '#lib/utils/format.ts';
 
 	const LICENCE_NAME = 'MIT';
-	const LOAD_FAILED = 'Failed to load the release';
 	const COMMIT_PREFIX_LENGTH = 8;
 	// What the backend reports for an image built without the release build arguments.
 	const RELEASE_TAG_UNRELEASED = 'unreleased';
@@ -34,7 +33,7 @@
 			release = await fetchRelease();
 			releaseReloads.stop();
 		} catch (e) {
-			releaseReloads.nameLoadFailure(e, LOAD_FAILED);
+			releaseReloads.nameLoadFailure(e, pageText('aboutPage.loadFailed'));
 		}
 	}
 
@@ -43,10 +42,10 @@
 </script>
 
 <svelte:head>
-	<title>About — {APP_NAME}</title>
+	<title>{pageText('aboutPage.documentTitle', { app: APP_NAME })}</title>
 </svelte:head>
 
-<h1>About</h1>
+<h1>{pageText('settingsSections.about')}</h1>
 
 {#if $loadFailure}
 	<p class="error">{$loadFailure}</p>
@@ -55,27 +54,27 @@
 {:else}
 	<div class="about-list">
 		<div class="about-row">
-			<span class="about-label">App</span>
+			<span class="about-label">{pageText('aboutPage.app')}</span>
 			<span class="about-value">{APP_NAME}</span>
 		</div>
 		<div class="about-row">
-			<span class="about-label">Version</span>
+			<span class="about-label">{pageText('aboutPage.version')}</span>
 			{#if tag === null}
-				<span class="about-value about-dim">No release</span>
+				<span class="about-value about-dim">{pageText('aboutPage.noRelease')}</span>
 			{:else}
 				<span class="about-value">{tag}</span>
 			{/if}
 		</div>
 		{#if releasedOn !== null}
 			<div class="about-row">
-				<span class="about-label">Released</span>
+				<span class="about-label">{pageText('aboutPage.released')}</span>
 				<span class="about-value">{releasedOn}</span>
 			</div>
 		{/if}
 		{#if commit === null}
 			<div class="about-row">
-				<span class="about-label">Commit</span>
-				<span class="about-value about-dim">Unknown</span>
+				<span class="about-label">{pageText('aboutPage.commit')}</span>
+				<span class="about-value about-dim">{pageText('aboutPage.unknown')}</span>
 			</div>
 		{:else}
 			<a
@@ -84,7 +83,7 @@
 				target="_blank"
 				rel="noopener"
 			>
-				<span class="about-label">Commit</span>
+				<span class="about-label">{pageText('aboutPage.commit')}</span>
 				<span class="about-value about-mono">{commit.slice(0, COMMIT_PREFIX_LENGTH)}</span>
 				<Icon name="external-link" size={16} class="about-icon" />
 			</a>
@@ -96,7 +95,7 @@
 				target="_blank"
 				rel="noopener"
 			>
-				<span class="about-label">What’s new</span>
+				<span class="about-label">{pageText('aboutPage.whatsNew')}</span>
 				<Icon name="external-link" size={16} class="about-icon" />
 			</a>
 		{/if}
@@ -106,7 +105,7 @@
 			target="_blank"
 			rel="noopener"
 		>
-			<span class="about-label">Licence</span>
+			<span class="about-label">{pageText('aboutPage.licence')}</span>
 			<span class="about-value">{LICENCE_NAME}</span>
 			<Icon name="external-link" size={16} class="about-icon" />
 		</a>

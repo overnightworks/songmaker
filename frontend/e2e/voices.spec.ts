@@ -47,13 +47,13 @@ interface GeneratedSong {
 }
 
 async function createVoice(page: Page, name: string): Promise<CreatedVoice> {
-	await page.getByRole('button', { name: 'New Voice', exact: true }).click();
-	await page.getByPlaceholder('Voice name (e.g. My Tenor)').fill(name);
+	await page.getByRole('button', { name: words['voicesPage.newVoice'], exact: true }).click();
+	await page.getByPlaceholder(words['voicesPage.namePlaceholder']).fill(name);
 	const createdResponse = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/loras'
 	);
-	await page.getByRole('button', { name: 'Create', exact: true }).click();
+	await page.getByRole('button', { name: words['voicesPage.create'], exact: true }).click();
 	const response = await createdResponse;
 	expect(response.ok(), `Create voice failed: ${await response.text()}`).toBeTruthy();
 	const { id } = (await response.json()) as { id: string };
@@ -70,12 +70,12 @@ async function addOwnTake(voice: Locator, sourceTitle: string): Promise<void> {
 				response.request().method() === 'GET' &&
 				new URL(response.url()).pathname === '/api/own-playable-takes'
 		);
-	await voice.getByRole('button', { name: 'Use a take', exact: true }).click();
+	await voice.getByRole('button', { name: words['voiceDetail.ownTakesOpen'], exact: true }).click();
 	await expect((await ownTakesResponse).ok()).toBeTruthy();
-	const ownTakes = voice.getByRole('region', { name: 'Your takes', exact: true });
+	const ownTakes = voice.getByRole('region', { name: words['voiceDetail.ownTakes'], exact: true });
 	const sourceTake = ownTakes.locator('li').filter({ hasText: sourceTitle });
 	await expect(sourceTake).toContainText('Take 1');
-	await sourceTake.getByRole('button', { name: 'Use as sample', exact: true }).click();
+	await sourceTake.getByRole('button', { name: words['voiceDetail.useTake'], exact: true }).click();
 	await expect(voice.locator('.sample-list li')).toHaveCount(1);
 }
 
@@ -85,7 +85,7 @@ async function addUploadedSample(
 	lyrics: string,
 	expectedSampleCount: number
 ): Promise<void> {
-	const upload = voice.getByRole('region', { name: 'Add sample', exact: true });
+	const upload = voice.getByRole('region', { name: words['voiceDetail.addSample'], exact: true });
 	const fileInput = upload.locator('input[type="file"]');
 	await fileInput.setInputFiles({
 		name: `${caption.replaceAll(' ', '-')}.mp3`,
@@ -94,7 +94,7 @@ async function addUploadedSample(
 	});
 	await upload.locator('textarea').nth(0).fill(caption);
 	await upload.locator('textarea').nth(1).fill(lyrics);
-	await upload.getByRole('button', { name: 'Add sample', exact: true }).click();
+	await upload.getByRole('button', { name: words['voiceDetail.addSample'], exact: true }).click();
 	await expect(voice.locator('.sample-list li')).toHaveCount(expectedSampleCount);
 }
 
@@ -208,7 +208,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		const createdVoice = await createVoice(page, voiceName);
 		voiceIds.push(createdVoice.id);
 		const voice = createdVoice.card;
-		await expect(voice.getByText('No samples yet. Add at least 3 to train.')).toBeVisible();
+		await expect(voice.getByText(words['voiceDetail.noSamples']({ count: 3 }))).toBeVisible();
 		const sampleFields = voice.locator('.sample-list textarea');
 		await addThreeSamples(voice, source.songTitle);
 		await expect(sampleFields.nth(0)).toHaveValue(source.caption);
@@ -220,12 +220,20 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect
 			.poll(() => readJob(request, generateJob.id).then((job) => job.status))
 			.toBe('running');
-		await voice.getByRole('button', { name: 'Train voice', exact: true }).click();
-		await expect(voice.getByText('Waiting', { exact: true })).toBeVisible({ timeout: 15_000 });
+		await voice.getByRole('button', { name: words['voiceDetail.trainVoice'], exact: true }).click();
+		await expect(voice.getByText(words['voiceDetail.waiting'], { exact: true })).toBeVisible({
+			timeout: 15_000
+		});
 		await expect(voice).toContainText('Waiting for queued generations on this GPU.');
 		await expect(voice).toContainText('Position 1 in the queue');
-		await expect(voice.getByText(/^Epoch \d+ of \d+$/)).toBeVisible({ timeout: 35_000 });
-		await expect(voice.getByText('ready', { exact: true })).toBeVisible({ timeout: 40_000 });
+		await expect(
+			voice.getByText(
+				new RegExp(`^${words['voiceDetail.epoch']({ current: '\\d+', total: '\\d+' })}$`)
+			)
+		).toBeVisible({ timeout: 35_000 });
+		await expect(voice.getByText(words['voicesPage.statusReady'], { exact: true })).toBeVisible({
+			timeout: 40_000
+		});
 		await expect(voice.locator('.model-mode')).toHaveText('sft');
 
 		const readyVoice = await readVoice(request, createdVoice.id);
@@ -237,12 +245,16 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		const foreignVoice = await createVoice(page, foreignVoiceName);
 		voiceIds.push(foreignVoice.id);
 		await addThreeSamples(foreignVoice.card, source.songTitle);
-		await foreignVoice.card.getByRole('button', { name: 'Train voice', exact: true }).click();
+		await foreignVoice.card
+			.getByRole('button', { name: words['voiceDetail.trainVoice'], exact: true })
+			.click();
 		await waitForReadyVoice(request, foreignVoice.id);
 		await setVoiceProofModelMode(foreignVoice.id, 'turbo');
 		await page.goto('/settings/voices');
 		const foreignVoiceCard = page.locator('.lora-card').filter({ hasText: foreignVoiceName });
-		await expect(foreignVoiceCard.getByText('ready', { exact: true })).toBeVisible();
+		await expect(
+			foreignVoiceCard.getByText(words['voicesPage.statusReady'], { exact: true })
+		).toBeVisible();
 		await expect(foreignVoiceCard.locator('.model-mode')).toHaveText('turbo');
 
 		const adapterSong = await seedVoiceAdapterComparisonSong(request, createdVoice.id);
@@ -304,15 +316,19 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 
 		await page.goto('/settings/voices');
 		const readyVoiceCard = page.locator('.lora-card').filter({ hasText: voiceName });
-		await readyVoiceCard.getByRole('button', { name: 'Delete', exact: true }).click();
+		await readyVoiceCard
+			.getByRole('button', { name: words['voicesPage.delete'], exact: true })
+			.click();
 		const deleteDialog = page.getByRole('dialog');
 		await expect(
-			deleteDialog.getByRole('heading', { name: 'Delete voice?', exact: true })
+			deleteDialog.getByRole('heading', { name: words['voicesPage.deleteTitle'], exact: true })
 		).toBeVisible();
 		await expect(deleteDialog).toContainText(
 			`${voiceName} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.`
 		);
-		await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click();
+		await deleteDialog
+			.getByRole('button', { name: words['voicesPage.delete'], exact: true })
+			.click();
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		if (isMobile) {
@@ -356,8 +372,12 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		const failedVoice = await createVoice(page, failedVoiceName);
 		voiceIds.push(failedVoice.id);
 		await addThreeSamples(failedVoice.card, source.songTitle, true);
-		await failedVoice.card.getByRole('button', { name: 'Train voice', exact: true }).click();
-		await expect(failedVoice.card.getByText('Training failed', { exact: true })).toBeVisible({
+		await failedVoice.card
+			.getByRole('button', { name: words['voiceDetail.trainVoice'], exact: true })
+			.click();
+		await expect(
+			failedVoice.card.getByText(words['voiceDetail.trainingFailed'], { exact: true })
+		).toBeVisible({
 			timeout: 15_000
 		});
 		await expect(failedVoice.card).toContainText('Worker training failed');
@@ -382,14 +402,22 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			.poll(() => readJob(request, queueBlockingGenerate.id).then((job) => job.status))
 			.toBe('running');
 		await expandVoice(queuedVoiceOne.card);
-		await queuedVoiceOne.card.getByRole('button', { name: 'Train voice', exact: true }).click();
+		await queuedVoiceOne.card
+			.getByRole('button', { name: words['voiceDetail.trainVoice'], exact: true })
+			.click();
 		await expandVoice(queuedVoiceTwo.card);
-		await queuedVoiceTwo.card.getByRole('button', { name: 'Train voice', exact: true }).click();
-		await expect(queuedVoiceTwo.card.getByText('Waiting', { exact: true })).toBeVisible({
+		await queuedVoiceTwo.card
+			.getByRole('button', { name: words['voiceDetail.trainVoice'], exact: true })
+			.click();
+		await expect(
+			queuedVoiceTwo.card.getByText(words['voiceDetail.waiting'], { exact: true })
+		).toBeVisible({
 			timeout: 15_000
 		});
 		await expandVoice(failedVoice.card);
-		await failedVoice.card.getByRole('button', { name: 'Train again', exact: true }).click();
+		await failedVoice.card
+			.getByRole('button', { name: words['voiceDetail.trainAgain'], exact: true })
+			.click();
 		await expect(failedVoice.card.locator('.training-error')).toContainText(
 			'Training queue is full'
 		);
@@ -400,11 +428,11 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await waitForReadyVoice(request, queuedVoiceTwo.id);
 
 		voiceIds.push(...(await seedVoiceDrafts(request, 6)));
-		await page.getByRole('button', { name: 'New Voice', exact: true }).click();
+		await page.getByRole('button', { name: words['voicesPage.newVoice'], exact: true }).click();
 		await page
-			.getByPlaceholder('Voice name (e.g. My Tenor)')
+			.getByPlaceholder(words['voicesPage.namePlaceholder'])
 			.fill(`E2E Voice Over Limit ${marker}`);
-		await page.getByRole('button', { name: 'Create', exact: true }).click();
+		await page.getByRole('button', { name: words['voicesPage.create'], exact: true }).click();
 		await expect(page.locator('.create-error')).toContainText(
 			'You have reached the limit of 10 voices.'
 		);

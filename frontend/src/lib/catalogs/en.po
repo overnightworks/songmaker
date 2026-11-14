@@ -4836,3 +4836,227 @@ msgstr ""
 msgctxt "referenceUses.version"
 msgid "Version v{version}"
 msgstr ""
+
+msgctxt "generationPage.defaultHeading"
+msgid "Default for New Songs"
+msgstr ""
+
+msgctxt "generationPage.inherit"
+msgid "Inherit"
+msgstr ""
+
+msgctxt "generationPage.myPresets"
+msgid "My Presets"
+msgstr ""
+
+msgctxt "generationPage.newPreset"
+msgid "New Preset"
+msgstr ""
+
+msgctxt "generationPage.presetName"
+msgid "Preset name"
+msgstr ""
+
+msgctxt "generationPage.saving"
+msgid "Saving..."
+msgstr ""
+
+msgctxt "generationPage.update"
+msgid "Update"
+msgstr ""
+
+msgctxt "generationPage.save"
+msgid "Save"
+msgstr ""
+
+msgctxt "generationPage.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "generationPage.setDefault"
+msgid "set default"
+msgstr ""
+
+msgctxt "generationPage.unsetDefault"
+msgid "unset default"
+msgstr ""
+
+msgctxt "generationPage.edit"
+msgid "edit"
+msgstr ""
+
+msgctxt "generationPage.delete"
+msgid "delete"
+msgstr ""
+
+msgctxt "generationPage.noPresets"
+msgid "No presets saved yet."
+msgstr ""
+
+msgctxt "generationPage.sharedPresets"
+msgid "Shared Presets"
+msgstr ""
+
+msgctxt "generationPage.defaultTag"
+msgid "default"
+msgstr ""
+
+msgctxt "generationPage.deleteTitle"
+msgid "Delete preset?"
+msgstr ""
+
+msgctxt "generationPage.loadDefaultsFailed"
+msgid "Failed to load generation defaults"
+msgstr ""
+
+msgctxt "generationPage.setDefaultFailed"
+msgid "Failed to set default config"
+msgstr ""
+
+msgctxt "generationPage.savePresetFailed"
+msgid "Failed to save preset"
+msgstr ""
+
+msgctxt "generationPage.updatePresetFailed"
+msgid "Failed to update preset"
+msgstr ""
+
+msgctxt "generationPage.updateDefaultFailed"
+msgid "Failed to update default"
+msgstr ""
+
+msgctxt "generationPage.deletePresetFailed"
+msgid "Failed to delete preset"
+msgstr ""
+
+msgctxt "aboutPage.documentTitle"
+msgid "About — {app}"
+msgstr ""
+
+msgctxt "aboutPage.loadFailed"
+msgid "Failed to load the release"
+msgstr ""
+
+msgctxt "aboutPage.app"
+msgid "App"
+msgstr ""
+
+msgctxt "aboutPage.version"
+msgid "Version"
+msgstr ""
+
+msgctxt "aboutPage.noRelease"
+msgid "No release"
+msgstr ""
+
+msgctxt "aboutPage.released"
+msgid "Released"
+msgstr ""
+
+msgctxt "aboutPage.commit"
+msgid "Commit"
+msgstr ""
+
+msgctxt "aboutPage.unknown"
+msgid "Unknown"
+msgstr ""
+
+msgctxt "aboutPage.whatsNew"
+msgid "What’s new"
+msgstr ""
+
+msgctxt "aboutPage.licence"
+msgid "Licence"
+msgstr ""
+
+msgctxt "paramField.inferenceStepsHelp"
+msgid "Diffusion denoising steps. More = slower but more refined."
+msgstr ""
+
+msgctxt "paramField.guidanceScaleHelp"
+msgid "How strongly to follow your style prompt. Ignored on turbo models."
+msgstr ""
+
+msgctxt "paramField.shiftHelp"
+msgid "Biases denoising toward early structure or late detail. 3.0 is balanced."
+msgstr ""
+
+msgctxt "paramField.cfgIntervalStartHelp"
+msgid "Apply CFG starting from this point in the denoising trajectory (0.0–1.0)."
+msgstr ""
+
+msgctxt "paramField.cfgIntervalEndHelp"
+msgid "Stop applying CFG at this point in the denoising trajectory (0.0–1.0)."
+msgstr ""
+
+msgctxt "paramField.velocityNormHelp"
+msgid "DiT velocity normalization threshold. 0 = disabled."
+msgstr ""
+
+msgctxt "paramField.velocityEmaHelp"
+msgid "Exponential moving average smoothing for DiT velocity. 0 = disabled."
+msgstr ""
+
+msgctxt "paramField.latentShiftHelp"
+msgid "Shifts the latent space center. 0 = no shift."
+msgstr ""
+
+msgctxt "paramField.latentRescaleHelp"
+msgid "Rescales latent magnitude. 1.0 = no change."
+msgstr ""
+
+msgctxt "paramField.lmCodeStrengthHelp"
+msgid "How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes ignored."
+msgstr ""
+
+msgctxt "paramField.inferMethodHelp"
+msgid "ODE = deterministic, reproducible. SDE = adds randomness, sometimes more natural."
+msgstr ""
+
+msgctxt "paramField.samplerHelp"
+msgid "Diffusion sampler algorithm. heun is a second-order predictor-corrector."
+msgstr ""
+
+msgctxt "paramField.adaptiveDualGuidanceHelp"
+msgid "Smarter CFG that prevents over-saturation. Only matters when guidance_scale > 1."
+msgstr ""
+
+msgctxt "paramField.temperatureHelp"
+msgid "How creative the LM is when planning. Higher = more varied, lower = more predictable."
+msgstr ""
+
+msgctxt "paramField.topKHelp"
+msgid "Limit LM sampling to the K most-likely tokens. 0 = disabled."
+msgstr ""
+
+msgctxt "paramField.topPHelp"
+msgid "Nucleus sampling — sample only from tokens covering P of the probability mass."
+msgstr ""
+
+msgctxt "paramField.cfgScaleHelp"
+msgid "CFG strength for the LM's plan (separate from the DiT guidance_scale)."
+msgstr ""
+
+msgctxt "paramField.repetitionPenaltyHelp"
+msgid "Discourages the LM from repeating itself. 1.0 = off."
+msgstr ""
+
+msgctxt "paramField.batchSizeHelp"
+msgid "Number of audio variations to generate from one request (1–8)."
+msgstr ""
+
+msgctxt "paramField.thinkingHelp"
+msgid "Let the LM plan musical structure before audio generation."
+msgstr ""
+
+msgctxt "paramField.cotCaptionHelp"
+msgid "Let the LM rewrite your style caption to be more model-friendly."
+msgstr ""
+
+msgctxt "paramField.cotLanguageHelp"
+msgid "Let the LM auto-detect the language of your lyrics."
+msgstr ""
+
+msgctxt "paramField.negativePromptHelp"
+msgid "Tell the LM what NOT to include in its musical plan."
+msgstr ""

@@ -42,7 +42,9 @@ test(
 
 		await rows.filter({ hasText: words['settingsSections.voices'] }).click();
 		await expect(page).toHaveURL(/\/settings\/voices$/);
-		await expect(workspace(page).getByRole('heading', { name: 'My Voices' })).toBeVisible();
+		await expect(
+			workspace(page).getByRole('heading', { name: words['voicesPage.heading'] })
+		).toBeVisible();
 
 		await page.goBack();
 		await expect(page).toHaveURL(/\/settings$/);

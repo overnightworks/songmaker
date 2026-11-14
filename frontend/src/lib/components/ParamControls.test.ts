@@ -3,6 +3,14 @@ import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { VersionGenerationParams } from '#lib/api/types.ts';
+import {
+	DIT_BOOL_FIELDS,
+	DIT_NUMBER_FIELDS,
+	DIT_SELECT_FIELDS,
+	LM_BOOL_FIELDS,
+	LM_NUMBER_FIELDS,
+	LM_TEXT_FIELDS
+} from '#lib/constants/acestep-param-fields.ts';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { toasts } from '#lib/stores/toast.ts';
 
@@ -211,5 +219,29 @@ describe('ParamControls change marks', () => {
 		label?.click();
 		expect(onresetfield).not.toHaveBeenCalled();
 		expect(input?.value).toBe('0.5');
+	});
+
+	it('titles every field with its own help text', async () => {
+		const target = await renderControls(false, LOADED_PLACEHOLDERS);
+		const titleByLabel = new Map(
+			[...target.querySelectorAll<HTMLElement>('.setting')].map((setting) => [
+				setting.querySelector('label')?.textContent,
+				setting.title
+			])
+		);
+		const fields = [
+			...DIT_NUMBER_FIELDS,
+			...DIT_SELECT_FIELDS,
+			...DIT_BOOL_FIELDS,
+			...LM_NUMBER_FIELDS,
+			...LM_BOOL_FIELDS,
+			...LM_TEXT_FIELDS
+		];
+		const shown = fields.filter((field) => titleByLabel.has(words[field.labelKey]));
+
+		expect(shown.length).toBeGreaterThan(0);
+		for (const field of shown) {
+			expect(titleByLabel.get(words[field.labelKey])).toBe(words[field.helpKey]);
+		}
 	});
 });

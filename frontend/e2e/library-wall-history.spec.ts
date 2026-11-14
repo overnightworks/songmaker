@@ -74,7 +74,7 @@ for (const position of ['halfway', 'bottom'] as const) {
 		else await openSettingsSection(page, shell, words['settingsSections.voices']);
 		await expect(page).toHaveURL(/\/settings\/voices$/);
 		await expect(
-			workspace(page).getByRole('heading', { name: 'My Voices', exact: true })
+			workspace(page).getByRole('heading', { name: words['voicesPage.heading'], exact: true })
 		).toBeVisible();
 		await page.goBack();
 

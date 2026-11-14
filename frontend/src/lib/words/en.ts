@@ -1174,6 +1174,62 @@ export type Words = {
     readonly "referenceUses.takeLength": (gaps: { readonly length: string; readonly number: string }) => string;
     readonly "referenceUses.takeVersionLength": (gaps: { readonly length: string; readonly number: string; readonly version: string }) => string;
     readonly "referenceUses.version": (gaps: { readonly version: string }) => string;
+    readonly "generationPage.defaultHeading": string;
+    readonly "generationPage.inherit": string;
+    readonly "generationPage.myPresets": string;
+    readonly "generationPage.newPreset": string;
+    readonly "generationPage.presetName": string;
+    readonly "generationPage.saving": string;
+    readonly "generationPage.update": string;
+    readonly "generationPage.save": string;
+    readonly "generationPage.cancel": string;
+    readonly "generationPage.setDefault": string;
+    readonly "generationPage.unsetDefault": string;
+    readonly "generationPage.edit": string;
+    readonly "generationPage.delete": string;
+    readonly "generationPage.noPresets": string;
+    readonly "generationPage.sharedPresets": string;
+    readonly "generationPage.defaultTag": string;
+    readonly "generationPage.deleteTitle": string;
+    readonly "generationPage.loadDefaultsFailed": string;
+    readonly "generationPage.setDefaultFailed": string;
+    readonly "generationPage.savePresetFailed": string;
+    readonly "generationPage.updatePresetFailed": string;
+    readonly "generationPage.updateDefaultFailed": string;
+    readonly "generationPage.deletePresetFailed": string;
+    readonly "aboutPage.documentTitle": (gaps: { readonly app: string }) => string;
+    readonly "aboutPage.loadFailed": string;
+    readonly "aboutPage.app": string;
+    readonly "aboutPage.version": string;
+    readonly "aboutPage.noRelease": string;
+    readonly "aboutPage.released": string;
+    readonly "aboutPage.commit": string;
+    readonly "aboutPage.unknown": string;
+    readonly "aboutPage.whatsNew": string;
+    readonly "aboutPage.licence": string;
+    readonly "paramField.inferenceStepsHelp": string;
+    readonly "paramField.guidanceScaleHelp": string;
+    readonly "paramField.shiftHelp": string;
+    readonly "paramField.cfgIntervalStartHelp": string;
+    readonly "paramField.cfgIntervalEndHelp": string;
+    readonly "paramField.velocityNormHelp": string;
+    readonly "paramField.velocityEmaHelp": string;
+    readonly "paramField.latentShiftHelp": string;
+    readonly "paramField.latentRescaleHelp": string;
+    readonly "paramField.lmCodeStrengthHelp": string;
+    readonly "paramField.inferMethodHelp": string;
+    readonly "paramField.samplerHelp": string;
+    readonly "paramField.adaptiveDualGuidanceHelp": string;
+    readonly "paramField.temperatureHelp": string;
+    readonly "paramField.topKHelp": string;
+    readonly "paramField.topPHelp": string;
+    readonly "paramField.cfgScaleHelp": string;
+    readonly "paramField.repetitionPenaltyHelp": string;
+    readonly "paramField.batchSizeHelp": string;
+    readonly "paramField.thinkingHelp": string;
+    readonly "paramField.cotCaptionHelp": string;
+    readonly "paramField.cotLanguageHelp": string;
+    readonly "paramField.negativePromptHelp": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -2619,5 +2675,61 @@ export const words: Words = {
     "referenceUses.takeLength": (gaps: { readonly length: string; readonly number: string }) => "Take " + gaps.number + " · " + gaps.length,
     "referenceUses.takeVersionLength": (gaps: { readonly length: string; readonly number: string; readonly version: string }) => "Take " + gaps.number + " · v" + gaps.version + " · " + gaps.length,
     "referenceUses.version": (gaps: { readonly version: string }) => "Version v" + gaps.version,
+    "generationPage.defaultHeading": "Default for New Songs",
+    "generationPage.inherit": "Inherit",
+    "generationPage.myPresets": "My Presets",
+    "generationPage.newPreset": "New Preset",
+    "generationPage.presetName": "Preset name",
+    "generationPage.saving": "Saving...",
+    "generationPage.update": "Update",
+    "generationPage.save": "Save",
+    "generationPage.cancel": "Cancel",
+    "generationPage.setDefault": "set default",
+    "generationPage.unsetDefault": "unset default",
+    "generationPage.edit": "edit",
+    "generationPage.delete": "delete",
+    "generationPage.noPresets": "No presets saved yet.",
+    "generationPage.sharedPresets": "Shared Presets",
+    "generationPage.defaultTag": "default",
+    "generationPage.deleteTitle": "Delete preset?",
+    "generationPage.loadDefaultsFailed": "Failed to load generation defaults",
+    "generationPage.setDefaultFailed": "Failed to set default config",
+    "generationPage.savePresetFailed": "Failed to save preset",
+    "generationPage.updatePresetFailed": "Failed to update preset",
+    "generationPage.updateDefaultFailed": "Failed to update default",
+    "generationPage.deletePresetFailed": "Failed to delete preset",
+    "aboutPage.documentTitle": (gaps: { readonly app: string }) => "About — " + gaps.app,
+    "aboutPage.loadFailed": "Failed to load the release",
+    "aboutPage.app": "App",
+    "aboutPage.version": "Version",
+    "aboutPage.noRelease": "No release",
+    "aboutPage.released": "Released",
+    "aboutPage.commit": "Commit",
+    "aboutPage.unknown": "Unknown",
+    "aboutPage.whatsNew": "What’s new",
+    "aboutPage.licence": "Licence",
+    "paramField.inferenceStepsHelp": "Diffusion denoising steps. More = slower but more refined.",
+    "paramField.guidanceScaleHelp": "How strongly to follow your style prompt. Ignored on turbo models.",
+    "paramField.shiftHelp": "Biases denoising toward early structure or late detail. 3.0 is balanced.",
+    "paramField.cfgIntervalStartHelp": "Apply CFG starting from this point in the denoising trajectory (0.0–1.0).",
+    "paramField.cfgIntervalEndHelp": "Stop applying CFG at this point in the denoising trajectory (0.0–1.0).",
+    "paramField.velocityNormHelp": "DiT velocity normalization threshold. 0 = disabled.",
+    "paramField.velocityEmaHelp": "Exponential moving average smoothing for DiT velocity. 0 = disabled.",
+    "paramField.latentShiftHelp": "Shifts the latent space center. 0 = no shift.",
+    "paramField.latentRescaleHelp": "Rescales latent magnitude. 1.0 = no change.",
+    "paramField.lmCodeStrengthHelp": "How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes ignored.",
+    "paramField.inferMethodHelp": "ODE = deterministic, reproducible. SDE = adds randomness, sometimes more natural.",
+    "paramField.samplerHelp": "Diffusion sampler algorithm. heun is a second-order predictor-corrector.",
+    "paramField.adaptiveDualGuidanceHelp": "Smarter CFG that prevents over-saturation. Only matters when guidance_scale > 1.",
+    "paramField.temperatureHelp": "How creative the LM is when planning. Higher = more varied, lower = more predictable.",
+    "paramField.topKHelp": "Limit LM sampling to the K most-likely tokens. 0 = disabled.",
+    "paramField.topPHelp": "Nucleus sampling — sample only from tokens covering P of the probability mass.",
+    "paramField.cfgScaleHelp": "CFG strength for the LM's plan (separate from the DiT guidance_scale).",
+    "paramField.repetitionPenaltyHelp": "Discourages the LM from repeating itself. 1.0 = off.",
+    "paramField.batchSizeHelp": "Number of audio variations to generate from one request (1–8).",
+    "paramField.thinkingHelp": "Let the LM plan musical structure before audio generation.",
+    "paramField.cotCaptionHelp": "Let the LM rewrite your style caption to be more model-friendly.",
+    "paramField.cotLanguageHelp": "Let the LM auto-detect the language of your lyrics.",
+    "paramField.negativePromptHelp": "Tell the LM what NOT to include in its musical plan.",
 };
 export type Key = keyof Words;

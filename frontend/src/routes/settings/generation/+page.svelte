@@ -23,6 +23,7 @@
 	import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import ParamControls from '#lib/components/ParamControls.svelte';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 	const activeIds = $derived($activeModelIds);
@@ -49,7 +50,7 @@
 		try {
 			globalDefaults = await fetchGenerationDefaults();
 		} catch {
-			error = 'Failed to load generation defaults';
+			error = pageText('generationPage.loadDefaultsFailed');
 		}
 	}
 
@@ -70,12 +71,12 @@
 		try {
 			await saveDefaultConfig(config);
 		} catch {
-			error = 'Failed to set default config';
+			error = pageText('generationPage.setDefaultFailed');
 		}
 	}
 
 	const defaultOptions = $derived([
-		{ id: null, name: 'Inherit', shared: false, unavailable: false },
+		{ id: null, name: pageText('generationPage.inherit'), shared: false, unavailable: false },
 		...$userPresets.map((preset) => ({
 			id: preset.id,
 			name: preset.name,
@@ -155,7 +156,9 @@
 			}
 			closePresetForm();
 		} catch {
-			error = editingPresetId ? 'Failed to update preset' : 'Failed to save preset';
+			error = pageText(
+				editingPresetId ? 'generationPage.updatePresetFailed' : 'generationPage.savePresetFailed'
+			);
 		} finally {
 			savingPreset = false;
 		}
@@ -169,7 +172,7 @@
 				await setDefault(presetId);
 			}
 		} catch {
-			error = 'Failed to update default';
+			error = pageText('generationPage.updateDefaultFailed');
 		}
 	}
 
@@ -178,20 +181,20 @@
 		try {
 			await deletePreset(presetId);
 		} catch {
-			error = 'Failed to delete preset';
+			error = pageText('generationPage.deletePresetFailed');
 		}
 	}
 </script>
 
 <div class="page">
-	<h1>Generation</h1>
+	<h1>{pageText('settingsSections.generation')}</h1>
 
 	{#if error}
 		<p class="error">{error}</p>
 	{/if}
 
 	<section>
-		<h2 id="default-config-heading">Default for New Songs</h2>
+		<h2 id="default-config-heading">{pageText('generationPage.defaultHeading')}</h2>
 		<div class="default-chips" role="radiogroup" aria-labelledby="default-config-heading">
 			{#each defaultOptions as option, index (option.id ?? 'inherit')}
 				<button
@@ -214,8 +217,9 @@
 
 	<section>
 		<div class="section-header">
-			<h2>My Presets</h2>
-			<button class="add-btn" onclick={openNewPreset}>New Preset</button>
+			<h2>{pageText('generationPage.myPresets')}</h2>
+			<button class="add-btn" onclick={openNewPreset}>{pageText('generationPage.newPreset')}</button
+			>
 		</div>
 
 		{#if showPresetForm}
@@ -223,7 +227,7 @@
 				<div class="save-preset-form">
 					<input
 						type="text"
-						placeholder="Preset name"
+						placeholder={pageText('generationPage.presetName')}
 						bind:value={presetName}
 						class="preset-name-input"
 					/>
@@ -248,9 +252,13 @@
 						onclick={handleSavePreset}
 						disabled={savingPreset || !presetName.trim()}
 					>
-						{savingPreset ? 'Saving...' : editingPresetId ? 'Update' : 'Save'}
+						{savingPreset
+							? pageText('generationPage.saving')
+							: pageText(editingPresetId ? 'generationPage.update' : 'generationPage.save')}
 					</button>
-					<button class="reset-btn" onclick={closePresetForm}>Cancel</button>
+					<button class="reset-btn" onclick={closePresetForm}
+						>{pageText('generationPage.cancel')}</button
+					>
 				</div>
 			</div>
 		{/if}
@@ -265,30 +273,34 @@
 							class="preset-action"
 							onclick={() => handleToggleDefault(preset.id, preset.is_default)}
 						>
-							{preset.is_default ? 'unset default' : 'set default'}
+							{pageText(
+								preset.is_default ? 'generationPage.unsetDefault' : 'generationPage.setDefault'
+							)}
 						</button>
-						<button class="preset-action" onclick={() => openEditPreset(preset.id)}> edit </button>
+						<button class="preset-action" onclick={() => openEditPreset(preset.id)}
+							>{pageText('generationPage.edit')}</button
+						>
 						<button class="preset-action delete" onclick={() => (presetPendingDelete = preset)}>
-							delete
+							{pageText('generationPage.delete')}
 						</button>
 					</div>
 				{/each}
 			</div>
 		{:else}
-			<p class="empty">No presets saved yet.</p>
+			<p class="empty">{pageText('generationPage.noPresets')}</p>
 		{/if}
 	</section>
 
 	{#if $sharedPresets.length > 0}
 		<section>
-			<h2>Shared Presets</h2>
+			<h2>{pageText('generationPage.sharedPresets')}</h2>
 			<div class="preset-list">
 				{#each $sharedPresets as preset (preset.id)}
 					<div class="preset-row">
 						<span class="preset-name">{preset.name}</span>
 						<span class="preset-mode-tag">{preset.model_mode}</span>
 						{#if preset.is_default}
-							<span class="preset-default-tag">default</span>
+							<span class="preset-default-tag">{pageText('generationPage.defaultTag')}</span>
 						{/if}
 					</div>
 				{/each}
@@ -300,7 +312,7 @@
 {#if presetPendingDelete}
 	{@const doomed = presetPendingDelete}
 	<ConfirmDeleteDialog
-		title="Delete preset?"
+		title={pageText('generationPage.deleteTitle')}
 		items={[doomed.name]}
 		onconfirm={() => void handleDeletePreset(doomed.id)}
 		oncancel={() => (presetPendingDelete = null)}

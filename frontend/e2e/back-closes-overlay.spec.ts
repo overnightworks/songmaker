@@ -54,7 +54,7 @@ const PLAY_PLAYLIST_LABEL = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlis
 
 const SETTINGS_SECTION = words['settingsSections.voices'];
 const LIBRARY_HEADING = { name: words['places.library'] };
-const SETTINGS_SECTION_HEADING = 'My Voices';
+const SETTINGS_SECTION_HEADING = words['voicesPage.heading'];
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
 // The base library's songs each carry one seeded take, their first.
 const SEEDED_TAKE_NUMBER = 1;
@@ -1063,7 +1063,7 @@ test(
 // Issue #1331: the history controller runs on every page, so Back closes the
 // topmost overlay on Settings and on a share page before it leaves the page.
 test.describe('Back closes the open overlay outside the library', () => {
-	const VOICE_DELETE_TITLE = 'Delete voice?';
+	const VOICE_DELETE_TITLE = words['voicesPage.deleteTitle'];
 
 	async function openVoicesOverTheWall(page: Page, shell: Shell): Promise<void> {
 		await page.goto(LIBRARY_PATH);
@@ -1103,7 +1103,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 			const name = await voiceNamed(request, voiceIds[0]);
 			await openVoicesOverTheWall(page, shellOf(testInfo));
 			const card = page.locator('.lora-card').filter({ hasText: name });
-			await card.getByRole('button', { name: 'Delete', exact: true }).click();
+			await card.getByRole('button', { name: words['voicesPage.delete'], exact: true }).click();
 			const confirm = page
 				.getByRole('dialog')
 				.filter({ has: page.getByRole('heading', { name: VOICE_DELETE_TITLE, exact: true }) });
@@ -1113,7 +1113,9 @@ test.describe('Back closes the open overlay outside the library', () => {
 
 			await expect(confirm).toBeHidden();
 			await expectSettingsStands(page);
-			await expect(card.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+			await expect(
+				card.getByRole('button', { name: words['voicesPage.delete'], exact: true })
+			).toBeVisible();
 			guard.assertClean();
 		} finally {
 			await deleteVoiceProofData(request, voiceIds);

@@ -24,7 +24,7 @@ import {
 } from './seed';
 
 const REFERENCES_PATH = '/api/references';
-const EMPTY_SENTENCE = "No references yet — upload a recording to guide a song's sound.";
+const EMPTY_SENTENCE = words['referencesPage.empty'];
 const LENGTH_AND_DAY = /^\d+:\d{2} · \d{1,2} [A-Z][a-z]{2}( \d{4})?( ⏳ \d+d)?$/;
 const COUNTDOWN = /^⏳ \d+d$/;
 
@@ -166,15 +166,31 @@ test('Settings › References plays a recording from its button and pauses it ag
 			(response) => /\/api\/references\/[^/]+\/audio$/.test(response.url()) && response.ok()
 		);
 
-		await row.getByRole('button', { name: 'Play storytime-drums.mp3' }).click();
+		await row
+			.getByRole('button', {
+				name: words['referenceRow.play']({ filename: 'storytime-drums.mp3' })
+			})
+			.click();
 
 		await served;
-		await expect(row.getByRole('button', { name: 'Pause storytime-drums.mp3' })).toBeVisible();
+		await expect(
+			row.getByRole('button', {
+				name: words['referenceRow.pause']({ filename: 'storytime-drums.mp3' })
+			})
+		).toBeVisible();
 		await expect(row).toHaveClass(/playing/);
 
-		await row.getByRole('button', { name: 'Pause storytime-drums.mp3' }).click();
+		await row
+			.getByRole('button', {
+				name: words['referenceRow.pause']({ filename: 'storytime-drums.mp3' })
+			})
+			.click();
 
-		await expect(row.getByRole('button', { name: 'Play storytime-drums.mp3' })).toBeVisible();
+		await expect(
+			row.getByRole('button', {
+				name: words['referenceRow.play']({ filename: 'storytime-drums.mp3' })
+			})
+		).toBeVisible();
 		await expect(row).not.toHaveClass(/playing/);
 		guard.assertClean();
 	} finally {
@@ -199,17 +215,29 @@ test('Settings › References plays a recording again after its first audio answ
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 		await page.route(audioRoute, (route) => route.fulfill({ status: 429 }), { times: 1 });
 
-		await row.getByRole('button', { name: 'Play storytime-drums.mp3' }).click();
+		await row
+			.getByRole('button', {
+				name: words['referenceRow.play']({ filename: 'storytime-drums.mp3' })
+			})
+			.click();
 
 		await expect(row.getByRole('alert')).toHaveText("Can't play this recording");
 		const served = page.waitForResponse(
 			(response) => audioRoute.test(response.url()) && response.ok()
 		);
 
-		await row.getByRole('button', { name: 'Play storytime-drums.mp3' }).click();
+		await row
+			.getByRole('button', {
+				name: words['referenceRow.play']({ filename: 'storytime-drums.mp3' })
+			})
+			.click();
 
 		await served;
-		await expect(row.getByRole('button', { name: 'Pause storytime-drums.mp3' })).toBeVisible();
+		await expect(
+			row.getByRole('button', {
+				name: words['referenceRow.pause']({ filename: 'storytime-drums.mp3' })
+			})
+		).toBeVisible();
 		await expect(row.getByRole('alert')).toHaveCount(0);
 		await expect.poll(() => previewIsAdvancing(page)).toBe(true);
 		guard.assertClean();
@@ -232,7 +260,7 @@ test('Settings › References uploads a recording through the file chooser, list
 		await expect(workspace(page).getByRole('listitem')).toHaveCount(1);
 
 		const chooser = page.waitForEvent('filechooser');
-		await workspace(page).getByRole('button', { name: 'Upload' }).click();
+		await workspace(page).getByRole('button', { name: words['referencesPage.upload'] }).click();
 		await (
 			await chooser
 		).setFiles({
@@ -245,12 +273,16 @@ test('Settings › References uploads a recording through the file chooser, list
 		await expect(row).toBeVisible();
 		await expect(workspace(page).getByRole('listitem').first()).toContainText('synth-hook.mp3');
 		await expect(row.locator('.reference-meta')).toHaveText(LENGTH_AND_DAY);
-		await expect(workspace(page).getByRole('button', { name: 'Upload' })).toBeEnabled();
+		await expect(
+			workspace(page).getByRole('button', { name: words['referencesPage.upload'] })
+		).toBeEnabled();
 		const served = page.waitForResponse(
 			(response) => /\/api\/references\/[^/]+\/audio$/.test(response.url()) && response.ok()
 		);
 
-		await row.getByRole('button', { name: 'Play synth-hook.mp3' }).click();
+		await row
+			.getByRole('button', { name: words['referenceRow.play']({ filename: 'synth-hook.mp3' }) })
+			.click();
 
 		await served;
 		await expect(row).toHaveClass(/playing/);
@@ -278,7 +310,7 @@ test('Settings › References deletes an unused recording from its menu after a 
 			.getByRole('dialog', { name: words['referenceMenu.label'] })
 			.getByRole('button', { name: words['referenceMenu.delete'] })
 			.click();
-		const confirm = page.getByRole('dialog', { name: 'Delete reference?' });
+		const confirm = page.getByRole('dialog', { name: words['referencesPage.deleteTitle'] });
 		await expect(confirm).toContainText('its audio file');
 		await confirm.getByRole('button', { name: 'Delete' }).click();
 
@@ -302,12 +334,16 @@ test('Settings › References keeps and unkeeps a recording with its heart, with
 		await postReferenceAudio(api, 'storytime-drums.mp3');
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
-		const keep = row.getByRole('button', { name: 'Keep storytime-drums.mp3' });
+		const keep = row.getByRole('button', {
+			name: words['referenceRow.keep']({ filename: 'storytime-drums.mp3' })
+		});
 		await expect(keep).toHaveAttribute('aria-pressed', 'false');
 
 		await keep.click();
 
-		const unkeep = row.getByRole('button', { name: 'Unkeep storytime-drums.mp3' });
+		const unkeep = row.getByRole('button', {
+			name: words['referenceRow.unkeep']({ filename: 'storytime-drums.mp3' })
+		});
 		await expect(unkeep).toHaveAttribute('aria-pressed', 'true');
 		expect(
 			await page.evaluate(() => (window as unknown as { createdAudio?: unknown[] }).createdAudio)
@@ -316,17 +352,23 @@ test('Settings › References keeps and unkeeps a recording with its heart, with
 		expect(rowBox?.width ?? Infinity).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
 
 		await page.reload();
-		await expect(row.getByRole('button', { name: 'Unkeep storytime-drums.mp3' })).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
+		await expect(
+			row.getByRole('button', {
+				name: words['referenceRow.unkeep']({ filename: 'storytime-drums.mp3' })
+			})
+		).toHaveAttribute('aria-pressed', 'true');
 
-		await row.getByRole('button', { name: 'Unkeep storytime-drums.mp3' }).click();
+		await row
+			.getByRole('button', {
+				name: words['referenceRow.unkeep']({ filename: 'storytime-drums.mp3' })
+			})
+			.click();
 
-		await expect(row.getByRole('button', { name: 'Keep storytime-drums.mp3' })).toHaveAttribute(
-			'aria-pressed',
-			'false'
-		);
+		await expect(
+			row.getByRole('button', {
+				name: words['referenceRow.keep']({ filename: 'storytime-drums.mp3' })
+			})
+		).toHaveAttribute('aria-pressed', 'false');
 		guard.assertClean();
 	} finally {
 		await api.dispose();
@@ -389,11 +431,11 @@ test('Settings › References shows the in-use notice on the row when a song too
 			.getByRole('button', { name: words['referenceMenu.delete'] })
 			.click();
 		await page
-			.getByRole('dialog', { name: 'Delete reference?' })
+			.getByRole('dialog', { name: words['referencesPage.deleteTitle'] })
 			.getByRole('button', { name: 'Delete' })
 			.click();
 
-		await expect(row.getByRole('alert')).toHaveText('In use — not deleted.');
+		await expect(row.getByRole('alert')).toHaveText(words['referencesPage.inUseFault']);
 		await row.getByRole('button', { name: words['referenceMenu.label'] }).click();
 		await expect(
 			page
