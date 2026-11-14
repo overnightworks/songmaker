@@ -24,3 +24,60 @@ export async function sendToCowriter(target: ParentNode, text: string): Promise<
 	await tick();
 	sendButtonOf(target)?.click();
 }
+
+export type ChatSpeaker = 'person' | 'helper';
+
+const helperName = () => words['cowriter.title'];
+
+const speakerLabel = (speaker: ChatSpeaker) =>
+	kitWords()['helperChat.speaker']({
+		name: speaker === 'person' ? kitWords()['helperChat.you'] : helperName()
+	});
+
+/** The co-writer's named message list; absent while the conversation is empty. */
+export const chatListOf = (target: ParentNode) =>
+	target.querySelector<HTMLOListElement>(
+		`ol[role="list"][aria-label="${kitWords()['helperChat.listLabel']({ name: helperName() })}"]`
+	);
+
+/** The chat's messages in order, optionally only those of one speaker. */
+export function chatMessagesOf(target: ParentNode, speaker?: ChatSpeaker): HTMLLIElement[] {
+	const messages = Array.from(chatListOf(target)?.querySelectorAll<HTMLLIElement>('li') ?? []);
+	if (speaker === undefined) return messages;
+	const label = speakerLabel(speaker);
+	return messages.filter((message) => message.textContent?.startsWith(label));
+}
+
+/** What a message says: its text without the speaker prefix, the AI mark and a failure note. */
+export function messageTextOf(message: HTMLLIElement): string {
+	const shown = message.cloneNode(true) as HTMLLIElement;
+	for (const note of shown.querySelectorAll('[role="alert"]')) note.remove();
+	for (const mark of shown.querySelectorAll('span')) if (mark.textContent === 'AI') mark.remove();
+	const text = (shown.textContent ?? '').replace(/\s+/g, ' ').trim();
+	const prefix = [speakerLabel('person'), speakerLabel('helper')].find((label) =>
+		text.startsWith(label)
+	);
+	return prefix === undefined ? text : text.slice(prefix.length).trim();
+}
+
+/** The button the archived conversation's banner offers, by its accessible name. */
+export function archivedBannerButtonOf(target: ParentNode): HTMLButtonElement | undefined {
+	const link = words['cowriter.archivedBanner'].find((part) => typeof part !== 'string');
+	if (link === undefined || typeof link === 'string') throw new Error('Expected a banner link');
+	return Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+		(button) => button.textContent?.trim() === link.text
+	);
+}
+
+/** The chat as the musician reads it: one entry per message, including a failure note. */
+export function chatViewOf(target: ParentNode): string[] {
+	const list = chatListOf(target);
+	return Array.from(target.querySelectorAll<HTMLElement>('li, .turn-error'))
+		.filter((entry) => !(entry instanceof HTMLLIElement) || list?.contains(entry))
+		.map((entry) =>
+			entry instanceof HTMLLIElement
+				? messageTextOf(entry)
+				: (entry.textContent ?? '').replace(/\s+/g, ' ').trim()
+		)
+		.filter((text) => text !== '');
+}

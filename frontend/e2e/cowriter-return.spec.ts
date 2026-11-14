@@ -46,9 +46,10 @@ import { kitWords } from './account-menu-words';
 const CONVERSATION_ID = 'e2e-cowriter-return';
 const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
+const CHAT_LIST_NAME = kitWords['helperChat.listLabel']({ name: words['cowriter.title'] });
 const THINKING = kitWords['helperChat.thinking']({ name: words['cowriter.title'] });
-// The mark and the reply sit in separate elements; their spacing varies with the layout.
-const ANSWER_SHOWN = new RegExp(`^\\s*AI\\s*${REPLY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
+// The speaker word, the mark and the reply sit in separate elements; the list item text starts with the speaker word.
+const ANSWER_SHOWN = new RegExp(`AI\\s*${REPLY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
 
 // The problem frame the server ends a turn with when the agent did not
 // run it; the panel words the named problem.
@@ -158,15 +159,22 @@ async function lookAtEditAndTakes(page: Page): Promise<void> {
 	await expect(page.getByPlaceholder(/Ask for a rewrite/)).toBeHidden();
 }
 
+/** The chat's messages in order. */
+const chatMessages = (page: Page) =>
+	page.getByRole('list', { name: CHAT_LIST_NAME }).getByRole('listitem');
+
 /** Scrolls the chat the way a finger does: the panel hears it before the next step. */
 async function scrollChatToTop(page: Page): Promise<void> {
-	await page.locator('.cowriter .list').evaluate(
-		(chat) =>
-			new Promise<void>((resolve) => {
-				chat.addEventListener('scroll', () => resolve(), { once: true });
-				chat.scrollTop = 0;
-			})
-	);
+	await page
+		.getByRole('list', { name: CHAT_LIST_NAME })
+		.locator('xpath=..')
+		.evaluate(
+			(chat) =>
+				new Promise<void>((resolve) => {
+					chat.addEventListener('scroll', () => resolve(), { once: true });
+					chat.scrollTop = 0;
+				})
+		);
 }
 
 test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, () => {
@@ -317,7 +325,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.fill(newer);
 		await composer.press('Enter');
 
-		const errorRowBelow = (text: string) => page.locator('.message', { hasText: text });
+		const errorRowBelow = (text: string) => chatMessages(page).filter({ hasText: text });
 		await expect(errorRowBelow(newer).getByRole('button', { name: TRY_AGAIN })).toHaveCount(1);
 		await expect(errorRowBelow(older).getByRole('button', { name: TRY_AGAIN })).toHaveCount(0);
 		await expect(tryAgain).toHaveCount(1);
@@ -360,13 +368,15 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.fill(SENT);
 		await composer.press('Enter');
 
-		const chat = page.locator('.cowriter .message');
+		const chat = chatMessages(page);
 		const shown = [failed, SENT, ANSWER_SHOWN];
-		await expect(chat).toHaveText(shown);
+		await expect(chat).toHaveCount(shown.length);
+		await expect(chat).toContainText(shown);
 		await expect(tryAgain).toHaveCount(0);
 
 		await openCowriterOnPickedSong(page);
-		await expect(chat).toHaveText(shown);
+		await expect(chat).toHaveCount(shown.length);
+		await expect(chat).toContainText(shown);
 		await expect(tryAgain).toHaveCount(0);
 	});
 	test('two conversations started the same day read apart and keep their order after a turn', async ({
@@ -434,7 +444,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		await composer.fill(SENT);
 		await composer.press('Enter');
-		await expect(page.locator('.cowriter .message').last()).toHaveText(ANSWER_SHOWN);
+		await expect(chatMessages(page).last()).toContainText(ANSWER_SHOWN);
 		await expect.poll(() => listReads).toBeGreaterThan(1);
 		await menuButton.click();
 
