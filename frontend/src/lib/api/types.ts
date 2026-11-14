@@ -473,6 +473,11 @@ export interface MemoryUpdateRequest {
 	body: string;
 }
 
+export interface Message {
+	key: string;
+	values: Record<string, string>;
+}
+
 export interface ModelCapabilities {
 	defaults: Record<string, unknown>;
 	max_inference_steps: number;
@@ -713,14 +718,9 @@ export interface ReferenceVersionUseResponse {
 	is_trashed: boolean;
 }
 
-export interface RefusalMessage {
-	key: string;
-	values: Record<string, string>;
-}
-
 export interface RefusalResponse {
 	detail: string;
-	message: RefusalMessage;
+	message: Message;
 }
 
 export interface RegistryModelItem {

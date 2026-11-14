@@ -6,8 +6,9 @@ Run from the project root:
     python scripts/check_refusal_keys.py
 
 It walks `src/songmaker_cli` for every `Refusal(...)` call and every call of
-`songmaker_cli.words.text` (by import, or as the `words.text` attribute; SQLAlchemy's
-`text` is another function and is not counted). It reads the entries of the generated
+`songmaker_cli.words.text` and `songmaker_cli.messages.message` (by import, or as the
+`words.text` and `messages.message` attributes; SQLAlchemy's `text` is another function and
+is not counted). It reads the entries of the generated
 `words.py` and requires, for each call:
 
 * the key is a string literal that is a plain entry of the source language, not a plural
@@ -22,8 +23,8 @@ Every `HTTPException(...)` call (by name or attribute) carries a `# unread: <tag
 of its lines, the tag naming why no person reads its English answer. An unmarked call, an
 unknown tag and a marker with no such call on its lines fail.
 
-`words.py` (generated) and `refusals.py` (which forwards the key of its caller to `text`)
-are not walked.
+`words.py` (generated), `messages.py` and `refusals.py` (which forward the key of their caller
+to `text` and `message`) are not walked.
 """
 # ruff: noqa: T201 - this check reports its violations on stdout
 
@@ -45,13 +46,16 @@ from typing import Final
 DEFAULT_SOURCE: Final = "src/songmaker_cli"
 WORDS_FILE: Final = "words.py"
 REFUSALS_FILE: Final = "refusals.py"
-WORDS_MODULE: Final = "songmaker_cli.words"
+MESSAGES_FILE: Final = "messages.py"
 PACKAGE_MODULE: Final = "songmaker_cli"
 WORDS_NAME: Final = "words"
 TEXT_NAME: Final = "text"
+MESSAGES_NAME: Final = "messages"
+MESSAGE_NAME: Final = "message"
 REFUSAL_NAME: Final = "Refusal"
 REFUSAL_KEY_PATTERN: Final = re.compile(r"^[a-z][A-Za-z0-9]*Refusal\.[a-z][A-Za-z0-9]*$")
 KEY_INDEX_OF_TEXT: Final = 1
+KEY_INDEX_OF_MESSAGE: Final = 0
 KEY_INDEX_OF_REFUSAL: Final = 1
 REFUSAL_HEADERS_KEYWORD: Final = "headers"
 HTTP_EXCEPTION_NAME: Final = "HTTPException"
@@ -98,16 +102,17 @@ def _dotted(node: ast.expr) -> str | None:
 
 
 @dataclass(frozen=True)
-class WordsBindings:
-    """The names a module binds to `songmaker_cli.words.text` and to the words module."""
+class FunctionBindings:
+    """The names a module binds to one function of a leaf module, and to that leaf module."""
 
+    function: str
     functions: frozenset[str]
     modules: frozenset[str]
 
-    def is_text_call(self, call: ast.Call) -> bool:
+    def is_call(self, call: ast.Call) -> bool:
         if isinstance(call.func, ast.Name):
             return call.func.id in self.functions
-        if isinstance(call.func, ast.Attribute) and call.func.attr == TEXT_NAME:
+        if isinstance(call.func, ast.Attribute) and call.func.attr == self.function:
             return _dotted(call.func.value) in self.modules
         return False
 
@@ -132,11 +137,14 @@ def _import_names(tree: ast.Module, module: str) -> set[str]:
     }
 
 
-def words_bindings(tree: ast.Module) -> WordsBindings:
-    return WordsBindings(
-        functions=frozenset(_from_import_names(tree, WORDS_MODULE, TEXT_NAME)),
+def function_bindings(tree: ast.Module, leaf: str, function: str) -> FunctionBindings:
+    """The bindings of `songmaker_cli.<leaf>.<function>` in a module."""
+    module = f"{PACKAGE_MODULE}.{leaf}"
+    return FunctionBindings(
+        function=function,
+        functions=frozenset(_from_import_names(tree, module, function)),
         modules=frozenset(
-            _from_import_names(tree, PACKAGE_MODULE, WORDS_NAME) | _import_names(tree, WORDS_MODULE)
+            _from_import_names(tree, PACKAGE_MODULE, leaf) | _import_names(tree, module)
         ),
     )
 
@@ -231,13 +239,18 @@ def _listed(value: str | None) -> list[str]:
 
 
 def _key_problem(
-    call: ast.Call, bindings: WordsBindings, plain: dict[str, frozenset[str]]
+    call: ast.Call,
+    text_bindings: FunctionBindings,
+    message_bindings: FunctionBindings,
+    plain: dict[str, frozenset[str]],
 ) -> tuple[bool, str | None]:
-    """Whether the call is a refusal or text call, and the problem with its key."""
+    """Whether the call is a refusal, text or message call, and the problem with its key."""
     if _is_refusal_call(call):
         return True, call_problem(call, KEY_INDEX_OF_REFUSAL, plain, is_refusal=True)
-    if bindings.is_text_call(call):
+    if text_bindings.is_call(call):
         return True, call_problem(call, KEY_INDEX_OF_TEXT, plain, is_refusal=False)
+    if message_bindings.is_call(call):
+        return True, call_problem(call, KEY_INDEX_OF_MESSAGE, plain, is_refusal=False)
     return False, None
 
 
@@ -246,7 +259,8 @@ def check_file(
 ) -> tuple[list[Violation], int, Counter[str]]:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=shown)
-    bindings = words_bindings(tree)
+    text_bindings = function_bindings(tree, WORDS_NAME, TEXT_NAME)
+    message_bindings = function_bindings(tree, MESSAGES_NAME, MESSAGE_NAME)
     markers = _unread_markers(source)
     violations: list[Violation] = []
     unread: Counter[str] = Counter()
@@ -261,7 +275,7 @@ def check_file(
             unread.update(_listed(tag))
             violations.extend(Violation(shown, node.lineno, text) for text in _listed(problem))
             continue
-        is_checked, problem = _key_problem(node, bindings, plain)
+        is_checked, problem = _key_problem(node, text_bindings, message_bindings, plain)
         if not is_checked:
             continue
         checked += 1
@@ -288,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     unread: Counter[str] = Counter()
     checked = 0
     for path in sorted(source.rglob("*.py")):
-        if path in (words_file, source / REFUSALS_FILE):
+        if path in (words_file, source / REFUSALS_FILE, source / MESSAGES_FILE):
             continue
         found, count, marked = check_file(path, str(path), plain)
         violations.extend(found)
@@ -298,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{violation.path}:{violation.line}: {violation.message}")
     per_tag = ", ".join(f"{tag}={unread[tag]}" for tag in UNREAD_TAGS)
     print(
-        f"checked: refusal and text calls={checked}, violations={len(violations)}; "
+        f"checked: refusal, text and message calls={checked}, violations={len(violations)}; "
         f"unread: {per_tag}"
     )
     return 1 if violations else 0

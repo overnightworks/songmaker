@@ -78,7 +78,7 @@ from songmaker_cli.api_models.references import (
     ReferenceUsesResponse,
     ReferenceVersionUseResponse,
 )
-from songmaker_cli.api_models.refusals import RefusalMessage, RefusalResponse
+from songmaker_cli.api_models.refusals import RefusalResponse
 from songmaker_cli.api_models.resource_events import (
     GenerationCreatedResourceEvent,
     ResourceHelloEvent,
@@ -162,6 +162,7 @@ from songmaker_cli.generation_params import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
+from songmaker_cli.messages import Message
 from songmaker_cli.whisper_cues import (
     WhisperCue,
     WhisperWordCue,
@@ -280,6 +281,7 @@ __all__ = [
     "LibraryTakePool",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",
+    "Message",
     "ModelAvailability",
     "OwnPlayableTakeListResponse",
     "OwnPlayableTakeResponse",
@@ -301,7 +303,6 @@ __all__ = [
     "RateLimitUpdateRequest",
     "RateLimitsResponse",
     "RateRequest",
-    "RefusalMessage",
     "RefusalResponse",
     "RegistryModelResponse",
     "RegistryResponse",

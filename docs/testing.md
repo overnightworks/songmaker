@@ -121,9 +121,9 @@ boundary, and over seeded files at every path that used to be exempt.
 ### Refusal keys check
 
 `scripts/check_refusal_keys.py` walks `src/songmaker_cli` for every `Refusal(...)` call and
-every call of the generated `songmaker_cli.words.text` (SQLAlchemy's `text` is not counted).
-A call must name a string-literal key that is a plain entry of `words.py`, and pass
-exactly the sentence's gaps as keywords with no `**` spread. A `Refusal` call also needs an
+every call of the generated `songmaker_cli.words.text` or of `songmaker_cli.messages.message`
+(SQLAlchemy's `text` is not counted). A call must name a string-literal key that is a plain
+entry of `words.py`, and pass exactly the sentence's gaps as keywords with no `**` spread. A `Refusal` call also needs an
 int literal status and a key of the form `<resource>Refusal.<reason>`, and may add `headers=`
 for response headers, so a sentence names no gap `headers`.
 

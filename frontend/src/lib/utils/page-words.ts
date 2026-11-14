@@ -1,3 +1,4 @@
+import type { Message } from '#lib/api/types.ts';
 import type { Key, Words } from '#lib/words/en.ts';
 import { loadWords, type Language } from '#lib/words/index.ts';
 
@@ -51,10 +52,10 @@ export function pageParts<K extends MarkedKey>(key: K, ...gaps: PartsGaps<K>): P
 }
 
 /**
- * The text of the catalog key a server refusal names, filled with the refusal's values, or null when the page has no such
+ * The text of the catalog key a server message names, filled with the message's values, or null when the page has no such
  * entry or the entry does not yield a sentence (a marked sentence returns parts). The caller shows its own fallback and names the key.
  */
-export function refusalText(key: string, values: Readonly<Record<string, string>>): string | null {
+export function messageText({ key, values }: Message): string | null {
 	if (loadedWords === undefined) throw new PageWordsNotLoadedError();
 	if (!Object.hasOwn(loadedWords, key)) return null;
 	const entry: unknown = (loadedWords as Record<string, unknown>)[key];
