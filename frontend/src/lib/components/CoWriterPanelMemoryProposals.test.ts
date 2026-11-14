@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { words } from '#lib/words/en.ts';
+import { sendToCowriter } from '#lib/test-utils/cowriter-composer.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 
@@ -146,14 +147,7 @@ describe('CoWriterPanel memory proposals', () => {
 			})()
 		);
 		const target = await mountPanel();
-		const field = target.querySelector<HTMLTextAreaElement>('textarea');
-		if (!field) throw new Error('Expected the composer');
-		field.value = 'Remember this';
-		field.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		Array.from(target.querySelectorAll('button'))
-			.find((button) => button.textContent?.trim() === kitWords()['helperChat.send'])
-			?.click();
+		await sendToCowriter(target, 'Remember this');
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(

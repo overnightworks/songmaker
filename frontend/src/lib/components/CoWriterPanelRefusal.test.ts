@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
 import { words } from '#lib/words/en.ts';
-import { kitWords } from '#lib/utils/kit-words.ts';
+import { sendToCowriter } from '#lib/test-utils/cowriter-composer.ts';
 
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
@@ -67,17 +67,7 @@ describe('CoWriterPanel refused turn', () => {
 			props: { currentSongId: 's1', currentAlbumId: 'a1' }
 		});
 		await tick();
-		const input = target.querySelector<HTMLTextAreaElement>(
-			`textarea[aria-label="${kitWords()['helperChat.composerLabel']({ name: words['cowriter.title'] })}"]`
-		);
-		if (!input) throw new Error('Expected the chat textarea');
-		input.value = 'write a chorus';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-
-		Array.from(target.querySelectorAll('button'))
-			.find((button) => button.textContent?.trim() === kitWords()['helperChat.send'])
-			?.click();
+		await sendToCowriter(target, 'write a chorus');
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('.turn-error .text')?.textContent).toBe(expected)

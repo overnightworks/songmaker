@@ -46,7 +46,7 @@ import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { historyComesToRest } from '#lib/history/historyController.ts';
 import { words } from '#lib/words/en.ts';
-import { kitWords } from '#lib/utils/kit-words.ts';
+import { composerOf, sendButtonOf, sendToCowriter } from '#lib/test-utils/cowriter-composer.ts';
 import {
 	deleteConversation,
 	fetchMemory,
@@ -55,17 +55,6 @@ import {
 } from '#lib/api/client.ts';
 
 const TRY_AGAIN = words['problemLine.tryAgain'];
-const COMPOSER_SELECTOR = `textarea[aria-label="${kitWords()['helperChat.composerLabel']({ name: words['cowriter.title'] })}"]`;
-
-const composerOf = (target: ParentNode) =>
-	target.querySelector<HTMLTextAreaElement>(COMPOSER_SELECTOR);
-
-function sendButtonOf(target: ParentNode): HTMLButtonElement | undefined {
-	return Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-		(button) => button.textContent?.trim() === kitWords()['helperChat.send']
-	);
-}
-
 function thinkingLine(target: ParentNode): string {
 	return target.querySelector('[role="status"]')?.textContent ?? '';
 }
@@ -176,9 +165,7 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 async function sendTurn(target: HTMLElement, message: string): Promise<void> {
-	typeIntoChat(target, message);
-	await tick();
-	sendButtonOf(target)?.click();
+	await sendToCowriter(target, message);
 }
 
 async function sendMessage(target: HTMLElement, message: string): Promise<void> {
@@ -236,7 +223,7 @@ describe('CoWriterPanel', () => {
 
 	it('greets a new conversation with the catalog hint', async () => {
 		const target = await render();
-		expect(target.querySelector('.list p')?.textContent).toBe(words['cowriter.emptyHint']);
+		expect(target.querySelector('.list')?.textContent).toContain(words['cowriter.emptyHint']);
 	});
 });
 
@@ -938,6 +925,18 @@ describe('CoWriterPanel failed turns', () => {
 		}
 	);
 
+	it('retries a message that holds a memory proposal block with its stored text', async () => {
+		const withProposal =
+			'Keep this <memory_proposal scope="user"><current>a</current><proposed>b</proposed></memory_proposal>';
+		streamCoWriterTurn.mockReturnValue(turnEvents([{ type: 'error' } as CoWriterStreamEvent]));
+		const target = await render();
+		await sendTurn(target, withProposal);
+		await vi.waitFor(() => expect(target.querySelector('.retry-turn')).not.toBeNull());
+		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
+		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
+		expect(streamCoWriterTurn.mock.calls[1][0]).toMatchObject({ message: withProposal });
+	});
+
 	it('C10 sends a person to sign in again and back to this page (Q5 a)', async () => {
 		const target = await failWith(401, 'sign_in_again');
 
@@ -1163,7 +1162,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		);
 
 		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.failure')?.textContent).toContain(
+			expect(target.querySelector<HTMLElement>('[role="alert"]')?.textContent).toContain(
 				words['cowriter.historyUnavailable']
 			)
 		);

@@ -200,21 +200,21 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		await composer.fill(SENT);
 		await composer.press('Enter');
-		await expect(page.getByRole('status')).toHaveText(THINKING);
+		await expect(page.locator('.cowriter').getByRole('status')).toHaveText(THINKING);
 		await expect.poll(() => turnState).toBe('running');
 
 		await lookAtEditAndTakes(page);
 
 		await showCowriterTab(page);
 		await expect(page.getByText(SENT)).toBeVisible();
-		await expect(page.getByRole('status')).toHaveText(THINKING);
+		await expect(page.locator('.cowriter').getByRole('status')).toHaveText(THINKING);
 		await expect(page.getByRole('button', { name: kitWords['helperChat.send'] })).toBeDisabled();
 
 		turnState = 'answered';
 		completeTurn();
 
 		await expect(page.getByText(REPLY)).toBeVisible();
-		await expect(page.getByRole('status')).toHaveText('');
+		await expect(page.locator('.cowriter').getByRole('status')).toHaveText('');
 		await expect(page.getByText(SENT)).toHaveCount(1);
 	});
 
