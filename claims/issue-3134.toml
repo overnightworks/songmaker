@@ -1,8 +1,0 @@
-claim_id = "cabaf3c68688436c8193875b5061c9a6"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "31d9f53a474adfc35c08001973b699bc33c7b61e"
-branch = "claude/issue-3134-move-quality-to-v0-16-0-and-record-the-l"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "docs/testing.md", "quality/baseline.toml"]
-opened_commit = "82f95a96dfecd32112a7d7e0299e060c9350922a"
-whole_reason = "one release bump: three workflow files and the ceiling file move together"
