@@ -1216,13 +1216,20 @@ mcp-server = [
 
 [[package]]
 name = "overnightworks-design"
-version = "0.31.0"
-source = { git = "https://github.com/overnightworks/design?rev=v0.31.0#587600a8e69d23b9584f59318794c6f553ccb23d" }
+version = "0.33.1"
+source = { url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl", hash = "sha256:ad81fde51c1d11265696f60f6810baa9f98ba85792db98d15b3a82de434d842e" },
+]
 
 [package.optional-dependencies]
 catalogs = [
     { name = "babel" },
 ]
+
+[package.metadata]
+requires-dist = [{ name = "babel", marker = "extra == 'catalogs'", specifier = ">=2.18,<3" }]
+provides-extras = ["catalogs"]
 
 [[package]]
 name = "overnightworks-webauth"
@@ -2019,7 +2026,7 @@ requires-dist = [
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.33.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.33.0" },
-    { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", git = "https://github.com/overnightworks/design?rev=v0.31.0" },
+    { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.37.1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
