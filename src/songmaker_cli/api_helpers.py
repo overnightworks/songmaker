@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Final, NoReturn, Protocol
@@ -479,6 +480,15 @@ def reference_not_found() -> Refusal:
 
 def generation_not_found() -> Refusal:
     return Refusal(404, "generationRefusal.notFound")
+
+
+@contextmanager
+def vanished_take_is_not_found() -> Iterator[None]:
+    """Answer a take deleted between its access check and its write like a missing one."""
+    try:
+        yield
+    except ValueError as exc:
+        raise generation_not_found() from exc
 
 
 def voice_not_found() -> Refusal:

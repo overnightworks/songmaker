@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import ToolEffect, agent_tool
-from songmaker_cli.api_helpers import check_generation_access, generation_not_found
+from songmaker_cli.api_helpers import check_generation_access, vanished_take_is_not_found
 from songmaker_cli.api_models import RateRequest, RateResponse, StatusResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
@@ -46,10 +46,8 @@ def api_rate_generation(
     session: Session = Depends(get_db_session),
 ) -> RateResponse:
     check_generation_access(session, gen_id, user)
-    try:
+    with vanished_take_is_not_found():
         save_rating(session, gen_id, req.rating, req.notes)
-    except ValueError:
-        raise generation_not_found()
     session.commit()
     return RateResponse(generation_id=gen_id, rating=req.rating)
 
@@ -63,10 +61,8 @@ def _toggle_generation(
     action: Callable[[Session, str], None],
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
-    try:
+    with vanished_take_is_not_found():
         action(session, gen_id)
-    except ValueError:
-        raise generation_not_found()
     session.commit()
     return StatusResponse()
 

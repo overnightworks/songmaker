@@ -23,6 +23,7 @@ from songmaker_cli.api_helpers import (
     cleanup_generation_files,
     create_job_with_rate_limit,
     generation_not_found,
+    vanished_take_is_not_found,
     version_not_found,
 )
 from songmaker_cli.api_models import (
@@ -224,10 +225,8 @@ def api_delete_generation(
 ) -> StatusResponse:
     gen = check_generation_access(session, gen_id, user)
     candidates = {gen.reference_recording_id} if gen.reference_recording_id else set()
-    try:
+    with vanished_take_is_not_found():
         paths = delete_generation(session, gen_id)
-    except ValueError:
-        raise generation_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     commit_unused_stamps(session, candidates)
@@ -614,10 +613,8 @@ def api_unshare_generation(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
-    try:
+    with vanished_take_is_not_found():
         disable_generation_sharing(session, gen_id)
-    except ValueError:
-        raise generation_not_found()
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return StatusResponse()
