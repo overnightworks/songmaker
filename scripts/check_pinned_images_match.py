@@ -30,7 +30,7 @@ SERVICE_NAMES = ("postgres", "redis")
 PLATFORM_RAW_URL = "https://raw.githubusercontent.com/overnightworks/platform/main/"
 PLATFORM_MANIFESTS = {
     "postgres": "infrastructure/postgres/postgres.yaml",
-    "redis": "apps/songmaker/redis.yaml",
+    "redis": "infrastructure/redis/redis.yaml",
 }
 FETCH_TIMEOUT_SECONDS = 30
 
