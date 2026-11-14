@@ -3,6 +3,6 @@ agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
 role = "builder"
 base = "4f51d8b48e3b09d0cb39b8ba006fee0f85751423"
 branch = "claude/issue-3184-songmaker-pins-design-v0-33-1"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/words", "pyproject.toml", "quality/baseline.toml", "src/songmaker_cli/words.py", "uv.lock"]
+scope = ["docs/security.md", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/words", "pyproject.toml", "quality/baseline.toml", "src/songmaker_cli/words.py", "uv.lock"]
 opened_commit = "9422dd20af5e573ca0b1839a350fa22c6083535b"
 whole_reason = "The two pins and their locks name one design release only together."
