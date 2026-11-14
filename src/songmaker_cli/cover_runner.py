@@ -88,10 +88,7 @@ def abort_web_cover_job(job_id: str) -> bool:
     return True
 
 
-def recover_web_cover_jobs(
-    db_factory,
-    audio_dir: Path,
-) -> int:
+def recover_web_cover_jobs(db_factory) -> int:
     """Fail interrupted web covers; `reconcile_reaped_cover_jobs` removes what they left."""
     with db_factory() as session:
         recovered = recover_stale_jobs_by_type(

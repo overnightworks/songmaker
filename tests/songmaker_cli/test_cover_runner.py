@@ -175,7 +175,7 @@ def test_web_recovery_fails_interrupted_work_and_leaves_queue_for_runner(
     _end_job(factory, running_job_id, JobStatus.RUNNING)
     _queue(factory, stack, "queued")
 
-    assert cover_runner.recover_web_cover_jobs(factory, tmp_path) == 1
+    assert cover_runner.recover_web_cover_jobs(factory) == 1
 
     with factory() as session:
         interrupted = session.get(Job, running_job_id)
@@ -224,7 +224,7 @@ def test_a_start_leaves_an_interrupted_cover_without_suggestion_and_staging_dire
     )
     _end_job(factory, job_id, JobStatus.RUNNING)
 
-    cover_runner.recover_web_cover_jobs(factory, audio_dir)
+    cover_runner.recover_web_cover_jobs(factory)
     cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir)
 
     with factory() as session:

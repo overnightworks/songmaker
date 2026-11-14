@@ -114,7 +114,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: cleaned up %d expired sessions", deleted)
         session.commit()
 
-    await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir)
+    await asyncio.to_thread(recover_web_cover_jobs, ctx.db)
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
     fail_chat_turns_ended_by_restart(ctx.db)
     reap_stale_jobs(ctx)
