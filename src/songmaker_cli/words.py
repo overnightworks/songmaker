@@ -1040,6 +1040,15 @@ type Key = Literal[
     'takeRetention.previewFailed',
     'takeRetention.runFailed',
     'takeRetention.outcome',
+    'generationRefusal.notFound',
+    'generationRefusal.someNotFound',
+    'generationRefusal.audioMissing',
+    'voiceRefusal.notFound',
+    'voiceRefusal.sampleNotFound',
+    'conversationRefusal.notFound',
+    'presetRefusal.notFound',
+    'modelRefusal.notFound',
+    'workerRefusal.notFound',
 ]
 type Language = Literal[
     'en',
@@ -2191,6 +2200,15 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'takeRetention.previewFailed': 'Preview failed',
         'takeRetention.runFailed': 'Cleanup failed',
         'takeRetention.outcome': 'Archived {archived}, deleted {deleted}',
+        'generationRefusal.notFound': 'Generation not found',
+        'generationRefusal.someNotFound': 'One or more generations not found',
+        'generationRefusal.audioMissing': 'Audio file not found',
+        'voiceRefusal.notFound': 'LoRA not found',
+        'voiceRefusal.sampleNotFound': 'LoRA sample not found',
+        'conversationRefusal.notFound': 'Conversation not found',
+        'presetRefusal.notFound': 'Preset not found',
+        'modelRefusal.notFound': 'Model not found',
+        'workerRefusal.notFound': "Worker '{workerId}' not found",
     },
 }
 

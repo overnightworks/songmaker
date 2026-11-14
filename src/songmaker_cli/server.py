@@ -208,7 +208,7 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
     @app.get("/service-worker.js", include_in_schema=False)
     async def serve_service_worker() -> FileResponse:
         if not sw_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)  # unread: media
         return FileResponse(
             sw_path,
             media_type="application/javascript",
@@ -218,7 +218,7 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
     @app.get("/manifest.webmanifest", include_in_schema=False)
     async def serve_webmanifest() -> FileResponse:
         if not manifest_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)  # unread: media
         return FileResponse(manifest_path, media_type="application/manifest+json")
 
     def register_icon_route(icon_path: str) -> None:
@@ -227,7 +227,7 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
         @app.get(icon_path, include_in_schema=False)
         async def serve_icon() -> FileResponse:
             if not icon_file.exists():
-                raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+                raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)  # unread: media
             return FileResponse(icon_file, media_type="image/png")
 
     for icon_path in sorted(PWA_ICON_PATHS):

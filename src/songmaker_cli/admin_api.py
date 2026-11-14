@@ -8,7 +8,7 @@ from typing import Final
 
 import httpx
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
@@ -62,6 +62,10 @@ _RELAYED_WORKER_STATUSES: Final = frozenset({400, 409})
 def _require_known_model_mode(mode: str) -> None:
     if mode not in MODEL_CONFIG_PATHS:
         raise Refusal(400, "adminRefusal.unknownModelMode", mode=mode)
+
+
+def _worker_not_found(worker_id: str) -> Refusal:
+    return Refusal(404, "workerRefusal.notFound", workerId=worker_id)
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -229,7 +233,7 @@ async def load_model_on_worker_endpoint(
 
     worker = get_worker_identity(db, worker_id)
     if worker is None:
-        raise HTTPException(404, f"Worker '{worker_id}' not found")
+        raise _worker_not_found(worker_id)
     _require_known_model_mode(req.mode)
 
     job = create_job(db, JobFunction.LOAD_MODEL_ON_WORKER, user_id=admin.id)
@@ -255,7 +259,7 @@ async def _command_worker_model(db: Session, worker_id: str, path: str, mode: st
     """Post a model command to a worker; its 400 or 409 refusal reaches the admin with its words."""
     worker = get_worker_identity(db, worker_id)
     if worker is None:
-        raise HTTPException(404, f"Worker '{worker_id}' not found")
+        raise _worker_not_found(worker_id)
     _require_known_model_mode(mode)
 
     try:
@@ -345,7 +349,7 @@ async def restart_worker_endpoint(
 ) -> StatusResponse:
     worker = get_worker_identity(db, worker_id)
     if worker is None:
-        raise HTTPException(404, f"Worker '{worker_id}' not found")
+        raise _worker_not_found(worker_id)
 
     try:
         response = await _post_to_worker(worker.host, worker.port, "/restart")

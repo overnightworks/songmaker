@@ -1,4 +1,5 @@
-"""CI check that every server refusal names a plain catalog key with exactly its gaps.
+"""CI check that every server refusal names a plain catalog key with exactly its gaps, and that
+every raw `HTTPException` is one no person reads.
 
 Run from the project root:
 
@@ -17,6 +18,10 @@ A `Refusal` call also needs an int literal status and a key of the form
 `<resource>Refusal.<reason>`. It may add the keyword `headers=` for response headers, which is
 no gap, so a sentence may not name a gap `headers`.
 
+Every `HTTPException(...)` call (by name or attribute) carries a `# unread: <tag>` comment on one
+of its lines, the tag naming why no person reads its English answer. An unmarked call, an
+unknown tag and a marker with no such call on its lines fail.
+
 `words.py` (generated) and `refusals.py` (which forwards the key of its caller to `text`)
 are not walked.
 """
@@ -27,8 +32,11 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import io
 import re
 import sys
+import tokenize
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from string import Formatter
@@ -46,6 +54,16 @@ REFUSAL_KEY_PATTERN: Final = re.compile(r"^[a-z][A-Za-z0-9]*Refusal\.[a-z][A-Za-
 KEY_INDEX_OF_TEXT: Final = 1
 KEY_INDEX_OF_REFUSAL: Final = 1
 REFUSAL_HEADERS_KEYWORD: Final = "headers"
+HTTP_EXCEPTION_NAME: Final = "HTTPException"
+UNREAD_MARKER: Final = re.compile(r"#\s*unread:\s*(?P<tag>\S*)")
+UNREAD_TAGS: Final = (
+    "share",  # public share routes, the public queue-stream build, the shared-access 429
+    "media",  # media and static-file fetches
+    "sse",  # EventSource streams
+    "machine",  # health and internal answers
+    "session",  # the 401 that ends a session
+    "token",  # a body whose detail is a typed token the page words from the catalog
+)
 
 
 @dataclass(frozen=True)
@@ -175,26 +193,86 @@ def call_problem(
     return _refusal_problem(call, key)
 
 
+def _is_http_exception_call(call: ast.Call) -> bool:
+    if isinstance(call.func, ast.Name):
+        return call.func.id == HTTP_EXCEPTION_NAME
+    return isinstance(call.func, ast.Attribute) and call.func.attr == HTTP_EXCEPTION_NAME
+
+
+def _unread_markers(source: str) -> dict[int, str]:
+    """Map each line holding a `# unread: <tag>` comment to its tag."""
+    return {
+        token.start[0]: match.group("tag")
+        for token in tokenize.generate_tokens(io.StringIO(source).readline)
+        if token.type == tokenize.COMMENT and (match := UNREAD_MARKER.search(token.string))
+    }
+
+
+def _unread_problem(
+    call: ast.Call, markers: dict[int, str]
+) -> tuple[str | None, str | None]:
+    """The tag a raw call is marked with, and the problem when it has none or an unknown one."""
+    end_line = call.end_lineno or call.lineno
+    tags = [markers[line] for line in range(call.lineno, end_line + 1) if line in markers]
+    if not tags:
+        return None, (
+            f"a raw {HTTP_EXCEPTION_NAME} answers English only; raise a Refusal, or mark a "
+            "no-reader answer with '# unread: <tag>'"
+        )
+    unknown = next((tag for tag in tags if tag not in UNREAD_TAGS), None)
+    if unknown is not None:
+        return None, f"unknown unread tag {unknown!r}; the tags are {list(UNREAD_TAGS)}"
+    return tags[0], None
+
+
+def _listed(value: str | None) -> list[str]:
+    """The value as a list of zero or one entry."""
+    return [] if value is None else [value]
+
+
+def _key_problem(
+    call: ast.Call, bindings: WordsBindings, plain: dict[str, frozenset[str]]
+) -> tuple[bool, str | None]:
+    """Whether the call is a refusal or text call, and the problem with its key."""
+    if _is_refusal_call(call):
+        return True, call_problem(call, KEY_INDEX_OF_REFUSAL, plain, is_refusal=True)
+    if bindings.is_text_call(call):
+        return True, call_problem(call, KEY_INDEX_OF_TEXT, plain, is_refusal=False)
+    return False, None
+
+
 def check_file(
     path: Path, shown: str, plain: dict[str, frozenset[str]]
-) -> tuple[list[Violation], int]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=shown)
+) -> tuple[list[Violation], int, Counter[str]]:
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=shown)
     bindings = words_bindings(tree)
+    markers = _unread_markers(source)
     violations: list[Violation] = []
+    unread: Counter[str] = Counter()
     checked = 0
+    raw_lines: set[int] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if _is_refusal_call(node):
-            problem = call_problem(node, KEY_INDEX_OF_REFUSAL, plain, is_refusal=True)
-        elif bindings.is_text_call(node):
-            problem = call_problem(node, KEY_INDEX_OF_TEXT, plain, is_refusal=False)
-        else:
+        if _is_http_exception_call(node):
+            raw_lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+            tag, problem = _unread_problem(node, markers)
+            unread.update(_listed(tag))
+            violations.extend(Violation(shown, node.lineno, text) for text in _listed(problem))
+            continue
+        is_checked, problem = _key_problem(node, bindings, plain)
+        if not is_checked:
             continue
         checked += 1
         if problem is not None:
             violations.append(Violation(shown, node.lineno, problem))
-    return violations, checked
+    violations.extend(
+        Violation(shown, line, f"'# unread: {tag}' marks no raw {HTTP_EXCEPTION_NAME} call")
+        for line, tag in markers.items()
+        if line not in raw_lines
+    )
+    return violations, checked, unread
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -207,16 +285,22 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     plain = load_plain_gaps(words_file)
     violations: list[Violation] = []
+    unread: Counter[str] = Counter()
     checked = 0
     for path in sorted(source.rglob("*.py")):
         if path in (words_file, source / REFUSALS_FILE):
             continue
-        found, count = check_file(path, str(path), plain)
+        found, count, marked = check_file(path, str(path), plain)
         violations.extend(found)
+        unread.update(marked)
         checked += count
     for violation in violations:
         print(f"{violation.path}:{violation.line}: {violation.message}")
-    print(f"checked: refusal and text calls={checked}, violations={len(violations)}")
+    per_tag = ", ".join(f"{tag}={unread[tag]}" for tag in UNREAD_TAGS)
+    print(
+        f"checked: refusal and text calls={checked}, violations={len(violations)}; "
+        f"unread: {per_tag}"
+    )
     return 1 if violations else 0
 
 

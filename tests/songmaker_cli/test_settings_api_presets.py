@@ -5,9 +5,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 from support.signed_in_people import sign_in_people
+from support.web_app import refusal_body
 
 from songmaker_cli.db.models import AvailableModel, GenerationPreset
-from songmaker_cli.settings_api import PRESET_NAME_EXISTS_DETAIL, PRESET_NOT_FOUND_DETAIL
+from songmaker_cli.settings_api import PRESET_NAME_EXISTS_DETAIL
 
 PRESETS_URL = "/api/settings/presets"
 
@@ -99,8 +100,9 @@ def test_an_id_that_is_not_the_persons_own_is_not_found_on_every_preset_route(
         client.post(f"{PRESETS_URL}/{preset_id}/set-default"),
     ]
 
-    refusals = [(r.status_code, r.json()["detail"]) for r in responses]
-    assert refusals == [(404, PRESET_NOT_FOUND_DETAIL)] * 3
+    assert [(r.status_code, r.json()) for r in responses] == [
+        (404, refusal_body("presetRefusal.notFound")),
+    ] * 3
     assert _stored_presets(factory) == before
     with factory() as session:
         assert (session.get(GenerationPreset, preset_id) is not None) == (target != "unknown")

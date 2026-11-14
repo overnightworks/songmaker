@@ -31,7 +31,7 @@ async def get_audio(
     ctx: Annotated[AppContext, Depends(get_app_context)],
 ) -> FileResponse:
     if user.role != AppRole.ADMIN and owner_id != user.id:
-        raise HTTPException(404, AUDIO_FILE_NOT_FOUND)
+        raise HTTPException(404, AUDIO_FILE_NOT_FOUND)  # unread: media
 
     try:
         audio_path = resolve_audio_path(ctx.audio_dir, f"{owner_id}/{filename}")

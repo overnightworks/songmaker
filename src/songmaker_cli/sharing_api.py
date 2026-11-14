@@ -82,7 +82,7 @@ def _presented_audio_response(
         stored_path_of_presented_take(db, slug, generation_id) if generation_id else None
     )
     if stored_filename is None:
-        raise HTTPException(404, HTTP_NOT_FOUND)
+        raise HTTPException(404, HTTP_NOT_FOUND)  # unread: share
     return _shared_audio_file_response(ctx, stored_filename)
 
 
@@ -106,7 +106,7 @@ def _shared_cover_response(
     check_shared_rate_limit(request)
     entity = resolve_entity()
     if entity is None:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     return cover_file_response(resolve_file, audio_dir, entity, variant, version)
 
 
@@ -117,30 +117,30 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
     if scope == "shared-playlist":
         playlist = get_playlist_by_slug(db, slug)
         if not playlist:
-            raise HTTPException(404, NOT_FOUND_DETAIL)
+            raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
         valid_tracks = {
             (entry.id, entry.generation.id)
             for entry in presented_playlist_entries(playlist)
             if is_playable_take(entry.generation)
         }
         if any((track.entry_id, track.generation_id) not in valid_tracks for track in tracks):
-            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
+            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
         return
 
     if scope == "shared-album":
         album = get_album_by_slug(db, slug)
         if not album:
-            raise HTTPException(404, NOT_FOUND_DETAIL)
+            raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
         valid_tracks = {
             (song.id, gen.id)
             for song in album.songs
             if (gen := presented_take(song.generations)) is not None
         }
         if any((track.song_id, track.generation_id) not in valid_tracks for track in tracks):
-            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
+            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
         return
 
-    raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
+    raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
 
 
 @router.get(
@@ -269,7 +269,7 @@ def get_shared_gen_audio(
     check_shared_rate_limit(request)
     gen = get_presented_generation(db, slug)
     if not gen or generation_id_of_shared_audio_name(filename) != gen.id:
-        raise HTTPException(404, HTTP_NOT_FOUND)
+        raise HTTPException(404, HTTP_NOT_FOUND)  # unread: share
     return _shared_audio_file_response(ctx, gen.mp3_path)
 
 
@@ -309,14 +309,14 @@ async def get_shared_playlist_album_cover(
     def resolve_album() -> Album:
         playlist = get_playlist_by_slug(db, slug)
         if not playlist:
-            raise HTTPException(404, NOT_FOUND_DETAIL)
+            raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
         album = next((
             album
             for entry in playlist.entries
             if (album := entry_album(entry)) is not None and album.id == album_id
         ), None)
         if album is None:
-            raise HTTPException(404, COVER_NOT_FOUND)
+            raise HTTPException(404, COVER_NOT_FOUND)  # unread: share
         return album
 
     return _shared_cover_response(request, resolve_album, ctx.audio_dir, variant, v)
