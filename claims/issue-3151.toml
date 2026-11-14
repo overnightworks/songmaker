@@ -1,7 +1,0 @@
-claim_id = "c206c15ecf234be4a77d73e76e84942e"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "0b5dba536b462239f177151534872cdf2966dbfe"
-branch = "claude/issue-3151-the-en-po-merge-driver-conflicts-on-a-re"
-scope = ["scripts/merge_po.py", "tests/scripts/test_merge_po.py"]
-opened_commit = "6cd038d0bf30b9e896f9b91ac9a1b5bbeed3d3fe"
