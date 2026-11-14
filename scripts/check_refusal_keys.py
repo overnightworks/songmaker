@@ -486,8 +486,11 @@ def _base_problems(
     ).returncode:
         problem = f"the base commit {base_sha} cannot be resolved; fetch the history"
         return [Violation(shown, 1, problem)]
-    base = _git(directory, "show", f"{commit_id}:./{stored_file.name}")
-    dropped = (read_stored_keys(base.stdout) if base.returncode == 0 else set()) - stored
+    tracked = _git(directory, "ls-tree", "--name-only", commit_id).stdout.splitlines()
+    # why: git is handed the file name as the base commit lists it, not the argument's spelling.
+    base_name = next((entry for entry in tracked if entry == stored_file.name), None)
+    base_text = _git(directory, "show", f"{commit_id}:./{base_name}").stdout if base_name else ""
+    dropped = read_stored_keys(base_text) - stored
     if not dropped:
         return []
     added = _git(
