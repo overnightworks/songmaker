@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-	import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		/** Whether this row holds the take the transport is on. */
@@ -16,7 +16,7 @@
 </script>
 
 {#if shown}
-	<span class="playing-mark" class:paused role="img" aria-label={PLAYING_MARK_LABEL}>
+	<span class="playing-mark" class:paused role="img" aria-label={pageText('playingMark.playing')}>
 		<span></span><span></span><span></span>
 	</span>
 {/if}

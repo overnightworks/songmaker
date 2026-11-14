@@ -14,7 +14,6 @@
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
-import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import type { VersionItem } from '../src/lib/api/types';
 import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import {
@@ -82,7 +81,7 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 		});
 		const panel = page.getByRole('tabpanel');
 		const playButtons = panel.getByRole('button', {
-			name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`)
+			name: new RegExp(`^${words['transport.play']} v`)
 		});
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);

@@ -5,12 +5,6 @@
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants/now-playing';
-import {
-	collectionActionLabel,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants/transport';
 import { FlowGuard, shellOf, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
@@ -41,20 +35,22 @@ test('1906_P5: the full player says KI-generiert and the mini-player bar does no
 	await page.goto(`/album/${library.albumId}`);
 	await workspace(page)
 		.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			name: words['collectionHeader.playAlbum'],
 			exact: true
 		})
 		.click();
 	const bar = page.getByRole('contentinfo');
-	await expect(bar.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })).toBeVisible();
+	await expect(
+		bar.getByRole('button', { name: words['transport.pause'], exact: true })
+	).toBeVisible();
 	await expect(bar.getByText(AI_GENERATED_WORDS)).toHaveCount(0);
 
 	await bar
 		.getByRole('button', {
 			name:
 				shellOf(testInfo) === 'mobile'
-					? openNowPlayingLabel(library.pickedSongTitle)
-					: NOW_PLAYING_LABEL
+					? words['player.openNowPlaying']({ title: library.pickedSongTitle })
+					: words['transport.nowPlaying']
 		})
 		.first()
 		.click();

@@ -8,19 +8,6 @@ import {
 } from './share-playlist-fixtures';
 import { words } from '../src/lib/words/en';
 import {
-	collectionActionLabel,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants/transport';
-import {
-	NOW_PLAYING_EXPAND_LABEL,
-	NOW_PLAYING_RIGHT_PANEL_LABEL,
-	nowPlayingSheetCloseLabel,
-	NOW_PLAYING_GO_TO_SONG,
-	NOW_PLAYING_LABEL,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
-import {
 	accountCircle,
 	accountMenu,
 	appBar,
@@ -50,7 +37,7 @@ import {
 	type SeededPlaylist
 } from './seed';
 
-const PLAY_PLAYLIST_LABEL = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist');
+const PLAY_PLAYLIST_LABEL = words['collectionHeader.playPlaylist'];
 
 const SETTINGS_SECTION = words['settingsSections.voices'];
 const LIBRARY_HEADING = { name: words['places.library'] };
@@ -80,9 +67,9 @@ interface OverlayRow {
 async function expandNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
 	const [playing] = playlist.songTitles;
 	await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
-	await transportButton(page, { name: NOW_PLAYING_LABEL, exact: true }).click();
+	await transportButton(page, { name: words['transport.nowPlaying'], exact: true }).click();
 	const docked = page.getByRole('complementary', { name: playing });
-	await docked.getByRole('button', { name: NOW_PLAYING_EXPAND_LABEL, exact: true }).click();
+	await docked.getByRole('button', { name: words['nowPlaying.expand'], exact: true }).click();
 	await expect(page.getByRole('dialog', { name: playing })).toBeVisible();
 }
 
@@ -125,7 +112,7 @@ async function openSongsTakes(page: Page, playlist: SeededPlaylist): Promise<Loc
 }
 
 function takeSheet(page: Page): Locator {
-	return page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
+	return page.getByRole('dialog', { name: words['nowPlaying.rightPanel'] });
 }
 
 async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
@@ -140,7 +127,7 @@ async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist)
 // strip of backdrop just above the sheet.
 async function tapBesideTakeSheet(page: Page): Promise<void> {
 	const backdrop = page.getByRole('button', {
-		name: nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)
+		name: words['nowPlaying.closeSheet']({ sheet: words['nowPlaying.rightPanel'] })
 	});
 	const [backdropBox, sheetBox] = await Promise.all([
 		backdrop.boundingBox(),
@@ -917,9 +904,9 @@ async function openAlbumFromNavigation(
 }
 
 async function goToPlayingSong(page: Page, title: string): Promise<void> {
-	await transportButton(page, { name: openNowPlayingLabel(title) }).click();
+	await transportButton(page, { name: words['player.openNowPlaying']({ title: title }) }).click();
 	const nowPlaying = page.getByRole('dialog', { name: title });
-	await nowPlaying.getByRole('button', { name: NOW_PLAYING_GO_TO_SONG, exact: true }).click();
+	await nowPlaying.getByRole('button', { name: words['nowPlaying.goToSong'], exact: true }).click();
 }
 
 // Search and the full Now Playing are phone layers.
@@ -952,7 +939,7 @@ test.describe(
 			const { playlist, pages } = await openSeededPlaylist(page, request);
 			await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
 			// Paused, so the seeded three-second take stays the playing song.
-			await transportButton(page, { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
+			await transportButton(page, { name: words['transport.pause'], exact: true }).click();
 
 			for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
 				await goToPlayingSong(page, firstSong(playlist));
@@ -1141,7 +1128,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 			await sharePage.goto(PLAYLIST_URL);
 			await sharePage
 				.locator('.now-playing.page')
-				.getByRole('button', { name: 'Play', exact: true })
+				.getByRole('button', { name: words['transport.play'], exact: true })
 				.click();
 			const historyLength = await sharePage.evaluate(() => window.history.length);
 			await sharePage
@@ -1153,7 +1140,9 @@ test.describe('Back closes the open overlay outside the library', () => {
 				await bar.getByRole('button', { name: 'Back to the player' }).first().click();
 			}
 			await expect(
-				sharePage.locator('.now-playing.page').getByRole('button', { name: 'Pause', exact: true })
+				sharePage
+					.locator('.now-playing.page')
+					.getByRole('button', { name: words['transport.pause'], exact: true })
 			).toBeInViewport({ ratio: 1 });
 			expect(await sharePage.evaluate(() => window.history.length)).toBe(historyLength);
 			await expect(bar).toBeHidden();

@@ -2,6 +2,7 @@ import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { fromStore, writable } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueueRowItem, QueueViewModel } from '#lib/stores/player.ts';
+import { words } from '#lib/words/en.ts';
 import NowPlayingQueue from './NowPlayingQueue.svelte';
 
 type NowPlayingQueueProps = ComponentProps<typeof NowPlayingQueue>;
@@ -154,22 +155,24 @@ describe('NowPlayingQueue', () => {
 	it('offers the take pool trio when the queue is built from a pool', async () => {
 		await render();
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(3);
-		expect(target.textContent).toContain('Picks');
-		expect(target.textContent).toContain('+ Keeps');
-		expect(target.textContent).toContain('All takes');
-		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue');
+		expect(target.textContent).toContain(words['nowPlaying.poolPicks']);
+		expect(target.textContent).toContain(words['nowPlaying.poolKeeps']);
+		expect(target.textContent).toContain(words['nowPlaying.poolAll']);
+		expect(target.querySelector('.queue-heading')?.textContent).toBe(words['nowPlaying.queueTab']);
 	});
 
 	it('names the collection in the heading and offers no pool when the queue has none', async () => {
 		await render({ contextLabel: 'Night Drive', takePool: undefined });
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
-		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Night Drive');
+		expect(target.querySelector('.queue-heading')?.textContent).toBe(
+			words['nowPlaying.queueHeading']({ source: 'Night Drive' })
+		);
 	});
 
 	it('calls onChoosePool when a pool pill is clicked', async () => {
 		const { onChoosePool } = await render();
 		const allPill = Array.from(target.querySelectorAll<HTMLButtonElement>('.pool-pill')).find(
-			(btn) => btn.textContent === 'All takes'
+			(btn) => btn.textContent === words['nowPlaying.poolAll']
 		);
 		allPill?.click();
 		expect(onChoosePool).toHaveBeenCalledWith('all');
@@ -185,7 +188,7 @@ describe('NowPlayingQueue', () => {
 		const rows = target.querySelectorAll('.queue-row');
 		expect(rows).toHaveLength(2);
 		expect(rows[0]?.classList.contains('current')).toBe(true);
-		expect(target.textContent).toContain('Up next: Ebb');
+		expect(target.textContent).toContain(words['nowPlaying.upNext']({ title: 'Ebb' }));
 		(rows[1] as HTMLButtonElement).click();
 		expect(onJump).toHaveBeenCalledWith(1);
 	});
@@ -196,7 +199,7 @@ describe('NowPlayingQueue', () => {
 		const rows = target.querySelectorAll('.queue-row');
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain('Tide');
-		expect(target.textContent).not.toContain('Up next');
+		expect(target.textContent).not.toContain(words['nowPlaying.upNext']({ title: '' }));
 	});
 
 	it('labels a versioned row with version and take number', async () => {
@@ -206,7 +209,9 @@ describe('NowPlayingQueue', () => {
 			upNext: null
 		};
 		await render({ queue });
-		expect(target.querySelector('.queue-take')?.textContent?.trim()).toBe('v2 · take 3');
+		expect(target.querySelector('.queue-take')?.textContent?.trim()).toBe(
+			words['nowPlaying.takeVersioned']({ version: '2', take: '3' })
+		);
 	});
 
 	it('labels a library-pool row (no version) with take number only, never "vnull"', async () => {
@@ -217,7 +222,7 @@ describe('NowPlayingQueue', () => {
 		};
 		await render({ queue });
 		const label = target.querySelector('.queue-take')?.textContent?.trim();
-		expect(label).toBe('take 4');
+		expect(label).toBe(words['nowPlaying.takeUnversioned']({ take: '4' }));
 		expect(label).not.toContain('vnull');
 	});
 

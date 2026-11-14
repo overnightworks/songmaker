@@ -5,7 +5,6 @@ import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { NetworkError } from '#lib/api/fetch.ts';
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { LIBRARY_ROUTE_ID, PLAYLISTS_ROUTE_ID } from '#lib/routes/addresses.ts';
 import {
 	reportResourceStreamReachable,
@@ -359,7 +358,9 @@ describe('RailPlaylistsGroup', () => {
 				entries.map((_, index) => index === played)
 			);
 			expect(
-				rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null)
+				rows.map(
+					(row) => findElementByRoleAndName(row, 'img', words['playingMark.playing']) !== null
+				)
 			).toEqual(marks);
 		}
 	);

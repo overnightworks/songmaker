@@ -1,10 +1,6 @@
 <script lang="ts">
 	import type { WhisperCue } from '#lib/api/types.ts';
-	import {
-		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
-		NOW_PLAYING_LYRICS_ROW_LABEL,
-		NOW_PLAYING_LYRICS_FOLLOW_LABEL
-	} from '#lib/constants/now-playing.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { alignInWorker } from '#lib/services/lyricsAlignment.svelte.ts';
 	import { activeLyricLineIndices, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
 	import { preferredScrollBehavior } from '#lib/utils/motion.ts';
@@ -183,7 +179,9 @@
 
 <div class="np-lyrics">
 	<p class="lyrics-heading">
-		{songTitle ? `${NOW_PLAYING_LYRICS_ROW_LABEL} · ${songTitle}` : NOW_PLAYING_LYRICS_ROW_LABEL}
+		{songTitle
+			? pageText('nowPlaying.lyricsHeadingTitled', { title: songTitle })
+			: pageText('nowPlaying.lyricsHeading')}
 	</p>
 	{#if hasLyrics}
 		<div
@@ -218,11 +216,11 @@
 				class="lyrics-follow"
 				data-hitbox="text"
 				onclick={() => (following = true)}
-				><span aria-hidden="true">↓</span> {NOW_PLAYING_LYRICS_FOLLOW_LABEL}</button
+				><span aria-hidden="true">↓</span> {pageText('nowPlaying.lyricsFollow')}</button
 			>
 		{/if}
 		{#if showUnsyncedNote}
-			<p class="lyrics-unsynced">{NOW_PLAYING_LYRICS_UNSYNCED_NOTE}</p>
+			<p class="lyrics-unsynced">{pageText('nowPlaying.lyricsUnsynced')}</p>
 		{/if}
 	{:else}
 		<p class="lyrics-empty">{emptyLabel}</p>

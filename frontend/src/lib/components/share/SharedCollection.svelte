@@ -7,10 +7,6 @@
 		type SharedCollectionView
 	} from '#lib/share/sharedCollection.ts';
 	import { SharePlayback, type ShareStreamFetcher } from '#lib/share/sharePlayback.svelte.ts';
-	import {
-		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
-		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
-	} from '#lib/constants/now-playing.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { formatTime, titleInitials } from '#lib/utils/format.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -202,9 +198,7 @@
 				? () => (playback.currentTrack ? playback.next() : playback.jump(1))
 				: undefined}
 			shuffle={playback.shuffle}
-			shuffleLabel={playback.shuffle
-				? NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
-				: NOW_PLAYING_SHUFFLE_LABEL_PREFIX}
+			shuffleLabel={pageText(playback.shuffle ? 'share.disableShuffle' : 'share.shuffle')}
 			onToggleShuffle={isCollection ? () => playback.setShuffle(!playback.shuffle) : undefined}
 			info={stagedInfo}
 			onCoverError={() => (coverFailed = true)}

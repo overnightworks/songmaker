@@ -2,10 +2,10 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
-import { NOW_PLAYING_LABEL } from '#lib/constants/now-playing.ts';
 import { audioPlayer, type PlaybackInfo } from '#lib/services/audioPlayer.svelte.ts';
 import { nowPlayingDockable, nowPlayingSurface, setShuffle } from '#lib/stores/player.ts';
 import PlayerBar from './PlayerBar.svelte';
+import { words } from '#lib/words/en.ts';
 
 class FakeAudio {
 	paused = true;
@@ -103,10 +103,10 @@ describe('PlayerBar while a take is loaded', () => {
 	it('names the song and opens and closes its one Now Playing surface', async () => {
 		expect(target.querySelector('.track-title')?.textContent).toBe('Opening Move');
 
-		await pressAndSettle(control(`button[aria-label="${NOW_PLAYING_LABEL}"]`));
+		await pressAndSettle(control(`button[aria-label="${words['transport.nowPlaying']}"]`));
 		expect(get(nowPlayingSurface)).toBe('docked');
 
-		await pressAndSettle(control(`button[aria-label="${NOW_PLAYING_LABEL}"]`));
+		await pressAndSettle(control(`button[aria-label="${words['transport.nowPlaying']}"]`));
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 });

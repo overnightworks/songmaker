@@ -3,7 +3,6 @@ import { APP_NAME } from '#lib/constants/app.ts';
 import { words } from '#lib/words/en.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '#lib/api/types.ts';
-import { TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
@@ -128,14 +127,14 @@ describe('shared generation (take) page', () => {
 
 		expect(target.querySelector('h1')?.textContent).toBe('Solo Track');
 		expect(target.textContent).toContain('Album · Artist');
-		expect(target.textContent).not.toContain('take 3');
+		expect(target.textContent).not.toContain(words['nowPlaying.takeUnversioned']({ take: '3' }));
 		// #141/10: the page names a take; only the URL segment stays /share/gen/.
 		expect(document.title).toContain(
 			words['shareTakePage.documentTitle']({ number: '3', title: 'Solo Track', app: APP_NAME })
 		);
 		expect(document.title).not.toContain('Gen #');
 
-		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		getByRoleButton(target, words['transport.play']).click();
 		await vi.waitFor(() => expect(audio.src).toBe('/audio/take3.mp3'));
 		expect(document.querySelector('.player-bar')).toBeNull();
 	});
@@ -154,7 +153,7 @@ describe('shared generation (take) page', () => {
 				whisper_cues: [sungCue(0, FIRST_LINE), sungCue(6, SECOND_LINE)]
 			})
 		);
-		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		getByRoleButton(target, words['transport.play']).click();
 		await vi.waitFor(() => expect(target.querySelector('.lyrics-synced')).not.toBeNull());
 
 		audioPlayer.currentTime = 8.5;

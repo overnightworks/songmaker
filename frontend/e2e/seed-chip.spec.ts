@@ -6,7 +6,6 @@
 // and 1440 px (the header).
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
@@ -181,9 +180,9 @@ test(
 		await openSong(page, songs.title);
 		await page
 			.getByRole('contentinfo')
-			.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
+			.getByRole('button', { name: words['transport.nowPlaying'], exact: true })
 			.click();
-		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB, exact: true }).click();
+		await page.getByRole('tab', { name: words['nowPlaying.takeTab'], exact: true }).click();
 		await page
 			.locator('.np-take')
 			.getByRole('button', { name: nameStartingWith(words['nowPlayingTake.useSeed']) })

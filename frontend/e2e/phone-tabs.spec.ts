@@ -1,8 +1,6 @@
 import { expect, test, type Page } from './coverage-test';
 import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
 import { words } from '../src/lib/words/en';
-import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
-import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
 	FlowGuard,
@@ -104,17 +102,20 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await expectCurrent(page, words['places.library']);
 		await workspace(page)
 			.getByRole('button', {
-				name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+				name: words['collectionHeader.playAlbum'],
 				exact: true
 			})
 			.click();
 		await expectCurrent(page, words['places.library']);
 		await page
 			.getByRole('contentinfo')
-			.getByRole('button', { name: openNowPlayingLabel(library.pickedSongTitle), exact: true })
+			.getByRole('button', {
+				name: words['player.openNowPlaying']({ title: library.pickedSongTitle }),
+				exact: true
+			})
 			.click();
 		await expect(tabs(page)).toHaveCount(0);
-		await page.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
+		await page.getByRole('button', { name: words['nowPlaying.close'], exact: true }).click();
 		await expectCurrent(page, words['places.library']);
 		guard.assertClean();
 	});

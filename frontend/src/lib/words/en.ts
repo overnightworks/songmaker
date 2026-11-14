@@ -619,7 +619,9 @@ export type Words = {
     readonly "takeRow.takeUnversioned": (gaps: { readonly take: string }) => string;
     readonly "takeRow.archivedTitle": string;
     readonly "takeRow.selectTake": (gaps: { readonly take: string }) => string;
-    readonly "takeRow.playTake": (gaps: { readonly action: string; readonly take: string }) => string;
+    readonly "takeRow.playTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.pauseTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.retryTake": (gaps: { readonly take: string }) => string;
     readonly "takeRow.pickTake": (gaps: { readonly take: string }) => string;
     readonly "takeRow.unpickTake": (gaps: { readonly take: string }) => string;
     readonly "takeRow.keepTake": (gaps: { readonly take: string }) => string;
@@ -1276,6 +1278,99 @@ export type Words = {
     readonly "jobEnd.modelDownloadPartial": string;
     readonly "jobEnd.modelDownloadCancelled": string;
     readonly "jobEnd.modelDownloadFailed": string;
+    readonly "transport.play": string;
+    readonly "transport.pause": string;
+    readonly "transport.retry": string;
+    readonly "transport.previous": string;
+    readonly "transport.next": string;
+    readonly "transport.nowPlaying": string;
+    readonly "transport.seek": string;
+    readonly "transport.seekPosition": (gaps: { readonly length: string; readonly position: string }) => string;
+    readonly "transport.waitingForNetwork": string;
+    readonly "transport.playbackFailed": string;
+    readonly "transport.fileNotFound": string;
+    readonly "transport.stalled": string;
+    readonly "transport.autoplayBlocked": string;
+    readonly "transport.aborted": string;
+    readonly "transport.fileCorrupted": string;
+    readonly "transport.formatUnsupported": string;
+    readonly "transport.shuffleLibrary": string;
+    readonly "transport.shuffleAlbum": string;
+    readonly "transport.shufflePlaylist": string;
+    readonly "transport.unshuffleLibrary": string;
+    readonly "transport.unshuffleAlbum": string;
+    readonly "transport.unshufflePlaylist": string;
+    readonly "player.openNowPlaying": (gaps: { readonly title: string }) => string;
+    readonly "player.loading": string;
+    readonly "player.nothingToPlay": string;
+    readonly "player.startFailed": (gaps: { readonly source: string }) => string;
+    readonly "player.pressPlayToRetry": string;
+    readonly "player.play": string;
+    readonly "player.playlistLoading": string;
+    readonly "player.picksQueueFailed": string;
+    readonly "player.keepsQueueFailed": string;
+    readonly "player.allTakesQueueFailed": string;
+    readonly "player.takeNotInQueue": string;
+    readonly "player.playTakeFailed": string;
+    readonly "player.takeSkipped": (gaps: { readonly title: string }) => string;
+    readonly "collectionHeader.playAlbum": string;
+    readonly "collectionHeader.pauseAlbum": string;
+    readonly "collectionHeader.retryAlbum": string;
+    readonly "collectionHeader.playPlaylist": string;
+    readonly "collectionHeader.pausePlaylist": string;
+    readonly "collectionHeader.retryPlaylist": string;
+    readonly "libraryWall.playTitle": (gaps: { readonly title: string }) => string;
+    readonly "libraryWall.pauseTitle": (gaps: { readonly title: string }) => string;
+    readonly "libraryWall.retryTitle": (gaps: { readonly title: string }) => string;
+    readonly "playingMark.playing": string;
+    readonly "share.shuffle": string;
+    readonly "share.disableShuffle": string;
+    readonly "nowPlaying.kicker": string;
+    readonly "nowPlaying.close": string;
+    readonly "nowPlaying.expand": string;
+    readonly "nowPlaying.collapse": string;
+    readonly "nowPlaying.goToSong": string;
+    readonly "nowPlaying.playAgain": string;
+    readonly "nowPlaying.previousSong": string;
+    readonly "nowPlaying.nextSong": string;
+    readonly "nowPlaying.rightPanel": string;
+    readonly "nowPlaying.closeSheet": (gaps: { readonly sheet: string }) => string;
+    readonly "nowPlaying.queueTab": string;
+    readonly "nowPlaying.takeTab": string;
+    readonly "nowPlaying.queueHeading": (gaps: { readonly source: string }) => string;
+    readonly "nowPlaying.upNext": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.fromSource": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.openAlbumSource": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.openPlaylistSource": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.takeVersioned": (gaps: { readonly take: string; readonly version: string }) => string;
+    readonly "nowPlaying.takeUnversioned": (gaps: { readonly take: string }) => string;
+    readonly "nowPlaying.takeDetailsFailed": string;
+    readonly "nowPlaying.lyricsHeading": string;
+    readonly "nowPlaying.lyricsHeadingTitled": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.lyricsFollow": string;
+    readonly "nowPlaying.lyricsUnsynced": string;
+    readonly "nowPlaying.noLyrics": string;
+    readonly "nowPlaying.importedNoLyrics": string;
+    readonly "nowPlaying.curateGroup": string;
+    readonly "nowPlaying.curateProgress": (gaps: { readonly index: string; readonly total: string }) => string;
+    readonly "nowPlaying.pick": string;
+    readonly "nowPlaying.keep": string;
+    readonly "nowPlaying.unkeep": string;
+    readonly "nowPlaying.skip": string;
+    readonly "nowPlaying.skipName": string;
+    readonly "nowPlaying.done": string;
+    readonly "nowPlaying.takePool": string;
+    readonly "nowPlaying.poolPicks": string;
+    readonly "nowPlaying.poolKeeps": string;
+    readonly "nowPlaying.poolAll": string;
+    readonly "nowPlaying.streamSkipped": (count: number) => string;
+    readonly "nowPlaying.streamCheckIncomplete": string;
+    readonly "nowPlaying.streamEnded": string;
+    readonly "nowPlaying.streamMissingPath": (gaps: { readonly count: number }) => string;
+    readonly "nowPlaying.streamMissingFile": (gaps: { readonly count: number }) => string;
+    readonly "nowPlaying.streamUnreadable": (gaps: { readonly count: number }) => string;
+    readonly "nowPlaying.streamMoreNotChecked": string;
+    readonly "nowPlaying.streamMoreNotLoaded": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -2082,7 +2177,9 @@ export const words: Words = {
     "takeRow.takeUnversioned": (gaps: { readonly take: string }) => "take " + gaps.take,
     "takeRow.archivedTitle": "Archived take",
     "takeRow.selectTake": (gaps: { readonly take: string }) => "Select " + gaps.take,
-    "takeRow.playTake": (gaps: { readonly action: string; readonly take: string }) => gaps.action + " " + gaps.take,
+    "takeRow.playTake": (gaps: { readonly take: string }) => "Play " + gaps.take,
+    "takeRow.pauseTake": (gaps: { readonly take: string }) => "Pause " + gaps.take,
+    "takeRow.retryTake": (gaps: { readonly take: string }) => "Retry " + gaps.take,
     "takeRow.pickTake": (gaps: { readonly take: string }) => "Pick " + gaps.take,
     "takeRow.unpickTake": (gaps: { readonly take: string }) => "Unpick " + gaps.take,
     "takeRow.keepTake": (gaps: { readonly take: string }) => "Keep " + gaps.take,
@@ -2823,5 +2920,105 @@ export const words: Words = {
     "jobEnd.modelDownloadPartial": "download_model_on_worker partially completed",
     "jobEnd.modelDownloadCancelled": "download_model_on_worker cancelled",
     "jobEnd.modelDownloadFailed": "download_model_on_worker failed",
+    "transport.play": "Play",
+    "transport.pause": "Pause",
+    "transport.retry": "Retry",
+    "transport.previous": "Previous",
+    "transport.next": "Next",
+    "transport.nowPlaying": "Now Playing",
+    "transport.seek": "Seek playback",
+    "transport.seekPosition": (gaps: { readonly length: string; readonly position: string }) => gaps.position + " of " + gaps.length,
+    "transport.waitingForNetwork": "Waiting for the network.",
+    "transport.playbackFailed": "Playback failed. Press Retry.",
+    "transport.fileNotFound": "Audio file not found.",
+    "transport.stalled": "Playback stalled. Press Retry.",
+    "transport.autoplayBlocked": "Autoplay blocked. Press Play to start.",
+    "transport.aborted": "Playback aborted.",
+    "transport.fileCorrupted": "Audio file is corrupted.",
+    "transport.formatUnsupported": "Audio format not supported by this browser.",
+    "transport.shuffleLibrary": "Shuffle all albums",
+    "transport.shuffleAlbum": "Shuffle this album",
+    "transport.shufflePlaylist": "Shuffle this playlist",
+    "transport.unshuffleLibrary": "Disable shuffle (all albums)",
+    "transport.unshuffleAlbum": "Disable shuffle (this album)",
+    "transport.unshufflePlaylist": "Disable shuffle (this playlist)",
+    "player.openNowPlaying": (gaps: { readonly title: string }) => gaps.title + " — open Now Playing",
+    "player.loading": "Loading",
+    "player.nothingToPlay": "Nothing to play yet",
+    "player.startFailed": (gaps: { readonly source: string }) => gaps.source + " failed",
+    "player.pressPlayToRetry": "Press play to retry",
+    "player.play": "Play",
+    "player.playlistLoading": "Loading playlist…",
+    "player.picksQueueFailed": "Picks queue failed. Press play to retry.",
+    "player.keepsQueueFailed": "+ Keeps queue failed. Press play to retry.",
+    "player.allTakesQueueFailed": "All takes queue failed. Press play to retry.",
+    "player.takeNotInQueue": "This take is not in the queue",
+    "player.playTakeFailed": "Playback failed",
+    "player.takeSkipped": (gaps: { readonly title: string }) => gaps.title + " couldn't be loaded, skipped.",
+    "collectionHeader.playAlbum": "Play album",
+    "collectionHeader.pauseAlbum": "Pause album",
+    "collectionHeader.retryAlbum": "Retry album",
+    "collectionHeader.playPlaylist": "Play playlist",
+    "collectionHeader.pausePlaylist": "Pause playlist",
+    "collectionHeader.retryPlaylist": "Retry playlist",
+    "libraryWall.playTitle": (gaps: { readonly title: string }) => "Play " + gaps.title,
+    "libraryWall.pauseTitle": (gaps: { readonly title: string }) => "Pause " + gaps.title,
+    "libraryWall.retryTitle": (gaps: { readonly title: string }) => "Retry " + gaps.title,
+    "playingMark.playing": "Playing",
+    "share.shuffle": "Shuffle",
+    "share.disableShuffle": "Disable shuffle",
+    "nowPlaying.kicker": "Now Playing",
+    "nowPlaying.close": "Close",
+    "nowPlaying.expand": "Expand",
+    "nowPlaying.collapse": "Collapse",
+    "nowPlaying.goToSong": "Go to song",
+    "nowPlaying.playAgain": "Play again",
+    "nowPlaying.previousSong": "Previous song",
+    "nowPlaying.nextSong": "Next song",
+    "nowPlaying.rightPanel": "Now Playing panel",
+    "nowPlaying.closeSheet": (gaps: { readonly sheet: string }) => "Close " + gaps.sheet,
+    "nowPlaying.queueTab": "Queue",
+    "nowPlaying.takeTab": "This take",
+    "nowPlaying.queueHeading": (gaps: { readonly source: string }) => "Queue · " + gaps.source,
+    "nowPlaying.upNext": (gaps: { readonly title: string }) => "Up next: " + gaps.title,
+    "nowPlaying.fromSource": (gaps: { readonly title: string }) => "from " + gaps.title,
+    "nowPlaying.openAlbumSource": (gaps: { readonly title: string }) => "from " + gaps.title + " — open album",
+    "nowPlaying.openPlaylistSource": (gaps: { readonly title: string }) => "from " + gaps.title + " — open playlist",
+    "nowPlaying.takeVersioned": (gaps: { readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take,
+    "nowPlaying.takeUnversioned": (gaps: { readonly take: string }) => "take " + gaps.take,
+    "nowPlaying.takeDetailsFailed": "Failed to load take details",
+    "nowPlaying.lyricsHeading": "Lyrics",
+    "nowPlaying.lyricsHeadingTitled": (gaps: { readonly title: string }) => "Lyrics · " + gaps.title,
+    "nowPlaying.lyricsFollow": "Follow",
+    "nowPlaying.lyricsUnsynced": "Lyrics aren't synced for this take.",
+    "nowPlaying.noLyrics": "No lyrics for this take",
+    "nowPlaying.importedNoLyrics": "Imported take — no lyrics were saved with it.",
+    "nowPlaying.curateGroup": "Pick album takes",
+    "nowPlaying.curateProgress": (gaps: { readonly index: string; readonly total: string }) => "Pick album takes · Song " + gaps.index + " of " + gaps.total,
+    "nowPlaying.pick": "Pick",
+    "nowPlaying.keep": "Keep",
+    "nowPlaying.unkeep": "Unkeep",
+    "nowPlaying.skip": "Skip",
+    "nowPlaying.skipName": "Skip — Next song",
+    "nowPlaying.done": "Done",
+    "nowPlaying.takePool": "Take pool",
+    "nowPlaying.poolPicks": "Picks",
+    "nowPlaying.poolKeeps": "+ Keeps",
+    "nowPlaying.poolAll": "All takes",
+    "nowPlaying.streamSkipped": (count: number) => ({
+        zero: numberFormat.format(count) + " takes skipped",
+        one: numberFormat.format(count) + " take skipped",
+        two: numberFormat.format(count) + " takes skipped",
+        few: numberFormat.format(count) + " takes skipped",
+        many: numberFormat.format(count) + " takes skipped",
+        other: numberFormat.format(count) + " takes skipped",
+    })[pluralRules.select(count)],
+    "nowPlaying.streamCheckIncomplete": "Check incomplete",
+    "nowPlaying.streamEnded": "End of stream",
+    "nowPlaying.streamMissingPath": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + " no audio file",
+    "nowPlaying.streamMissingFile": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + " file not found",
+    "nowPlaying.streamUnreadable": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + " file unreadable",
+    "nowPlaying.streamMoreNotChecked": "More takes not checked",
+    "nowPlaying.streamMoreNotLoaded": "More takes not loaded",
 };
 export type Key = keyof Words;

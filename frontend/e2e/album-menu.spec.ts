@@ -6,7 +6,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { boundingBoxes, sameOriginHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';
@@ -57,7 +56,7 @@ async function expectActionRowUnderCoverAndTitle(
 ): Promise<void> {
 	const heading = header.getByRole('heading', { name: title });
 	const play = header.getByRole('button', {
-		name: collectionActionLabel(TRANSPORT_PLAY_LABEL, kind),
+		name: words[kind === 'album' ? 'collectionHeader.playAlbum' : 'collectionHeader.playPlaylist'],
 		exact: true
 	});
 	await expect(heading).toBeVisible();

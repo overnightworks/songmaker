@@ -305,9 +305,13 @@ describe('shared album page', () => {
 		const rows = () => target.querySelectorAll<HTMLButtonElement>('.queue-row');
 		expect(rows()[1].classList).toContain('current');
 		await vi.waitFor(() => expect(document.querySelector('.play-again')).not.toBeNull());
-		expect(document.querySelector('.play-again')?.textContent).toContain('Play again');
+		expect(document.querySelector('.play-again')?.textContent).toContain(
+			words['nowPlaying.playAgain']
+		);
 		expect(
-			document.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+			document.querySelector<HTMLButtonElement>(
+				`button[aria-label="${words['nowPlaying.nextSong']}"]`
+			)?.disabled
 		).toBe(true);
 
 		document.querySelector<HTMLButtonElement>('.play-again')?.click();

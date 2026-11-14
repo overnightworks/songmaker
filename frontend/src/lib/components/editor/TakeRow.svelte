@@ -8,7 +8,8 @@
 	import {
 		audioPlayer,
 		transportButtonFace,
-		transportButtonLabel,
+		transportAction,
+		type TransportAction,
 		transportIsBusy
 	} from '#lib/services/audioPlayer.svelte.ts';
 	import {
@@ -32,6 +33,12 @@
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import TakeMenu from './TakeMenu.svelte';
+
+	const PLAY_LABEL_KEYS = {
+		play: 'takeRow.playTake',
+		pause: 'takeRow.pauseTake',
+		retry: 'takeRow.retryTake'
+	} as const satisfies Record<TransportAction, TextKey>;
 
 	interface Props {
 		gen: GenerationItem;
@@ -257,7 +264,7 @@
 					aria-busy={$selectionMode ? undefined : transportIsBusy(transport)}
 					aria-label={$selectionMode
 						? pageText('takeRow.selectTake', { take: name })
-						: pageText('takeRow.playTake', { action: transportButtonLabel(transport), take: name })}
+						: pageText(PLAY_LABEL_KEYS[transportAction(transport)], { take: name })}
 				>
 					{#if $selectionMode}
 						<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />

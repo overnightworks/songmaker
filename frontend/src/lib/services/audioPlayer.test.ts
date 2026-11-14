@@ -1,11 +1,11 @@
 import { makeGeneration as makeGen } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '#lib/api/types.ts';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,
-	transportButtonLabel,
+	transportAction,
 	transportIsBusy,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo
@@ -130,8 +130,8 @@ vi.mock('./continuousDeck', () => {
 const NO_STRIP_SHOWN = (): boolean => false;
 const SECOND = 1000;
 const RECOVERY_DEADLINE = 2 * 60 * SECOND;
-const STALLED = 'Playback stalled. Press Retry.';
-const WAITING_FOR_NETWORK = 'Waiting for the network.';
+const STALLED = words['transport.stalled'];
+const WAITING_FOR_NETWORK = words['transport.waitingForNetwork'];
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
 	return {
@@ -1676,7 +1676,7 @@ describe('stream playback', () => {
 		}).toEqual({
 			signInAsked: true,
 			status: 'error',
-			error: 'Playback failed. Press Retry.',
+			error: words['transport.playbackFailed'],
 			src: '/shared/queue-streams/snap/audio'
 		});
 	});
@@ -1842,8 +1842,8 @@ describe('error handling', () => {
 	);
 
 	it.each([
-		{ answer: 401, outcome: { signInAsked: true, error: 'Playback failed. Press Retry.' } },
-		{ answer: 404, outcome: { signInAsked: false, error: 'Audio file not found.' } }
+		{ answer: 401, outcome: { signInAsked: true, error: words['transport.playbackFailed'] } },
+		{ answer: 404, outcome: { signInAsked: false, error: words['transport.fileNotFound'] } }
 	])(
 		'names a $answer answer to a mid-track media error at once instead of reloading',
 		async ({ answer, outcome }) => {
@@ -1961,7 +1961,7 @@ describe('error handling', () => {
 			await loseNetworkAtTheStart(false);
 			audioPlayer.resumeAfterNetworkReturn();
 			expect(audioPlayer.status).toBe('error');
-			expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+			expect(audioPlayer.error).toBe(words['transport.playbackFailed']);
 		});
 	});
 
@@ -1970,7 +1970,7 @@ describe('error handling', () => {
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('error');
-		expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+		expect(audioPlayer.error).toBe(words['transport.playbackFailed']);
 	});
 
 	it('decodes MEDIA_ERR_DECODE', async () => {
@@ -2080,18 +2080,18 @@ describe('toggle / play / pause', () => {
 	});
 
 	it.each([
-		{ moment: 'nobody pressed yet', presses: 0, label: TRANSPORT_PLAY_LABEL, busy: false },
-		{ moment: 'a press asked for sound', presses: 1, label: TRANSPORT_PAUSE_LABEL, busy: true },
-		{ moment: 'a second press withdrew it', presses: 2, label: TRANSPORT_PLAY_LABEL, busy: false }
+		{ moment: 'nobody pressed yet', presses: 0, action: 'play', busy: false },
+		{ moment: 'a press asked for sound', presses: 1, action: 'pause', busy: true },
+		{ moment: 'a second press withdrew it', presses: 2, action: 'play', busy: false }
 	])(
-		'names a loading take $label, busy $busy, once $moment (#1312)',
-		({ presses, label, busy }) => {
+		'names a loading take $action, busy $busy, once $moment (#1312)',
+		({ presses, action, busy }) => {
 			for (let press = 0; press < presses; press++) audioPlayer.toggle();
 
 			expect({
-				label: transportButtonLabel(audioPlayer.transport),
+				action: transportAction(audioPlayer.transport),
 				busy: transportIsBusy(audioPlayer.transport)
-			}).toEqual({ label, busy });
+			}).toEqual({ action, busy });
 		}
 	);
 
@@ -2203,7 +2203,7 @@ describe('toggle / play / pause', () => {
 		audioPlayer.play();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('paused');
-		expect(audioPlayer.error).toBe('Autoplay blocked. Press Play to start.');
+		expect(audioPlayer.error).toBe(words['transport.autoplayBlocked']);
 	});
 
 	it('AbortError on play is silently ignored', async () => {
@@ -2243,13 +2243,13 @@ describe('a loading take whose bytes never come, past the stall check (#1312)', 
 
 		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
 		const shown = {
-			label: transportButtonLabel(audioPlayer.transport),
+			action: transportAction(audioPlayer.transport),
 			busy: transportIsBusy(audioPlayer.transport)
 		};
 		fakeAudio.fire('canplay');
 
 		expect({ shown, played: fakeAudio.playMock.mock.calls.length > 0 }).toEqual({
-			shown: { label: TRANSPORT_PLAY_LABEL, busy: false },
+			shown: { action: 'play', busy: false },
 			played: false
 		});
 	});
@@ -2260,9 +2260,9 @@ describe('a loading take whose bytes never come, past the stall check (#1312)', 
 		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
 
 		expect({
-			label: transportButtonLabel(audioPlayer.transport),
+			action: transportAction(audioPlayer.transport),
 			busy: transportIsBusy(audioPlayer.transport)
-		}).toEqual({ label: TRANSPORT_PAUSE_LABEL, busy: true });
+		}).toEqual({ action: 'pause', busy: true });
 	});
 });
 

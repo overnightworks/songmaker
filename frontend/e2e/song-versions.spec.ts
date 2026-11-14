@@ -30,16 +30,7 @@ import { words } from '../src/lib/words/en';
 
 const openVersion = (number: number) => words['takesList.openVersion']({ number: String(number) });
 const firstTake = words['takeRow.takeLabel']({ number: '1' });
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
-import {
-	NOW_PLAYING_QUEUE_TAB,
-	NOW_PLAYING_RIGHT_PANEL_LABEL,
-	NOW_PLAYING_TAKE_TAB,
-	takeVersion,
-	type TakeVersion,
-	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
+import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
 import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';
 import {
@@ -248,7 +239,7 @@ function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): 
 // The phone's full Now Playing carries the transport while it covers the
 // mini player; elsewhere the transport bar does.
 function pauseOfThePlayingTake(page: Page): Locator {
-	return page.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).first();
+	return page.getByRole('button', { name: words['transport.pause'], exact: true }).first();
 }
 
 interface DeckWindow {
@@ -313,7 +304,9 @@ async function heldTakePosition(page: Page): Promise<number> {
 async function shownTakePosition(page: Page, phoneTakeSeconds: number | null): Promise<number> {
 	const transport = page.getByRole('contentinfo');
 	if (phoneTakeSeconds === null) {
-		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
+		return Number(
+			await transport.getByRole('slider', { name: words['transport.seek'] }).inputValue()
+		);
 	}
 	const progress = await transport
 		.locator('.mobile-progress-fill')
@@ -663,13 +656,13 @@ test.describe('the versions of a song', () => {
 		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: nameStartingWith(firstTake) })
 			.click();
-		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
+		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
 		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
 		await openV1.click();
 
-		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
+		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionDraftName(2));
 		await expect(workspace(page).getByText(loadedFromHint(1))).toBeVisible();
@@ -686,7 +679,7 @@ test.describe('the versions of a song', () => {
 		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: nameStartingWith(firstTake) })
 			.click();
-		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
+		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
 		// Back closes one layer at a time: the phone's This take sheet, which
@@ -696,7 +689,7 @@ test.describe('the versions of a song', () => {
 		const phoneTakeSeconds = mobile ? await recordedSecondsOf(page, song.songId, 1) : null;
 		if (mobile) {
 			await page.goBack();
-			await expect(page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })).toBeHidden();
+			await expect(page.getByRole('dialog', { name: words['nowPlaying.rightPanel'] })).toBeHidden();
 			await expect(page.getByRole('dialog', { name: song.title })).toBeVisible();
 		}
 		const heldAt = await holdThePlayingTakeAt(page, HELD_TAKE_SECONDS);
@@ -714,14 +707,17 @@ test.describe('the versions of a song', () => {
 		if (mobile) {
 			await page
 				.getByRole('contentinfo')
-				.getByRole('button', { name: openNowPlayingLabel(song.title), exact: true })
+				.getByRole('button', {
+					name: words['player.openNowPlaying']({ title: song.title }),
+					exact: true
+				})
 				.click();
 			await page
 				.getByRole('dialog', { name: song.title })
-				.getByRole('button', { name: new RegExp(`${NOW_PLAYING_QUEUE_TAB}$`) })
+				.getByRole('button', { name: new RegExp(`${words['nowPlaying.queueTab']}$`) })
 				.click();
 		}
-		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB }).click();
+		await page.getByRole('tab', { name: words['nowPlaying.takeTab'] }).click();
 
 		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
 		await openV1.click();
@@ -729,7 +725,9 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionDraftName(2));
 		await expect(
-			page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+			page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: words['transport.play'], exact: true })
 		).toBeVisible();
 		expect(await heldTakePosition(page)).toBe(heldAt);
 		await expect.poll(() => shownTakePosition(page, phoneTakeSeconds)).toBe(shownAt);
@@ -839,8 +837,8 @@ test.describe('the versions of a song', () => {
 		await expect(imported.getByRole('button', { name: /Open v/ })).toHaveCount(0);
 
 		await imported.getByRole('button', { name: nameStartingWith(firstTake) }).click();
-		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
-		await expect(page.getByText(NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS)).toBeVisible();
+		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
+		await expect(page.getByText(words['nowPlaying.importedNoLyrics'])).toBeVisible();
 		await expect(
 			page.getByRole('heading', { name: words['nowPlayingTake.importedHeading'], exact: true })
 		).toBeVisible();

@@ -1,15 +1,7 @@
 <script lang="ts">
 	import type { QueueStreamSkipItem } from '#lib/api/types.ts';
-	import {
-		NOW_PLAYING_STREAM_CHECK_INCOMPLETE,
-		NOW_PLAYING_STREAM_ENDED,
-		NOW_PLAYING_STREAM_MISSING_FILE_SUFFIX,
-		NOW_PLAYING_STREAM_MISSING_PATH_SUFFIX,
-		NOW_PLAYING_STREAM_MORE_NOT_CHECKED,
-		NOW_PLAYING_STREAM_MORE_NOT_LOADED,
-		NOW_PLAYING_STREAM_SKIPPED_SUFFIX,
-		NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX
-	} from '#lib/constants/now-playing.ts';
+	import { formatDecimal, formatList } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -26,13 +18,13 @@
 	}));
 	const hasFeedback = $derived(skipped.length > 0 || !skippedComplete || windowEnded);
 	const summaryLabel = $derived(
-		[
-			skipped.length > 0 ? `${skipped.length} ${NOW_PLAYING_STREAM_SKIPPED_SUFFIX}` : '',
-			!skippedComplete ? NOW_PLAYING_STREAM_CHECK_INCOMPLETE : '',
-			windowEnded ? NOW_PLAYING_STREAM_ENDED : ''
-		]
-			.filter(Boolean)
-			.join(', ')
+		formatList(
+			[
+				skipped.length > 0 ? pageText('nowPlaying.streamSkipped', skipped.length) : '',
+				!skippedComplete ? pageText('nowPlaying.streamCheckIncomplete') : '',
+				windowEnded ? pageText('nowPlaying.streamEnded') : ''
+			].filter(Boolean)
+		)
 	);
 </script>
 
@@ -41,7 +33,7 @@
 		<summary aria-label={summaryLabel}>
 			{#if skipped.length > 0}
 				<Icon name="triangle-alert" size={15} />
-				<span>{skipped.length}{skippedComplete ? '' : '+'}</span>
+				<span>{formatDecimal(skipped.length, 0)}{skippedComplete ? '' : '+'}</span>
 			{:else if !skippedComplete}
 				<Icon name="more-horizontal" size={16} />
 			{:else if windowEnded}
@@ -51,17 +43,17 @@
 		<div class="feedback-details">
 			{#if skipped.length > 0}
 				{#if grouped.missing_path > 0}<span
-						>{grouped.missing_path} {NOW_PLAYING_STREAM_MISSING_PATH_SUFFIX}</span
+						>{pageText('nowPlaying.streamMissingPath', { count: grouped.missing_path })}</span
 					>{/if}
 				{#if grouped.missing_file > 0}<span
-						>{grouped.missing_file} {NOW_PLAYING_STREAM_MISSING_FILE_SUFFIX}</span
+						>{pageText('nowPlaying.streamMissingFile', { count: grouped.missing_file })}</span
 					>{/if}
 				{#if grouped.unreadable_file > 0}<span
-						>{grouped.unreadable_file} {NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX}</span
+						>{pageText('nowPlaying.streamUnreadable', { count: grouped.unreadable_file })}</span
 					>{/if}
 			{/if}
-			{#if !skippedComplete}<span>{NOW_PLAYING_STREAM_MORE_NOT_CHECKED}</span>{/if}
-			{#if windowEnded}<span>{NOW_PLAYING_STREAM_MORE_NOT_LOADED}</span>{/if}
+			{#if !skippedComplete}<span>{pageText('nowPlaying.streamMoreNotChecked')}</span>{/if}
+			{#if windowEnded}<span>{pageText('nowPlaying.streamMoreNotLoaded')}</span>{/if}
 		</div>
 	</details>
 {/if}

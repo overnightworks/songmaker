@@ -4,16 +4,12 @@
 	import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
-		NOW_PLAYING_QUEUE_TAB,
-		NOW_PLAYING_RIGHT_PANEL_LABEL,
-		NOW_PLAYING_TAKE_TAB,
-		nowPlayingCurateProgress,
 		type NowPlayingSource,
 		type PlaybackSource,
-		takeVersion,
-		NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
-		NOW_PLAYING_NO_LYRICS
+		takeVersion
 	} from '#lib/constants/now-playing.ts';
+	import { formatDecimal } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { albumList, songList } from '#lib/stores/libraryData.ts';
 	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import {
@@ -58,8 +54,6 @@
 	// site only has to say which take is playing.
 	let { info }: { info: PlaybackInfo } = $props();
 
-	const TAKE_DETAILS_LOAD_FAILED = 'Failed to load take details';
-
 	// Seeded once from the shared request store, not bound to it: a take-row
 	// click (playTakeAndShowNowPlaying) leaves it on 'take' before opening
 	// this surface, while PlayerBar's own Now Playing button opens on the tab
@@ -70,7 +64,7 @@
 	let takeTabBtn: HTMLButtonElement | undefined = $state();
 
 	const mobileTriggerLabel = $derived(
-		rightPanelTab === 'take' ? NOW_PLAYING_TAKE_TAB : NOW_PLAYING_QUEUE_TAB
+		pageText(rightPanelTab === 'take' ? 'nowPlaying.takeTab' : 'nowPlaying.queueTab')
 	);
 
 	// 'closed' never reaches here: the layout only mounts this surface while
@@ -116,8 +110,8 @@
 	const lyricsEmptyLabel = $derived(
 		playingGeneration &&
 			takeVersion(playingGeneration.version_id, playingGeneration.version_number) === null
-			? NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS
-			: NOW_PLAYING_NO_LYRICS
+			? pageText('nowPlaying.importedNoLyrics')
+			: pageText('nowPlaying.noLyrics')
 	);
 
 	// Curation mode (issue #228) only ever plays an album's own queue. The
@@ -169,7 +163,7 @@
 		if (err instanceof NetworkError && takeDetailsReloads.afterNetworkFailure() !== 'exhausted') {
 			return;
 		}
-		addToast(describeFailure(err, TAKE_DETAILS_LOAD_FAILED), 'error');
+		addToast(describeFailure(err, pageText('nowPlaying.takeDetailsFailed')), 'error');
 	}
 
 	function onTabsKeydown(event: KeyboardEvent): void {
@@ -250,7 +244,7 @@
 	<div
 		class="panel-toggle"
 		role="tablist"
-		aria-label={NOW_PLAYING_RIGHT_PANEL_LABEL}
+		aria-label={pageText('nowPlaying.rightPanel')}
 		tabindex="-1"
 		onkeydown={onTabsKeydown}
 	>
@@ -266,7 +260,7 @@
 			tabindex={rightPanelTab === 'queue' ? 0 : -1}
 			onclick={() => (rightPanelTab = 'queue')}
 		>
-			{NOW_PLAYING_QUEUE_TAB}
+			{pageText('nowPlaying.queueTab')}
 		</button>
 		<button
 			bind:this={takeTabBtn}
@@ -280,7 +274,7 @@
 			tabindex={rightPanelTab === 'take' ? 0 : -1}
 			onclick={() => (rightPanelTab = 'take')}
 		>
-			{NOW_PLAYING_TAKE_TAB}
+			{pageText('nowPlaying.takeTab')}
 		</button>
 	</div>
 	<div
@@ -309,7 +303,10 @@
 {#snippet curationBar()}
 	{#if song && playingGeneration}
 		<NowPlayingCuration
-			progressLabel={nowPlayingCurateProgress(queueVm.currentIndex, queueVm.items.length)}
+			progressLabel={pageText('nowPlaying.curateProgress', {
+				index: formatDecimal(queueVm.currentIndex + 1, 0),
+				total: formatDecimal(queueVm.items.length, 0)
+			})}
 			picked={playingGeneration.is_picked}
 			kept={playingGeneration.is_kept}
 			canSkip={canNext}
@@ -341,7 +338,7 @@
 	onGoToSong={goToSong}
 	upNextTitle={queueVm.upNext?.songTitle ?? null}
 	rightPanelLabel={mobileTriggerLabel}
-	sheetLabel={NOW_PLAYING_RIGHT_PANEL_LABEL}
+	sheetLabel={pageText('nowPlaying.rightPanel')}
 	rightPanelOpenOnMount={rightPanelTab === 'take'}
 	{lyricsEmptyLabel}
 	lyricsCues={playingGeneration?.whisper_cues ?? null}

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { words } from '#lib/words/en.ts';
 import {
 	nowPlayingFromLabel,
-	nowPlayingOpenSourceLabel,
-	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel,
 	nowPlayingTakeMeta,
 	takeVersion
@@ -11,11 +10,13 @@ import {
 
 describe('nowPlayingTakeLabel', () => {
 	it('names the version and the take', () => {
-		expect(nowPlayingTakeLabel(1, 3)).toBe('v1 · take 3');
+		expect(nowPlayingTakeLabel(1, 3)).toBe(
+			words['nowPlaying.takeVersioned']({ version: '1', take: '3' })
+		);
 	});
 
 	it('names only the take when the row carries no version', () => {
-		expect(nowPlayingTakeLabel(null, 3)).toBe('take 3');
+		expect(nowPlayingTakeLabel(null, 3)).toBe(words['nowPlaying.takeUnversioned']({ take: '3' }));
 	});
 });
 
@@ -61,7 +62,7 @@ describe('nowPlayingTakeMeta', () => {
 		{
 			name: 'no artist',
 			parts: { artist: null, versionNumber: 1, generationNumber: 1, durationSec: 195 },
-			line: 'v1 · take 1 · 3:15'
+			line: `${words['nowPlaying.takeVersioned']({ version: '1', take: '1' })} · 3:15`
 		}
 	];
 
@@ -70,23 +71,10 @@ describe('nowPlayingTakeMeta', () => {
 	});
 });
 
-describe('the names Now Playing gives its ways out (#1052)', () => {
-	it('closes the sheet by its own name, never as ×', () => {
-		expect(nowPlayingSheetCloseLabel('Now Playing panel')).toBe('Close Now Playing panel');
-	});
-
+describe('the name Now Playing gives where the music comes from', () => {
 	it('says where the music comes from', () => {
-		expect(nowPlayingFromLabel('Nightdrive')).toBe('from Nightdrive');
-	});
-
-	it.each([
-		{ kind: 'album' as const, title: 'Nightdrive', label: 'from Nightdrive — open album' },
-		{
-			kind: 'playlist' as const,
-			title: 'Late Drives',
-			label: 'from Late Drives — open playlist'
-		}
-	])('names opening the $kind, starting with the text it shows', ({ kind, title, label }) => {
-		expect(nowPlayingOpenSourceLabel(kind, title)).toBe(label);
+		expect(nowPlayingFromLabel('Nightdrive')).toBe(
+			words['nowPlaying.fromSource']({ title: 'Nightdrive' })
+		);
 	});
 });

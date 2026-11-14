@@ -8,7 +8,6 @@
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import {
 	createAlbum,
 	FIRST_VERSION_TAKE_COUNT,
@@ -276,7 +275,9 @@ test.describe(
 			await expect(takeRow(page, song.source)).toBeInViewport();
 			await page
 				.getByRole('contentinfo')
-				.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+				.getByRole('button', {
+					name: new RegExp(`${words['player.openNowPlaying']({ title: '' })}$`)
+				})
 				.click();
 			const nowPlaying = page.getByRole('dialog', { name: song.title });
 			await expect(nowPlaying).toBeVisible();

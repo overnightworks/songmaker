@@ -1,11 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SEEK_PLAYBACK_LABEL } from '#lib/constants/transport.ts';
 import { formatTime } from '#lib/utils/format.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { laidOutSeekLine, pointerOnSeekLine, shownSeekTime } from '#lib/test-utils/seek-line.ts';
 import SeekSlider from './SeekSlider.svelte';
 import seekSliderSource from './SeekSlider.svelte?raw';
+import { words } from '#lib/words/en.ts';
 
 const SONG_SECONDS = 180;
 
@@ -34,7 +34,7 @@ async function renderSeek(currentTime = 0, duration = SONG_SECONDS) {
 
 function slider(): HTMLInputElement {
 	const input = target.querySelector<HTMLInputElement>(
-		`input[aria-label="${SEEK_PLAYBACK_LABEL}"]`
+		`input[aria-label="${words['transport.seek']}"]`
 	);
 	if (!input) throw new Error('Expected the seek slider');
 	return input;
@@ -137,6 +137,8 @@ describe('SeekSlider', () => {
 	it('reads its position out as the time of the song', async () => {
 		await renderSeek(72);
 
-		expect(slider().getAttribute('aria-valuetext')).toBe('1:12 of 3:00');
+		expect(slider().getAttribute('aria-valuetext')).toBe(
+			words['transport.seekPosition']({ position: '1:12', length: '3:00' })
+		);
 	});
 });

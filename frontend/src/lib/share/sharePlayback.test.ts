@@ -7,6 +7,7 @@ import type { QueueStreamManifest } from '#lib/api/types.ts';
 import { audioPlayer, type AudioPlayerCallbacks } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { playableTracks, trackPlaybackInfo, type SharedCollectionView } from './sharedCollection';
+import { words } from '#lib/words/en.ts';
 import { SharePlayback } from './sharePlayback.svelte';
 import {
 	albumView,
@@ -318,12 +319,11 @@ describe('a failed take offline', () => {
 		playback.start(view, null);
 		playback.toggle(tracksOf(view)[0]);
 		reportResourceStreamReachable(false);
-
 		fakeAudio.fire('error');
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(audioPlayer.status).toBe('error');
-		expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+		expect(audioPlayer.error).toBe(words['transport.playbackFailed']);
 		playback.stop();
 	});
 });

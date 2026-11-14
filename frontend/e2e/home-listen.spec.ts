@@ -210,10 +210,16 @@ test('1354_rule_15: the playing Listen row offers Pause and its body opens the a
 	await postFromPage(page, `/api/songs/${library.listenReorderSongs[shellOf(testInfo)].id}/listen`);
 	await page.goto(HOME_PATH);
 	await listenRegion(page)
-		.getByRole('button', { name: `Play ${library.albumTitle}`, exact: true })
+		.getByRole('button', {
+			name: words['libraryWall.playTitle']({ title: library.albumTitle }),
+			exact: true
+		})
 		.click();
 	await expect(
-		listenRegion(page).getByRole('button', { name: `Pause ${library.albumTitle}`, exact: true })
+		listenRegion(page).getByRole('button', {
+			name: words['libraryWall.pauseTitle']({ title: library.albumTitle }),
+			exact: true
+		})
 	).toBeVisible();
 	await listenRegion(page)
 		.getByRole('button', {

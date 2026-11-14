@@ -7,16 +7,6 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from './coverage-test';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
-import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '../src/lib/constants/song';
-import {
-	SEEK_PLAYBACK_LABEL,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants/transport';
-import {
-	NOW_PLAYING_PLAY_AGAIN_LABEL,
-	NOW_PLAYING_GO_TO_SONG
-} from '../src/lib/constants/now-playing';
 import { words } from '../src/lib/words/en';
 import {
 	boundingBoxes,
@@ -114,7 +104,9 @@ async function expectNowPlayingLine(page: Page, title: string, position: number,
 }
 
 async function expectLyricsOf(page: Page, title: string): Promise<void> {
-	await expect(page.locator('.lyrics-heading')).toHaveText(`Lyrics · ${title}`);
+	await expect(page.locator('.lyrics-heading')).toHaveText(
+		words['nowPlaying.lyricsHeadingTitled']({ title })
+	);
 }
 
 async function scrollPageTo(page: Page, edge: 'top' | 'bottom'): Promise<void> {
@@ -138,7 +130,7 @@ test.describe('before Play', () => {
 			);
 			await page.screenshot({ path: testInfo.outputPath('album-landscape-844-390.png') });
 			expect(cover.x + cover.width).toBeLessThanOrEqual(title.x);
-			await expect(control(page, TRANSPORT_PLAY_LABEL)).toBeInViewport({ ratio: 1 });
+			await expect(control(page, words['transport.play'])).toBeInViewport({ ratio: 1 });
 			expect(cover.x + cover.width).toBeLessThanOrEqual(songsBox.x);
 		}
 	);
@@ -156,8 +148,8 @@ test.describe('before Play', () => {
 					page.getByRole('heading', { level: 1 }),
 					page.locator('.cover-line').first(),
 					page.locator('.now-playing-line'),
-					control(page, TRANSPORT_PLAY_LABEL),
-					page.getByRole('slider', { name: SEEK_PLAYBACK_LABEL }),
+					control(page, words['transport.play']),
+					page.getByRole('slider', { name: words['transport.seek'] }),
 					page.locator('.lyrics-heading'),
 					songs(page).getByRole('heading', { name: 'Songs' })
 				];
@@ -244,8 +236,8 @@ test.describe('before Play', () => {
 	test('1374_rule_2 A4: Previous song is disabled and Next song enabled', async ({ visitor }) => {
 		await openMockAlbum(visitor);
 
-		await expect(control(visitor.page, SONG_PREVIOUS_LABEL)).toBeDisabled();
-		await expect(control(visitor.page, SONG_NEXT_LABEL)).toBeEnabled();
+		await expect(control(visitor.page, words['nowPlaying.previousSong'])).toBeDisabled();
+		await expect(control(visitor.page, words['nowPlaying.nextSong'])).toBeEnabled();
 	});
 });
 
@@ -273,7 +265,7 @@ test('1374_rule_5 B5: an unplayable first song is neither listed nor staged', as
 	]);
 	await expectNowPlayingLine(page, mockSongTitle(1), 1, 2);
 	await expectLyricsOf(page, mockSongTitle(1));
-	await control(page, TRANSPORT_PLAY_LABEL).click();
+	await control(page, words['transport.play']).click();
 	await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(1)));
 });
 
@@ -295,11 +287,11 @@ test('1374_rule_14 C3: seeking before the first Play readies song 1 paused', asy
 }) => {
 	await openMockAlbum(visitor);
 	const { page } = visitor;
-	const slider = page.getByRole('slider', { name: SEEK_PLAYBACK_LABEL });
+	const slider = page.getByRole('slider', { name: words['transport.seek'] });
 	await slider.fill('45');
 	await expect(slider).toHaveValue('45');
-	await expect(control(page, TRANSPORT_PLAY_LABEL)).toBeVisible();
-	await expect(control(page, TRANSPORT_PAUSE_LABEL)).toHaveCount(0);
+	await expect(control(page, words['transport.play'])).toBeVisible();
+	await expect(control(page, words['transport.pause'])).toHaveCount(0);
 	await expectNowPlayingLine(page, mockSongTitle(1), 1, 3);
 	await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(1)));
 });
@@ -309,12 +301,12 @@ test('1374_rule_2 endpoint controls: Next is disabled on the last song and Previ
 }) => {
 	await openMockAlbum(visitor, mockSongs(2));
 	const { page } = visitor;
-	await expect(control(page, SONG_PREVIOUS_LABEL)).toBeDisabled();
-	await control(page, SONG_NEXT_LABEL).click();
-	await expect(control(page, SONG_NEXT_LABEL)).toBeDisabled();
-	await expect(control(page, SONG_PREVIOUS_LABEL)).toBeEnabled();
-	await control(page, SONG_PREVIOUS_LABEL).click();
-	await expect(control(page, SONG_PREVIOUS_LABEL)).toBeDisabled();
+	await expect(control(page, words['nowPlaying.previousSong'])).toBeDisabled();
+	await control(page, words['nowPlaying.nextSong']).click();
+	await expect(control(page, words['nowPlaying.nextSong'])).toBeDisabled();
+	await expect(control(page, words['nowPlaying.previousSong'])).toBeEnabled();
+	await control(page, words['nowPlaying.previousSong']).click();
+	await expect(control(page, words['nowPlaying.previousSong'])).toBeDisabled();
 });
 
 test.describe('songs', () => {
@@ -337,14 +329,14 @@ test.describe('songs', () => {
 		await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(2)));
 		await expectLyricsOf(page, mockSongTitle(2));
 		await expectNowPlayingLine(page, mockSongTitle(2), 2, 3);
-		await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeVisible();
+		await expect(control(page, words['transport.pause'])).toBeVisible();
 
 		await playingRow(page).click();
-		await expect(control(page, TRANSPORT_PLAY_LABEL)).toBeVisible();
+		await expect(control(page, words['transport.play'])).toBeVisible();
 
 		await songRow(page, mockSongTitle(1)).click();
 		await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(1)));
-		await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeVisible();
+		await expect(control(page, words['transport.pause'])).toBeVisible();
 		await expectNowPlayingLine(page, mockSongTitle(1), 1, 3);
 	});
 
@@ -372,13 +364,13 @@ test.describe('controls', () => {
 	}) => {
 		await openMockAlbum(visitor);
 		const { page } = visitor;
-		await control(page, TRANSPORT_PLAY_LABEL).click();
+		await control(page, words['transport.play']).click();
 
-		await control(page, SONG_NEXT_LABEL).click();
+		await control(page, words['nowPlaying.nextSong']).click();
 		await expectLyricsOf(page, mockSongTitle(2));
 		await expectNowPlayingLine(page, mockSongTitle(2), 2, 3);
 
-		await control(page, SONG_PREVIOUS_LABEL).click();
+		await control(page, words['nowPlaying.previousSong']).click();
 		await expectLyricsOf(page, mockSongTitle(1));
 		await expectNowPlayingLine(page, mockSongTitle(1), 1, 3);
 	});
@@ -390,9 +382,12 @@ test.describe('controls', () => {
 		const { page } = visitor;
 		await songRow(page, mockSongTitle(3)).click();
 
-		await control(page, 'Shuffle').click();
+		await control(page, words['share.shuffle']).click();
 
-		await expect(control(page, 'Disable shuffle')).toHaveAttribute('aria-pressed', 'true');
+		await expect(control(page, words['share.disableShuffle'])).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
 		await expectLyricsOf(page, mockSongTitle(3));
 		await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(3)));
 	});
@@ -407,9 +402,9 @@ test.describe('the end', () => {
 		const lastSong = SEEDED_SONG_TITLES.at(-1) ?? '';
 
 		await songRow(page, lastSong).click();
-		const playAgain = control(page, NOW_PLAYING_PLAY_AGAIN_LABEL);
+		const playAgain = control(page, words['nowPlaying.playAgain']);
 		await expect(playAgain).toBeVisible();
-		const slider = page.getByRole('slider', { name: SEEK_PLAYBACK_LABEL });
+		const slider = page.getByRole('slider', { name: words['transport.seek'] });
 		await expect
 			.poll(
 				async () => Number(await slider.inputValue()) / Number(await slider.getAttribute('max'))
@@ -438,7 +433,7 @@ test.describe('a long album', () => {
 
 		await songRow(page, mockSongTitle(20)).click();
 		await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(20)));
-		await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeVisible();
+		await expect(control(page, words['transport.pause'])).toBeVisible();
 	});
 
 	test('1374_rule_14 E3: long lyrics stay in a bounded box and Songs stays reachable', async ({
@@ -470,18 +465,18 @@ test.describe('a long album', () => {
 				await openMockAlbum(visitor, mockSongs(40));
 				const { page } = visitor;
 				const bar = page.locator('footer.player-bar');
-				await control(page, TRANSPORT_PLAY_LABEL).click();
-				await control(page, SONG_NEXT_LABEL).click();
+				await control(page, words['transport.play']).click();
+				await control(page, words['nowPlaying.nextSong']).click();
 				await expectNowPlayingLine(page, mockSongTitle(2), 2, 40);
 
-				const [transportBox] = await boundingBoxes(control(page, TRANSPORT_PAUSE_LABEL));
+				const [transportBox] = await boundingBoxes(control(page, words['transport.pause']));
 				const history = await page.evaluate(() => window.history.length);
 				await scrollPageTo(page, 'bottom');
 				if (testInfo.project.name === 'desktop') {
 					await expect
 						.poll(() => page.locator(PLAYER_SCROLL_ROOT).evaluate((root) => root.scrollTop))
 						.toBeGreaterThan(transportBox.y + transportBox.height);
-					await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport({ ratio: 1 });
+					await expect(control(page, words['transport.pause'])).toBeInViewport({ ratio: 1 });
 					await expect(bar).toBeHidden();
 					return;
 				}
@@ -494,7 +489,7 @@ test.describe('a long album', () => {
 				expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 
 				await bar.getByRole('button', { name: words['share.backToPlayer'] }).first().click();
-				await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport();
+				await expect(control(page, words['transport.pause'])).toBeInViewport();
 				await expect(bar).toBeHidden();
 				expect(await page.evaluate(() => window.history.length)).toBe(history);
 			}
@@ -514,7 +509,7 @@ test.describe('rights and neighbours', () => {
 		const { page } = visitor;
 
 		await expect(page.getByRole('button', { name: /edit|pencil/i })).toHaveCount(0);
-		await expect(page.getByText(NOW_PLAYING_GO_TO_SONG)).toHaveCount(0);
+		await expect(page.getByText(words['nowPlaying.goToSong'])).toHaveCount(0);
 		await expect(page.locator('.queue-take')).toHaveCount(0);
 		await expect(page.getByText(/\bTake\b|\bv\d+\b/)).toHaveCount(0);
 		await expect(page.getByText(MOCK_UNPLAYABLE_TITLE)).toHaveCount(0);
@@ -584,8 +579,8 @@ test('1374_rule_16 F6: a shared song scrolled past its transport has no bar or b
 		})
 	);
 	await page.goto(`${new URL(MOCK_URL).origin}/share/song/mock-song`);
-	await control(page, TRANSPORT_PLAY_LABEL).click();
-	await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeVisible();
+	await control(page, words['transport.play']).click();
+	await expect(control(page, words['transport.pause'])).toBeVisible();
 	// The single-song player shrinks to fit; a very short window lets the legal footer
 	// scroll its transport completely away without changing the page's content or CSS.
 	await page.setViewportSize({ width: page.viewportSize()?.width ?? 1440, height: 80 });

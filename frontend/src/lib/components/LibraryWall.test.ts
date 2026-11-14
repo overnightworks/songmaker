@@ -9,6 +9,7 @@ import {
 	place,
 	pressedOrder,
 	render,
+	rowLabel,
 	seedWall,
 	songs,
 	tileLines,
@@ -52,7 +53,7 @@ import {
 import { chooseLibraryWallOrder, libraryWallOrder } from '#lib/stores/ui.ts';
 import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
-import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { getByRoleButton, queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import {
 	playAlbum,
@@ -449,7 +450,7 @@ it.each([
 			albumSongsLoad.set({ proof: 'idle' });
 		}
 		const root = await render();
-		expect(root.querySelector('[aria-label="Play Proof"]') !== null).toBe(expected);
+		expect(queryButtonByLabel(root, rowLabel('play', 'Proof')) !== null).toBe(expected);
 		expect(root.querySelector('.tile-subtitle')).toHaveTextContent(songs(1));
 	}
 );
@@ -501,9 +502,9 @@ it('1354_rule_10: opening album B keeps the mark and Pause on queue source A', a
 	getByRoleButton(root, words['libraryWall.openAlbum']({ title: 'Album B' })).click();
 	await tick();
 	expect(get(openCollection)).toMatchObject({ kind: 'album', id: 'b' });
-	expect(root.querySelector('[aria-label="Pause Album A"]')).not.toBeNull();
-	expect(root.querySelector('[aria-label="Play Album B"]')).not.toBeNull();
-	const marks = root.querySelectorAll('[role="img"][aria-label="Playing"]');
+	expect(queryButtonByLabel(root, rowLabel('pause', 'Album A'))).not.toBeNull();
+	expect(queryButtonByLabel(root, rowLabel('play', 'Album B'))).not.toBeNull();
+	const marks = root.querySelectorAll(`[role="img"][aria-label="${words['playingMark.playing']}"]`);
 	expect(marks).toHaveLength(1);
 	expect(marks[0].closest('.library-row')).toHaveTextContent('Album A');
 });
@@ -527,7 +528,7 @@ it('1354_rule_10: the row withdraws an album start waiting for the network', asy
 	await tick();
 	expect(get(pendingStart)).toBeNull();
 	expect(get(playStartNotice)).toBe('idle');
-	expect(root.querySelector('.row-play')).toHaveAccessibleName('Play Waiting');
+	expect(root.querySelector('.row-play')).toHaveAccessibleName(rowLabel('play', 'Waiting'));
 });
 
 it('1354_rule_43: the phone row starts an album and leaves Shuffle on', async () => {
@@ -538,8 +539,7 @@ it('1354_rule_43: the phone row starts an album and leaves Shuffle on', async ()
 	]);
 	albumSongsLoad.set({ shuffle: 'idle' });
 	setShuffle(true);
-	const root = await render();
-	getByRoleButton(root, 'Play Shuffle').click();
+	getByRoleButton(await render(), rowLabel('play', 'Shuffle')).click();
 	await tick();
 	expect(get(shuffleEnabled)).toBe(true);
 });

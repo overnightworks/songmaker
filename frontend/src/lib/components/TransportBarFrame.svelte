@@ -5,11 +5,13 @@
 	import {
 		audioPlayer,
 		transportButtonFace,
-		transportButtonLabel,
+		transportAction,
+		TRANSPORT_ACTION_KEYS,
 		transportIsBusy,
 		type TransportState
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '#lib/constants/now-playing.ts';
+	import { NOW_PLAYING_SWIPE_RISE_PX } from '#lib/constants/now-playing.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -80,7 +82,7 @@
 		onOpenNowPlaying,
 		nowPlayingDocked = false,
 		nowPlayingDisabled,
-		nowPlayingTargetLabel = NOW_PLAYING_LABEL,
+		nowPlayingTargetLabel = pageText('transport.nowPlaying'),
 		nowPlayingTargetDescriptionId,
 		onNowPlayingTriggerBind,
 		mobileTransport,
@@ -235,8 +237,8 @@
 		data-hitbox={phoneHitbox}
 		onclick={onPrev}
 		disabled={!canPrev}
-		aria-label="Previous"
-		title="Previous"
+		aria-label={pageText('transport.previous')}
+		title={pageText('transport.previous')}
 	>
 		<Icon name="skip-back" size={21} />
 	</button>
@@ -245,7 +247,7 @@
 		class:playing={isPlaying}
 		class:errored={isError}
 		onclick={onTogglePlay}
-		aria-label={transportButtonLabel(transport)}
+		aria-label={pageText(TRANSPORT_ACTION_KEYS[transportAction(transport)])}
 		aria-busy={isLoading}
 		title={isError && errorMsg ? errorMsg : ''}
 	>
@@ -261,8 +263,8 @@
 		data-hitbox={phoneHitbox}
 		onclick={onNext}
 		disabled={!canNext}
-		aria-label="Next"
-		title="Next"
+		aria-label={pageText('transport.next')}
+		title={pageText('transport.next')}
 	>
 		<Icon name="skip-forward" size={21} />
 	</button>
@@ -382,11 +384,11 @@
 					data-hitbox="frequent"
 					onclick={onOpenNowPlaying}
 					disabled={nowPlayingDisabled}
-					aria-label={NOW_PLAYING_LABEL}
+					aria-label={pageText('transport.nowPlaying')}
 					aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
 					aria-expanded={nowPlayingOpen}
 				>
-					<span>{NOW_PLAYING_LABEL}</span>
+					<span>{pageText('transport.nowPlaying')}</span>
 					<Icon name="chevron-up" size={16} />
 				</button>
 			{/if}

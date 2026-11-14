@@ -1,9 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants/song.ts';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
-import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
 import { words } from '#lib/words/en.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
@@ -268,7 +265,7 @@ describe('SharedCollection player page (#1391)', () => {
 			);
 			expect(target.querySelector('.progress-times')?.textContent).toContain('3:00');
 			expect(target.querySelector('.np-lyrics')?.textContent).toContain(LYRIC_LINE);
-			expect(buttonNames(document.body)).toEqual([TRANSPORT_PLAY_LABEL]);
+			expect(buttonNames(document.body)).toEqual([words['transport.play']]);
 			expect(
 				Array.from(document.querySelectorAll('a')).map((link) => link.getAttribute('href'))
 			).toEqual(['/', ...LEGAL_SECTIONS.map((section) => section.href)]);
@@ -350,7 +347,7 @@ describe('SharedCollection player page (#1391)', () => {
 			});
 			const target = await renderSharedSong(kind);
 
-			getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+			getByRoleButton(target, words['transport.play']).click();
 			await tick();
 			const playing = audioPlayer.current?.songTitle ?? null;
 			if (mounted) await unmount(mounted);
@@ -373,7 +370,7 @@ describe('SharedCollection player page (#1391)', () => {
 
 		expect({
 			times: shownTimes(target),
-			play: getByRoleButton(target, TRANSPORT_PLAY_LABEL) !== undefined
+			play: getByRoleButton(target, words['transport.play']) !== undefined
 		}).toEqual({ times: ['1:00', '3:00'], play: true });
 	});
 
@@ -387,7 +384,7 @@ describe('SharedCollection player page (#1391)', () => {
 	it('at the end offers Play again, keeps the slider there and lights no line', async () => {
 		stubLayout(true);
 		const target = await renderSharedSong('song', TIMED_LYRICS);
-		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		getByRoleButton(target, words['transport.play']).click();
 		audioPlayer.currentTime = 3;
 		await tick();
 		const whilePlaying = await litLines(target);
@@ -401,7 +398,7 @@ describe('SharedCollection player page (#1391)', () => {
 			times: shownTimes(target),
 			again: target
 				.querySelector('.play-again')
-				?.textContent?.includes(NOW_PLAYING_PLAY_AGAIN_LABEL)
+				?.textContent?.includes(words['nowPlaying.playAgain'])
 		}).toEqual({
 			whilePlaying: [SUNG_LINES[1]],
 			atTheEnd: [],
@@ -416,7 +413,7 @@ describe('SharedCollection player page (#1391)', () => {
 			stubLayout(true);
 			const target = await renderSharedSong(kind, { audioUrl: null });
 
-			expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL).disabled).toBe(true);
+			expect(getByRoleButton(target, words['transport.play']).disabled).toBe(true);
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(words['share.noAudio']);
 			expect(target.querySelector('.np-page-lyrics')).toBeNull();
 			expect(target.textContent).not.toContain('No lyrics');
@@ -431,7 +428,9 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		stubLayout(true);
 		const target = await renderCollection({ tracks: [sharedTrack('first', 'Tide')] });
 		expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
-		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics · Tide');
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe(
+			words['nowPlaying.lyricsHeadingTitled']({ title: 'Tide' })
+		);
 		expect(target.querySelector('.lyrics-empty')?.textContent).toBe(words['share.noLyrics']);
 		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
 			words['share.nowPlaying']({ title: 'Tide', position: '1', total: '1' })
@@ -453,7 +452,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		expect(target.querySelector('.np-page-lyrics')?.textContent).toContain('Public words');
 		expect(target.textContent).not.toContain('Unpicked');
 		expect(target.textContent).not.toContain('Private words');
-		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		getByRoleButton(target, words['transport.play']).click();
 		await tick();
 		expect(audioPlayer.current?.songTitle).toBe('Tide');
 	});
@@ -483,7 +482,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		expect(audioPlayer.current?.songTitle).toBe('Tide');
 		expect(audioPlayer.currentTime).toBe(45);
 		expect(audioPlayer.transport).toBe('paused');
-		expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL)).toBeDefined();
+		expect(getByRoleButton(target, words['transport.play'])).toBeDefined();
 	});
 
 	it('1374_rule_2 C1 skips from the staged song to song 2 and back', async () => {
@@ -491,13 +490,13 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		const target = await renderCollection({
 			tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb')]
 		});
-		expect(getByRoleButton(target, SONG_PREVIOUS_LABEL).disabled).toBe(true);
-		expect(getByRoleButton(target, SONG_NEXT_LABEL).disabled).toBe(false);
-		getByRoleButton(target, SONG_NEXT_LABEL).click();
+		expect(getByRoleButton(target, words['nowPlaying.previousSong']).disabled).toBe(true);
+		expect(getByRoleButton(target, words['nowPlaying.nextSong']).disabled).toBe(false);
+		getByRoleButton(target, words['nowPlaying.nextSong']).click();
 		await tick();
 		expect(audioPlayer.current?.songTitle).toBe('Ebb');
-		expect(getByRoleButton(target, SONG_NEXT_LABEL).disabled).toBe(true);
-		getByRoleButton(target, SONG_PREVIOUS_LABEL).click();
+		expect(getByRoleButton(target, words['nowPlaying.nextSong']).disabled).toBe(true);
+		getByRoleButton(target, words['nowPlaying.previousSong']).click();
 		await tick();
 		expect(audioPlayer.current?.songTitle).toBe('Tide');
 		expect(target.querySelectorAll('h1')).toHaveLength(1);
@@ -530,7 +529,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		audioPlayer.status = 'playing';
 		await tick();
 		expect(target.querySelector('.queue-row.current .queue-title')?.textContent).toBe('Ebb');
-		expect(getByRoleButton(target, TRANSPORT_PAUSE_LABEL)).toBeDefined();
+		expect(getByRoleButton(target, words['transport.pause'])).toBeDefined();
 		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
 			words['share.nowPlaying']({ title: 'Ebb', position: '2', total: '2' })
 		);
@@ -562,7 +561,7 @@ describe('Shared collection scroll bar', () => {
 			};
 			await reportVisibility(false);
 			expect(document.querySelector('footer.player-bar')).toBeNull();
-			getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+			getByRoleButton(target, words['transport.play']).click();
 			await tick();
 			expect(target.querySelector('.bar-room') !== null).toBe(
 				kind === 'album' || kind === 'playlist'
@@ -572,7 +571,7 @@ describe('Shared collection scroll bar', () => {
 				kind === 'album' || kind === 'playlist'
 			);
 			if (kind === 'album' || kind === 'playlist') {
-				getByRoleButton(target, SONG_NEXT_LABEL).click();
+				getByRoleButton(target, words['nowPlaying.nextSong']).click();
 				await tick();
 				await reportVisibility(false);
 				expect(document.querySelector('footer.player-bar')).not.toBeNull();
@@ -618,12 +617,12 @@ describe('Shared playlist metadata and artwork', () => {
 		]);
 		rows()[1].click();
 		await tick();
-		getByRoleButton(target, 'Shuffle').click();
+		getByRoleButton(target, words['share.shuffle']).click();
 		await tick();
 		assertLabels();
 		expect(audioPlayer.current?.albumTitle).toBe('Album b');
 		expect(target.querySelector('.queue-row.current .queue-title')?.textContent).toBe('Song b');
-		getByRoleButton(target, 'Disable shuffle').click();
+		getByRoleButton(target, words['share.disableShuffle']).click();
 		await tick();
 		expect(rows().map((row) => row.querySelector('.queue-title')?.textContent)).toEqual([
 			'Song a',
@@ -683,7 +682,7 @@ describe('Shared playlist metadata and artwork', () => {
 				kind: 'playlist',
 				tracks: [sharedTrack('first', 'Tide')]
 			});
-			getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+			getByRoleButton(target, words['transport.play']).click();
 			await tick();
 			audioPlayer.status = status;
 			await tick();

@@ -6,16 +6,8 @@ import { expect, test, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
 import { formatTime } from '../src/lib/utils/format';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { words } from '../src/lib/words/en';
-import {
-	nowPlayingOpenSourceLabel,
-	nowPlayingTakeLabel,
-	takeVersion,
-	type TakeVersion,
-	NOW_PLAYING_CLOSE,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
+import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import {
 	boundingBoxes,
 	containing,
@@ -43,8 +35,11 @@ const SETTINGS_SECTION = words['settingsSections.generation'];
 // assumed v1 — the whole point of L12's "version number as seeded" clause.
 const SONG_PHONE_VERSION_NUMBER = 7;
 const SONG_PHONE_TAKE_COUNT = 2;
-const SECOND_TAKE_LABEL = nowPlayingTakeLabel(SONG_PHONE_VERSION_NUMBER, SONG_PHONE_TAKE_COUNT);
-const PLAYS_FROM_AN_ALBUM = new RegExp(`^${nowPlayingOpenSourceLabel('album', '.+')}$`);
+const SECOND_TAKE_LABEL = words['nowPlaying.takeVersioned']({
+	version: String(SONG_PHONE_VERSION_NUMBER),
+	take: String(SONG_PHONE_TAKE_COUNT)
+});
+const PLAYS_FROM_AN_ALBUM = new RegExp(`^${words['nowPlaying.openAlbumSource']({ title: '.+' })}$`);
 const RUNNING_JOB_TAKE_INDEX = 1;
 const RUNNING_JOB_TAKE_COUNT = 2;
 // A cold start: the job begins by loading the model, which names no percent
@@ -191,7 +186,7 @@ test.describe('song page at phone width', () => {
 			).toBeVisible();
 
 			const playButtons = panel.getByRole('button', {
-				name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`)
+				name: new RegExp(`^${words['transport.play']} v`)
 			});
 			await expect(playButtons).toHaveCount(SONG_PHONE_TAKE_COUNT);
 			for (const box of await boundingBoxes(...(await playButtons.all()))) {
@@ -200,7 +195,10 @@ test.describe('song page at phone width', () => {
 			}
 
 			await panel
-				.getByRole('button', { name: `${TRANSPORT_PLAY_LABEL} ${SECOND_TAKE_LABEL}`, exact: true })
+				.getByRole('button', {
+					name: `${words['transport.play']} ${SECOND_TAKE_LABEL}`,
+					exact: true
+				})
 				.click();
 			// The phone bar says where the music comes from (#1058, frame C2); the
 			// player names the take on Now Playing, opened from the bar's title: on
@@ -208,12 +206,17 @@ test.describe('song page at phone width', () => {
 			// once the song has loaded, starts with the same label.
 			await page
 				.getByRole('contentinfo')
-				.getByRole('button', { name: openNowPlayingLabel(songTitle), exact: true })
+				.getByRole('button', {
+					name: words['player.openNowPlaying']({ title: songTitle }),
+					exact: true
+				})
 				.click();
 			const nowPlaying = page.getByRole('dialog', { name: songTitle });
 			await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
 			await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
-			await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
+			await nowPlaying
+				.getByRole('button', { name: words['nowPlaying.close'], exact: true })
+				.click();
 			await expect(nowPlaying).toBeHidden();
 
 			// A seeded running job, discovered the same way a reload would: a fresh

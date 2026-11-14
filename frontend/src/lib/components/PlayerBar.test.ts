@@ -8,14 +8,9 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
+import { queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { words } from '#lib/words/en.ts';
 import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
-import {
-	PLAYER_WAITING_FOR_NETWORK,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
-} from '#lib/constants/transport.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,
@@ -45,16 +40,13 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { get } from 'svelte/store';
-import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '#lib/constants/queue.ts';
 import PlayerBar from './PlayerBar.svelte';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import {
 	nowPlayingFromLabel,
 	nowPlayingTakeLabel,
-	NOW_PLAYING_LABEL,
-	NOW_PLAYING_SWIPE_RISE_PX,
-	openNowPlayingLabel
+	NOW_PLAYING_SWIPE_RISE_PX
 } from '#lib/constants/now-playing.ts';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
@@ -184,6 +176,7 @@ function installLockScreen(): FakeLockScreen {
 	return lockScreen;
 }
 
+const NOW_PLAYING_BUTTON = `button[aria-label="${words['transport.nowPlaying']}"]`;
 const WAITING_SONG = { songTitle: 'Opening Move', artist: 'Artist', albumTitle: 'Nachtstrom' };
 
 // An album header start that could not read its takes offline, as the player
@@ -263,7 +256,7 @@ describe('PlayerBar stream boundaries', () => {
 		await mountPlayerBar();
 
 		expect(audioPlayer.current).toBeNull();
-		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
+		const play = queryButtonByLabel(target, words['transport.play']);
 		expect(play?.disabled).toBe(false);
 		expect(target.querySelector('.track-title')?.textContent).toBe(words['places.library']);
 		play?.click();
@@ -281,7 +274,7 @@ describe('PlayerBar stream boundaries', () => {
 			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 			await mountPlayerBar();
 
-			const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+			const transport = queryButtonByLabel(target, words['transport.pause']);
 			expect(transport?.querySelector('.spinner')).not.toBeNull();
 			transport?.click();
 			expect(playIdleStart).toHaveBeenCalledOnce();
@@ -308,7 +301,7 @@ describe('PlayerBar stream boundaries', () => {
 			}).toEqual({
 				title: WAITING_SONG.songTitle,
 				detail: WAITING_SONG.albumTitle,
-				main: TRANSPORT_PAUSE_LABEL,
+				main: words['transport.pause'],
 				timeReadouts: 0
 			});
 		}
@@ -353,7 +346,7 @@ describe('PlayerBar stream boundaries', () => {
 			title: target.querySelector('.track-title')?.textContent,
 			main: playButton().getAttribute('aria-label'),
 			timeReadouts: target.querySelectorAll('.timeline .time').length
-		}).toEqual({ title: 'Nachtstrom', main: TRANSPORT_PLAY_LABEL, timeReadouts: 0 });
+		}).toEqual({ title: 'Nachtstrom', main: words['transport.play'], timeReadouts: 0 });
 	});
 
 	describe('during the restore wait (#1312)', () => {
@@ -377,8 +370,8 @@ describe('PlayerBar stream boundaries', () => {
 			await tick();
 		}
 
-		const readsPlay = { label: TRANSPORT_PLAY_LABEL, busy: 'false', spinner: false };
-		const readsBusyPause = { label: TRANSPORT_PAUSE_LABEL, busy: 'true', spinner: true };
+		const readsPlay = { label: words['transport.play'], busy: 'false', spinner: false };
+		const readsBusyPause = { label: words['transport.pause'], busy: 'true', spinner: true };
 
 		it('reads Pause with its spinner for a Play pressed before the saved take arrived (#1330)', async () => {
 			playStartNotice.set('restoring');
@@ -527,26 +520,26 @@ describe('PlayerBar stream boundaries', () => {
 		);
 		await mountPlayerBar();
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
-		await vi.waitFor(() => expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE));
+		queryButtonByLabel(target, words['transport.play'])?.click();
+		await vi.waitFor(() => expect(target.textContent).toContain(words['player.nothingToPlay']));
 		expect(target.querySelector('.track-detail')).toBeNull();
 		expect(audioPlayer.current).toBeNull();
 
 		selectedPlaylistDetail.set(playlistItem(playablePlaylistDefaults()));
-		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
+		queryButtonByLabel(target, words['transport.play'])?.click();
 		await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('Tide'));
-		expect(target.textContent).not.toContain(LIBRARY_QUEUE_EMPTY_TITLE);
+		expect(target.textContent).not.toContain(words['player.nothingToPlay']);
 	});
 
 	it('uses English loading and empty copy instead of German leftovers', async () => {
 		queueContext.set({ type: 'library' });
 		playStartNotice.set('building');
 		await mountPlayerBar();
-		expect(target.textContent).toContain(LIBRARY_QUEUE_LOADING_TITLE);
+		expect(target.textContent).toContain(words['player.loading']);
 		expect(target.textContent).not.toContain('Queue wird gebaut');
 		playStartNotice.set('empty');
 		await tick();
-		expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE);
+		expect(target.textContent).toContain(words['player.nothingToPlay']);
 		expect(target.textContent).not.toContain('Keine Takes');
 	});
 
@@ -554,8 +547,8 @@ describe('PlayerBar stream boundaries', () => {
 		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
 		await mountPlayerBar();
 
-		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous"]');
-		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next"]');
+		const previous = queryButtonByLabel(target, words['transport.previous']);
+		const next = queryButtonByLabel(target, words['transport.next']);
 		expect(previous?.disabled).toBe(true);
 		expect(next?.disabled).toBe(false);
 
@@ -661,8 +654,8 @@ describe('PlayerBar take identifier', () => {
 	// L9: the mini-player names the playing take through the one owner,
 	// nowPlayingTakeLabel — never a second, ad-hoc format.
 	it.each([
-		[7, 'v7 · take 2'],
-		[null, 'take 2']
+		[7, words['nowPlaying.takeVersioned']({ version: '7', take: '2' })],
+		[null, words['nowPlaying.takeUnversioned']({ take: '2' })]
 	])('reads the take as %s from nowPlayingTakeLabel', async (versionNumber, expected) => {
 		queueContext.set({ type: 'library' });
 		audioPlayer.load(
@@ -703,14 +696,14 @@ describe('PlayerBar shuffle', () => {
 		await mountPlayerBar();
 
 		expect(shuffleButton().getAttribute('aria-pressed')).toBe('false');
-		expect(shuffleButton().getAttribute('aria-label')).toBe('Shuffle this album');
+		expect(shuffleButton().getAttribute('aria-label')).toBe(words['transport.shuffleAlbum']);
 
 		shuffleButton().click();
 		await tick();
 
 		expect(get(shuffleEnabled)).toBe(true);
 		expect(shuffleButton().getAttribute('aria-pressed')).toBe('true');
-		expect(shuffleButton().getAttribute('aria-label')).toBe('Disable shuffle (this album)');
+		expect(shuffleButton().getAttribute('aria-label')).toBe(words['transport.unshuffleAlbum']);
 	});
 });
 
@@ -736,20 +729,20 @@ describe('PlayerBar transport labels', () => {
 	it('names the transport button after the state its click leaves', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		await mountPlayerBar();
-		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+		expect(playButton().getAttribute('aria-label')).toBe(words['transport.play']);
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
 		await clickAndSettle();
 		audio.fire('canplay');
 		await tick();
-		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PAUSE_LABEL);
+		expect(playButton().getAttribute('aria-label')).toBe(words['transport.pause']);
 
 		await clickAndSettle();
-		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+		expect(playButton().getAttribute('aria-label')).toBe(words['transport.play']);
 
 		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
 		await clickAndSettle();
-		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_RETRY_LABEL);
+		expect(playButton().getAttribute('aria-label')).toBe(words['transport.retry']);
 	});
 });
 
@@ -757,9 +750,7 @@ describe('PlayerBar Now Playing', () => {
 	beforeEach(useDesktopLayout);
 
 	function nowPlayingButton(): HTMLButtonElement {
-		const button = target.querySelector<HTMLButtonElement>(
-			`button[aria-label="${NOW_PLAYING_LABEL}"]`
-		);
+		const button = target.querySelector<HTMLButtonElement>(NOW_PLAYING_BUTTON);
 		if (!button) throw new Error('Expected a Now Playing trigger in the transport bar');
 		return button;
 	}
@@ -799,7 +790,7 @@ describe('PlayerBar Now Playing', () => {
 		await mountPlayerBar();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		target.querySelector<HTMLButtonElement>(NOW_PLAYING_BUTTON)?.click();
 		await tick();
 
 		expect(get(nowPlayingSurface)).toBe('full');
@@ -815,7 +806,7 @@ describe('PlayerBar Now Playing', () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		await mountPlayerBar();
 
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		target.querySelector<HTMLButtonElement>(NOW_PLAYING_BUTTON)?.click();
 		await tick();
 
 		expect(get(nowPlayingSurface)).toBe('docked');
@@ -884,16 +875,14 @@ describe('PlayerBar Now Playing', () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		await mountPlayerBar();
 
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		target.querySelector<HTMLButtonElement>(NOW_PLAYING_BUTTON)?.click();
 		await tick();
 		expect(target.querySelector('.player-bar')).toBeNull();
 
 		closeNowPlaying();
 		await tick();
 
-		expect(document.activeElement).toBe(
-			target.querySelector(`button[aria-label="${NOW_PLAYING_LABEL}"]`)
-		);
+		expect(document.activeElement).toBe(target.querySelector(NOW_PLAYING_BUTTON));
 	});
 });
 
@@ -978,14 +967,16 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 			(child) => child.getAttribute('aria-label') ?? child.className.split(' ')[0]
 		);
 		expect(targets).toEqual([
-			openNowPlayingLabel('Opening Move'),
+			words['player.openNowPlaying']({ title: 'Opening Move' }),
 			'transport-controls',
 			'phone-side'
 		]);
 		const transport = Array.from(
 			bar().querySelectorAll<HTMLButtonElement>('.transport-controls button')
 		).map((button) => button.getAttribute('aria-label'));
-		expect(transport).toEqual(['Previous', TRANSPORT_PLAY_LABEL, 'Next']);
+		expect(transport).toEqual(
+			(['previous', 'play', 'next'] as const).map((name) => words[`transport.${name}`])
+		);
 		expect(target.querySelector('.shuffle-btn')).toBeNull();
 		expect(target.querySelector('.now-playing-btn')).toBeNull();
 	});
@@ -1008,7 +999,9 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		const [titleTarget] = openTargets();
 		expect(titleTarget.querySelectorAll('.track-cover')).toHaveLength(covers);
 		expect(titleTarget.querySelector('.track-title')?.textContent).toBe('Opening Move');
-		expect(titleTarget.getAttribute('aria-label')).toBe(openNowPlayingLabel('Opening Move'));
+		expect(titleTarget.getAttribute('aria-label')).toBe(
+			words['player.openNowPlaying']({ title: 'Opening Move' })
+		);
 	});
 
 	it.each([
@@ -1092,17 +1085,17 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		{ gesture: 'a move down', start: swipeStarts.title, rise: -NOW_PLAYING_SWIPE_RISE_PX },
 		{
 			gesture: 'a swipe up from Previous',
-			start: swipeStarts.control('Previous'),
+			start: swipeStarts.control(words['transport.previous']),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		},
 		{
 			gesture: 'a swipe up from play',
-			start: swipeStarts.control(TRANSPORT_PLAY_LABEL),
+			start: swipeStarts.control(words['transport.play']),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		},
 		{
 			gesture: 'a swipe up from Next',
-			start: swipeStarts.control('Next'),
+			start: swipeStarts.control(words['transport.next']),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		}
 	])('leaves Now Playing closed on $gesture', async ({ start, rise, drift }) => {
@@ -1147,8 +1140,8 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 			expectActed: () => expect(get(nowPlayingSurface)).toBe('closed')
 		},
 		{
-			control: 'Next',
-			press: swipeStarts.control('Next'),
+			control: words['transport.next'],
+			press: swipeStarts.control(words['transport.next']),
 			expectActed: () => expect(playerStore.playNextSong).toHaveBeenCalledOnce()
 		}
 	])(
@@ -1170,12 +1163,12 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 	);
 
 	it.each([
-		{ step: 'Previous', action: 'playPrevSong' as const },
-		{ step: 'Next', action: 'playNextSong' as const }
+		{ step: words['transport.previous'], action: 'playPrevSong' as const },
+		{ step: words['transport.next'], action: 'playNextSong' as const }
 	])('steps with $step', async ({ step, action }) => {
 		const played = vi.spyOn(playerStore, action).mockResolvedValue();
 		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
-		audio.currentTime = step === 'Previous' ? 15 : 0;
+		audio.currentTime = step === words['transport.previous'] ? 15 : 0;
 		audio.fire('timeupdate');
 		await mountBar();
 
@@ -1255,7 +1248,9 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		loadTake(LONG_TITLE);
 		await mountBar();
 
-		expect(openTargets()[0].getAttribute('aria-label')).toBe(openNowPlayingLabel(LONG_TITLE));
+		expect(openTargets()[0].getAttribute('aria-label')).toBe(
+			words['player.openNowPlaying']({ title: LONG_TITLE })
+		);
 		expect(bar().querySelector('.track-title')?.textContent).toBe(LONG_TITLE);
 	});
 
@@ -1335,7 +1330,7 @@ describe('PlayerBar failure line', () => {
 
 		expect(target.querySelector('.offline-strip')).not.toBeNull();
 		expect(target.querySelector('.phone-failure, .error-text')).toBeNull();
-		expect(target.querySelector('.play-btn')?.getAttribute('aria-label')).toBe('Retry');
+		expect(queryButtonByLabel(target, words['transport.retry'])?.matches('.play-btn')).toBe(true);
 	});
 
 	// The target's own label replaces its words for a screen reader.
@@ -1502,7 +1497,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 			await tap();
 
 			expect(transportFacts(lockScreen)).toEqual({
-				main: TRANSPORT_PAUSE_LABEL,
+				main: words['transport.pause'],
 				spinner: true,
 				lockScreen: 'playing'
 			});
@@ -1517,7 +1512,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		expect({
 			title: target.querySelector('.track-title')?.textContent,
 			main: playButton().getAttribute('aria-label')
-		}).toEqual({ title: 'Opening Move', main: TRANSPORT_PLAY_LABEL });
+		}).toEqual({ title: 'Opening Move', main: words['transport.play'] });
 	});
 
 	it.each([
@@ -1540,8 +1535,8 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 			spinner: target.querySelector('.play-btn .spinner') !== null,
 			reloads: load.mock.calls.length
 		}).toEqual({
-			whileRecovering: TRANSPORT_PAUSE_LABEL,
-			afterPause: TRANSPORT_PLAY_LABEL,
+			whileRecovering: words['transport.pause'],
+			afterPause: words['transport.play'],
 			spinner: false,
 			reloads: 0
 		});
@@ -1570,11 +1565,11 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 				words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),
 				redFailure: target.querySelector('.error-text, .phone-failure, .play-btn.errored') !== null,
 				main: playButton().getAttribute('aria-label'),
-				retryOffered: target.textContent?.includes(TRANSPORT_RETRY_LABEL)
+				retryOffered: target.textContent?.includes(words['transport.retry'])
 			}).toEqual({
-				words: PLAYER_WAITING_FOR_NETWORK,
+				words: words['transport.waitingForNetwork'],
 				redFailure: false,
-				main: TRANSPORT_PAUSE_LABEL,
+				main: words['transport.pause'],
 				retryOffered: false
 			});
 		}
@@ -1615,6 +1610,6 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		expect({
 			main: playButton().getAttribute('aria-label'),
 			waiting: target.querySelector('.waiting-notice') !== null
-		}).toEqual({ main: TRANSPORT_PLAY_LABEL, waiting: false });
+		}).toEqual({ main: words['transport.play'], waiting: false });
 	});
 });

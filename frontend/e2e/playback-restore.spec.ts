@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	sameOriginHeaders,
 	FlowGuard,
@@ -151,8 +150,8 @@ function transportOf(page: Page) {
 	const transport = page.getByRole('contentinfo');
 	return {
 		transport,
-		play: transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true }),
-		pause: transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+		play: transport.getByRole('button', { name: words['transport.play'], exact: true }),
+		pause: transport.getByRole('button', { name: words['transport.pause'], exact: true })
 	};
 }
 
@@ -212,7 +211,7 @@ async function playTheSongsTake(
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
-	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
+	await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
 	await expect(transportOf(page).pause).toHaveAttribute('aria-busy', 'false');
 }
 
@@ -278,7 +277,9 @@ async function holdTheSavedSongBack(
 async function shownPosition(page: Page, shell: Shell, takeSeconds: number): Promise<number> {
 	const { transport } = transportOf(page);
 	if (shell === 'desktop') {
-		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
+		return Number(
+			await transport.getByRole('slider', { name: words['transport.seek'] }).inputValue()
+		);
 	}
 	const fill = transport.locator('.mobile-progress-fill');
 	const percent = parseFloat(await fill.evaluate((line) => (line as HTMLElement).style.width));

@@ -11,21 +11,6 @@
 import { expect, request, test, type APIRequestContext, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import {
-	collectionActionLabel,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
-} from '../src/lib/constants/transport';
-import {
-	NOW_PLAYING_QUEUE_TAB,
-	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
-	NOW_PLAYING_UP_NEXT_PREFIX,
-	SHUFFLE_SCOPE_LIBRARY,
-	NOW_PLAYING_LABEL,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
-import {
 	FlowGuard,
 	nameStartingWith,
 	shellOf,
@@ -230,7 +215,7 @@ async function playAlbum(page: Page, albumId: string) {
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
 		.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			name: words['collectionHeader.playAlbum'],
 			exact: true
 		})
 		.click();
@@ -256,12 +241,15 @@ async function toggleShuffle(page: Page, shell: Shell, playingSongTitle: string)
 	const transport = page.getByRole('contentinfo');
 	if (shell === 'mobile')
 		await transport
-			.getByRole('button', { name: openNowPlayingLabel(playingSongTitle), exact: true })
+			.getByRole('button', {
+				name: words['player.openNowPlaying']({ title: playingSongTitle }),
+				exact: true
+			})
 			.click();
 	const controls =
 		shell === 'desktop' ? transport : page.getByRole('dialog', { name: playingSongTitle });
 	const shuffle = controls.getByRole('button', {
-		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+		name: nameStartingWith(words['share.shuffle'], words['share.disableShuffle'])
 	});
 	await shuffle.click();
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
@@ -312,27 +300,28 @@ test('shuffle while a library take plays keeps the position reached during the p
 	});
 	await page.goto(LIBRARY_PATH);
 	const transport = page.getByRole('contentinfo');
-	await transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.play'], exact: true }).click();
 	await expect.poll(() => timeline.position).toBeGreaterThan(0);
 	await transport
 		.getByRole('button', {
-			name: shell === 'mobile' ? new RegExp(`${openNowPlayingLabel('')}$`) : NOW_PLAYING_LABEL,
+			name:
+				shell === 'mobile'
+					? new RegExp(`${words['player.openNowPlaying']({ title: '' })}$`)
+					: words['transport.nowPlaying'],
 			exact: true
 		})
 		.click();
 	// The library's pool of one pick queues a single take, so Now Playing opens
 	// on This take; Escape then puts the sheet away on the phone.
-	await page.getByRole('tab', { name: NOW_PLAYING_QUEUE_TAB, exact: true }).click();
+	await page.getByRole('tab', { name: words['nowPlaying.queueTab'], exact: true }).click();
 	if (shell === 'mobile') await page.keyboard.press('Escape');
 	const controls = shell === 'desktop' ? transport : page.getByRole('dialog');
 	const shuffle = controls.getByRole('button', {
-		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+		name: nameStartingWith(words['share.shuffle'], words['share.disableShuffle'])
 	});
-	const queue = page.getByRole('region', { name: NOW_PLAYING_QUEUE_TAB });
+	const queue = page.getByRole('region', { name: words['nowPlaying.queueTab'] });
 	const currentQueueRow = queue.locator('button[aria-current="true"]');
-	await expect(shuffle).toHaveAccessibleName(
-		`${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${SHUFFLE_SCOPE_LIBRARY}`
-	);
+	await expect(shuffle).toHaveAccessibleName(words['transport.shuffleLibrary']);
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'false');
 	let positionAtRelease = 0;
 	let responseReady!: () => void;
@@ -358,7 +347,7 @@ test('shuffle while a library take plays keeps the position reached during the p
 
 	await responseIsReady;
 	if (shell === 'mobile')
-		await controls.getByRole('button', { name: NOW_PLAYING_QUEUE_TAB, exact: true }).click();
+		await controls.getByRole('button', { name: words['nowPlaying.queueTab'], exact: true }).click();
 	await expect(queue).toBeVisible();
 	await expect(currentQueueRow).toHaveCount(0);
 	allowFulfillment();
@@ -384,7 +373,7 @@ test('Prev on an album starts the previous take and the queue continues into the
 
 	await playAlbum(page, library.albumId);
 	await expectTransportMovesOn(page, first, second);
-	await transport.getByRole('button', { name: 'Previous', exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.previous'], exact: true }).click();
 
 	await expectTransportMovesOn(page, first, second);
 	expect(timeline.elementsPlayed).toBe(1);
@@ -408,12 +397,12 @@ test('Next between two places of one take in a playlist moves the audio to the s
 	await page.goto(`/playlist/${slug}`);
 	await workspace(page)
 		.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'),
+			name: words['collectionHeader.playPlaylist'],
 			exact: true
 		})
 		.click();
 	await expect.poll(() => timeline.requestsOf(trackOf(library, twice))).toBeGreaterThanOrEqual(2);
-	await transport.getByRole('button', { name: 'Next', exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.next'], exact: true }).click();
 
 	await expect.poll(() => timeline.seeks).toHaveLength(1);
 	expect(timeline.seeks[0]).toBeGreaterThan(SECOND_PLACE_STARTS_AFTER_SECONDS);
@@ -439,7 +428,7 @@ test('shuffle on an album keeps the playing take where it is and plays on into t
 	await playAlbum(page, library.albumId);
 	await expect(transport.getByText(first.songTitle, { exact: true })).toBeVisible();
 	await expect.poll(() => PlaybackTimeline.clockOf(page)).toBeGreaterThan(PLAYING_FOR_SECONDS);
-	await transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.pause'], exact: true }).click();
 	const pausedAt = await PlaybackTimeline.clockOf(page);
 	await toggleShuffle(page, shellOf(testInfo), first.songTitle);
 
@@ -487,8 +476,10 @@ test('an album whose next take fails on the network for a while plays that take 
 	expect(timeline.sourcesPlayed).toEqual(['blob:']);
 	expect(timeline.stops).toEqual([]);
 	expect(timeline.recoveryRequests).toEqual([]);
-	await expect(page.getByText(`${second.songTitle} couldn't be loaded, skipped.`)).toHaveCount(0);
-	await expect(transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL })).toHaveCount(0);
+	await expect(
+		page.getByText(words['player.takeSkipped']({ title: second.songTitle }))
+	).toHaveCount(0);
+	await expect(transport.getByRole('button', { name: words['transport.retry'] })).toHaveCount(0);
 	guard.assertClean();
 });
 
@@ -504,9 +495,9 @@ test('an album whose second take is refused names it once, when playback reaches
 	const library = readSeededLibrary();
 	const [first, second, third] = library.albumTracks;
 	const toasts = await ToastLog.watch(page);
-	const skipped = `${second.songTitle} couldn't be loaded, skipped.`;
+	const skipped = words['player.takeSkipped']({ title: second.songTitle });
 	const upNext = (track: SeededTrack) =>
-		page.getByText(`${NOW_PLAYING_UP_NEXT_PREFIX} ${track.songTitle}`, { exact: true });
+		page.getByText(words['nowPlaying.upNext']({ title: track.songTitle }), { exact: true });
 	const playsUntilUpNextNames = (track: SeededTrack) =>
 		expect(upNext(track)).toBeVisible({ timeout: TRACK_CHANGE_TIMEOUT_MS });
 	await page.route(
@@ -519,7 +510,9 @@ test('an album whose second take is refused names it once, when playback reaches
 		.getByRole('contentinfo')
 		.getByRole('button', {
 			name:
-				shellOf(testInfo) === 'mobile' ? openNowPlayingLabel(first.songTitle) : NOW_PLAYING_LABEL,
+				shellOf(testInfo) === 'mobile'
+					? words['player.openNowPlaying']({ title: first.songTitle })
+					: words['transport.nowPlaying'],
 			exact: true
 		})
 		.click();
@@ -568,7 +561,7 @@ test.describe('on a fresh account', () => {
 			await surface.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		const take = surface.locator('.take-row');
 		await expect(take).toHaveCount(1);
-		await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
+		await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
 
 		await expectTransportMovesOn(page, first, second);
 		guard.assertClean();

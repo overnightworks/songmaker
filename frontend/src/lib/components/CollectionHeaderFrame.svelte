@@ -1,14 +1,29 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { collectionActionLabel, type CollectionPlayKind } from '#lib/constants/transport.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import CoverActivityMark, { type CoverMark } from './CoverActivityMark.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {
 		transportButtonFace,
-		transportButtonLabel,
+		transportAction,
+		type TransportAction,
 		transportIsBusy,
 		type TransportState
 	} from '#lib/services/audioPlayer.svelte.ts';
+
+	// A header's play circle names what it does to its collection: "Play album", "Retry playlist".
+	const PLAY_LABEL_KEYS = {
+		album: {
+			play: 'collectionHeader.playAlbum',
+			pause: 'collectionHeader.pauseAlbum',
+			retry: 'collectionHeader.retryAlbum'
+		},
+		playlist: {
+			play: 'collectionHeader.playPlaylist',
+			pause: 'collectionHeader.pausePlaylist',
+			retry: 'collectionHeader.retryPlaylist'
+		}
+	} as const satisfies Record<'album' | 'playlist', Record<TransportAction, TextKey>>;
 
 	interface Props {
 		coverUrl: string | null;
@@ -17,7 +32,7 @@
 		coverAlt: string;
 		initials: string;
 		artFill: string | null;
-		kind: CollectionPlayKind;
+		kind: 'album' | 'playlist';
 		/** The transport the circle acts on: this collection's queue or a waiting start of it, else idle. */
 		transport: TransportState;
 		/** The circle's action; null while the circle has nothing to act on, which dims it. */
@@ -55,7 +70,7 @@
 	}: Props = $props();
 
 	const coverShown = $derived(showCover && Boolean(coverUrl));
-	const playLabel = $derived(collectionActionLabel(transportButtonLabel(transport), kind));
+	const playLabel = $derived(pageText(PLAY_LABEL_KEYS[kind][transportAction(transport)]));
 </script>
 
 {#snippet coverArt()}

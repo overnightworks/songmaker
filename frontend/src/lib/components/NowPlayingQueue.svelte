@@ -6,13 +6,9 @@
 		LIBRARY_TAKE_POOLS,
 		type LibraryTakePool
 	} from '#lib/stores/playbackSettings.ts';
-	import {
-		NOW_PLAYING_QUEUE_TAB,
-		NOW_PLAYING_UP_NEXT_PREFIX,
-		nowPlayingQueueHeading,
-		nowPlayingTakeLabel
-	} from '#lib/constants/now-playing.ts';
-	import { formatTime } from '#lib/utils/format.ts';
+	import { nowPlayingTakeLabel } from '#lib/constants/now-playing.ts';
+	import { formatDecimal, formatTime } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 	let {
@@ -50,15 +46,20 @@
 		subtitleByEntryId?: ReadonlyMap<string, string>;
 	} = $props();
 
-	const shownHeading = $derived(heading ?? nowPlayingQueueHeading(contextLabel));
+	const shownHeading = $derived(
+		heading ??
+			(contextLabel
+				? pageText('nowPlaying.queueHeading', { source: contextLabel })
+				: pageText('nowPlaying.queueTab'))
+	);
 </script>
 
-<section class="np-queue" aria-label={heading ?? NOW_PLAYING_QUEUE_TAB}>
+<section class="np-queue" aria-label={heading ?? pageText('nowPlaying.queueTab')}>
 	<div class="queue-heading-row">
 		<h3 class="queue-heading">{shownHeading}</h3>
 		<div class="queue-heading-actions">
 			{#if takePool}
-				<div class="pool-trio" role="group" aria-label="Take pool">
+				<div class="pool-trio" role="group" aria-label={pageText('nowPlaying.takePool')}>
 					{#each LIBRARY_TAKE_POOLS as option (option)}
 						<button
 							type="button"
@@ -67,7 +68,7 @@
 							aria-pressed={takePool.selected === option}
 							onclick={() => takePool.onChoose(option)}
 						>
-							{LIBRARY_TAKE_POOL_LABELS[option]}
+							{pageText(LIBRARY_TAKE_POOL_LABELS[option])}
 						</button>
 					{/each}
 				</div>
@@ -89,7 +90,7 @@
 						onclick={() => onJump(index)}
 					>
 						<span class="queue-position" aria-hidden="true"
-							>{index === queue.currentIndex ? '' : index + 1}</span
+							>{index === queue.currentIndex ? '' : formatDecimal(index + 1, 0)}</span
 						>
 						{#if subtitleByEntryId?.get(item.key)}
 							<span class="queue-label">
@@ -117,7 +118,7 @@
 		{/if}
 	</ol>
 	{#if queue.upNext}
-		<p class="up-next">{NOW_PLAYING_UP_NEXT_PREFIX} {queue.upNext.songTitle}</p>
+		<p class="up-next">{pageText('nowPlaying.upNext', { title: queue.upNext.songTitle })}</p>
 	{/if}
 </section>
 

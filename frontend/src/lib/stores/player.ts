@@ -49,7 +49,6 @@ import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
 import { outdateLastPlayedRanking } from '#lib/stores/libraryOrder.ts';
 import {
 	desktopNowPlayingSurface,
-	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
@@ -67,19 +66,9 @@ import {
 	type ResumeQueueSource,
 	type SavedPlayback
 } from '#lib/stores/playbackResume.ts';
-import { LIBRARY_QUEUE_EMPTY_TITLE, PLAYLIST_LOADING_LABEL } from '#lib/constants/queue.ts';
-import { pageText } from '#lib/utils/page-words.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 import type { Key } from '#lib/words/en.ts';
-import {
-	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
-	type NowPlayingSurfaceKind,
-	type PlaybackSource,
-	QUEUE_TAKE_MISSING_TOAST,
-	SHUFFLE_SCOPE_ALBUM,
-	SHUFFLE_SCOPE_LIBRARY,
-	SHUFFLE_SCOPE_PLAYLIST
-} from '#lib/constants/now-playing.ts';
+import { type NowPlayingSurfaceKind, type PlaybackSource } from '#lib/constants/now-playing.ts';
 import { shuffled } from '#lib/utils/shuffle.ts';
 import { readStorage, writeStorage } from '#lib/utils/storage.ts';
 
@@ -204,19 +193,17 @@ export async function toggleShuffle(): Promise<void> {
 	await rebuildQueueAfterShuffleToggle();
 }
 
-function shuffleScopeLabel(ctx: QueueContext): string {
-	if (ctx.type === 'playlist') return SHUFFLE_SCOPE_PLAYLIST;
-	if (ctx.type === 'album') return SHUFFLE_SCOPE_ALBUM;
-	return SHUFFLE_SCOPE_LIBRARY;
-}
+const SHUFFLE_LABEL_KEYS = {
+	library: { on: 'transport.unshuffleLibrary', off: 'transport.shuffleLibrary' },
+	album: { on: 'transport.unshuffleAlbum', off: 'transport.shuffleAlbum' },
+	playlist: { on: 'transport.unshufflePlaylist', off: 'transport.shufflePlaylist' }
+} as const satisfies Record<QueueContext['type'], Record<'on' | 'off', TextKey>>;
 
 // Every shuffle control (transport bar, Now Playing) names the same scope
 // from the same place, so the two can never disagree about what a toggle
 // would shuffle.
 export const shuffleLabel = derived([shuffleEnabled, queueContext], ([$enabled, $ctx]) =>
-	$enabled
-		? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScopeLabel($ctx)})`
-		: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScopeLabel($ctx)}`
+	pageText(SHUFFLE_LABEL_KEYS[$ctx.type][$enabled ? 'on' : 'off'])
 );
 
 // Where the playing music comes from, named by the queue itself — never by
@@ -269,9 +256,11 @@ function librarySnapshotOpts(): { shuffle: boolean; pool: LibraryTakePool } {
 	return { shuffle: get(shuffleEnabled), pool: get(libraryTakePool) };
 }
 
-function poolLabel(): string {
-	return LIBRARY_TAKE_POOL_LABELS[get(libraryTakePool)];
-}
+const POOL_QUEUE_FAILED_KEYS = {
+	picks: 'player.picksQueueFailed',
+	mix: 'player.keepsQueueFailed',
+	all: 'player.allTakesQueueFailed'
+} as const satisfies Record<LibraryTakePool, TextKey>;
 
 const EMPTY_POOL_REFUSAL: Key = 'libraryQueueRefusal.emptyPool';
 const UNPLAYABLE_START_REFUSAL: Key = 'libraryQueueRefusal.startUnplayable';
@@ -288,7 +277,7 @@ function reportNothingPlayable(retry: () => Promise<void>): void {
 	retryPlayIntent = retry;
 	playStartNotice.set('empty');
 	clearLibraryQueueSkipFeedback();
-	addToast(LIBRARY_QUEUE_EMPTY_TITLE, 'error');
+	addToast(pageText('player.nothingToPlay'), 'error');
 }
 
 function albumTitle(albums: AlbumItem[], albumId: string): string {
@@ -302,8 +291,8 @@ function toastAlbumSongsFailure(err: unknown): void {
 }
 
 function libraryStreamFailureToast(err: unknown): string {
-	if (isEmptyPoolError(err)) return LIBRARY_QUEUE_EMPTY_TITLE;
-	const queueFailed = `${poolLabel()} queue failed. Press play to retry.`;
+	if (isEmptyPoolError(err)) return pageText('player.nothingToPlay');
+	const queueFailed = pageText(POOL_QUEUE_FAILED_KEYS[get(libraryTakePool)]);
 	return isUnplayableStartError(err) ? describeFailure(err, queueFailed) : queueFailed;
 }
 
@@ -705,7 +694,12 @@ async function playLibraryFromGeneration(
 			continue;
 		}
 		if (startIndex < 0) {
-			reportLibraryTakeStartFailure(startGeneration, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
+			reportLibraryTakeStartFailure(
+				startGeneration,
+				opts,
+				'error',
+				pageText('player.takeNotInQueue')
+			);
 			return;
 		}
 		const start = libraryQueueStart(opts, continuation);
@@ -780,7 +774,7 @@ export function idlePlayTarget(input: {
 		if (input.playlistLoading) {
 			return {
 				type: 'playlist',
-				label: input.listedPlaylist?.title ?? PLAYLIST_LOADING_LABEL,
+				label: input.listedPlaylist?.title ?? pageText('player.playlistLoading'),
 				playlistId
 			};
 		}
@@ -1320,8 +1314,6 @@ export function escapeNowPlaying(): void {
 	closeNowPlaying();
 }
 
-const PLAYBACK_FAILED_TOAST = 'Playback failed';
-
 // The single playback entry point for a take row (TakesList):
 // toggles pause if the row's take is already playing, otherwise starts a
 // queue from it (its album, else the library pool), reporting any failure as
@@ -1338,7 +1330,7 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 		if (albumId) await playAlbumFromGeneration(albumId, song, gen);
 		else await playLibraryFromGeneration(gen, { tappedRowSong: song });
 	} catch (e) {
-		addToast(describeFailure(e, PLAYBACK_FAILED_TOAST), 'error');
+		addToast(describeFailure(e, pageText('player.playTakeFailed')), 'error');
 	}
 }
 
@@ -1958,7 +1950,7 @@ function announcePendingSkips(): void {
 	if (reached.length === 0) return;
 	const skipped = new Map(ctx.skipped);
 	for (const [take, notice] of reached) {
-		addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
+		addToast(pageText('player.takeSkipped', { title: take.songTitle }), 'error');
 		skipped.set(take, { ...notice, state: 'announced' });
 	}
 	queueContext.set({ ...ctx, skipped });

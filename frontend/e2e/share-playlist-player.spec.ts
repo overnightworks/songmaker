@@ -78,7 +78,7 @@ const row = (page: Page, position: number) =>
 		has: page.locator('.queue-title', { hasText: new RegExp(`^${songTitle(position)}$`) })
 	});
 const slider = (page: Page) =>
-	page.locator('.now-playing.page').getByRole('slider', { name: 'Seek playback' });
+	page.locator('.now-playing.page').getByRole('slider', { name: words['transport.seek'] });
 const bar = (page: Page) => page.locator('footer.player-bar');
 
 async function openMock(page: Page, payload = playlistPayload()) {
@@ -91,7 +91,9 @@ async function openMock(page: Page, payload = playlistPayload()) {
 async function selected(page: Page, position: number, total = 3) {
 	await expect(row(page, position)).toHaveAttribute('aria-current', 'true');
 	await expect(row(page, position).locator('.queue-subtitle')).toHaveText(albumTitle(position));
-	await expect(page.locator('.lyrics-heading')).toHaveText(`Lyrics · ${songTitle(position)}`);
+	await expect(page.locator('.lyrics-heading')).toHaveText(
+		words['nowPlaying.lyricsHeadingTitled']({ title: songTitle(position) })
+	);
 	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(position));
 	await expect(page.locator('.now-playing-line')).toHaveText(
 		words['share.nowPlaying']({
@@ -189,7 +191,12 @@ for (const height of [900, 600]) {
 			await expect(page.locator('.cover-art .playlist-cover-cell img')).toHaveCount(3);
 			await loadedImages(page.locator('.cover-art .playlist-cover-cell img'));
 			await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(1));
-			for (const name of ['Shuffle', 'Previous song', 'Play', 'Next song'])
+			for (const name of [
+				words['share.shuffle'],
+				words['nowPlaying.previousSong'],
+				words['transport.play'],
+				words['nowPlaying.nextSong']
+			])
 				await expect(control(page, name)).toBeVisible();
 			await expect(slider(page)).toBeVisible();
 			await expect(page.locator('.queue-title')).toHaveText([1, 2, 3].map(songTitle));
@@ -198,7 +205,7 @@ for (const height of [900, 600]) {
 			const boxes = await boundingBoxes(
 				page.getByRole('heading', { level: 1 }),
 				page.locator('.now-playing-line'),
-				control(page, 'Play'),
+				control(page, words['transport.play']),
 				slider(page),
 				page.locator('.lyrics-heading'),
 				page.getByRole('heading', { name: 'Songs', exact: true })
@@ -255,9 +262,9 @@ test('1374_rule_5 P3: classic row play pause resume and return stay aligned', as
 	await selected(page, 2);
 	await currentCover(page, coverOf(2).card);
 	await row(page, 2).click();
-	await expect(control(page, 'Play')).toBeVisible();
+	await expect(control(page, words['transport.play'])).toBeVisible();
 	await row(page, 2).click();
-	await expect(control(page, 'Pause')).toBeVisible();
+	await expect(control(page, words['transport.pause'])).toBeVisible();
 	await row(page, 1).click();
 	await selected(page, 1);
 	await currentCover(page, coverOf(1).card);
@@ -269,18 +276,18 @@ test('1374_rule_2 P4: previous and next follow songs and stop at endpoints', asy
 }) => {
 	expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 	await openMock(page);
-	await expect(control(page, 'Previous song')).toBeDisabled();
-	await control(page, 'Play').click();
-	await control(page, 'Next song').click();
+	await expect(control(page, words['nowPlaying.previousSong'])).toBeDisabled();
+	await control(page, words['transport.play']).click();
+	await control(page, words['nowPlaying.nextSong']).click();
 	await selected(page, 2);
-	await control(page, 'Next song').click();
+	await control(page, words['nowPlaying.nextSong']).click();
 	await selected(page, 3);
-	await expect(control(page, 'Next song')).toBeDisabled();
-	await control(page, 'Previous song').click();
+	await expect(control(page, words['nowPlaying.nextSong'])).toBeDisabled();
+	await control(page, words['nowPlaying.previousSong']).click();
 	await selected(page, 2);
-	await control(page, 'Previous song').click();
+	await control(page, words['nowPlaying.previousSong']).click();
 	await selected(page, 1);
-	await expect(control(page, 'Previous song')).toBeDisabled();
+	await expect(control(page, words['nowPlaying.previousSong'])).toBeDisabled();
 });
 
 test('1374_rule_14 P5: seek before Play stages a paused song and resumes there', async ({
@@ -291,10 +298,10 @@ test('1374_rule_14 P5: seek before Play stages a paused song and resumes there',
 	await openMock(page);
 	await slider(page).fill('45');
 	await expect(slider(page)).toHaveValue('45');
-	await expect(control(page, 'Play')).toBeVisible();
+	await expect(control(page, words['transport.play'])).toBeVisible();
 	await selected(page, 1);
-	await control(page, 'Play').click();
-	await expect(control(page, 'Pause')).toBeVisible();
+	await control(page, words['transport.play']).click();
+	await expect(control(page, words['transport.pause'])).toBeVisible();
 	await expect.poll(async () => Number(await slider(page).inputValue())).toBeGreaterThan(45);
 });
 
@@ -303,7 +310,9 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 	realPlaylist
 }) => {
 	await page.goto(realPlaylist.url);
-	const initialStream = await startStream(page, realPlaylist, () => control(page, 'Play').click());
+	const initialStream = await startStream(page, realPlaylist, () =>
+		control(page, words['transport.play']).click()
+	);
 	await selected(page, 1);
 	await currentCover(page, realCover(realPlaylist, 1));
 	await page.evaluate(() => {
@@ -314,11 +323,14 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 			new URL(response.url()).pathname === realPlaylist.payload.entries[0].audio_url &&
 			response.ok()
 	);
-	await control(page, 'Shuffle').click();
+	await control(page, words['share.shuffle']).click();
 	const classicResponse = await classic;
 	expect(classicResponse.status()).toBe(206);
 	expect(await classicResponse.finished()).toBeNull();
-	await expect(control(page, 'Disable shuffle')).toHaveAttribute('aria-pressed', 'true');
+	await expect(control(page, words['share.disableShuffle'])).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
 	await expect(page.locator('.queue-title')).not.toHaveText([1, 2, 3].map(songTitle));
 	await selected(page, 1);
 	for (const position of [1, 2, 3]) {
@@ -327,11 +339,11 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 	await currentCover(page, realCover(realPlaylist, 1));
 	// Chromium can reuse the loaded media for this URL without another audio response.
 	const restoredStream = await requestStream(page, realPlaylist, () =>
-		control(page, 'Disable shuffle').click()
+		control(page, words['share.disableShuffle']).click()
 	);
 	// The server reuses the snapshot when the original queue order returns.
 	expect(restoredStream.stream_url).toBe(initialStream.stream_url);
-	await expect(control(page, 'Pause')).toBeVisible();
+	await expect(control(page, words['transport.pause'])).toBeVisible();
 	const resumedAt = Number(await slider(page).inputValue());
 	await expect.poll(async () => Number(await slider(page).inputValue())).toBeGreaterThan(resumedAt);
 	await expect(page.locator('.queue-title')).toHaveText([1, 2, 3].map(songTitle));
@@ -343,7 +355,7 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 // swaps to Pause once it plays; a seek made before that is lost when the jump
 // lands.
 async function seekToEndOfPlayingTake(page: Page) {
-	await expect(control(page, 'Pause')).toHaveAttribute('aria-busy', 'false');
+	await expect(control(page, words['transport.pause'])).toHaveAttribute('aria-busy', 'false');
 	const maximum = Number(await slider(page).getAttribute('max'));
 	await slider(page).fill((maximum - 0.4).toFixed(1));
 }
@@ -368,7 +380,7 @@ async function finishAndReplay(page: Page, order = [1, 2, 3]) {
 	await expect(row(page, order[0])).toHaveAttribute('aria-current', 'true');
 	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(order[0]));
 	await expect(page.locator('.play-again')).toBeHidden();
-	await expect(control(page, 'Pause')).toBeVisible();
+	await expect(control(page, words['transport.pause'])).toBeVisible();
 }
 
 test('1374_rule_7 P7: classic replay starts the first entry with shuffle off and on', async ({
@@ -378,15 +390,18 @@ test('1374_rule_7 P7: classic replay starts the first entry with shuffle off and
 	expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 	await openMock(page);
 	await row(page, 3).click();
-	await expect(control(page, 'Pause')).toBeVisible();
+	await expect(control(page, words['transport.pause'])).toBeVisible();
 	await finishAndReplay(page);
 	await row(page, 2).click();
 	await selected(page, 2);
 	await page.evaluate(() => {
 		Math.random = () => 0;
 	});
-	await control(page, 'Shuffle').click();
-	await expect(control(page, 'Disable shuffle')).toHaveAttribute('aria-pressed', 'true');
+	await control(page, words['share.shuffle']).click();
+	await expect(control(page, words['share.disableShuffle'])).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
 	const titles = await page.locator('.queue-title').allTextContents();
 	const order = titles.map((title) => {
 		const position = [1, 2, 3].find((position) => songTitle(position) === title);
@@ -407,7 +422,7 @@ test('1374_rule_10 P8: real stream crosses and jumps between member albums', asy
 	realPlaylist
 }) => {
 	await page.goto(realPlaylist.url);
-	await startStream(page, realPlaylist, () => control(page, 'Play').click());
+	await startStream(page, realPlaylist, () => control(page, words['transport.play']).click());
 	await selected(page, 1);
 	await slider(page).fill((Number(await slider(page).getAttribute('max')) - 0.5).toFixed(1));
 	await selected(page, 2);
@@ -424,7 +439,7 @@ test('1374_rule_7 P9: real stream ends without wrapping and replays song one', a
 	realPlaylist
 }) => {
 	await page.goto(realPlaylist.url);
-	await startStream(page, realPlaylist, () => control(page, 'Play').click());
+	await startStream(page, realPlaylist, () => control(page, words['transport.play']).click());
 	await row(page, 3).click();
 	await selected(page, 3);
 	await finishAndReplay(page);
@@ -502,7 +517,7 @@ test('1374_rule_16 P12: 24 rows remain reachable with bounded lyrics at full and
 			await expect(row(page, position)).toBeInViewport();
 			await row(page, position).click();
 			await expect(row(page, position)).toHaveAttribute('aria-current', 'true');
-			await expect(control(page, 'Pause')).toBeVisible();
+			await expect(control(page, words['transport.pause'])).toBeVisible();
 			await expect(page.locator('.now-playing-line')).toContainText(`${position} of 24`);
 			await expect(page.locator('.lyrics-line').first()).toBeVisible();
 			// A Follow pressed during the smooth PageDown scroll is re-paused by its tail (#1374); wait for the scroll to end first.
@@ -514,14 +529,17 @@ test('1374_rule_16 P12: 24 rows remain reachable with bounded lyrics at full and
 			await page.locator('.lyrics').press('PageDown');
 			await readerScrolled.evaluate(({ ended }) => ended);
 			await readerScrolled.dispose();
-			const follow = page.getByRole('button', { name: 'Follow', exact: true });
+			const follow = page.getByRole('button', {
+				name: words['nowPlaying.lyricsFollow'],
+				exact: true
+			});
 			await expect(follow).toBeInViewport({ ratio: 1 });
 			await follow.click();
 			await expect(follow).toBeHidden();
 			const [lyrics] = await boundingBoxes(page.locator('.np-page-lyrics'));
 			expect(lyrics.height).toBeLessThanOrEqual(height);
 			if ((page.viewportSize()?.width ?? 1440) > 768) {
-				await expect(control(page, 'Pause')).toBeInViewport({ ratio: 1 });
+				await expect(control(page, words['transport.pause'])).toBeInViewport({ ratio: 1 });
 				expect(lyrics.y).toBeGreaterThanOrEqual(0);
 				expect(lyrics.y + lyrics.height).toBeLessThanOrEqual(height);
 				await expect(bar(page)).toBeHidden();
@@ -541,13 +559,13 @@ for (const height of [900, 600]) {
 			expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 			if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 			await openMock(page, playlistPayload(24));
-			await control(page, 'Play').click();
-			await control(page, 'Next song').click();
+			await control(page, words['transport.play']).click();
+			await control(page, words['nowPlaying.nextSong']).click();
 			await selected(page, 2, 24);
 			const history = await page.evaluate(() => window.history.length);
 			await scroll(page, 'bottom');
 			if (info.project.name === 'desktop') {
-				await expect(control(page, 'Pause')).toBeInViewport({ ratio: 1 });
+				await expect(control(page, words['transport.pause'])).toBeInViewport({ ratio: 1 });
 				await expect(bar(page)).toBeHidden();
 				return;
 			}
@@ -555,17 +573,21 @@ for (const height of [900, 600]) {
 			await expect(bar(page).locator('.track-cover img')).toHaveAttribute('src', coverOf(2).card);
 			await loadedImages(bar(page).locator('.track-cover img'));
 			await screenshot(page, 'scrolled-bar', info.project.use.viewport?.width ?? 1440);
-			await bar(page).getByRole('button', { name: 'Pause', exact: true }).click();
-			await expect(bar(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
-			await bar(page).getByRole('button', { name: 'Play', exact: true }).click();
-			await expect(bar(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+			await bar(page).getByRole('button', { name: words['transport.pause'], exact: true }).click();
+			await expect(
+				bar(page).getByRole('button', { name: words['transport.play'], exact: true })
+			).toBeVisible();
+			await bar(page).getByRole('button', { name: words['transport.play'], exact: true }).click();
+			await expect(
+				bar(page).getByRole('button', { name: words['transport.pause'], exact: true })
+			).toBeVisible();
 			const [footer, transport] = await boundingBoxes(
 				page.getByRole('link', { name: words['legal.imprint'] }),
 				bar(page)
 			);
 			expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);
 			await bar(page).getByRole('button', { name: words['share.backToPlayer'] }).first().click();
-			await expect(control(page, 'Pause')).toBeInViewport();
+			await expect(control(page, words['transport.pause'])).toBeInViewport();
 			await expect(bar(page)).toBeHidden();
 			await expect(page.getByRole('dialog')).toHaveCount(0);
 			expect(await page.evaluate(() => window.history.length)).toBe(history);
@@ -578,7 +600,9 @@ async function rights(page: Page, payload: SharedPlaylistPayload) {
 		page.getByRole('button', { name: /edit|pencil|source|take|library|account/i })
 	).toHaveCount(0);
 	await expect(page.locator('.queue-take')).toHaveCount(0);
-	await expect(page.getByText(/Go to song|\bTake\b|\bv\d+\b/)).toHaveCount(0);
+	await expect(
+		page.getByText(new RegExp(`${words['nowPlaying.goToSong']}|\\bTake\\b|\\bv\\d+\\b`))
+	).toHaveCount(0);
 	await expect(page.locator('.queue-title')).toHaveText(
 		payload.entries.map((entry) => entry.song_title)
 	);
@@ -599,7 +623,7 @@ test('1374_rule_10 P14: uploaded cover mosaic revoke legal and signed-out rights
 	await expect(page.locator('.cover-art .playlist-cover-image')).toBeVisible();
 	await loadedImages(page.locator('.cover-art .playlist-cover-image'));
 	await rights(page, realPlaylist.payload);
-	await startStream(page, realPlaylist, () => control(page, 'Play').click());
+	await startStream(page, realPlaylist, () => control(page, words['transport.play']).click());
 	await rights(page, realPlaylist.payload);
 	await realPlaylist.setUpload(false);
 	await page.reload();

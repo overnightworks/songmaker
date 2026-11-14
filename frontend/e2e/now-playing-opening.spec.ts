@@ -4,19 +4,6 @@
 // way out say "Pick album takes" and "Done". Both shells walk the flow.
 
 import { expect, test, type Page, type TestInfo } from './coverage-test';
-import {
-	collectionActionLabel,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants/transport';
-import {
-	NOW_PLAYING_CURATE_DONE_LABEL,
-	NOW_PLAYING_CURATE_GROUP_LABEL,
-	NOW_PLAYING_QUEUE_TAB,
-	NOW_PLAYING_TAKE_TAB,
-	NOW_PLAYING_LABEL,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 import { words } from '../src/lib/words/en';
@@ -33,12 +20,14 @@ test.afterEach(() => {
 
 async function playCollection(page: Page, kind: 'album' | 'playlist'): Promise<void> {
 	const play = workspace(page).getByRole('button', {
-		name: collectionActionLabel(TRANSPORT_PLAY_LABEL, kind),
+		name: words[kind === 'album' ? 'collectionHeader.playAlbum' : 'collectionHeader.playPlaylist'],
 		exact: true
 	});
 	await play.click();
 	await expect(
-		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+		page
+			.getByRole('contentinfo')
+			.getByRole('button', { name: words['transport.pause'], exact: true })
 	).toBeVisible();
 }
 
@@ -51,7 +40,10 @@ async function openNowPlayingFromBar(
 	await page
 		.getByRole('contentinfo')
 		.getByRole('button', {
-			name: shellOf(testInfo) === 'mobile' ? openNowPlayingLabel(songTitle) : NOW_PLAYING_LABEL,
+			name:
+				shellOf(testInfo) === 'mobile'
+					? words['player.openNowPlaying']({ title: songTitle })
+					: words['transport.nowPlaying'],
 			exact: true
 		})
 		.click();
@@ -62,7 +54,7 @@ async function openNowPlayingFromBar(
  * sheet stays shut behind a trigger that carries the tab's name.
  */
 async function expectOpenedOn(page: Page, testInfo: TestInfo, tab: string): Promise<void> {
-	if (shellOf(testInfo) === 'mobile' && tab === NOW_PLAYING_QUEUE_TAB) {
+	if (shellOf(testInfo) === 'mobile' && tab === words['nowPlaying.queueTab']) {
 		await expect(
 			page.getByRole('dialog').getByRole('button', { name: new RegExp(`${tab}$`) })
 		).toBeVisible();
@@ -80,7 +72,7 @@ test('one take queued opens Now Playing on This take', async ({ page, request },
 	await playCollection(page, 'playlist');
 	await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
 
-	await expectOpenedOn(page, testInfo, NOW_PLAYING_TAKE_TAB);
+	await expectOpenedOn(page, testInfo, words['nowPlaying.takeTab']);
 });
 
 test('several takes queued open Now Playing on Queue', async ({ page, request }, testInfo) => {
@@ -90,7 +82,7 @@ test('several takes queued open Now Playing on Queue', async ({ page, request },
 	await playCollection(page, 'playlist');
 	await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
 
-	await expectOpenedOn(page, testInfo, NOW_PLAYING_QUEUE_TAB);
+	await expectOpenedOn(page, testInfo, words['nowPlaying.queueTab']);
 });
 
 // The album's queue starts as the one take that plays and widens a moment
@@ -106,7 +98,7 @@ test(
 		await playCollection(page, 'album');
 		await openNowPlayingFromBar(page, testInfo, library.albumTracks[0].songTitle);
 
-		await expectOpenedOn(page, testInfo, NOW_PLAYING_QUEUE_TAB);
+		await expectOpenedOn(page, testInfo, words['nowPlaying.queueTab']);
 	}
 );
 
@@ -119,18 +111,20 @@ test(
 		await page.goto(`/playlist/${playlist.slug}`);
 		await playCollection(page, 'playlist');
 		await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
-		await expectOpenedOn(page, testInfo, NOW_PLAYING_TAKE_TAB);
+		await expectOpenedOn(page, testInfo, words['nowPlaying.takeTab']);
 
 		await openAlbumFromRail(page, shellOf(testInfo), library.albumTitle);
 		await playCollection(page, 'album');
 		await expect(
-			page.getByRole('contentinfo').getByRole('button', { name: 'Next', exact: true })
+			page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: words['transport.next'], exact: true })
 		).toBeEnabled();
 		// Next is enabled only with two queued takes, and the album's takes are set in
 		// one call, so the queue has grown behind the tab, which stays where it opened.
 
-		await expectOpenedOn(page, testInfo, NOW_PLAYING_TAKE_TAB);
-		await page.getByRole('tab', { name: NOW_PLAYING_QUEUE_TAB }).click();
+		await expectOpenedOn(page, testInfo, words['nowPlaying.takeTab']);
+		await page.getByRole('tab', { name: words['nowPlaying.queueTab'] }).click();
 		await expect(page.locator('.queue-row')).toHaveCount(library.albumTracks.length);
 	}
 );
@@ -147,12 +141,12 @@ test('the album walk is "Pick album takes" and ends with "Done"', async ({ page 
 		.getByRole('button', { name: words['collectionMenu.curate'], exact: true })
 		.click();
 
-	const walk = page.getByRole('group', { name: NOW_PLAYING_CURATE_GROUP_LABEL });
+	const walk = page.getByRole('group', { name: words['nowPlaying.curateGroup'] });
 	await expect(walk).toContainText(
-		new RegExp(`^${NOW_PLAYING_CURATE_GROUP_LABEL} · Song \\d+ of \\d+`)
+		new RegExp(`^${words['nowPlaying.curateGroup']} · Song \\d+ of \\d+`)
 	);
 	// The phone opens the walk with the This take sheet over its card.
 	if (shellOf(testInfo) === 'mobile') await page.keyboard.press('Escape');
-	await walk.getByRole('button', { name: NOW_PLAYING_CURATE_DONE_LABEL, exact: true }).click();
+	await walk.getByRole('button', { name: words['nowPlaying.done'], exact: true }).click();
 	await expect(walk).toBeHidden();
 });

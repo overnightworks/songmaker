@@ -4,7 +4,6 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { LIBRARY_WALL_ORDER_KEYS, type LibraryWallOrder } from '../src/lib/constants/library';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { words } from '../src/lib/words/en';
 import {
 	sameOriginHeaders,
@@ -62,6 +61,16 @@ function row(page: Page, title: string): Locator {
 			has: page.getByRole('button', { name: openAlbum(title), exact: true })
 		});
 }
+
+const rowControl = (page: Page, action: 'play' | 'pause', title: string) =>
+	row(page, title).getByRole('button', {
+		name: words[`libraryWall.${action}Title`]({ title }),
+		exact: true
+	});
+const playingMark = (page: Page, title: string) =>
+	row(page, title).getByRole('img', { name: words['playingMark.playing'] });
+const nextButton = (scope: Locator) =>
+	scope.getByRole('button', { name: words['transport.next'], exact: true });
 
 async function expectRows(page: Page): Promise<void> {
 	const rows = workspace(page).locator('.wall-tile');
@@ -141,10 +150,7 @@ test(
 		await page.getByRole('button', { name: LIBRARY_BACK_NAME, exact: true }).click();
 		await expect(page).toHaveURL(LIBRARY_URL);
 
-		const play = row(page, playable.title).getByRole('button', {
-			name: `Play ${playable.title}`,
-			exact: true
-		});
+		const play = rowControl(page, 'play', playable.title);
 		const open = row(page, playable.title).getByRole('button', {
 			name: openAlbum(playable.title),
 			exact: true
@@ -166,15 +172,12 @@ test(
 		);
 		await page.keyboard.press('Enter');
 		expect((await audioResponse).ok()).toBe(true);
-		const pause = row(page, playable.title).getByRole('button', {
-			name: `Pause ${playable.title}`,
-			exact: true
-		});
+		const pause = rowControl(page, 'pause', playable.title);
 		await expect(pause).toBeVisible();
 		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
 		await expect(page).toHaveURL(LIBRARY_URL);
 		expect(await scroll.evaluate((el) => el.scrollTop)).toBe(before);
-		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
+		await expect(playingMark(page, playable.title)).toBeVisible();
 		const title = row(page, playable.title).locator('.tile-title');
 		expect(await title.evaluate((el) => getComputedStyle(el).color)).toBe(
 			await title.evaluate((el) => {
@@ -189,7 +192,7 @@ test(
 		await screenshot(page, 'playing');
 		const playerBar = page.locator('.player-bar');
 		await guard.abandoningTakes(takePathsOf(playable.id), secondTrack.audioPath, async () => {
-			await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
+			await nextButton(playerBar).click();
 			await expect(playerBar).toContainText(secondTrack.title);
 			expect((await secondAudioResponse).ok()).toBe(true);
 		});
@@ -197,7 +200,7 @@ test(
 		await expect(play).toBeVisible();
 		const paused = await playingAudioState(page);
 		expect(paused.paused).toBe(true);
-		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
+		await expect(playingMark(page, playable.title)).toBeVisible();
 		await play.click();
 		await expect(pause).toBeVisible();
 		const resumed = await playingAudioState(page);
@@ -209,7 +212,7 @@ test(
 			.toBeGreaterThan(paused.time + 0.2);
 		await row(page, empty.title).getByRole('button').click();
 		await page.getByRole('button', { name: LIBRARY_BACK_NAME, exact: true }).click();
-		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
+		await expect(playingMark(page, playable.title)).toBeVisible();
 
 		await row(page, long.title).scrollIntoViewIfNeeded();
 		const longTitle = row(page, long.title).locator('.tile-title');
@@ -230,16 +233,12 @@ test(
 		await row(page, last.title).scrollIntoViewIfNeeded();
 		const bottomBefore = await scroll.evaluate((el) => el.scrollTop);
 		await guard.abandoningTakes(takePathsOf(playable.id), takePathsOf(last.id)[0], async () => {
-			await row(page, last.title)
-				.getByRole('button', { name: `Play ${last.title}`, exact: true })
-				.click();
-			await expect(
-				row(page, last.title).getByRole('button', { name: `Pause ${last.title}`, exact: true })
-			).toBeVisible();
+			await rowControl(page, 'play', last.title).click();
+			await expect(rowControl(page, 'pause', last.title)).toBeVisible();
 		});
 		await expect(page).toHaveURL(LIBRARY_URL);
 		expect(await scroll.evaluate((el) => el.scrollTop)).toBe(bottomBefore);
-		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toHaveCount(0);
+		await expect(playingMark(page, playable.title)).toHaveCount(0);
 		await screenshot(page, 'bottom-of-list');
 		await expectRows(page);
 		await orderChoice(page, 'played').click();
@@ -316,21 +315,16 @@ test(
 		const playable = fixture.albums[2];
 		const secondTrack = fixture.tracks[playable.id][1];
 		await page.goto(LIBRARY_PATH);
-		const play = row(page, playable.title).getByRole('button', {
-			name: `Play ${playable.title}`,
-			exact: true
-		});
+		const play = rowControl(page, 'play', playable.title);
 		await play.click();
 		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
 		await guard.abandoningTakes(takePathsOf(playable.id), secondTrack.audioPath, async () => {
-			await page.locator('.player-bar').getByRole('button', { name: 'Next', exact: true }).click();
+			await nextButton(page.locator('.player-bar')).click();
 			await expect
 				.poll(async () => new URL((await playingAudioState(page)).src).pathname)
 				.toBe(secondTrack.audioPath);
 		});
-		await row(page, playable.title)
-			.getByRole('button', { name: `Pause ${playable.title}`, exact: true })
-			.click();
+		await rowControl(page, 'pause', playable.title).click();
 		const paused = await playingAudioState(page);
 		expect(paused.paused).toBe(true);
 		await play.click();
@@ -620,7 +614,7 @@ async function playFirstTakeFromTheWall(
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
-	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
+	await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
 	expect((await listenRecorded).ok()).toBe(true);
 }
 
@@ -635,9 +629,9 @@ async function pauseATakeToRestore(
 	await playFirstTakeFromTheWall(page, shell, album);
 	await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
 	const transport = page.getByRole('contentinfo');
-	await transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.pause'], exact: true }).click();
 	await expect(
-		transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+		transport.getByRole('button', { name: words['transport.play'], exact: true })
 	).toBeVisible();
 }
 

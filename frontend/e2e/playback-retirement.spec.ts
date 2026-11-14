@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from './coverage-test';
 import type { SongItem } from '../src/lib/api/types';
 import { words } from '../src/lib/words/en';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	accountCircle,
 	accountMenu,
@@ -146,9 +145,9 @@ function transport(page: Page, label: string) {
 async function playTake(page: Page, slow = true): Promise<void> {
 	await workspace(page)
 		.locator('.take-row')
-		.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) })
+		.getByRole('button', { name: nameStartingWith(words['transport.play']) })
 		.click();
-	await expect(transport(page, TRANSPORT_PAUSE_LABEL)).toHaveAttribute('aria-busy', 'false');
+	await expect(transport(page, words['transport.pause'])).toHaveAttribute('aria-busy', 'false');
 	if (slow) {
 		await page.evaluate((rate) => {
 			const element = Reflect.get(window, 'playingAudio') as HTMLMediaElement;
@@ -179,7 +178,7 @@ async function advanceAndPause(page: Page): Promise<void> {
 			{ timeout: END_TIMEOUT_MS }
 		)
 		.toBeGreaterThan(0.3);
-	await transport(page, TRANSPORT_PAUSE_LABEL).click();
+	await transport(page, words['transport.pause']).click();
 	await expect.poll(async () => (await playingAudioState(page)).paused).toBe(true);
 }
 
@@ -225,7 +224,7 @@ for (const tabs of [1, 2]) {
 					const saved = await recovery(receiver, library.userId);
 					expect(saved?.position).toBeGreaterThan(0);
 					await receiver.reload();
-					await expect(transport(receiver, TRANSPORT_PLAY_LABEL)).toBeVisible();
+					await expect(transport(receiver, words['transport.play'])).toBeVisible();
 					await expect(receiver.getByRole('contentinfo')).toContainText(library.song.title);
 					expect(await recovery(receiver, library.userId)).toEqual(saved);
 				}
@@ -290,7 +289,7 @@ for (const record of ['present', 'absent'] as const) {
 				// Keep the receiving document alive; its cached media plays
 				// despite the shared cookie being gone. A navigation proves less.
 				const receiverUrl = receiver.url();
-				await transport(receiver, TRANSPORT_PLAY_LABEL).click();
+				await transport(receiver, words['transport.play']).click();
 				await advanceAndPause(receiver);
 				expect(receiver.url()).toBe(receiverUrl);
 				expect(await recovery(receiver, library.userId)).toBeNull();
@@ -349,7 +348,7 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 						.poll(() => notices.some((event) => event.key === 'playbackLogout:foreign-viewer'))
 						.toBe(true);
 					expect(await recovery(page, library.userId)).toEqual(saved);
-					await transport(page, TRANSPORT_PLAY_LABEL).click();
+					await transport(page, words['transport.play']).click();
 					await advanceAndPause(page);
 					expect((await recovery(page, library.userId))?.position).toBeGreaterThan(
 						saved?.position ?? 0

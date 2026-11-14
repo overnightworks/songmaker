@@ -48,12 +48,6 @@
 		transportOffersPause,
 		transportWaitingNotice
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import {
-		LIBRARY_QUEUE_EMPTY_TITLE,
-		LIBRARY_QUEUE_LOADING_TITLE,
-		LIBRARY_QUEUE_PLAY_DETAIL,
-		LIBRARY_QUEUE_RETRY_DETAIL
-	} from '#lib/constants/queue.ts';
 	import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import OfflineStrip from './OfflineStrip.svelte';
@@ -69,8 +63,7 @@
 		nowPlayingTakeLabel,
 		MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND,
 		MINI_PLAYER_TITLE_SCROLL_REST_MS,
-		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
-		openNowPlayingLabel
+		MINI_PLAYER_TITLE_SCROLL_RETURN_MS
 	} from '#lib/constants/now-playing.ts';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
@@ -271,16 +264,17 @@
 			<span class="track-title">{waitingSong.songTitle}</span>
 			<span class="track-detail">{waitingSong.albumTitle}</span>
 		{:else if startNotice === 'building' || startNotice === 'restoring'}
-			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
+			<span class="track-title">{pageText('player.loading')}</span>
 			<span class="track-detail">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
-			<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
+			<span class="track-title">{pageText('player.nothingToPlay')}</span>
 		{:else if startNotice === 'error'}
-			<span class="track-title">{idleTarget.label} failed</span>
-			<span class="track-detail">{LIBRARY_QUEUE_RETRY_DETAIL}</span>
+			<span class="track-title">{pageText('player.startFailed', { source: idleTarget.label })}</span
+			>
+			<span class="track-detail">{pageText('player.pressPlayToRetry')}</span>
 		{:else}
 			<span class="track-title">{idleTarget.label}</span>
-			<span class="track-detail">{LIBRARY_QUEUE_PLAY_DETAIL}</span>
+			<span class="track-detail">{pageText('player.play')}</span>
 		{/if}
 	</span>
 {/snippet}
@@ -310,7 +304,9 @@
 		onOpenNowPlaying={onNowPlayingClick}
 		nowPlayingDocked={docked}
 		nowPlayingDisabled={!shownTake}
-		nowPlayingTargetLabel={shownTake ? openNowPlayingLabel(shownTake.songTitle) : undefined}
+		nowPlayingTargetLabel={shownTake
+			? pageText('player.openNowPlaying', { title: shownTake.songTitle })
+			: undefined}
 		nowPlayingTargetDescriptionId={shownTake ? detailId : undefined}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}

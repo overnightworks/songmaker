@@ -23,6 +23,14 @@ export function getByRoleButton(root: ParentNode, name: string): HTMLButtonEleme
 	return button;
 }
 
+export function queryButtonByLabel(
+	root: ParentNode,
+	label: string,
+	match: '=' | '*=' = '='
+): HTMLButtonElement | null {
+	return root.querySelector<HTMLButtonElement>(`button[aria-label${match}"${label}"]`);
+}
+
 // What a screen reader reads out of an element: its text without the parts
 // marked aria-hidden.
 export function announcedText(element: Element): string {

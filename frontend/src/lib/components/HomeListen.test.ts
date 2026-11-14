@@ -2,7 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LibraryListenItem } from '#lib/api/library.ts';
 import { get } from 'svelte/store';
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
 import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
@@ -353,11 +352,16 @@ describe('1354_rule_14 Listen', () => {
 			arrangeCurrentSong(type);
 			audioPlayer.status = 'playing';
 			await showListen();
-			const playingRow = getByRoleButton(target, `Pause ${title}`).closest('.library-row');
+			const playingRow = getByRoleButton(
+				target,
+				words['libraryWall.pauseTitle']({ title: title })
+			).closest('.library-row');
 			expect(
-				playingRow?.querySelector(`[role="img"][aria-label="${PLAYING_MARK_LABEL}"]`)
+				playingRow?.querySelector(`[role="img"][aria-label="${words['playingMark.playing']}"]`)
 			).not.toBeNull();
-			expect(target.querySelectorAll(`[aria-label="${PLAYING_MARK_LABEL}"]`)).toHaveLength(1);
+			expect(
+				target.querySelectorAll(`[aria-label="${words['playingMark.playing']}"]`)
+			).toHaveLength(1);
 			expect(target.textContent).toContain(
 				words[type === 'album' ? 'homeListen.albumPlaying' : 'homeListen.playlistPlaying']({
 					number: '2',
@@ -374,7 +378,7 @@ describe('1354_rule_14 Listen', () => {
 			arrangeCurrentSong(type);
 			audioPlayer.status = 'paused';
 			await showListen();
-			getByRoleButton(target, `Play ${title}`);
+			getByRoleButton(target, words['libraryWall.playTitle']({ title: title }));
 			expect(target.textContent).toContain(
 				words[type === 'album' ? 'homeListen.albumStopped' : 'homeListen.playlistStopped']({
 					number: '2'

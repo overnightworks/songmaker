@@ -2,7 +2,6 @@ import { expect, test as base, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import type { JobItem } from '../src/lib/api/types';
 import { ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
-import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveOwnedAlbum,
@@ -117,7 +116,7 @@ for (const width of WIDTHS) {
 						if (width === 390)
 							await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 						await page
-							.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
+							.getByRole('button', { name: new RegExp(`^${words['transport.play']} v`) })
 							.first()
 							.click();
 						if (width === 390)
