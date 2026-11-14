@@ -36,12 +36,21 @@ with web_processes(Path(root), database_url=database_url, redis_url=redis_url) a
 
 
 @pytest.fixture
-def web_cluster(tmp_path: Path, extra_pg_factory, redis_url: str):
+def case_factory(extra_pg_factory):
+    """A session factory on a database of the case's own, which the per-test reset leaves alone."""
+    return extra_pg_factory()
+
+
+@pytest.fixture
+def database_url(case_factory) -> str:
+    return case_factory.kw["bind"].url.render_as_string(hide_password=False)
+
+
+@pytest.fixture
+def web_cluster(tmp_path: Path, case_factory, database_url: str, redis_url: str):
     """The processes of one case, on a database and a Redis of its own; none is started yet."""
-    factory = extra_pg_factory()
-    database_url = factory.kw["bind"].url.render_as_string(hide_password=False)
     with web_processes(tmp_path, database_url=database_url, redis_url=redis_url) as cluster:
-        yield cluster, factory
+        yield cluster, case_factory
 
 
 @pytest.fixture
@@ -126,9 +135,8 @@ def test_a_killed_process_leaves_the_other_serving(two_processes) -> None:
 
 
 def test_a_failing_case_leaves_no_child_behind(
-    tmp_path: Path, extra_pg_factory, redis_url: str,
+    tmp_path: Path, database_url: str, redis_url: str,
 ) -> None:
-    database_url = extra_pg_factory().kw["bind"].url.render_as_string(hide_password=False)
     started: list[WebProcess] = []
 
     with pytest.raises(AssertionError):
@@ -141,9 +149,8 @@ def test_a_failing_case_leaves_no_child_behind(
 
 
 def test_the_children_die_with_a_test_process_that_is_killed(
-    tmp_path: Path, extra_pg_factory, redis_url: str,
+    tmp_path: Path, database_url: str, redis_url: str,
 ) -> None:
-    database_url = extra_pg_factory().kw["bind"].url.render_as_string(hide_password=False)
     holder = subprocess.Popen(
         [sys.executable, "-c", _HOLDER_SCRIPT, str(tmp_path), database_url, redis_url],
         stdout=subprocess.PIPE,
