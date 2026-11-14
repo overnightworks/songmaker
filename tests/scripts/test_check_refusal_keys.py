@@ -496,3 +496,15 @@ def test_without_a_base_commit_only_the_local_rules_run(
     code, output = _scan(tmp_path, capsys, "", stored=STORED_KEYS)
 
     assert code == 0, output
+
+
+@pytest.mark.parametrize("not_a_commit_id", ["HEAD", "HEAD~0", "abc123"])
+def test_a_base_that_is_no_full_commit_id_is_red(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], not_a_commit_id: str
+) -> None:
+    _commit_stored_keys(tmp_path, *STORED_KEYS)
+
+    code, output = _scan_against(tmp_path, capsys, not_a_commit_id, stored=STORED_KEYS)
+
+    assert code == 1
+    assert "cannot be resolved" in output

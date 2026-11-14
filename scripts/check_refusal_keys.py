@@ -76,6 +76,7 @@ STORED_KEYS_FILE: Final = Path(__file__).with_name("stored_message_keys.txt")
 MIGRATIONS_DIRECTORY: Final = "db/migrations/versions"
 STORED_TABLE_NAME: Final = "STORED_MESSAGE_KEYS"
 RETIRED_NAME: Final = "RETIRED_STORED_KEYS"
+COMMIT_ID_PATTERN: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 # why: the stored keys of a failure, a wait or a refusal, and the cover problems the page already
 # words under `coverProblem`, which the cover job stores as they are.
 STORED_KEY_PATTERN: Final = re.compile(
@@ -382,8 +383,8 @@ def read_migration(path: Path) -> Migration:
     return Migration(
         path=path,
         revision=revision[0] if revision else path.stem,
-        down_revisions=_strings(_literal(tree, "down_revision")),
-        table_keys=_strings(list(table.values())) if isinstance(table, dict) else (),
+        down_revisions=tuple(_strings(_literal(tree, "down_revision"))),
+        table_keys=tuple(_strings(list(table.values()))) if isinstance(table, dict) else (),
         retired_keys=frozenset(_strings(retired)),
     )
 
@@ -460,7 +461,7 @@ def _set_problems(
 
 
 def _git(directory: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603 - fixed git subcommands; the only input is the commit id of the pull request
+    return subprocess.run(  # noqa: S603 - fixed git subcommands; the only input is a full commit id
         ["git", *arguments],  # noqa: S607 - git is found on PATH like in every other CI step
         cwd=directory, capture_output=True, text=True, check=False,
     )
@@ -472,7 +473,9 @@ def _base_problems(
     """Rule (c): a key the set lost since the base commit, and no added migration retires."""
     shown = str(stored_file)
     directory = stored_file.parent
-    if _git(directory, "rev-parse", "--verify", "--quiet", f"{base_sha}^{{commit}}").returncode:
+    if not COMMIT_ID_PATTERN.fullmatch(base_sha) or _git(
+        directory, "rev-parse", "--verify", "--quiet", f"{base_sha}^{{commit}}"
+    ).returncode:
         problem = f"the base commit {base_sha} cannot be resolved; fetch the history"
         return [Violation(shown, 1, problem)]
     base = _git(directory, "show", f"{base_sha}:./{stored_file.name}")
