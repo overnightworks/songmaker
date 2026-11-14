@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import fakeredis
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
+from sqlalchemy import text
+from support.web_app import make_authenticated_user, seed_user
 
+from songmaker_cli.api_helpers import create_job_with_rate_limit
+from songmaker_cli.constants import SETTING_MAX_QUEUE_DEPTH
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
     JOB_ERROR_SERVER_RESTARTED,
@@ -16,16 +22,22 @@ from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_type,
     update_job_status,
 )
+from songmaker_cli.db.queries.rate_limits import upsert_rate_limit_setting
+from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 GONE = "owner-gone"
 HERE = "owner-here"
 UNREAD = "owner-unread"
+PERSON = make_authenticated_user("person", username="person")
 
 
-def _running_job(session, job_type: JobType, owner_id: str | None) -> str:
-    job = create_job(session, job_type, owner_id=owner_id)
+def _running_job(
+    session, job_type: JobType, owner_id: str | None, user_id: str | None = None,
+) -> str:
+    job = create_job(session, job_type, owner_id=owner_id, user_id=user_id)
     assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
     return job.id
 
@@ -81,7 +93,9 @@ def test_the_owners_asked_about_are_those_of_active_jobs_only(pg_factory) -> Non
         assert active_job_owner_ids(session) == {HERE}
 
 
-def test_the_submission_path_ends_the_dead_owners_job_through_the_same_verdict(pg_factory) -> None:
+def test_the_age_recovery_fails_the_job_of_an_owner_the_given_liveness_reads_dead(
+    pg_factory,
+) -> None:
     with pg_factory() as session:
         gone = _running_job(session, JobType.CHAT, GONE)
 
@@ -90,6 +104,69 @@ def test_the_submission_path_ends_the_dead_owners_job_through_the_same_verdict(p
         assert _outcome(session, gone) == (
             JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type,
         )
+
+
+class _OwnerLeaseServer(fakeredis.FakeRedis):
+    """A Redis that has run for the lease TTL, holds no lease, and notes who held a lock.
+
+    fakeredis answers no INFO, which the owner reading needs; ``readable=False`` makes
+    that reading fail as an unreachable server does.
+    """
+
+    def __init__(self, session, *, readable: bool) -> None:
+        super().__init__(decode_responses=True)
+        self._session = session
+        self._readable = readable
+        self.advisory_locks_held_at_the_reading = 0
+
+    def info(self, section=None, *args, **kwargs):
+        self.advisory_locks_held_at_the_reading = self._session.execute(text(
+            "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()",
+        )).scalar_one()
+        if not self._readable:
+            raise RedisConnectionError("down")
+        return {"uptime_in_seconds": OWNER_LEASE_TTL_SECONDS}
+
+
+@pytest.fixture
+def person_at_the_queue_limit(pg_factory) -> str:
+    """A person whose only active job, run by an owner without a lease, fills the queue."""
+    with pg_factory() as session:
+        seed_user(session, PERSON.username, user_id=PERSON.id)
+        upsert_rate_limit_setting(session, SETTING_MAX_QUEUE_DEPTH, 1)
+        gone = _running_job(session, JobType.CHAT, GONE, user_id=PERSON.id)
+        session.commit()
+    return gone
+
+
+def test_a_submission_ends_the_job_of_a_dead_owner_instead_of_refusing_for_the_full_queue(
+    pg_factory, person_at_the_queue_limit,
+) -> None:
+    with pg_factory() as session:
+        server = _OwnerLeaseServer(session, readable=True)
+
+        admitted = create_job_with_rate_limit(session, PERSON, JobType.SCORE, redis=server)
+
+        assert (admitted.type, admitted.user_id) == (JobType.SCORE, PERSON.id)
+        assert _outcome(session, person_at_the_queue_limit) == (
+            JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type,
+        )
+        assert server.advisory_locks_held_at_the_reading == 0
+
+
+def test_a_submission_that_cannot_read_owner_liveness_leaves_the_job_and_is_refused(
+    pg_factory, person_at_the_queue_limit,
+) -> None:
+    with pg_factory() as session:
+        server = _OwnerLeaseServer(session, readable=False)
+
+        with pytest.raises(Refusal) as refusal:
+            create_job_with_rate_limit(session, PERSON, JobType.SCORE, redis=server)
+
+        assert (refusal.value.status_code, refusal.value.message.key) == (
+            429, "jobRefusal.queueFull",
+        )
+        assert _outcome(session, person_at_the_queue_limit)[0] == JobStatus.RUNNING
 
 
 @pytest.mark.parametrize("owner_liveness", [None, {GONE: WorkerLiveness.UNKNOWN}])
