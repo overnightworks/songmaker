@@ -176,13 +176,14 @@ def test_a_repeated_key_inside_one_input_fails_loud_naming_it(tmp_path: Path, si
     corrupt = catalog(entry("dup.key"), entry("dup.key", "Again"))
     clean = catalog(entry("dup.key"))
     inputs = {name: clean for name in ("base", "ours", "theirs")} | {side: corrupt}
+    base, ours, theirs = inputs["base"], inputs["ours"], inputs["theirs"]
 
     with pytest.raises(SystemExit, match="dup.key"):
-        merge_files(tmp_path, inputs["base"], inputs["ours"], inputs["theirs"])
+        merge_files(tmp_path, base, ours, theirs)
 
 
 def test_a_comment_only_block_without_a_msgid_fails_loud(tmp_path: Path) -> None:
-    corrupt = catalog("# stray comment")
+    base, corrupt, theirs = catalog(), catalog("# stray comment"), catalog()
 
     with pytest.raises(SystemExit):
-        merge_files(tmp_path, catalog(), corrupt, catalog())
+        merge_files(tmp_path, base, corrupt, theirs)

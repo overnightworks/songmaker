@@ -81,8 +81,8 @@ def reworded_contexts(
     our_new, their_new = new_msgids(ours), new_msgids(theirs)
     return {
         context
-        for context in our_new.keys() & their_new.keys()
-        if our_new[context] != their_new[context]
+        for context, our_msgids in our_new.items()
+        if context in their_new and our_msgids != their_new[context]
     }
 
 
