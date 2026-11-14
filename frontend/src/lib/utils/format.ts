@@ -108,3 +108,8 @@ export function formatDecimal(value: number, fractionDigits: number): string {
 export function formatPercent(fraction: number): string {
 	return fraction.toLocaleString(pageLanguage(), { style: 'percent', maximumFractionDigits: 0 });
 }
+
+/** Items as a unit list in the page language: English reads "2 takes, 1 version". */
+export function formatList(items: readonly string[]): string {
+	return new Intl.ListFormat(pageLanguage(), { type: 'unit', style: 'long' }).format(items);
+}

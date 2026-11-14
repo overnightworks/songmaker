@@ -3,6 +3,7 @@ import {
 	accountInitial,
 	activityTimeLabel,
 	formatDecimal,
+	formatList,
 	formatPercent,
 	formatTime,
 	localDayAndMonth,
@@ -158,5 +159,16 @@ describe('formatPercent', () => {
 		{ fraction: 1, expected: '100%' }
 	])('writes $fraction as "$expected"', ({ fraction, expected }) => {
 		expect(formatPercent(fraction)).toBe(expected);
+	});
+});
+
+describe('formatList', () => {
+	it.each([
+		{ items: [], expected: '' },
+		{ items: ['2 takes'], expected: '2 takes' },
+		{ items: ['2 takes', '1 version'], expected: '2 takes, 1 version' },
+		{ items: ['.wav', '.mp3', '.flac'], expected: '.wav, .mp3, .flac' }
+	])('writes $items as "$expected"', ({ items, expected }) => {
+		expect(formatList(items)).toBe(expected);
 	});
 });
