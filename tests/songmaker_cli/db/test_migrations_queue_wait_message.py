@@ -138,6 +138,6 @@ def test_the_migration_upgrades_again_after_a_downgrade(upgraded):
 def test_the_keys_the_migration_stores_are_in_the_committed_set_of_stored_keys():
     committed = {
         line.strip() for line in STORED_KEYS_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.startswith("#")
+        if line.strip()
     }
     assert set(MIGRATION.STORED_MESSAGE_KEYS.values()) <= committed
