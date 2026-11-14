@@ -1,5 +1,4 @@
 import { words } from '../src/lib/words/en';
-import { RATE_LIMITED_TOAST_MESSAGE } from '../src/lib/constants/http';
 // + NEW on Home's head makes an album or a playlist at both widths, even from
 // an empty library (account_rule_1 in docs/navigation.md). The desktop
 // Library and Playlists heads keep it; the phone's list heads carry the order
@@ -398,7 +397,7 @@ const FAILED_CREATES: FailedCreate[] = [
 				headers: { 'Retry-After': '30' }
 			})),
 		toast: words['newAlbum.failed'],
-		alsoSaid: RATE_LIMITED_TOAST_MESSAGE
+		alsoSaid: words['http.rateLimited']
 	},
 	{
 		failure: 'the network is gone: Try again once back online',

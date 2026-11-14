@@ -3,7 +3,6 @@ import { get } from 'svelte/store';
 import { ApiError } from '#lib/api/fetch.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { words } from '#lib/words/en.ts';
-import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
@@ -325,7 +324,7 @@ describe('SongMenu move picker', () => {
 			expect(target.querySelector('.pk-list')).toBeNull();
 
 			[...document.body.querySelectorAll('button')]
-				.find((button) => button.textContent?.trim() === DIALOG_CANCEL_LABEL)
+				.find((button) => button.textContent?.trim() === words['dialog.cancel'])
 				?.click();
 			await tick();
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { toasts, dismissToast } from '#lib/stores/toast.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 </script>
 
 {#if $toasts.length > 0}
@@ -12,8 +13,10 @@
 						{toast.action.label}
 					</button>
 				{/if}
-				<button class="toast-dismiss" onclick={() => dismissToast(toast.id)} aria-label="Dismiss"
-					>&times;</button
+				<button
+					class="toast-dismiss"
+					onclick={() => dismissToast(toast.id)}
+					aria-label={pageText('toast.dismiss')}>&times;</button
 				>
 			</div>
 		{/each}

@@ -2,7 +2,6 @@ export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
 export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
-export const RESOURCE_SYNC_ERROR = "Couldn't reach your library";
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;

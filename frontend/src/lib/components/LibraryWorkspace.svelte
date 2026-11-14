@@ -24,7 +24,6 @@
 	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
 	import { libraryLoadFailed } from '#lib/stores/libraryRecovery.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
-	import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import BusyState from './BusyState.svelte';
 	import LoadFailure from './LoadFailure.svelte';
@@ -72,7 +71,7 @@
 
 {#if bootstrapFailed}
 	<LoadFailure
-		message={sync.error || RESOURCE_SYNC_ERROR}
+		message={sync.error || pageText('resourceSync.error')}
 		retryLabel={pageText('libraryWorkspace.retry')}
 		onretry={() => void retryLoad()}
 	/>

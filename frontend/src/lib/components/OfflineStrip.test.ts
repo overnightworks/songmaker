@@ -1,13 +1,13 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import OfflineStrip from './OfflineStrip.svelte';
+import { words } from '#lib/words/en.ts';
 
 let component: ReturnType<typeof mount>;
 let target: HTMLDivElement;
@@ -39,7 +39,7 @@ describe('OfflineStrip', () => {
 		await tick();
 
 		expect(liveRegion()).toHaveAttribute('aria-live', 'polite');
-		expect(liveRegion()?.textContent?.trim()).toBe(OFFLINE_STRIP_MESSAGE);
+		expect(liveRegion()?.textContent?.trim()).toBe(words['connectivity.offlineStrip']);
 		expect(target.querySelector('button')).toBeNull();
 	});
 
@@ -54,7 +54,7 @@ describe('OfflineStrip', () => {
 		reportResourceStreamReachable(false);
 		await tick();
 
-		expect(liveRegion()?.textContent?.trim()).toBe(OFFLINE_STRIP_MESSAGE);
+		expect(liveRegion()?.textContent?.trim()).toBe(words['connectivity.offlineStrip']);
 	});
 
 	it('goes by itself once back online, with no message of its own', async () => {

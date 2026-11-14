@@ -5,7 +5,6 @@ import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
 import { EDITOR_GENERATE_TAKE_TEMPLATE } from '../src/lib/constants/song';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
 import { formatTime } from '../src/lib/utils/format';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
@@ -362,7 +361,7 @@ test.describe('song page at phone width', () => {
 
 			await selectTheOtherAlbumFromSearch();
 			await unsavedDraftDialog
-				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+				.getByRole('button', { name: words['dialog.cancel'], exact: true })
 				.click();
 			await expect(unsavedDraftDialog).toBeHidden();
 			await expect(songHeading).toBeVisible();
@@ -426,7 +425,7 @@ test.describe('song page at phone width', () => {
 			await expect(phoneTabs(page)).toHaveCount(0);
 			await expect(page).toHaveURL(songAddress);
 			await unsavedDraftDialog
-				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+				.getByRole('button', { name: words['dialog.cancel'], exact: true })
 				.click();
 			await expect(unsavedDraftDialog).toBeHidden();
 			await expect(page).toHaveURL(songAddress);
@@ -526,12 +525,12 @@ test.describe('song page at phone width', () => {
 		}
 
 		for (const choice of [
-			DIALOG_CANCEL_LABEL,
+			words['dialog.cancel'],
 			words['songPage.unsavedDiscard'],
 			words['songPage.unsavedSave']
 		]) {
 			test(
-				`1354_61_C${choice === DIALOG_CANCEL_LABEL ? '13' : choice === words['songPage.unsavedSave'] ? '14' : '15'} 1354_rule_32: song ‹ asks first and honors ${choice}`,
+				`1354_61_C${choice === words['dialog.cancel'] ? '13' : choice === words['songPage.unsavedSave'] ? '14' : '15'} 1354_rule_32: song ‹ asks first and honors ${choice}`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
 					const { songPhoneAlbumId } = readSeededLibrary();
@@ -545,7 +544,7 @@ test.describe('song page at phone width', () => {
 					await expect(page).toHaveURL(address);
 					await unsavedDraftDialog.getByRole('button', { name: choice, exact: true }).click();
 					await expect(unsavedDraftDialog).toBeHidden();
-					if (choice === DIALOG_CANCEL_LABEL) {
+					if (choice === words['dialog.cancel']) {
 						await expect(page).toHaveURL(address);
 						await expect(songHeading).toBeVisible();
 						await expect(lyrics).toHaveValue(draft);

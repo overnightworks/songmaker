@@ -14,7 +14,7 @@
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '#lib/api/types.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
-	import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import {
 		WORKER_POOL_RESTART_LABEL,
 		WORKER_POOL_RESTART_CONFIRM,
@@ -473,7 +473,7 @@
 							<p>{WORKER_POOL_RESTART_WARNING}</p>
 							<div class="confirmation-actions">
 								<button class="action-btn" onclick={current.layer.answer(closeConfirmation)}
-									>{DIALOG_CANCEL_LABEL}</button
+									>{pageText('dialog.cancel')}</button
 								>
 								<button
 									class="action-btn danger"

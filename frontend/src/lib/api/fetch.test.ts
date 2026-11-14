@@ -19,7 +19,6 @@ import {
 	isTransientApiFailure,
 	signInAddress
 } from './fetch';
-import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
 import { words } from '#lib/words/en.ts';
 import { hangsUntilAborted, sentUpload, uploadAnswers } from '#lib/test-utils/network.ts';
 
@@ -130,7 +129,7 @@ describe('sseFetch', () => {
 describe('ApiError', () => {
 	it('falls back to a readable sentence when the server sends no detail', () => {
 		const err = new ApiError(500, '', '/api/albums');
-		expect(err.message).toBe(API_ERROR_GENERIC_MESSAGE);
+		expect(err.message).toBe(words['http.genericError']);
 	});
 
 	it('uses the server detail as the message when one is sent', () => {
@@ -152,7 +151,7 @@ describe('apiFetch error detail', () => {
 
 		expect(err).toBeInstanceOf(ApiError);
 		expect((err as ApiError).detail).toBe('');
-		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
+		expect((err as ApiError).message).toBe(words['http.genericError']);
 	});
 
 	it('surfaces a readable sentence for a JSON body with no detail field', async () => {
@@ -165,7 +164,7 @@ describe('apiFetch error detail', () => {
 
 		const err = await apiFetch('/api/albums').catch((e: unknown) => e);
 
-		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
+		expect((err as ApiError).message).toBe(words['http.genericError']);
 	});
 
 	it('keeps a structured detail payload while preserving the legacy string detail', async () => {
@@ -185,7 +184,7 @@ describe('apiFetch error detail', () => {
 
 		expect((err as ApiError).detail).toBe('');
 		expect((err as ApiError).responseDetail).toEqual(responseDetail);
-		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
+		expect((err as ApiError).message).toBe(words['http.genericError']);
 	});
 
 	it.each([

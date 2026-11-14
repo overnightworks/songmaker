@@ -846,6 +846,14 @@ type Key = Literal[
     'auth.checkRateLimited',
     'auth.checkServerError',
     'auth.checkNetworkError',
+    'connectivity.offlineStrip',
+    'resourceSync.error',
+    'http.rateLimited',
+    'http.genericError',
+    'dialog.cancel',
+    'dialog.confirm',
+    'toast.dismiss',
+    'loading.plain',
 ]
 type Language = Literal[
     'en',
@@ -1794,6 +1802,14 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'auth.checkRateLimited': 'Too many requests. Retry in a moment to check your session.',
         'auth.checkServerError': 'Could not verify your session. Retry to try again.',
         'auth.checkNetworkError': 'Network error. Retry to check your session.',
+        'connectivity.offlineStrip': "You're offline — retrying",
+        'resourceSync.error': "Couldn't reach your library",
+        'http.rateLimited': 'Too many requests — hang on, it will continue in a moment.',
+        'http.genericError': 'Something went wrong. Try again.',
+        'dialog.cancel': 'Cancel',
+        'dialog.confirm': 'Confirm',
+        'toast.dismiss': 'Dismiss',
+        'loading.plain': 'Loading...',
     },
 }
 

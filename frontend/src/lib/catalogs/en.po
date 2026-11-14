@@ -3480,3 +3480,35 @@ msgstr ""
 msgctxt "auth.checkNetworkError"
 msgid "Network error. Retry to check your session."
 msgstr ""
+
+msgctxt "connectivity.offlineStrip"
+msgid "You're offline — retrying"
+msgstr ""
+
+msgctxt "resourceSync.error"
+msgid "Couldn't reach your library"
+msgstr ""
+
+msgctxt "http.rateLimited"
+msgid "Too many requests — hang on, it will continue in a moment."
+msgstr ""
+
+msgctxt "http.genericError"
+msgid "Something went wrong. Try again."
+msgstr ""
+
+msgctxt "dialog.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "dialog.confirm"
+msgid "Confirm"
+msgstr ""
+
+msgctxt "toast.dismiss"
+msgid "Dismiss"
+msgstr ""
+
+msgctxt "loading.plain"
+msgid "Loading..."
+msgstr ""

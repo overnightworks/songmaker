@@ -7,7 +7,6 @@
 // in the desktop one (the takes column beside the lyrics).
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	boundingBoxes,
@@ -291,8 +290,8 @@ test(
 
 			const confirm = page.getByRole('dialog', { name: /^Delete take \d+\?$/ });
 			await expect(confirm).toBeVisible();
-			await expect(confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL })).toBeFocused();
-			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+			await expect(confirm.getByRole('button', { name: words['dialog.cancel'] })).toBeFocused();
+			await confirm.getByRole('button', { name: words['dialog.cancel'] }).click();
 
 			await expect(confirm).toBeHidden();
 			await expect(takeMenuTriggers(page)).toHaveCount(TAKE_COUNT);
@@ -377,7 +376,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					.click();
 				const deleting = page.getByRole('dialog', { name: /^Delete take \d+\?$/ });
 				await expectConfirmFill(page, deleting, '--fail');
-				await deleting.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+				await deleting.getByRole('button', { name: words['dialog.cancel'] }).click();
 				await expect(deleting).toBeHidden();
 
 				const lyrics = page.getByRole('textbox', {

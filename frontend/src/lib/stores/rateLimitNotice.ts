@@ -1,5 +1,5 @@
 import { get } from 'svelte/store';
-import { RATE_LIMITED_TOAST_MESSAGE } from '#lib/constants/http.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 import { addToast, toasts } from '#lib/stores/toast.ts';
 
@@ -27,7 +27,7 @@ const RATE_LIMIT_TOAST_EXEMPT_PATHS: readonly RegExp[] = [
  */
 export function notifyRateLimited(path: string): void {
 	if (RATE_LIMIT_TOAST_EXEMPT_PATHS.some((exempt) => exempt.test(path))) return;
-	const alreadyShown = get(toasts).some((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+	const alreadyShown = get(toasts).some((toast) => toast.message === pageText('http.rateLimited'));
 	if (alreadyShown) return;
-	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
+	addToast(pageText('http.rateLimited'), 'info');
 }

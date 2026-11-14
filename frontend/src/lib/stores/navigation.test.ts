@@ -86,8 +86,6 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { LIBRARY_HISTORY_KIND } from '#lib/constants/library.ts';
 import { words } from '#lib/words/en.ts';
-import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
-import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
 import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
 import type { SongItem } from '#lib/api/types.ts';
@@ -1267,7 +1265,7 @@ describe('opening a song recovers its generation state', () => {
 			const error = network
 				? new NetworkError('/api/songs/s1/active-generation', new TypeError('fetch'))
 				: new ApiError(503, 'Unavailable', '/api/songs/s1/active-generation');
-			const shown = network ? API_ERROR_GENERIC_MESSAGE : 'Unavailable';
+			const shown = network ? words['http.genericError'] : 'Unavailable';
 			if (offlineFirst) reportResourceStreamReachable(false);
 			fetchActiveGeneration.mockRejectedValue(error);
 			await selectSong('s1');
@@ -2011,7 +2009,7 @@ describe.each([
 		await editTheSongOpenedFrom(() => openAlbum('a1'));
 		await pressBackAndSeeTheQuestion();
 
-		answer(DIALOG_CANCEL_LABEL);
+		answer(words['dialog.cancel']);
 
 		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
 		await expectOnTheSongWithItsDraft();

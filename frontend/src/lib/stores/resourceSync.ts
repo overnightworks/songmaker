@@ -17,7 +17,6 @@ import {
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
-	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
@@ -35,6 +34,7 @@ import {
 	watchLoadedSongIds
 } from '#lib/stores/librarySearch.ts';
 import { cancelAlbumSongLoads } from '#lib/stores/libraryData.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { classifyAuthFailure, handleSessionLost, type AuthFailureKind } from '#lib/stores/auth.ts';
 import { reportResourceStreamReachable } from '#lib/stores/connectivity.ts';
@@ -198,7 +198,7 @@ export class ResourceSyncController {
 		if (!this.started) return false;
 		if (this.state.error) return false;
 		if (this.hasShownSongFailure()) {
-			this.setVisibleError(shownError || RESOURCE_SYNC_ERROR);
+			this.setVisibleError(shownError || pageText('resourceSync.error'));
 			return false;
 		}
 		this.setStatus('live');
@@ -425,7 +425,7 @@ export class ResourceSyncController {
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
 		if (result === 'unauthorized') {
 			this.teardown({ resetStore: false });
-			this.setVisibleError(RESOURCE_SYNC_ERROR);
+			this.setVisibleError(pageText('resourceSync.error'));
 			this.resolveReady(false);
 			await this.deps.onUnauthorized();
 			return;
@@ -438,7 +438,7 @@ export class ResourceSyncController {
 			const browserGaveUp = source?.readyState === EVENT_SOURCE_CLOSED;
 			if (browserGaveUp || this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
 				if (!failedToOpen && result === 'ok') {
-					this.failBootstrap(RESOURCE_SYNC_ERROR);
+					this.failBootstrap(pageText('resourceSync.error'));
 					return;
 				}
 				this.failBootstrap(null);
@@ -510,7 +510,7 @@ export class ResourceSyncController {
 		}
 		if (!this.started) return;
 		if (this.hasShownSongFailure()) {
-			this.setVisibleError(this.state.error || RESOURCE_SYNC_ERROR);
+			this.setVisibleError(this.state.error || pageText('resourceSync.error'));
 			return;
 		}
 		this.store.update((state) => ({
@@ -537,7 +537,7 @@ export class ResourceSyncController {
 			const ok = await this.deps.loadSnapshot();
 			if (!this.isCurrentEpoch(epoch)) return;
 			if (!ok) {
-				this.failBootstrap(RESOURCE_SYNC_ERROR);
+				this.failBootstrap(pageText('resourceSync.error'));
 				return;
 			}
 			while (this.isCurrentEpoch(epoch)) {
@@ -749,7 +749,7 @@ export class ResourceSyncController {
 
 	/** The bootstrap's own words for failed songs; a network failure has none. */
 	private songFailureFallback(): string | null {
-		return this.hasShownSongFailure() ? RESOURCE_SYNC_ERROR : null;
+		return this.hasShownSongFailure() ? pageText('resourceSync.error') : null;
 	}
 
 	/**
@@ -978,7 +978,7 @@ async function runLimited<T>(
 // ("Failed to fetch") is not copy a musician should read either.
 function visibleErrorMessage(err: unknown): string | null {
 	if (err instanceof NetworkError) return null;
-	return describeFailure(err, RESOURCE_SYNC_ERROR);
+	return describeFailure(err, pageText('resourceSync.error'));
 }
 
 function classifySongRefreshFailure(err: unknown): SongRefreshFailure {

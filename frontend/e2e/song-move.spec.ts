@@ -4,7 +4,6 @@
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
 import {
@@ -277,7 +276,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await expect(asking).toContainText(
 				words['songMove.sharedMessage']({ song: SONG_TITLE, album: sharedTitle })
 			);
-			await asking.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true }).click();
+			await asking.getByRole('button', { name: words['dialog.cancel'], exact: true }).click();
 			await expect(asking).toBeHidden();
 			expect(await albumIdOf(person, song.id)).toBe(currentId);
 

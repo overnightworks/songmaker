@@ -8,7 +8,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	appBar,
@@ -127,7 +126,7 @@ async function openDeleteConfirm(page: Page, title: string): Promise<Locator> {
 
 	const confirm = page.getByRole('dialog', { name: words['songPage.deleteTitle']({ title }) });
 	await expect(confirm).toBeVisible();
-	await expect(confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL })).toBeFocused();
+	await expect(confirm.getByRole('button', { name: words['dialog.cancel'] })).toBeFocused();
 	return confirm;
 }
 
@@ -260,7 +259,7 @@ test(
 	async ({ page }) => {
 		await onOwnSong(page, TITLES[1], 390, async ({ songId }) => {
 			const confirm = await openDeleteConfirm(page, TITLES[1]);
-			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+			await confirm.getByRole('button', { name: words['dialog.cancel'] }).click();
 
 			await expect(confirm).toBeHidden();
 			await expect(menuTrigger(page)).toBeFocused();
