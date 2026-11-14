@@ -40,7 +40,6 @@ class _RecordingRedis:
         self.leases[key] = ex
         return True
 
-
     def mget(self, keys: list[str]) -> list[str | None]:
         raise RedisConnectionError("down")
 

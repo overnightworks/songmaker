@@ -77,4 +77,4 @@ def test_a_refreshed_lease_reads_alive_and_a_dropped_one_does_not(redis_url: str
         assert read_owner_liveness(server, [LEASED])[LEASED] is WorkerLiveness.ALIVE
 
         drop_owner_lease(server, LEASED)
-        assert server.exists(owner_lease_key(LEASED)) == 0
+        assert read_owner_liveness(server, [LEASED])[LEASED] is not WorkerLiveness.ALIVE
