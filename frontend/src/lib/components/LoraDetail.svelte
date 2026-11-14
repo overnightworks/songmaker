@@ -19,7 +19,7 @@
 		LORA_MIN_SAMPLES_FOR_TRAINING
 	} from '#lib/constants/lora.ts';
 	import { formatDecimal, formatList, formatRemainingTime } from '#lib/utils/format.ts';
-	import { pageParts, pageText } from '#lib/utils/page-words.ts';
+	import { pageParts, pageText, messageText } from '#lib/utils/page-words.ts';
 
 	const ACTIVE_STATUS_KEYS = {
 		queued: { banner: 'voiceDetail.lockedQueued', button: 'voiceDetail.trainButtonQueued' },
@@ -76,7 +76,6 @@
 			? [pageText('voiceDetail.sampleTextsMissing')]
 			: [])
 	]);
-
 	const canTrain = $derived(
 		!active && !deleted && sampleValidationProblems.length === 0 && !training
 	);
@@ -89,7 +88,7 @@
 	const trainingCancelled = $derived(displayedTrainingJob?.status === 'cancelled');
 	const waitingForWorker = $derived(
 		displayedTrainingJob?.status === 'queued' &&
-			(displayedTrainingJob.queue_reason !== null || displayedTrainingJob.queue_position !== null)
+			(displayedTrainingJob.queue_reason_message || displayedTrainingJob.queue_position !== null)
 	);
 	const epochProgress = $derived.by(() => {
 		const job = displayedTrainingJob;
@@ -451,7 +450,8 @@
 			{#if trainingCancelled}
 				<p>{pageText('voiceDetail.trainingCancelled')}</p>
 			{:else if waitingForWorker}
-				<p>{displayedTrainingJob.queue_reason || pageText('voiceDetail.waitingDefault')}</p>
+				{@const wait = messageText(displayedTrainingJob.queue_reason_message)}
+				<p>{wait ?? pageText('voiceDetail.waitingDefault')}</p>
 				{#if displayedTrainingJob.queue_position !== null && displayedTrainingJob.queue_position !== undefined}
 					<p class="training-detail">
 						{pageText('voiceDetail.queuePosition', {

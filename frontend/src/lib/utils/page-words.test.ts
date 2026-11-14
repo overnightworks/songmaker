@@ -42,6 +42,20 @@ describe('messageText', () => {
 		);
 	});
 
+	it.each([null, undefined])('gives null for %s without reporting', (absent) => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect(messageText(absent)).toBeNull();
+		expect(report).not.toHaveBeenCalled();
+		report.mockRestore();
+	});
+
+	it('reports the key the page has no words for', () => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect(messageText({ key: 'jobWait.retired', values: {} })).toBeNull();
+		expect(report).toHaveBeenCalledWith(expect.stringContaining('jobWait.retired'));
+		report.mockRestore();
+	});
+
 	it.each([
 		{ key: 'takeRefusal.gone', why: 'no entry has the key' },
 		{ key: 'toString', why: 'the name is inherited, not an entry' },

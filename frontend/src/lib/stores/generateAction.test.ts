@@ -57,8 +57,10 @@ const queuedJob: JobItem = {
 	status: 'queued',
 	progress: 0,
 	queue_position: 2,
-	queue_reason: 'Waiting for LoRA training on this GPU.'
+	queue_reason: 'Waiting for LoRA training on this GPU.',
+	queue_reason_message: { key: 'jobWait.voiceTraining', values: {} }
 };
+const queuedReason = words['jobWait.voiceTraining'];
 
 beforeEach(async () => {
 	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
@@ -152,7 +154,7 @@ describe('generate action presentation', () => {
 				kind: 'queued',
 				jobId: 'job1',
 				label: 'Queued #2',
-				reason: queuedJob.queue_reason,
+				reason: queuedReason,
 				reconnecting: false,
 				offline: false
 			},
@@ -164,7 +166,7 @@ describe('generate action presentation', () => {
 				kind: 'queued',
 				jobId: 'job1',
 				label: 'Queued',
-				reason: queuedJob.queue_reason,
+				reason: queuedReason,
 				reconnecting: false,
 				offline: false
 			},
@@ -383,7 +385,7 @@ describe('generate action presentation', () => {
 				kind: 'queued',
 				jobId: 'job1',
 				label,
-				reason: queuedJob.queue_reason,
+				reason: queuedReason,
 				reconnecting: disconnected || stale,
 				offline: disconnected
 			});
@@ -504,12 +506,25 @@ describe('generate action presentation', () => {
 		});
 	});
 
+	it('words the queue wait of a message the page has no key for as no reason and reports the key', () => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		activeJobs.set([
+			{
+				songId: 's1',
+				job: { ...queuedJob, queue_reason_message: { key: 'jobWait.retired', values: {} } }
+			}
+		]);
+		expect(get(generateAction)).toMatchObject({ kind: 'queued', reason: null });
+		expect(report).toHaveBeenCalledWith(expect.stringContaining('jobWait.retired'));
+		report.mockRestore();
+	});
+
 	it('follows the selected song and exposes a reason only while queued', () => {
 		activeJobs.set([{ songId: 's1', job: queuedJob }]);
 		expect(get(generateAction)).toMatchObject({
 			kind: 'queued',
 			jobId: queuedJob.id,
-			reason: queuedJob.queue_reason
+			reason: queuedReason
 		});
 		activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }]);
 		expect(get(generateAction)).toMatchObject({ kind: 'generating' });

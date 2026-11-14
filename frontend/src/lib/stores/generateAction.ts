@@ -4,7 +4,7 @@ import { cancelJob, generateSong } from '#lib/api/client.ts';
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
 import { formatDecimal, formatPercent, formatTime } from '#lib/utils/format.ts';
-import { pageText } from '#lib/utils/page-words.ts';
+import { pageText, messageText } from '#lib/utils/page-words.ts';
 import { offline } from './connectivity';
 import {
 	currentVersionIndex,
@@ -195,7 +195,7 @@ function queuedState(
 		label: reconnecting
 			? pageText('generate.reconnecting')
 			: queuedLabel(job.queue_position ?? null),
-		reason: job.queue_reason ?? null,
+		reason: messageText(job.queue_reason_message),
 		reconnecting,
 		offline
 	};

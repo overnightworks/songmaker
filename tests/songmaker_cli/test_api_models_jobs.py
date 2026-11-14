@@ -7,6 +7,7 @@ import pytest
 from songmaker_cli.api_models.jobs import JobResponse
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import Message, message
 
 NOW = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
 
@@ -45,3 +46,44 @@ def test_running_lora_training_estimate_follows_the_workers_epoch_reports(
     )
 
     assert JobResponse.from_orm(job, now=NOW).remaining_time_estimate == expected
+
+
+@pytest.mark.parametrize(
+    ("wait", "sentence"),
+    [
+        pytest.param(
+            message("jobWait.voiceTraining"), "Waiting for LoRA training on this GPU.",
+            id="voice-training",
+        ),
+        pytest.param(
+            message("jobWait.queuedGenerations"), "Waiting for queued generations on this GPU.",
+            id="queued-generations",
+        ),
+        pytest.param(None, None, id="no-wait"),
+    ],
+)
+def test_a_queue_wait_is_answered_as_the_unchanged_agent_sentence_and_its_message(wait, sentence):
+    job = Job(
+        id="job-1", type=JobType.GENERATE, status=JobStatus.QUEUED, progress=0.0,
+        queue_reason_message=wait,
+    )
+
+    response = JobResponse.from_orm(job)
+
+    assert response.queue_reason == sentence
+    assert response.queue_reason_message == wait
+
+
+def test_a_queue_wait_whose_key_the_catalog_lacks_fails_that_response_and_logs_job_and_key(
+    caplog,
+):
+    job = Job(
+        id="job-1", type=JobType.GENERATE, status=JobStatus.QUEUED, progress=0.0,
+        queue_reason_message=Message(key="jobWait.retired", values={}),
+    )
+
+    with pytest.raises(KeyError):
+        JobResponse.from_orm(job)
+
+    assert "job-1" in caplog.text
+    assert "jobWait.retired" in caplog.text

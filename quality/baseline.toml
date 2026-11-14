@@ -50,12 +50,12 @@
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1180
-"tests/songmaker_cli/jobs/test_lora_training.py" = 1857
+"tests/songmaker_cli/jobs/test_lora_training.py" = 1856
 "tests/songmaker_cli/test_admin_api.py" = 999
 "tests/songmaker_cli/test_api.py" = 4581
 "tests/songmaker_cli/test_db.py" = 2439
 "tests/songmaker_cli/test_db_postgresql.py" = 831
-"tests/songmaker_cli/test_jobs.py" = 3102
+"tests/songmaker_cli/test_jobs.py" = 3101
 "tests/songmaker_cli/test_library_api.py" = 1621
 "tests/songmaker_cli/test_lora_api.py" = 1170
 "tests/songmaker_cli/test_playlist_api.py" = 1100
@@ -133,7 +133,7 @@
 "test_worker_renewal_failure_releases_hold_and_cache_before_background_error" = 61
 
 [function_lines."tests/songmaker_cli/jobs/test_lora_training.py"]
-"test_happy_path_transitions_and_persists" = 90
+"test_happy_path_transitions_and_persists" = 88
 "test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 70
 "test_unknown_handover_probe_does_not_release_a_worker_owned_hold" = 65
 

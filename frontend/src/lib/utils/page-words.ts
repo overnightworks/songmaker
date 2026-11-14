@@ -51,11 +51,7 @@ export function pageParts<K extends MarkedKey>(key: K, ...gaps: PartsGaps<K>): P
 		: (entry as Parts<K>);
 }
 
-/**
- * The text of the catalog key a server message names, filled with the message's values, or null when the page has no such
- * entry or the entry does not yield a sentence (a marked sentence returns parts). The caller shows its own fallback and names the key.
- */
-export function messageText({ key, values }: Message): string | null {
+function sentenceOf({ key, values }: Message): string | null {
 	if (loadedWords === undefined) throw new PageWordsNotLoadedError();
 	if (!Object.hasOwn(loadedWords, key)) return null;
 	const entry: unknown = (loadedWords as Record<string, unknown>)[key];
@@ -63,4 +59,16 @@ export function messageText({ key, values }: Message): string | null {
 	if (typeof entry !== 'function') return null;
 	const sentence: unknown = entry(values);
 	return typeof sentence === 'string' ? sentence : null;
+}
+
+/**
+ * The text of the catalog key a server message names, filled with the message's values, or null for an absent message and for a
+ * key the page has no entry for or whose entry does not yield a sentence (a marked sentence returns parts); the latter is reported
+ * with its key. The caller shows its own fallback.
+ */
+export function messageText(message: Message | null | undefined): string | null {
+	if (!message) return null;
+	const sentence = sentenceOf(message);
+	if (sentence === null) console.error(`The page has no words for the message key ${message.key}`);
+	return sentence;
 }

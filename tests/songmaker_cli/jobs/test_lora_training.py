@@ -37,6 +37,7 @@ from songmaker_cli.jobs.lora_training import (
     run_lora_training_job,
 )
 from songmaker_cli.lifecycle import reap_stale_jobs
+from songmaker_cli.messages import message
 from songmaker_cli.scheduler import WorkerProtocolError
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import WorkerLiveness
@@ -240,9 +241,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.READY
         assert lora.storage_path is not None
-        assert lora.storage_path.endswith(
-            f"/{seeded['lora_id']}/{USER_LORA_OUTPUT_DIRNAME}",
-        )
+        assert lora.storage_path.endswith(f"/{seeded['lora_id']}/{USER_LORA_OUTPUT_DIRNAME}")
         assert lora.error is None
         assert lora.completed_at is not None
 
@@ -578,7 +577,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
             yield
 
     with db_factory() as session:
-        get_job(session, "job-1").queue_reason = "Waiting for LoRA training on this GPU."
+        get_job(session, "job-1").queue_reason_message = message("jobWait.voiceTraining")
         session.commit()
 
     with patches():
@@ -597,7 +596,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert get_job(session, "job-1").queue_reason is None
+        assert get_job(session, "job-1").queue_reason_message is None
 
 
 def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
@@ -1022,7 +1021,7 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.QUEUED
-        assert job.queue_reason == "Waiting for queued generations on this GPU."
+        assert job.queue_reason_message == message("jobWait.queuedGenerations")
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.QUEUED
     dataset_dir = (
         seeded["audio_dir"]
@@ -1069,7 +1068,7 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.QUEUED
-        assert job.queue_reason == "Waiting for queued generations on this GPU."
+        assert job.queue_reason_message == message("jobWait.queuedGenerations")
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.QUEUED
 
 

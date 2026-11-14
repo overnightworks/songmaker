@@ -56,9 +56,8 @@ from songmaker_cli.jobs import (
     run_scoring_job,
 )
 from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgressTracker
-from songmaker_cli.scheduler import (
-    WorkerTaskFailed,
-)
+from songmaker_cli.messages import message
+from songmaker_cli.scheduler import WorkerTaskFailed
 from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
     ScorerOutcome,
@@ -222,7 +221,7 @@ def test_generation_hold_defers_before_building_temporary_context(
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "queued"
-        assert job.queue_reason == "Waiting for LoRA training on this GPU."
+        assert job.queue_reason_message == message("jobWait.voiceTraining")
 
 
 @pytest.mark.parametrize(
@@ -338,7 +337,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
             )
         )
         with seeded_db() as session:
-            assert get_job(session, "j1").queue_reason == "Waiting for LoRA training on this GPU."
+            assert get_job(session, "j1").queue_reason_message == message("jobWait.voiceTraining")
         run_async(
             run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
@@ -351,7 +350,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "completed"
-        assert job.queue_reason is None
+        assert job.queue_reason_message is None
 
 
 def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
@@ -381,7 +380,7 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
             with seeded_db() as session:
                 queued = get_job(session, "j1")
                 assert queued.status == "queued"
-                assert queued.queue_reason == "Waiting for LoRA training on this GPU."
+                assert queued.queue_reason_message == message("jobWait.voiceTraining")
 
             assert await release_gpu_hold(redis, "w1", "hold-token")
             await run_generation_job(
@@ -429,7 +428,7 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
         with seeded_db() as session:
             job = get_job(session, "j1")
             assert job.status == "queued"
-            assert job.queue_reason == "Waiting for LoRA training on this GPU."
+            assert job.queue_reason_message == message("jobWait.voiceTraining")
 
     run_async(exercise())
 

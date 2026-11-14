@@ -21,6 +21,7 @@ from songmaker_cli.job_types import (
     JobStatus,
     JobType,
 )
+from songmaker_cli.messages import Message
 from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
@@ -193,7 +194,7 @@ class JobStatusUpdate:
     error: str | None = None
     error_type: str | None = None
     retry_after_seconds: int | None = None
-    queue_reason: str | None = None
+    queue_reason_message: Message | None = None
     worker_pid: int | _Unset = UNSET
     current_epoch: int | _Unset = UNSET
     train_epochs: int | _Unset = UNSET
@@ -237,7 +238,7 @@ def _terminal_values(now: datetime) -> dict[str, object]:
     """The columns every write that ends a job sets."""
     return {
         "completed_at": now,
-        "queue_reason": None,
+        "queue_reason_message": None,
         "generation_started_at": None,
         "session_id": None,
     }

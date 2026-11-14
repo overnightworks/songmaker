@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+import sqlalchemy as sa
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import TEST_SECRET, make_fake_redis
 
@@ -34,6 +35,7 @@ from songmaker_cli.lifecycle import (
     reap_stale_jobs,
     stale_job_reaper_loop,
 )
+from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
@@ -63,7 +65,7 @@ def _dead_process_time(now: datetime, threshold_seconds: int) -> datetime:
 def _add_job(
     ctx: AppContext, *, job_id: str, job_type: str, status: str,
     started_at: datetime | None = None, heartbeat_at: datetime | None = None,
-    queue_reason: str | None = None,
+    queue_reason_message: Message | None = None,
 ) -> None:
     with ctx.db() as session:
         kwargs = {}
@@ -72,7 +74,10 @@ def _add_job(
         if heartbeat_at is not None:
             kwargs["heartbeat_at"] = heartbeat_at
         session.add(
-            Job(id=job_id, type=job_type, status=status, queue_reason=queue_reason, **kwargs)
+            Job(
+                id=job_id, type=job_type, status=status,
+                queue_reason_message=queue_reason_message, **kwargs,
+            )
         )
         session.commit()
 
@@ -109,7 +114,7 @@ class TestLifecycleReaper:
             ctx, job_id="chat-1", job_type=JobType.CHAT, status=JobStatus.QUEUED,
             started_at=dead,
             heartbeat_at=dead,
-            queue_reason="Waiting for LoRA training on this GPU.",
+            queue_reason_message=message("jobWait.voiceTraining"),
         )
 
         recovered = reap_stale_jobs(ctx, now=now)
@@ -120,7 +125,26 @@ class TestLifecycleReaper:
             assert job.status == JobStatus.FAILED
             assert job.error == "Queued too long — please retry."
             assert job.error_type == "queued_too_long"
-            assert job.queue_reason is None
+            assert job.queue_reason_message is None
+
+    def test_fails_an_old_queued_job_whose_wait_names_an_unknown_key(self, ctx) -> None:
+        now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        dead = _dead_process_time(now, QUEUED_JOB_STALE_THRESHOLD_SECONDS)
+        with ctx.db() as session:
+            session.execute(sa.text(
+                "INSERT INTO jobs (id, type, status, progress, heartbeat_at, started_at, "
+                "queue_reason_message) VALUES ('retired-wait', 'chat', 'queued', 0, :dead, "
+                ":dead, CAST('{\"key\": \"jobWait.retired\", \"values\": {}}' AS json))"
+            ), {"dead": dead})
+            session.commit()
+
+        recovered = reap_stale_jobs(ctx, now=now)
+
+        assert recovered == 1
+        with ctx.db() as session:
+            job = session.query(Job).filter_by(id="retired-wait").one()
+            assert job.status == JobStatus.FAILED
+            assert job.queue_reason_message is None
 
     def test_fails_a_silenced_running_chat_job_by_heartbeat(self, ctx) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)

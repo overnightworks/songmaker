@@ -98,16 +98,10 @@ export function describeFailure(
 ): string {
 	if (err instanceof NetworkError && wording.offline) return wording.offline;
 	if (err instanceof ApiError && !wording.withholdServerDetail) {
-		if (err.refusal) return refusalSentence(err.refusal) ?? fallback;
+		if (err.refusal) return messageText(err.refusal) ?? fallback;
 		if (err.detail) return err.detail;
 	}
 	return fallback;
-}
-
-function refusalSentence(refusal: Message): string | null {
-	const sentence = messageText(refusal);
-	if (sentence === null) console.error(`The page has no words for the refusal key ${refusal.key}`);
-	return sentence;
 }
 
 /**
