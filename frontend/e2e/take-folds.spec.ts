@@ -23,7 +23,6 @@ import {
 	seedSongPhoneSong,
 	seedTakeStripSong
 } from './seed';
-import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 
 const EDITED_LYRICS = 'Third version lyrics';
@@ -338,7 +337,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		);
 		await expect(workspace(page).locator('.status-slot')).toBeVisible();
 		await expect(
-			workspace(page).getByText(words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL }))
+			workspace(page).getByText(words['takesList.empty']({ generate: words['generate.button'] }))
 		).toHaveCount(0);
 	});
 
@@ -385,7 +384,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 			words['takesList.currentHead'](0, { number: String(3) })
 		);
 		await expect(workspace(page).locator('.version-empty')).toHaveText(
-			words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })
+			words['takesList.empty']({ generate: words['generate.button'] })
 		);
 		await expect(v2Row(page)).toHaveAttribute('aria-expanded', 'false');
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'true');

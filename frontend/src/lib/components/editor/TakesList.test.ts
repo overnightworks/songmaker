@@ -2,7 +2,6 @@ import { failed } from '#lib/test-utils/generate-states.ts';
 import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import {
 	clearHitboxStyles,
@@ -94,7 +93,7 @@ import {
 } from '#lib/test-utils/takes-list.ts';
 import { words } from '#lib/words/en.ts';
 
-const emptyText = words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL });
+const emptyText = words['takesList.empty']({ generate: words['generate.button'] });
 const takeOne = words['takeRow.takeVersioned']({ version: '1', take: '1' });
 const repaintFromOne = words['takeRow.provenanceRepaint']({ take: takeOne });
 const takeTwo = words['takeRow.takeVersioned']({ version: '3', take: '2' });

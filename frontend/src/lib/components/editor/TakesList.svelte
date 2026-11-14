@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
-	import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 	import { COARSE_POINTER_MEDIA } from '#lib/constants/media.ts';
 	import { removeGenerationFromSong } from '#lib/stores/libraryData.ts';
 	import { currentVersionIndex, versions } from '#lib/stores/editor.ts';
@@ -259,7 +258,7 @@
 		<p class="skeleton-caption">{pageText('takesList.loading')}</p>
 	</div>
 {:else if song.generations.length === 0 && !groups.current && !dirty && !jobRunning}
-	<div class="empty">{pageText('takesList.empty', { generate: EDITOR_GENERATE_LABEL })}</div>
+	<div class="empty">{pageText('takesList.empty', { generate: pageText('generate.button') })}</div>
 {:else}
 	<div class="takes-list">
 		{#if loadStatus === 'error'}
@@ -306,7 +305,7 @@
 				</div>
 				{#if current.generations.length === 0 && !jobRunning}
 					<div class="version-empty">
-						{pageText('takesList.empty', { generate: EDITOR_GENERATE_LABEL })}
+						{pageText('takesList.empty', { generate: pageText('generate.button') })}
 					</div>
 				{/if}
 				{@render takeRows(current.generations)}

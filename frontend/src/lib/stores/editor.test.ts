@@ -680,7 +680,7 @@ describe('draftVersionNumber', () => {
 		gap: [[makeVersion({ id: 'v3', version_number: 3 }), older], [takeOf(3)]]
 	} as const;
 	const jobOf = (status: string, versionId: string) => ({
-		job: { id: 'j1', type: 'generate', status, progress: 0, version_id: versionId }
+		job: { id: 'j1', type: 'generate' as const, status, progress: 0, version_id: versionId }
 	});
 
 	beforeEach(() => {

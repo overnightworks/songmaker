@@ -5,12 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import type { JobItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import {
-	EDITOR_GENERATE_CANCEL_FAILED,
-	EDITOR_MISSING_CONTENT_TITLE,
-	EDITOR_NO_MODELS_WARNING,
-	EDITOR_SELECT_MODEL_TITLE
-} from '#lib/constants/song.ts';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
@@ -55,6 +49,7 @@ import {
 	takesPerGenerate
 } from './recipe';
 import { addToast } from './toast';
+import { words } from '#lib/words/en.ts';
 
 const queuedJob: JobItem = {
 	id: 'job1',
@@ -112,22 +107,22 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'missing lyrics',
-			expectedState: { kind: 'disabled', reason: EDITOR_MISSING_CONTENT_TITLE },
+			expectedState: { kind: 'disabled', reason: words['generate.needsContent'] },
 			setup: () => setDraftLyrics('')
 		},
 		{
 			state: 'missing prompt',
-			expectedState: { kind: 'disabled', reason: EDITOR_MISSING_CONTENT_TITLE },
+			expectedState: { kind: 'disabled', reason: words['generate.needsContent'] },
 			setup: () => setDraftPrompt('')
 		},
 		{
 			state: 'no selected model',
-			expectedState: { kind: 'disabled', reason: EDITOR_SELECT_MODEL_TITLE },
+			expectedState: { kind: 'disabled', reason: words['generate.selectModel'] },
 			setup: () => recipeModel.set(null)
 		},
 		{
 			state: 'no active models',
-			expectedState: { kind: 'disabled', reason: EDITOR_NO_MODELS_WARNING },
+			expectedState: { kind: 'disabled', reason: words['generate.noModels'] },
 			setup: () => {
 				recipeModel.set(null);
 				activeModels.set([]);
@@ -763,7 +758,7 @@ describe('cancelGeneration', () => {
 		{
 			failure: 'with no network answer',
 			error: new NetworkError('/api/jobs/job1/cancel', new TypeError('Failed to fetch')),
-			shown: EDITOR_GENERATE_CANCEL_FAILED
+			shown: words['generate.cancelFailed']
 		},
 		{
 			failure: 'refused by the server',

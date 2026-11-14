@@ -1939,92 +1939,184 @@ msgctxt "paramField.inferenceSteps"
 msgid "Inference Steps"
 msgstr ""
 
+msgctxt "paramField.inferenceStepsHelp"
+msgid "Diffusion denoising steps. More = slower but more refined."
+msgstr ""
+
 msgctxt "paramField.guidanceScale"
 msgid "Guidance Scale"
+msgstr ""
+
+msgctxt "paramField.guidanceScaleHelp"
+msgid "How strongly to follow your style prompt. Ignored on turbo models."
 msgstr ""
 
 msgctxt "paramField.shift"
 msgid "Shift"
 msgstr ""
 
+msgctxt "paramField.shiftHelp"
+msgid "Biases denoising toward early structure or late detail. 3.0 is balanced."
+msgstr ""
+
 msgctxt "paramField.cfgIntervalStart"
 msgid "CFG Interval Start"
+msgstr ""
+
+msgctxt "paramField.cfgIntervalStartHelp"
+msgid "Apply CFG starting from this point in the denoising trajectory (0.0–1.0)."
 msgstr ""
 
 msgctxt "paramField.cfgIntervalEnd"
 msgid "CFG Interval End"
 msgstr ""
 
+msgctxt "paramField.cfgIntervalEndHelp"
+msgid "Stop applying CFG at this point in the denoising trajectory (0.0–1.0)."
+msgstr ""
+
 msgctxt "paramField.velocityNorm"
 msgid "Velocity Norm"
+msgstr ""
+
+msgctxt "paramField.velocityNormHelp"
+msgid "DiT velocity normalization threshold. 0 = disabled."
 msgstr ""
 
 msgctxt "paramField.velocityEma"
 msgid "Velocity EMA"
 msgstr ""
 
+msgctxt "paramField.velocityEmaHelp"
+msgid "Exponential moving average smoothing for DiT velocity. 0 = disabled."
+msgstr ""
+
 msgctxt "paramField.latentShift"
 msgid "Latent Shift"
+msgstr ""
+
+msgctxt "paramField.latentShiftHelp"
+msgid "Shifts the latent space center. 0 = no shift."
 msgstr ""
 
 msgctxt "paramField.latentRescale"
 msgid "Latent Rescale"
 msgstr ""
 
+msgctxt "paramField.latentRescaleHelp"
+msgid "Rescales latent magnitude. 1.0 = no change."
+msgstr ""
+
 msgctxt "paramField.lmCodeStrength"
 msgid "LM Code Strength"
+msgstr ""
+
+msgctxt "paramField.lmCodeStrengthHelp"
+msgid "How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes ignored."
 msgstr ""
 
 msgctxt "paramField.inferMethod"
 msgid "Infer Method"
 msgstr ""
 
+msgctxt "paramField.inferMethodHelp"
+msgid "ODE = deterministic, reproducible. SDE = adds randomness, sometimes more natural."
+msgstr ""
+
 msgctxt "paramField.sampler"
 msgid "Sampler"
+msgstr ""
+
+msgctxt "paramField.samplerHelp"
+msgid "Diffusion sampler algorithm. heun is a second-order predictor-corrector."
 msgstr ""
 
 msgctxt "paramField.adaptiveDualGuidance"
 msgid "Adaptive Dual Guidance"
 msgstr ""
 
+msgctxt "paramField.adaptiveDualGuidanceHelp"
+msgid "Smarter CFG that prevents over-saturation. Only matters when guidance_scale > 1."
+msgstr ""
+
 msgctxt "paramField.temperature"
 msgid "Temperature"
+msgstr ""
+
+msgctxt "paramField.temperatureHelp"
+msgid "How creative the LM is when planning. Higher = more varied, lower = more predictable."
 msgstr ""
 
 msgctxt "paramField.topK"
 msgid "Top-K"
 msgstr ""
 
+msgctxt "paramField.topKHelp"
+msgid "Limit LM sampling to the K most-likely tokens. 0 = disabled."
+msgstr ""
+
 msgctxt "paramField.topP"
 msgid "Top-P"
+msgstr ""
+
+msgctxt "paramField.topPHelp"
+msgid "Nucleus sampling — sample only from tokens covering P of the probability mass."
 msgstr ""
 
 msgctxt "paramField.cfgScale"
 msgid "CFG Scale"
 msgstr ""
 
+msgctxt "paramField.cfgScaleHelp"
+msgid "CFG strength for the LM's plan (separate from the DiT guidance_scale)."
+msgstr ""
+
 msgctxt "paramField.repetitionPenalty"
 msgid "Rep. Penalty"
+msgstr ""
+
+msgctxt "paramField.repetitionPenaltyHelp"
+msgid "Discourages the LM from repeating itself. 1.0 = off."
 msgstr ""
 
 msgctxt "paramField.batchSize"
 msgid "Batch Size"
 msgstr ""
 
+msgctxt "paramField.batchSizeHelp"
+msgid "Number of audio variations to generate from one request (1–8)."
+msgstr ""
+
 msgctxt "paramField.thinking"
 msgid "Thinking"
+msgstr ""
+
+msgctxt "paramField.thinkingHelp"
+msgid "Let the LM plan musical structure before audio generation."
 msgstr ""
 
 msgctxt "paramField.cotCaption"
 msgid "CoT Caption"
 msgstr ""
 
+msgctxt "paramField.cotCaptionHelp"
+msgid "Let the LM rewrite your style caption to be more model-friendly."
+msgstr ""
+
 msgctxt "paramField.cotLanguage"
 msgid "CoT Language"
 msgstr ""
 
+msgctxt "paramField.cotLanguageHelp"
+msgid "Let the LM auto-detect the language of your lyrics."
+msgstr ""
+
 msgctxt "paramField.negativePrompt"
 msgid "Negative Prompt"
+msgstr ""
+
+msgctxt "paramField.negativePromptHelp"
+msgid "Tell the LM what NOT to include in its musical plan."
 msgstr ""
 
 msgctxt "paramField.negativePromptPlaceholder"
@@ -2695,6 +2787,18 @@ msgstr ""
 
 msgctxt "takeTask.repaintPress"
 msgid "Repaint {start} – {end}"
+msgstr ""
+
+msgctxt "takeTask.repaintStart"
+msgid "Repaint start"
+msgstr ""
+
+msgctxt "takeTask.repaintEnd"
+msgid "Repaint end"
+msgstr ""
+
+msgctxt "takeTask.previewRange"
+msgid "Preview selected range"
 msgstr ""
 
 msgctxt "seedChip.label"
@@ -4967,4 +5071,176 @@ msgstr ""
 
 msgctxt "aboutPage.licence"
 msgid "Licence"
+msgstr ""
+
+msgctxt "generate.button"
+msgid "Generate"
+msgstr ""
+
+msgctxt "generate.disabledButton"
+msgid "Generate — {reason}"
+msgstr ""
+
+msgctxt "generate.openWorkerPool"
+msgid "Open worker pool"
+msgstr ""
+
+msgctxt "generate.cancel"
+msgid "Cancel generation"
+msgstr ""
+
+msgctxt "generate.cancelOffline"
+msgid "Cancel generation (unavailable while offline)"
+msgstr ""
+
+msgctxt "generate.cancelFailed"
+msgid "Could not cancel generation"
+msgstr ""
+
+msgctxt "generate.lastKnownProgress"
+msgid "Last known progress"
+msgstr ""
+
+msgctxt "generate.versionLabel"
+msgid "v{version}"
+msgstr ""
+
+msgctxt "generate.queued"
+msgid "Queued"
+msgstr ""
+
+msgctxt "generate.queuedPosition"
+msgid "Queued #{position}"
+msgstr ""
+
+msgctxt "generate.takeOfCount"
+msgid "Take {index} of {count}"
+msgstr ""
+
+msgctxt "generate.generating"
+msgid "Generating..."
+msgstr ""
+
+msgctxt "generate.reconnecting"
+msgid "Reconnecting…"
+msgstr ""
+
+msgctxt "generate.lastSeen"
+msgid "last seen at {percent}"
+msgstr ""
+
+msgctxt "generate.phaseLoadingModel"
+msgid "Loading model…"
+msgstr ""
+
+msgctxt "generate.phaseWriting"
+msgid "Writing"
+msgstr ""
+
+msgctxt "generate.phaseRendering"
+msgid "Rendering"
+msgstr ""
+
+msgctxt "generate.phaseSavingTake"
+msgid "Saving take"
+msgstr ""
+
+msgctxt "generate.needsContent"
+msgid "Add lyrics and style prompt first"
+msgstr ""
+
+msgctxt "generate.noModels"
+msgid "No models enabled. Ask admin to enable one."
+msgstr ""
+
+msgctxt "generate.selectModel"
+msgid "Select a model first"
+msgstr ""
+
+msgctxt "generate.startFailed"
+msgid "Generation failed"
+msgstr ""
+
+msgctxt "jobEnd.serverRestart"
+msgid "Server restarted — please retry"
+msgstr ""
+
+msgctxt "jobEnd.generateCompleted"
+msgid "generate completed"
+msgstr ""
+
+msgctxt "jobEnd.generatePartial"
+msgid "generate partially completed"
+msgstr ""
+
+msgctxt "jobEnd.generateCancelled"
+msgid "generate cancelled"
+msgstr ""
+
+msgctxt "jobEnd.generateFailed"
+msgid "generate failed"
+msgstr ""
+
+msgctxt "jobEnd.scoreCompleted"
+msgid "score completed"
+msgstr ""
+
+msgctxt "jobEnd.scorePartial"
+msgid "score partially completed"
+msgstr ""
+
+msgctxt "jobEnd.scoreCancelled"
+msgid "score cancelled"
+msgstr ""
+
+msgctxt "jobEnd.scoreFailed"
+msgid "score failed"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingCompleted"
+msgid "lora_training completed"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingPartial"
+msgid "lora_training partially completed"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingCancelled"
+msgid "lora_training cancelled"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingFailed"
+msgid "lora_training failed"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadCompleted"
+msgid "load_model_on_worker completed"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadPartial"
+msgid "load_model_on_worker partially completed"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadCancelled"
+msgid "load_model_on_worker cancelled"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadFailed"
+msgid "load_model_on_worker failed"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadCompleted"
+msgid "download_model_on_worker completed"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadPartial"
+msgid "download_model_on_worker partially completed"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadCancelled"
+msgid "download_model_on_worker cancelled"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadFailed"
+msgid "download_model_on_worker failed"
 msgstr ""

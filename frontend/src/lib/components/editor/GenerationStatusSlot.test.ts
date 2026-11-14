@@ -8,7 +8,6 @@ import {
 	minSquarePx,
 	setPointer
 } from '#lib/test-utils/hitbox.ts';
-import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { failed, queued, running } from '#lib/test-utils/generate-states.ts';
@@ -26,6 +25,7 @@ vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
 import { cancelGeneration, type GenerateState } from '#lib/stores/generateAction.ts';
 import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 import generationStatusSlotSource from './GenerationStatusSlot.svelte?raw';
+import { words } from '#lib/words/en.ts';
 
 const reconnecting: Extract<GenerateState, { kind: 'generating' }> = {
 	...running,
@@ -195,7 +195,7 @@ describe('GenerationStatusSlot', () => {
 			await render(reconnecting);
 			const slot = styledSlot();
 			const bar = slot.querySelector('[role="progressbar"]');
-			expect(bar?.getAttribute('aria-label')).toBe(EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL);
+			expect(bar?.getAttribute('aria-label')).toBe(words['generate.lastKnownProgress']);
 			expect(bar?.getAttribute('aria-valuenow')).toBe('40');
 			const fill = bar?.querySelector('span');
 			if (!fill) throw new Error('Expected the bar fill');

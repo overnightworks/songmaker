@@ -471,28 +471,51 @@ export type Words = {
     readonly "referenceExpiry.deletesOn": (gaps: { readonly date: string }) => string;
     readonly "referenceExpiry.daysLeft": (count: number) => string;
     readonly "paramField.inferenceSteps": string;
+    readonly "paramField.inferenceStepsHelp": string;
     readonly "paramField.guidanceScale": string;
+    readonly "paramField.guidanceScaleHelp": string;
     readonly "paramField.shift": string;
+    readonly "paramField.shiftHelp": string;
     readonly "paramField.cfgIntervalStart": string;
+    readonly "paramField.cfgIntervalStartHelp": string;
     readonly "paramField.cfgIntervalEnd": string;
+    readonly "paramField.cfgIntervalEndHelp": string;
     readonly "paramField.velocityNorm": string;
+    readonly "paramField.velocityNormHelp": string;
     readonly "paramField.velocityEma": string;
+    readonly "paramField.velocityEmaHelp": string;
     readonly "paramField.latentShift": string;
+    readonly "paramField.latentShiftHelp": string;
     readonly "paramField.latentRescale": string;
+    readonly "paramField.latentRescaleHelp": string;
     readonly "paramField.lmCodeStrength": string;
+    readonly "paramField.lmCodeStrengthHelp": string;
     readonly "paramField.inferMethod": string;
+    readonly "paramField.inferMethodHelp": string;
     readonly "paramField.sampler": string;
+    readonly "paramField.samplerHelp": string;
     readonly "paramField.adaptiveDualGuidance": string;
+    readonly "paramField.adaptiveDualGuidanceHelp": string;
     readonly "paramField.temperature": string;
+    readonly "paramField.temperatureHelp": string;
     readonly "paramField.topK": string;
+    readonly "paramField.topKHelp": string;
     readonly "paramField.topP": string;
+    readonly "paramField.topPHelp": string;
     readonly "paramField.cfgScale": string;
+    readonly "paramField.cfgScaleHelp": string;
     readonly "paramField.repetitionPenalty": string;
+    readonly "paramField.repetitionPenaltyHelp": string;
     readonly "paramField.batchSize": string;
+    readonly "paramField.batchSizeHelp": string;
     readonly "paramField.thinking": string;
+    readonly "paramField.thinkingHelp": string;
     readonly "paramField.cotCaption": string;
+    readonly "paramField.cotCaptionHelp": string;
     readonly "paramField.cotLanguage": string;
+    readonly "paramField.cotLanguageHelp": string;
     readonly "paramField.negativePrompt": string;
+    readonly "paramField.negativePromptHelp": string;
     readonly "paramField.negativePromptPlaceholder": string;
     readonly "paramField.sectionDit": string;
     readonly "paramField.sectionLm": string;
@@ -650,6 +673,9 @@ export type Words = {
     readonly "takeTask.landing": (gaps: { readonly number: string }) => string;
     readonly "takeTask.headerNote": string;
     readonly "takeTask.repaintPress": (gaps: { readonly end: string; readonly start: string }) => string;
+    readonly "takeTask.repaintStart": string;
+    readonly "takeTask.repaintEnd": string;
+    readonly "takeTask.previewRange": string;
     readonly "seedChip.label": (gaps: { readonly number: string }) => string;
     readonly "seedChip.clear": string;
     readonly "takeActions.pickFailed": string;
@@ -1207,6 +1233,49 @@ export type Words = {
     readonly "aboutPage.unknown": string;
     readonly "aboutPage.whatsNew": string;
     readonly "aboutPage.licence": string;
+    readonly "generate.button": string;
+    readonly "generate.disabledButton": (gaps: { readonly reason: string }) => string;
+    readonly "generate.openWorkerPool": string;
+    readonly "generate.cancel": string;
+    readonly "generate.cancelOffline": string;
+    readonly "generate.cancelFailed": string;
+    readonly "generate.lastKnownProgress": string;
+    readonly "generate.versionLabel": (gaps: { readonly version: string }) => string;
+    readonly "generate.queued": string;
+    readonly "generate.queuedPosition": (gaps: { readonly position: string }) => string;
+    readonly "generate.takeOfCount": (gaps: { readonly count: number; readonly index: string }) => string;
+    readonly "generate.generating": string;
+    readonly "generate.reconnecting": string;
+    readonly "generate.lastSeen": (gaps: { readonly percent: string }) => string;
+    readonly "generate.phaseLoadingModel": string;
+    readonly "generate.phaseWriting": string;
+    readonly "generate.phaseRendering": string;
+    readonly "generate.phaseSavingTake": string;
+    readonly "generate.needsContent": string;
+    readonly "generate.noModels": string;
+    readonly "generate.selectModel": string;
+    readonly "generate.startFailed": string;
+    readonly "jobEnd.serverRestart": string;
+    readonly "jobEnd.generateCompleted": string;
+    readonly "jobEnd.generatePartial": string;
+    readonly "jobEnd.generateCancelled": string;
+    readonly "jobEnd.generateFailed": string;
+    readonly "jobEnd.scoreCompleted": string;
+    readonly "jobEnd.scorePartial": string;
+    readonly "jobEnd.scoreCancelled": string;
+    readonly "jobEnd.scoreFailed": string;
+    readonly "jobEnd.voiceTrainingCompleted": string;
+    readonly "jobEnd.voiceTrainingPartial": string;
+    readonly "jobEnd.voiceTrainingCancelled": string;
+    readonly "jobEnd.voiceTrainingFailed": string;
+    readonly "jobEnd.modelLoadCompleted": string;
+    readonly "jobEnd.modelLoadPartial": string;
+    readonly "jobEnd.modelLoadCancelled": string;
+    readonly "jobEnd.modelLoadFailed": string;
+    readonly "jobEnd.modelDownloadCompleted": string;
+    readonly "jobEnd.modelDownloadPartial": string;
+    readonly "jobEnd.modelDownloadCancelled": string;
+    readonly "jobEnd.modelDownloadFailed": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1802,28 +1871,51 @@ export const words: Words = {
         other: numberFormat.format(count) + "d",
     })[pluralRules.select(count)],
     "paramField.inferenceSteps": "Inference Steps",
+    "paramField.inferenceStepsHelp": "Diffusion denoising steps. More = slower but more refined.",
     "paramField.guidanceScale": "Guidance Scale",
+    "paramField.guidanceScaleHelp": "How strongly to follow your style prompt. Ignored on turbo models.",
     "paramField.shift": "Shift",
+    "paramField.shiftHelp": "Biases denoising toward early structure or late detail. 3.0 is balanced.",
     "paramField.cfgIntervalStart": "CFG Interval Start",
+    "paramField.cfgIntervalStartHelp": "Apply CFG starting from this point in the denoising trajectory (0.0–1.0).",
     "paramField.cfgIntervalEnd": "CFG Interval End",
+    "paramField.cfgIntervalEndHelp": "Stop applying CFG at this point in the denoising trajectory (0.0–1.0).",
     "paramField.velocityNorm": "Velocity Norm",
+    "paramField.velocityNormHelp": "DiT velocity normalization threshold. 0 = disabled.",
     "paramField.velocityEma": "Velocity EMA",
+    "paramField.velocityEmaHelp": "Exponential moving average smoothing for DiT velocity. 0 = disabled.",
     "paramField.latentShift": "Latent Shift",
+    "paramField.latentShiftHelp": "Shifts the latent space center. 0 = no shift.",
     "paramField.latentRescale": "Latent Rescale",
+    "paramField.latentRescaleHelp": "Rescales latent magnitude. 1.0 = no change.",
     "paramField.lmCodeStrength": "LM Code Strength",
+    "paramField.lmCodeStrengthHelp": "How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes ignored.",
     "paramField.inferMethod": "Infer Method",
+    "paramField.inferMethodHelp": "ODE = deterministic, reproducible. SDE = adds randomness, sometimes more natural.",
     "paramField.sampler": "Sampler",
+    "paramField.samplerHelp": "Diffusion sampler algorithm. heun is a second-order predictor-corrector.",
     "paramField.adaptiveDualGuidance": "Adaptive Dual Guidance",
+    "paramField.adaptiveDualGuidanceHelp": "Smarter CFG that prevents over-saturation. Only matters when guidance_scale > 1.",
     "paramField.temperature": "Temperature",
+    "paramField.temperatureHelp": "How creative the LM is when planning. Higher = more varied, lower = more predictable.",
     "paramField.topK": "Top-K",
+    "paramField.topKHelp": "Limit LM sampling to the K most-likely tokens. 0 = disabled.",
     "paramField.topP": "Top-P",
+    "paramField.topPHelp": "Nucleus sampling — sample only from tokens covering P of the probability mass.",
     "paramField.cfgScale": "CFG Scale",
+    "paramField.cfgScaleHelp": "CFG strength for the LM's plan (separate from the DiT guidance_scale).",
     "paramField.repetitionPenalty": "Rep. Penalty",
+    "paramField.repetitionPenaltyHelp": "Discourages the LM from repeating itself. 1.0 = off.",
     "paramField.batchSize": "Batch Size",
+    "paramField.batchSizeHelp": "Number of audio variations to generate from one request (1–8).",
     "paramField.thinking": "Thinking",
+    "paramField.thinkingHelp": "Let the LM plan musical structure before audio generation.",
     "paramField.cotCaption": "CoT Caption",
+    "paramField.cotCaptionHelp": "Let the LM rewrite your style caption to be more model-friendly.",
     "paramField.cotLanguage": "CoT Language",
+    "paramField.cotLanguageHelp": "Let the LM auto-detect the language of your lyrics.",
     "paramField.negativePrompt": "Negative Prompt",
+    "paramField.negativePromptHelp": "Tell the LM what NOT to include in its musical plan.",
     "paramField.negativePromptPlaceholder": "e.g. bad quality, noise",
     "paramField.sectionDit": "DiT (Sound)",
     "paramField.sectionLm": "LM (Lyrics)",
@@ -2051,6 +2143,9 @@ export const words: Words = {
     "takeTask.landing": (gaps: { readonly number: string }) => "New take in v" + gaps.number,
     "takeTask.headerNote": "· the header Generate stays what it is",
     "takeTask.repaintPress": (gaps: { readonly end: string; readonly start: string }) => "Repaint " + gaps.start + " – " + gaps.end,
+    "takeTask.repaintStart": "Repaint start",
+    "takeTask.repaintEnd": "Repaint end",
+    "takeTask.previewRange": "Preview selected range",
     "seedChip.label": (gaps: { readonly number: string }) => "Seed · take " + gaps.number,
     "seedChip.clear": "Clear seed",
     "takeActions.pickFailed": "Pick failed",
@@ -2685,5 +2780,48 @@ export const words: Words = {
     "aboutPage.unknown": "Unknown",
     "aboutPage.whatsNew": "What’s new",
     "aboutPage.licence": "Licence",
+    "generate.button": "Generate",
+    "generate.disabledButton": (gaps: { readonly reason: string }) => "Generate — " + gaps.reason,
+    "generate.openWorkerPool": "Open worker pool",
+    "generate.cancel": "Cancel generation",
+    "generate.cancelOffline": "Cancel generation (unavailable while offline)",
+    "generate.cancelFailed": "Could not cancel generation",
+    "generate.lastKnownProgress": "Last known progress",
+    "generate.versionLabel": (gaps: { readonly version: string }) => "v" + gaps.version,
+    "generate.queued": "Queued",
+    "generate.queuedPosition": (gaps: { readonly position: string }) => "Queued #" + gaps.position,
+    "generate.takeOfCount": (gaps: { readonly count: number; readonly index: string }) => "Take " + gaps.index + " of " + numberFormat.format(gaps.count),
+    "generate.generating": "Generating...",
+    "generate.reconnecting": "Reconnecting…",
+    "generate.lastSeen": (gaps: { readonly percent: string }) => "last seen at " + gaps.percent,
+    "generate.phaseLoadingModel": "Loading model…",
+    "generate.phaseWriting": "Writing",
+    "generate.phaseRendering": "Rendering",
+    "generate.phaseSavingTake": "Saving take",
+    "generate.needsContent": "Add lyrics and style prompt first",
+    "generate.noModels": "No models enabled. Ask admin to enable one.",
+    "generate.selectModel": "Select a model first",
+    "generate.startFailed": "Generation failed",
+    "jobEnd.serverRestart": "Server restarted — please retry",
+    "jobEnd.generateCompleted": "generate completed",
+    "jobEnd.generatePartial": "generate partially completed",
+    "jobEnd.generateCancelled": "generate cancelled",
+    "jobEnd.generateFailed": "generate failed",
+    "jobEnd.scoreCompleted": "score completed",
+    "jobEnd.scorePartial": "score partially completed",
+    "jobEnd.scoreCancelled": "score cancelled",
+    "jobEnd.scoreFailed": "score failed",
+    "jobEnd.voiceTrainingCompleted": "lora_training completed",
+    "jobEnd.voiceTrainingPartial": "lora_training partially completed",
+    "jobEnd.voiceTrainingCancelled": "lora_training cancelled",
+    "jobEnd.voiceTrainingFailed": "lora_training failed",
+    "jobEnd.modelLoadCompleted": "load_model_on_worker completed",
+    "jobEnd.modelLoadPartial": "load_model_on_worker partially completed",
+    "jobEnd.modelLoadCancelled": "load_model_on_worker cancelled",
+    "jobEnd.modelLoadFailed": "load_model_on_worker failed",
+    "jobEnd.modelDownloadCompleted": "download_model_on_worker completed",
+    "jobEnd.modelDownloadPartial": "download_model_on_worker partially completed",
+    "jobEnd.modelDownloadCancelled": "download_model_on_worker cancelled",
+    "jobEnd.modelDownloadFailed": "download_model_on_worker failed",
 };
 export type Key = keyof Words;

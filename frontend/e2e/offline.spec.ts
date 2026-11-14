@@ -4,13 +4,6 @@
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import {
-	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
-	EDITOR_GENERATE_LABEL,
-	EDITOR_GENERATE_RECONNECTING_LABEL,
-	EDITOR_GENERATE_TAKE_TEMPLATE
-} from '../src/lib/constants/song';
-import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS
 } from '../src/lib/constants/resource-sync';
@@ -68,7 +61,7 @@ const DECK_DOWNLOAD_ATTEMPTS = 3;
 const SERVER_BACK_MS = 2 * RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS;
 const RESOURCE_STREAM = `**${RESOURCE_EVENT_STREAM_PATH}**`;
 const SESSION_CHECK = '**/api/auth/me';
-const GENERATE_LABEL = EDITOR_GENERATE_LABEL;
+const GENERATE_LABEL = words['generate.button'];
 // The toast a generate job's end raises (`notifyTerminalJob` in stores/jobs.ts).
 const JOB_COMPLETED_TOAST = 'generate completed';
 // The ride through three tunnels on #1039's final drive (#1141).
@@ -550,7 +543,7 @@ async function seedOfflineRunningSong(suffix: string, progress: number) {
 		phase: 'rendering',
 		generationStartedOffsetSeconds: 30
 	});
-	const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+	const takeCounter = `${words['generate.takeOfCount']({ index: '1', count: 2 })} · `;
 	return { library, songTitle, songId, jobId, takeCounter };
 }
 
@@ -593,14 +586,14 @@ test.describe(
 				const playTakePrefix = `${TRANSPORT_PLAY_LABEL} v`;
 				const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });
 				const lastSeenBar = panel.getByRole('progressbar', {
-					name: EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
+					name: words['generate.lastKnownProgress']
 				});
 				await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 				await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
 				await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
 				await expect(playButtons).toHaveCount(seededTakes);
 				await loseNetwork(page, context, { keepOpenStreams });
-				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+				await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible({
 					timeout: OFFLINE_NOTICE_MS
 				});
 				await expect(
@@ -608,7 +601,7 @@ test.describe(
 				).toBeVisible();
 				await expect(panel.getByText(/~\d/)).toHaveCount(0);
 				await expect(lastSeenBar).toHaveAttribute('aria-valuenow', '40');
-				const cancel = panel.getByRole('button', { name: EDITOR_GENERATE_CANCEL_OFFLINE_LABEL });
+				const cancel = panel.getByRole('button', { name: words['generate.cancelOffline'] });
 				await expect(cancel).toHaveAttribute('aria-disabled', 'true');
 				const grey = await resolvedToken(page, '--text-disabled');
 				await expect(lastSeenBar.locator('span')).toHaveCSS('background-color', grey);
@@ -639,7 +632,7 @@ test.describe(
 				await completeGenerationJobWithoutEvent(jobId);
 				if (songRefreshFailed) {
 					await songRefreshFailed;
-					await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible();
+					await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible();
 				}
 				await expect(lastSeenBar).toBeVisible();
 				await expect(page.getByText(JOB_COMPLETED_TOAST)).toHaveCount(0);
@@ -682,13 +675,13 @@ test.describe(
 				await expectRealQueuedPosition();
 				const address = page.url();
 				await loseNetwork(page, context);
-				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+				await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible({
 					timeout: OFFLINE_NOTICE_MS
 				});
 				await expect(panel.getByText(/Queued #/)).toHaveCount(0);
 				await regainNetwork(page, context);
 				await expectRealQueuedPosition();
-				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
+				await expect(panel.getByText(words['generate.reconnecting'])).toHaveCount(0);
 				await expect(page).toHaveURL(address);
 			} finally {
 				try {
@@ -727,7 +720,7 @@ test.describe(
 						(request.failure()?.errorText ?? '').includes('ERR_INTERNET_DISCONNECTED')
 				);
 				await loseNetwork(page, context);
-				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+				await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible({
 					timeout: OFFLINE_NOTICE_MS
 				});
 				await retryRefusedOffline;
@@ -740,7 +733,7 @@ test.describe(
 				await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible({
 					timeout: BACK_ONLINE_MS
 				});
-				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
+				await expect(panel.getByText(words['generate.reconnecting'])).toHaveCount(0);
 				await expect(page.getByRole('alert')).toHaveCount(0);
 			}
 
@@ -775,7 +768,7 @@ test.describe(
 
 			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 
-			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+			await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible({
 				timeout: BACK_ONLINE_MS
 			});
 			await expect(
@@ -796,7 +789,7 @@ test.describe(
 			await expect(panel.getByText(new RegExp(`^${takeCounter}65%`))).toBeVisible({
 				timeout: NEXT_JOB_STREAM_REOPEN_MS
 			});
-			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
+			await expect(panel.getByText(words['generate.reconnecting'])).toHaveCount(0);
 		});
 	}
 );

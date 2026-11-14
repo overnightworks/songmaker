@@ -30,7 +30,6 @@ import { words } from '../src/lib/words/en';
 
 const openVersion = (number: number) => words['takesList.openVersion']({ number: String(number) });
 const firstTake = words['takeRow.takeLabel']({ number: '1' });
-import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_QUEUE_TAB,
@@ -366,7 +365,7 @@ test.describe('the versions of a song', () => {
 			await expect(versionChip(page)).toHaveText(versionDraftName(2));
 			await expect(loadedToast(page)).toBeVisible();
 			const generate = workspace(page).getByRole('button', {
-				name: nameStartingWith(EDITOR_GENERATE_LABEL)
+				name: nameStartingWith(words['generate.button'])
 			});
 			// On the phone the toast rises above the docked Generate bar, so
 			// Generate takes the tap while the toast still shows.

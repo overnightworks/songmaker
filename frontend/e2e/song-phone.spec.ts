@@ -4,8 +4,6 @@
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
-import { EDITOR_GENERATE_TAKE_TEMPLATE } from '../src/lib/constants/song';
-import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
 import { formatTime } from '../src/lib/utils/format';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
@@ -52,19 +50,19 @@ const RUNNING_JOB_TAKE_COUNT = 2;
 // A cold start: the job begins by loading the model, which names no percent
 // and no remaining time (#1040), then moves on live to rendering.
 const LOADING_JOB_PHASE = 'loading_model';
-const LOADING_JOB_PHASE_LABEL = GENERATION_PHASE_LABELS[LOADING_JOB_PHASE];
+const LOADING_JOB_PHASE_LABEL = words['generate.phaseLoadingModel'];
 const LOADING_JOB_PROGRESS = 0;
 const RUNNING_JOB_PROGRESS = 0.36;
 // The job has been generating this many seconds, so the remaining-time
 // estimate lands well inside a plausible single-digit-minute ETA rather than
 // at either extreme.
 const RUNNING_JOB_PHASE = 'rendering';
-const RUNNING_JOB_PHASE_LABEL = GENERATION_PHASE_LABELS[RUNNING_JOB_PHASE];
+const RUNNING_JOB_PHASE_LABEL = words['generate.phaseRendering'];
 const RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS = 64;
-const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
-	'{index}',
-	String(RUNNING_JOB_TAKE_INDEX)
-).replace('{count}', String(RUNNING_JOB_TAKE_COUNT));
+const RUNNING_JOB_TAKE_COUNTER = words['generate.takeOfCount']({
+	index: String(RUNNING_JOB_TAKE_INDEX),
+	count: RUNNING_JOB_TAKE_COUNT
+});
 const REMAINING_TIME_PATTERN = /~\d+:\d{2}/;
 const ELAPSED_TIME_PATTERN = /\d+:\d{2}/;
 const CLOCK_HOLD_LEAD_MS = 1000;

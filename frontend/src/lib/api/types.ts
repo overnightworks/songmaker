@@ -352,7 +352,7 @@ export interface GenerationUnavailableResponse {
 
 export interface JobItem {
 	id: string;
-	type: string;
+	type: 'cover' | 'generate' | 'score' | 'chat' | 'lora_training' | 'load_model_on_worker' | 'download_model_on_worker';
 	status: string;
 	version_id?: string | null;
 	progress: number;

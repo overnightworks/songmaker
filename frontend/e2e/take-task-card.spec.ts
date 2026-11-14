@@ -6,7 +6,6 @@
 // plain (#1923, S4 and S8). Both projects run it: 390 px (Takes tab) and 1440 px.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { sameOriginHeaders, shellOf } from './helpers';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 import { words } from '../src/lib/words/en';
@@ -154,7 +153,7 @@ test('The header Generate stays plain with a card open and sends no repaint (S4,
 		await page.route(/\/api\/songs\/[^/]+\/generate$/, (route) =>
 			route.fulfill({ json: QUEUED_JOB })
 		);
-		const generate = page.getByRole('button', { name: EDITOR_GENERATE_LABEL, exact: true });
+		const generate = page.getByRole('button', { name: words['generate.button'], exact: true });
 		await expect(generate).toBeEnabled();
 		await generate.click();
 		await request;

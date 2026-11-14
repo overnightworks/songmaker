@@ -2,7 +2,6 @@ import { expect, test as base, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import type { JobItem } from '../src/lib/api/types';
 import { ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
-import { EDITOR_OPEN_WORKER_POOL_LABEL } from '../src/lib/constants/song';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
 import {
@@ -129,7 +128,7 @@ for (const width of WIDTHS) {
 						if (source === 'reload') await page.reload();
 						const failure = page.locator('.generate-action:visible .failure');
 						await expect(failure).toContainText(UNAVAILABLE);
-						const link = failure.getByRole('link', { name: EDITOR_OPEN_WORKER_POOL_LABEL });
+						const link = failure.getByRole('link', { name: words['generate.openWorkerPool'] });
 						await expect(link).toHaveCount(role === 'admin' ? 1 : 0);
 						await expectClearance(page, failure);
 						await testInfo.attach(`C4-${role}-${source}-${width}`, {

@@ -20,7 +20,6 @@ import {
 import { tick, flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 import { deleteVersion, fetchVersions, updateSong } from '#lib/api/client.ts';
 import { addToast, addUndoToast } from '#lib/stores/toast.ts';
 import { songList } from '#lib/stores/libraryData.ts';
@@ -652,7 +651,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			act: (target: HTMLElement) =>
 				getByRoleButton(
 					target.querySelector<HTMLElement>('.generate-action') ?? target,
-					EDITOR_GENERATE_LABEL
+					words['generate.button']
 				).click()
 		}
 	])('the Undo toast of a load goes with the next action: $action', async ({ act }) => {
@@ -692,7 +691,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 		getByRoleButton(
 			target.querySelector<HTMLElement>('.generate-action') ?? target,
-			EDITOR_GENERATE_LABEL
+			words['generate.button']
 		).click();
 		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
 

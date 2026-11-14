@@ -28,7 +28,6 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
 
 import { bulkDeleteGenerations } from '#lib/api/client.ts';
 import { jumpToTake } from '#lib/stores/navigation.ts';
-import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 import { words } from '#lib/words/en.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -298,7 +297,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		);
 		expect(target.querySelector('.version-head')?.textContent).not.toContain('Open v');
 		expect(target.textContent).toContain(
-			words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })
+			words['takesList.empty']({ generate: words['generate.button'] })
 		);
 		expect(foldToggle(target, words['takesList.foldedVersion'](1, { number: '2' }))).toBeTruthy();
 	});
@@ -314,7 +313,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 			words['takesList.draftDiffers']({ latest: '3', next: '3' })
 		);
 		expect(target.textContent).toContain(
-			words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })
+			words['takesList.empty']({ generate: words['generate.button'] })
 		);
 	});
 

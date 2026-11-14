@@ -11,7 +11,6 @@ import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
-import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '#lib/constants/song.ts';
 import type { GenerateState } from '#lib/stores/generateAction.ts';
 import { words } from '#lib/words/en.ts';
 
@@ -98,7 +97,7 @@ function expectGenerateAsPrimaryAction(target: HTMLElement): void {
 	const primaryAction = target
 		.querySelector('[role="tabpanel"] > :last-child')
 		?.querySelector('button');
-	expect(primaryAction?.textContent?.trim()).toBe(EDITOR_GENERATE_LABEL);
+	expect(primaryAction?.textContent?.trim()).toBe(words['generate.button']);
 }
 
 describe('SongPhoneView', () => {
@@ -150,7 +149,7 @@ describe('SongPhoneView', () => {
 	});
 
 	it.each([
-		['ready', words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })],
+		['ready', words['takesList.empty']({ generate: words['generate.button'] })],
 		['loading', 'Loading takes…'],
 		['error', 'Failed to load takes']
 	] as const)(
@@ -185,13 +184,13 @@ describe('SongPhoneView', () => {
 	it('keeps the Edit action bar one row: a disabled Generate says why inside itself', async () => {
 		generateAction.set({
 			kind: 'disabled',
-			reason: EDITOR_MISSING_CONTENT_TITLE
+			reason: words['generate.needsContent']
 		});
 		const target = await render();
 		const actionBar = target.querySelector<HTMLElement>('.edit-actionbar');
 		const button = actionBar?.querySelector('button');
 		expect(button?.disabled).toBe(true);
-		expect(button?.textContent?.trim()).toBe(`ⓘ ${EDITOR_MISSING_CONTENT_TITLE}`);
+		expect(button?.textContent?.trim()).toBe(`ⓘ ${words['generate.needsContent']}`);
 		expect(actionBar?.textContent?.trim()).toBe(button?.textContent?.trim());
 	});
 

@@ -6,7 +6,6 @@
 // and 1440 px (the header).
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
@@ -93,7 +92,7 @@ async function showChip(page: Page, takeNumber: number): Promise<void> {
 async function pressGenerate(page: Page): Promise<Record<string, unknown>> {
 	await page.route(GENERATE_ROUTE, (route) => route.fulfill({ json: QUEUED_JOB }));
 	const request = page.waitForRequest(GENERATE_ROUTE);
-	await page.getByRole('button', { name: EDITOR_GENERATE_LABEL, exact: true }).click();
+	await page.getByRole('button', { name: words['generate.button'], exact: true }).click();
 	return (await request).postDataJSON() as Record<string, unknown>;
 }
 
