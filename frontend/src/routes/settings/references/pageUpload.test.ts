@@ -65,12 +65,26 @@ describe('references page uploads', () => {
 			{
 				case: 'files',
 				usage: { files: 40, bytes: 10 * MB },
-				figures: ['40 of 50 files', '10 of 500 MB']
+				figures: [
+					words['referencesPage.filesFigure'](50, { files: '40' }),
+					words['referencesPage.sizeFigure']({ used: '10', limit: '500' })
+				]
 			},
 			{
 				case: 'bytes',
 				usage: { files: 3, bytes: 400 * MB },
-				figures: ['3 of 50 files', '400 of 500 MB']
+				figures: [
+					words['referencesPage.filesFigure'](50, { files: '3' }),
+					words['referencesPage.sizeFigure']({ used: '400', limit: '500' })
+				]
+			},
+			{
+				case: 'a single-file limit',
+				usage: { files: 1, file_limit: 1 },
+				figures: [
+					words['referencesPage.filesFigure'](1, { files: '1' }),
+					words['referencesPage.sizeFigure']({ used: '0', limit: '500' })
+				]
 			}
 		])('shows both figures from 80 % of the limit on $case alone', async ({ usage, figures }) => {
 			const target = await renderReady(usage);
@@ -95,12 +109,12 @@ describe('references page uploads', () => {
 			{
 				limit: 'files',
 				usage: { files: 50 },
-				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
+				reason: words['referencesPage.storageFullFiles'](50, { files: '50' })
 			},
 			{
 				limit: 'bytes',
 				usage: { bytes: 500 * MB },
-				reason: 'Reference storage is full (500 of 500 MB) — delete one first.'
+				reason: words['referencesPage.storageFullSize']({ used: '500', limit: '500' })
 			}
 		])(
 			'says at the button that storage is full at 100 % of $limit, and the button stays pressable',
@@ -129,7 +143,7 @@ describe('references page uploads', () => {
 		it('offers Upload as one button, for the same file types as the recipe picker', async () => {
 			const target = await renderReady();
 
-			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+			expect(uploadButton(target).textContent?.trim()).toBe(words['referencesPage.upload']);
 			expect(target.querySelector('input[type="file"]')?.getAttribute('accept')).toBe(
 				'.mp3,.wav,.flac,.ogg'
 			);
@@ -148,7 +162,9 @@ describe('references page uploads', () => {
 			report(0.64);
 			await tick();
 
-			expect(uploadButton(target).textContent?.trim()).toBe('Uploading synth-hook.wav · 64%');
+			expect(uploadButton(target).textContent?.trim()).toBe(
+				`${words['referencesPage.uploadingName']({ name: 'synth-hook.wav' })} · 64%`
+			);
 			expect(uploadButton(target).style.getPropertyValue('--progress')).toBe('64%');
 			expect(uploadButton(target).disabled).toBe(true);
 			expect(mocks.uploadReference.mock.calls[0][0]).toBe(NEW_FILE);
@@ -172,8 +188,10 @@ describe('references page uploads', () => {
 
 			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 			expect(listedReferences(target)[0].name).toBe('synth-hook.wav');
-			expect(target.querySelector('.quota')?.textContent).toContain('41 of 50 files');
-			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+			expect(target.querySelector('.quota')?.textContent).toContain(
+				words['referencesPage.filesFigure'](50, { files: '41' })
+			);
+			expect(uploadButton(target).textContent?.trim()).toBe(words['referencesPage.upload']);
 		});
 
 		const STORAGE_FULL = new ApiError(
@@ -187,31 +205,31 @@ describe('references page uploads', () => {
 				case: 'the file limit',
 				known: { files: 50 },
 				reloaded: { files: 50 } as Partial<ReferenceUsageResponse> | null,
-				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
+				reason: words['referencesPage.storageFullFiles'](50, { files: '50' })
 			},
 			{
 				case: 'the byte limit',
 				known: { bytes: 500_000_000 },
 				reloaded: { bytes: 500_000_000 } as Partial<ReferenceUsageResponse> | null,
-				reason: 'Reference storage is full (500 of 500 MB) — delete one first.'
+				reason: words['referencesPage.storageFullSize']({ used: '500', limit: '500' })
 			},
 			{
 				case: 'a stale 49 whose reload answers 50',
 				known: { files: 49 },
 				reloaded: { files: 50 } as Partial<ReferenceUsageResponse> | null,
-				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
+				reason: words['referencesPage.storageFullFiles'](50, { files: '50' })
 			},
 			{
 				case: 'room left',
 				known: { files: 5, bytes: 431_900_000 },
 				reloaded: { files: 5, bytes: 431_900_000 } as Partial<ReferenceUsageResponse> | null,
-				reason: "That file doesn't fit (431 of 500 MB used) — delete one first."
+				reason: words['referencesPage.doesNotFit']({ used: '431', limit: '500' })
 			},
 			{
 				case: 'room left when the reload fails',
 				known: { files: 5, bytes: 431_900_000 },
 				reloaded: null,
-				reason: "That file doesn't fit (431 of 500 MB used) — delete one first."
+				reason: words['referencesPage.doesNotFit']({ used: '431', limit: '500' })
 			}
 		])(
 			'words a 409 from the usage the reload brings back: $case',
@@ -249,7 +267,7 @@ describe('references page uploads', () => {
 
 			await vi.waitFor(() =>
 				expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(
-					'Reference storage is full (50 of 50 files) — delete one first.'
+					words['referencesPage.storageFullFiles'](50, { files: '50' })
 				)
 			);
 		});
@@ -259,7 +277,7 @@ describe('references page uploads', () => {
 			const target = await renderReferencesPage();
 			await vi.waitFor(() => expect(target.querySelector('.empty')).not.toBeNull());
 
-			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+			expect(uploadButton(target).textContent?.trim()).toBe(words['referencesPage.upload']);
 		});
 
 		it('claims the list empty no longer, and keeps Upload, once the reload after a first upload fails', async () => {
@@ -273,7 +291,7 @@ describe('references page uploads', () => {
 			await vi.waitFor(() => expect(target.querySelector('.load-error')).not.toBeNull());
 
 			expect(target.querySelector('.empty')).toBeNull();
-			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+			expect(uploadButton(target).textContent?.trim()).toBe(words['referencesPage.upload']);
 		});
 
 		it('shows the load failure with its retry beside the kept rows when the reload after a stored upload fails', async () => {
@@ -285,7 +303,7 @@ describe('references page uploads', () => {
 			await vi.waitFor(() => expect(target.querySelector('.load-error')).not.toBeNull());
 
 			expect(target.querySelector('.load-error')?.textContent).toContain(
-				'Failed to load references'
+				words['referencesPage.loadFailed']
 			);
 			expect(target.querySelector('.retry-btn')).not.toBeNull();
 			expect(listedReferences(target).map((row) => row.name)).toEqual(['voice-memo.mp3']);
@@ -336,12 +354,12 @@ describe('references page uploads', () => {
 			{
 				case: 'the fallback for a server without detail',
 				error: new ApiError(500, '', '/api/references'),
-				reason: "Couldn't upload this file"
+				reason: words['referencesPage.uploadFailed']
 			},
 			{
 				case: 'the fallback for a lost connection',
 				error: new NetworkError('/api/references', new TypeError('x')),
-				reason: "Couldn't upload this file"
+				reason: words['referencesPage.uploadFailed']
 			}
 		])(
 			'stands at the button with $case when the upload fails, and the list stays',
@@ -372,7 +390,7 @@ describe('references page uploads', () => {
 			{
 				case: 'the fallback for a lost connection',
 				error: new NetworkError('/api/references', new TypeError('x')),
-				reason: "Couldn't upload this file"
+				reason: words['referencesPage.uploadFailed']
 			}
 		])(
 			'shows $case at the button, not the full reason, when the upload fails at 50 of 50 files',

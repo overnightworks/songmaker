@@ -4672,3 +4672,167 @@ msgstr ""
 msgctxt "voiceDetail.cancelFailed"
 msgid "Could not cancel training"
 msgstr ""
+
+msgctxt "referencesPage.documentTitle"
+msgid "References — {app}"
+msgstr ""
+
+msgctxt "referencesPage.loading"
+msgid "Loading references…"
+msgstr ""
+
+msgctxt "referencesPage.loadFailed"
+msgid "Failed to load references"
+msgstr ""
+
+msgctxt "referencesPage.retry"
+msgid "Try again"
+msgstr ""
+
+msgctxt "referencesPage.empty"
+msgid "No references yet — upload a recording to guide a song's sound."
+msgstr ""
+
+msgctxt "referencesPage.upload"
+msgid "Upload"
+msgstr ""
+
+msgctxt "referencesPage.uploadingName"
+msgid "Uploading {name}"
+msgstr ""
+
+msgctxt "referencesPage.uploadFailed"
+msgid "Couldn't upload this file"
+msgstr ""
+
+msgctxt "referencesPage.filesFigure.one"
+msgid "{files} of {count} file"
+msgstr ""
+
+msgctxt "referencesPage.filesFigure.other"
+msgid "{files} of {count} files"
+msgstr ""
+
+msgctxt "referencesPage.sizeFigure"
+msgid "{used} of {limit} MB"
+msgstr ""
+
+msgctxt "referencesPage.storageFullFiles.one"
+msgid "Reference storage is full ({files} of {count} file) — delete one first."
+msgstr ""
+
+msgctxt "referencesPage.storageFullFiles.other"
+msgid "Reference storage is full ({files} of {count} files) — delete one first."
+msgstr ""
+
+msgctxt "referencesPage.storageFullSize"
+msgid "Reference storage is full ({used} of {limit} MB) — delete one first."
+msgstr ""
+
+msgctxt "referencesPage.doesNotFit"
+msgid "That file doesn't fit ({used} of {limit} MB used) — delete one first."
+msgstr ""
+
+msgctxt "referencesPage.playFault"
+msgid "Can't play this recording"
+msgstr ""
+
+msgctxt "referencesPage.inUseFault"
+msgid "In use — not deleted."
+msgstr ""
+
+msgctxt "referencesPage.deleteFailed"
+msgid "Couldn't delete this recording"
+msgstr ""
+
+msgctxt "referencesPage.keepFailed"
+msgid "Couldn't keep this recording"
+msgstr ""
+
+msgctxt "referencesPage.unkeepFailed"
+msgid "Couldn't unkeep this recording"
+msgstr ""
+
+msgctxt "referencesPage.deleteTitle"
+msgid "Delete reference?"
+msgstr ""
+
+msgctxt "referencesPage.deleteItem"
+msgid "{filename} — its audio file"
+msgstr ""
+
+msgctxt "referenceRow.play"
+msgid "Play {filename}"
+msgstr ""
+
+msgctxt "referenceRow.pause"
+msgid "Pause {filename}"
+msgstr ""
+
+msgctxt "referenceRow.keep"
+msgid "Keep {filename}"
+msgstr ""
+
+msgctxt "referenceRow.unkeep"
+msgid "Unkeep {filename}"
+msgstr ""
+
+msgctxt "referenceRow.usedIn"
+msgid "Used in {uses}"
+msgstr ""
+
+msgctxt "referenceRow.takes.one"
+msgid "{count} take"
+msgstr ""
+
+msgctxt "referenceRow.takes.other"
+msgid "{count} takes"
+msgstr ""
+
+msgctxt "referenceRow.versions.one"
+msgid "{count} version"
+msgstr ""
+
+msgctxt "referenceRow.versions.other"
+msgid "{count} versions"
+msgstr ""
+
+msgctxt "referenceUses.loading"
+msgid "Loading…"
+msgstr ""
+
+msgctxt "referenceUses.loadFailed"
+msgid "Couldn't load where it is used"
+msgstr ""
+
+msgctxt "referenceUses.staysNote"
+msgid "It stays while a take or version uses it."
+msgstr ""
+
+msgctxt "referenceUses.deletedTag"
+msgid "Deleted"
+msgstr ""
+
+msgctxt "referenceUses.archivedTag"
+msgid "Archived"
+msgstr ""
+
+msgctxt "referenceUses.take"
+msgid "Take {number}"
+msgstr ""
+
+msgctxt "referenceUses.takeVersion"
+msgid "Take {number} · v{version}"
+msgstr ""
+
+msgctxt "referenceUses.takeLength"
+msgid "Take {number} · {length}"
+msgstr ""
+
+msgctxt "referenceUses.takeVersionLength"
+msgid "Take {number} · v{version} · {length}"
+msgstr ""
+
+msgctxt "referenceUses.version"
+msgid "Version v{version}"
+msgstr ""

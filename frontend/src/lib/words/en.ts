@@ -1137,6 +1137,43 @@ export type Words = {
     readonly "voiceDetail.queuedToast": string;
     readonly "voiceDetail.startFailed": string;
     readonly "voiceDetail.cancelFailed": string;
+    readonly "referencesPage.documentTitle": (gaps: { readonly app: string }) => string;
+    readonly "referencesPage.loading": string;
+    readonly "referencesPage.loadFailed": string;
+    readonly "referencesPage.retry": string;
+    readonly "referencesPage.empty": string;
+    readonly "referencesPage.upload": string;
+    readonly "referencesPage.uploadingName": (gaps: { readonly name: string }) => string;
+    readonly "referencesPage.uploadFailed": string;
+    readonly "referencesPage.filesFigure": (count: number, gaps: { readonly files: string }) => string;
+    readonly "referencesPage.sizeFigure": (gaps: { readonly limit: string; readonly used: string }) => string;
+    readonly "referencesPage.storageFullFiles": (count: number, gaps: { readonly files: string }) => string;
+    readonly "referencesPage.storageFullSize": (gaps: { readonly limit: string; readonly used: string }) => string;
+    readonly "referencesPage.doesNotFit": (gaps: { readonly limit: string; readonly used: string }) => string;
+    readonly "referencesPage.playFault": string;
+    readonly "referencesPage.inUseFault": string;
+    readonly "referencesPage.deleteFailed": string;
+    readonly "referencesPage.keepFailed": string;
+    readonly "referencesPage.unkeepFailed": string;
+    readonly "referencesPage.deleteTitle": string;
+    readonly "referencesPage.deleteItem": (gaps: { readonly filename: string }) => string;
+    readonly "referenceRow.play": (gaps: { readonly filename: string }) => string;
+    readonly "referenceRow.pause": (gaps: { readonly filename: string }) => string;
+    readonly "referenceRow.keep": (gaps: { readonly filename: string }) => string;
+    readonly "referenceRow.unkeep": (gaps: { readonly filename: string }) => string;
+    readonly "referenceRow.usedIn": (gaps: { readonly uses: string }) => string;
+    readonly "referenceRow.takes": (count: number) => string;
+    readonly "referenceRow.versions": (count: number) => string;
+    readonly "referenceUses.loading": string;
+    readonly "referenceUses.loadFailed": string;
+    readonly "referenceUses.staysNote": string;
+    readonly "referenceUses.deletedTag": string;
+    readonly "referenceUses.archivedTag": string;
+    readonly "referenceUses.take": (gaps: { readonly number: string }) => string;
+    readonly "referenceUses.takeVersion": (gaps: { readonly number: string; readonly version: string }) => string;
+    readonly "referenceUses.takeLength": (gaps: { readonly length: string; readonly number: string }) => string;
+    readonly "referenceUses.takeVersionLength": (gaps: { readonly length: string; readonly number: string; readonly version: string }) => string;
+    readonly "referenceUses.version": (gaps: { readonly version: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -2517,5 +2554,70 @@ export const words: Words = {
     "voiceDetail.queuedToast": "Training queued",
     "voiceDetail.startFailed": "Training failed to start",
     "voiceDetail.cancelFailed": "Could not cancel training",
+    "referencesPage.documentTitle": (gaps: { readonly app: string }) => "References — " + gaps.app,
+    "referencesPage.loading": "Loading references…",
+    "referencesPage.loadFailed": "Failed to load references",
+    "referencesPage.retry": "Try again",
+    "referencesPage.empty": "No references yet — upload a recording to guide a song's sound.",
+    "referencesPage.upload": "Upload",
+    "referencesPage.uploadingName": (gaps: { readonly name: string }) => "Uploading " + gaps.name,
+    "referencesPage.uploadFailed": "Couldn't upload this file",
+    "referencesPage.filesFigure": (count: number, gaps: { readonly files: string }) => ({
+        zero: gaps.files + " of " + numberFormat.format(count) + " files",
+        one: gaps.files + " of " + numberFormat.format(count) + " file",
+        two: gaps.files + " of " + numberFormat.format(count) + " files",
+        few: gaps.files + " of " + numberFormat.format(count) + " files",
+        many: gaps.files + " of " + numberFormat.format(count) + " files",
+        other: gaps.files + " of " + numberFormat.format(count) + " files",
+    })[pluralRules.select(count)],
+    "referencesPage.sizeFigure": (gaps: { readonly limit: string; readonly used: string }) => gaps.used + " of " + gaps.limit + " MB",
+    "referencesPage.storageFullFiles": (count: number, gaps: { readonly files: string }) => ({
+        zero: "Reference storage is full (" + gaps.files + " of " + numberFormat.format(count) + " files) — delete one first.",
+        one: "Reference storage is full (" + gaps.files + " of " + numberFormat.format(count) + " file) — delete one first.",
+        two: "Reference storage is full (" + gaps.files + " of " + numberFormat.format(count) + " files) — delete one first.",
+        few: "Reference storage is full (" + gaps.files + " of " + numberFormat.format(count) + " files) — delete one first.",
+        many: "Reference storage is full (" + gaps.files + " of " + numberFormat.format(count) + " files) — delete one first.",
+        other: "Reference storage is full (" + gaps.files + " of " + numberFormat.format(count) + " files) — delete one first.",
+    })[pluralRules.select(count)],
+    "referencesPage.storageFullSize": (gaps: { readonly limit: string; readonly used: string }) => "Reference storage is full (" + gaps.used + " of " + gaps.limit + " MB) — delete one first.",
+    "referencesPage.doesNotFit": (gaps: { readonly limit: string; readonly used: string }) => "That file doesn't fit (" + gaps.used + " of " + gaps.limit + " MB used) — delete one first.",
+    "referencesPage.playFault": "Can't play this recording",
+    "referencesPage.inUseFault": "In use — not deleted.",
+    "referencesPage.deleteFailed": "Couldn't delete this recording",
+    "referencesPage.keepFailed": "Couldn't keep this recording",
+    "referencesPage.unkeepFailed": "Couldn't unkeep this recording",
+    "referencesPage.deleteTitle": "Delete reference?",
+    "referencesPage.deleteItem": (gaps: { readonly filename: string }) => gaps.filename + " — its audio file",
+    "referenceRow.play": (gaps: { readonly filename: string }) => "Play " + gaps.filename,
+    "referenceRow.pause": (gaps: { readonly filename: string }) => "Pause " + gaps.filename,
+    "referenceRow.keep": (gaps: { readonly filename: string }) => "Keep " + gaps.filename,
+    "referenceRow.unkeep": (gaps: { readonly filename: string }) => "Unkeep " + gaps.filename,
+    "referenceRow.usedIn": (gaps: { readonly uses: string }) => "Used in " + gaps.uses,
+    "referenceRow.takes": (count: number) => ({
+        zero: numberFormat.format(count) + " takes",
+        one: numberFormat.format(count) + " take",
+        two: numberFormat.format(count) + " takes",
+        few: numberFormat.format(count) + " takes",
+        many: numberFormat.format(count) + " takes",
+        other: numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "referenceRow.versions": (count: number) => ({
+        zero: numberFormat.format(count) + " versions",
+        one: numberFormat.format(count) + " version",
+        two: numberFormat.format(count) + " versions",
+        few: numberFormat.format(count) + " versions",
+        many: numberFormat.format(count) + " versions",
+        other: numberFormat.format(count) + " versions",
+    })[pluralRules.select(count)],
+    "referenceUses.loading": "Loading…",
+    "referenceUses.loadFailed": "Couldn't load where it is used",
+    "referenceUses.staysNote": "It stays while a take or version uses it.",
+    "referenceUses.deletedTag": "Deleted",
+    "referenceUses.archivedTag": "Archived",
+    "referenceUses.take": (gaps: { readonly number: string }) => "Take " + gaps.number,
+    "referenceUses.takeVersion": (gaps: { readonly number: string; readonly version: string }) => "Take " + gaps.number + " · v" + gaps.version,
+    "referenceUses.takeLength": (gaps: { readonly length: string; readonly number: string }) => "Take " + gaps.number + " · " + gaps.length,
+    "referenceUses.takeVersionLength": (gaps: { readonly length: string; readonly number: string; readonly version: string }) => "Take " + gaps.number + " · v" + gaps.version + " · " + gaps.length,
+    "referenceUses.version": (gaps: { readonly version: string }) => "Version v" + gaps.version,
 };
 export type Key = keyof Words;

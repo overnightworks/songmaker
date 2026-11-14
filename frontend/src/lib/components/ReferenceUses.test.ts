@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReferenceUsesResponse } from '#lib/api/types.ts';
+import { words } from '#lib/words/en.ts';
 
 const mocks = vi.hoisted(() => ({ getReferenceUses: vi.fn() }));
 
@@ -41,7 +42,7 @@ describe('ReferenceUses', () => {
 	it('says it is loading until the read answers', async () => {
 		const target = await renderUses(new Promise(() => {}));
 
-		expect(target.textContent).toContain('Loading');
+		expect(target.textContent).toContain(words['referenceUses.loading']);
 	});
 
 	it('names the failure when the read fails', async () => {
@@ -49,7 +50,7 @@ describe('ReferenceUses', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('[role="alert"]')?.textContent).toBe(
-				"Couldn't load where it is used"
+				words['referenceUses.loadFailed']
 			)
 		);
 	});
@@ -77,12 +78,29 @@ describe('ReferenceUses', () => {
 			Array.from(target.querySelectorAll('.uses-song-title')).map((h) => h.textContent?.trim())
 		).toEqual(['Storytime', 'Other']);
 		expect(rowsOf(target)).toEqual([
-			{ text: 'Take 11 · v6 · 3:13', href: '/album/album-1/storytime/take/11' },
-			{ text: 'Take 2', href: '/album/album-1/storytime/take/2' },
-			{ text: 'Version v3', href: '/album/album-1/storytime' },
-			{ text: 'Take 1 · v6 · 3:13', href: '/album/album-1/other/take/1' }
+			{
+				text: words['referenceUses.takeVersionLength']({
+					number: '11',
+					version: '6',
+					length: '3:13'
+				}),
+				href: '/album/album-1/storytime/take/11'
+			},
+			{
+				text: words['referenceUses.take']({ number: '2' }),
+				href: '/album/album-1/storytime/take/2'
+			},
+			{ text: words['referenceUses.version']({ version: '3' }), href: '/album/album-1/storytime' },
+			{
+				text: words['referenceUses.takeVersionLength']({
+					number: '1',
+					version: '6',
+					length: '3:13'
+				}),
+				href: '/album/album-1/other/take/1'
+			}
 		]);
-		expect(target.textContent).toContain('It stays while a take or version uses it.');
+		expect(target.textContent).toContain(words['referenceUses.staysNote']);
 	});
 
 	it('tags an archived take and keeps it linked', async () => {
@@ -92,7 +110,7 @@ describe('ReferenceUses', () => {
 
 		await vi.waitFor(() => expect(rowsOf(target)).toHaveLength(1));
 
-		expect(rowsOf(target)[0].text).toContain('Archived');
+		expect(rowsOf(target)[0].text).toContain(words['referenceUses.archivedTag']);
 		expect(rowsOf(target)[0].href).not.toBeNull();
 	});
 
@@ -106,8 +124,27 @@ describe('ReferenceUses', () => {
 
 		await vi.waitFor(() => expect(rowsOf(target)).toHaveLength(2));
 
-		expect(target.querySelector('.uses-song-title')?.textContent).toContain('Deleted');
+		expect(target.querySelector('.uses-song-title')?.textContent).toContain(
+			words['referenceUses.deletedTag']
+		);
 		expect(rowsOf(target).map((row) => row.href)).toEqual([null, null]);
 		expect(target.querySelector('a')).toBeNull();
+	});
+
+	it.each([
+		{
+			case: 'a version and no length',
+			use: { version_number: 6, audio_duration_sec: null },
+			text: words['referenceUses.takeVersion']({ number: '11', version: '6' })
+		},
+		{
+			case: 'a length and no version',
+			use: { version_number: null, audio_duration_sec: 193 },
+			text: words['referenceUses.takeLength']({ number: '11', length: '3:13' })
+		}
+	])('words a take with $case as one whole sentence', async ({ use, text }) => {
+		const target = await renderUses(Promise.resolve({ takes: [takeUse(use)], versions: [] }));
+
+		await vi.waitFor(() => expect(rowsOf(target)).toEqual([expect.objectContaining({ text })]));
 	});
 });
