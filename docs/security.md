@@ -642,13 +642,13 @@ images are installed through `uv` with the committed `uv.lock`.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
 hash-verified release has no published wheel. The first-party
-libraries are git pins built from source: webauth and agents at image build,
-overnightworks-design (the `dev` extra's catalog generator) in CI and local checks only, never in an image; the three images that sync the first two
+libraries webauth and agents are git pins built from source at image build; the three images that sync them
 (web, music worker, scoring worker) carry `git`, and the music worker builds
 only those two from source, after a `--no-build` step that refuses any
-third-party source distribution. Their build requirements (`setuptools`, `wheel`;
-for overnightworks-design `uv_build`) float on PyPI, unlocked and unhashed: a malicious release would run at image
-build, as root in the web image, or in CI for the generator. This risk is accepted.
+third-party source distribution. overnightworks-design (the `dev` extra's catalog generator) is a release wheel
+pinned by URL and sha256 in `uv.lock`, installed in CI and local checks only, never in an image. The build requirements of the
+two source builds (`setuptools`, `wheel`) float on PyPI, unlocked and unhashed: a malicious release would run at image
+build, as root in the web image. This risk is accepted.
 
 ## Audit Trail
 
