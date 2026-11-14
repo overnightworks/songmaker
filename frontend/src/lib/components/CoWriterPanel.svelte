@@ -28,7 +28,13 @@
 		COWRITER_RUNNING_TURN_POLL_MS,
 		cowriterMentionToken
 	} from '#lib/constants/cowriter.ts';
-	import { Marked } from 'overnightworks-design';
+	import {
+		HelperChat,
+		Marked,
+		type HelperHistory,
+		type HelperToolCall
+	} from 'overnightworks-design';
+	import { kitWords } from '#lib/utils/kit-words.ts';
 	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
@@ -57,13 +63,11 @@
 		conversationRowLabel,
 		cowriterNoAnswerText,
 		cowriterProblemText,
-		cowriterThinkingLabel,
 		cowriterTurnError,
 		cowriterToolCallTarget,
 		type CowriterProblem,
 		type CowriterTurnError
 	} from '#lib/utils/cowriter-ui.ts';
-	import ChatInput from './ChatInput.svelte';
 	import AgentProblemLine from './AgentProblemLine.svelte';
 	import AiNotice from './AiNotice.svelte';
 	import Icon from './Icon.svelte';
@@ -100,8 +104,6 @@
 	let historyLoading = $state(false);
 	let historyError = $state('');
 	let container: HTMLDivElement | undefined = $state();
-	let inputEl: HTMLTextAreaElement | undefined = $state();
-	let inputArea: HTMLDivElement | undefined = $state();
 
 	let conversations: ConversationItem[] = $state([]);
 	let activeConversationId: string | null = $state(null);
@@ -447,20 +449,12 @@
 		}
 	}
 
-	async function send(): Promise<void> {
-		await sendMessage(input.trim());
-	}
-
 	async function retry(message: string): Promise<void> {
 		await sendMessage(message);
 	}
 
 	async function sendMessage(msg: string): Promise<void> {
 		if (!msg || loading) return;
-		if (viewingConversationId !== null && viewingConversationId !== activeConversationId) {
-			addToast(pageText('cowriter.archivedToast'), 'info');
-			return;
-		}
 		latestTurn = runTurn(msg);
 		await latestTurn;
 	}
@@ -653,24 +647,6 @@
 		return () => shownAgain.disconnect();
 	});
 
-	/*
-	 * Pressing a composer button keeps focus in the composer. On the phone the
-	 * composer losing focus brings the mini-player back, which moves Send up
-	 * before the tap lands, so the tap missed it (#1063); the keyboard also
-	 * stays open for the next message.
-	 */
-	$effect(() => {
-		const area = inputArea;
-		if (!area) return;
-		function keepComposerFocus(event: MouseEvent): void {
-			if (event.target instanceof Element && event.target.closest('button')) {
-				event.preventDefault();
-			}
-		}
-		area.addEventListener('mousedown', keepComposerFocus);
-		return () => area.removeEventListener('mousedown', keepComposerFocus);
-	});
-
 	async function loadMemory(songId: string | null): Promise<void> {
 		const requestId = ++memoryRequestId;
 		memoryLoading = true;
@@ -764,13 +740,12 @@
 			.filter((version): version is VersionItem => version !== undefined)
 	);
 
-	function handleInput(): void {
-		if (!inputEl) return;
-		const pos = inputEl.selectionStart ?? 0;
-		const found = mentionQueryAtCursor(input, pos);
+	function handleDraft(text: string, caret: number): void {
+		input = text;
+		const found = mentionQueryAtCursor(text, caret);
 		if (found) {
 			mentionQuery = found.query;
-			mentionCursorPos = pos;
+			mentionCursorPos = caret;
 			$showMentions = true;
 			selectedMentionIdx = 0;
 		} else {
@@ -780,7 +755,6 @@
 	}
 
 	function selectMentionItem(item: MentionItem): void {
-		if (!inputEl) return;
 		if (item.type !== 'song')
 			input = replaceMentionToken(input, mentionCursorPos, `${cowriterMentionToken(item)} `);
 		if (item.type === 'album') {
@@ -793,10 +767,9 @@
 		}
 		$showMentions = false;
 		mentionQuery = '';
-		inputEl.focus();
 	}
 
-	function handleKeydown(e: KeyboardEvent): void {
+	function handleComposerKeydown(e: KeyboardEvent): void {
 		if ($showMentions && activeMentionResults.length > 0) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
@@ -817,10 +790,6 @@
 				if (item) selectMentionItem(item);
 				return;
 			}
-		}
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			void send();
 		}
 	}
 
@@ -880,6 +849,17 @@
 		};
 	});
 
+	const shownMessages = $derived(
+		messages.map((message) => ({ ...message, text: stripMemoryProposals(message.text) }))
+	);
+	const chatHistory = $derived<HelperHistory>(
+		historyLoading
+			? { state: 'loading' }
+			: historyError
+				? { state: 'failed', failure: historyError }
+				: { state: 'ready' }
+	);
+
 	const readOnly = $derived(
 		viewingConversationId !== null && viewingConversationId !== activeConversationId
 	);
@@ -887,6 +867,78 @@
 
 {#snippet link({ text }: { text: string })}
 	<button class="link" onclick={startNew}>{text}</button>
+{/snippet}
+
+{#snippet archivedBanner()}
+	<Marked parts={pageParts('cowriter.archivedBanner')} marked={{ link }} />
+{/snippet}
+
+{#snippet problemLine({ message, index }: { message: Message; index: number })}
+	{#if message.error && index === retryableMessageIndex}
+		<AgentProblemLine
+			text={message.error}
+			problem={message.problem ?? null}
+			waitSeconds={message.waitSeconds ?? 0}
+			onretry={() => retry(message.text)}
+		/>
+	{/if}
+{/snippet}
+
+{#snippet toolCallTarget({ call }: { call: HelperToolCall })}
+	{@const target = cowriterToolCallTarget(call.name, call.input, allSongs, currentSongId)}
+	{#if target}
+		<span
+			class="tool-target"
+			class:foreign={target.foreign}
+			title={target.foreign ? pageText('cowriter.toolForeignTarget') : undefined}
+			>{pageText('cowriter.toolTarget', { title: target.title })}</span
+		>
+	{/if}
+{/snippet}
+
+{#snippet composerPopup()}
+	{#if $showMentions}
+		<MentionDropdown
+			items={activeMentionResults}
+			selectedIndex={selectedMentionIdx}
+			albumTitle={currentAlbumTitle}
+			onselect={selectMentionItem}
+		/>
+	{/if}
+{/snippet}
+
+{#snippet composerTop()}
+	{#if mentionedSongs.length > 0 || mentionedVersions.length > 0 || mentionedAlbumId}
+		<div class="mentions-bar">
+			{#if mentionedAlbumId}
+				<span class="mention-tag album">
+					{currentAlbumTitle || pageText('cowriter.albumFallback')}
+					<button class="mention-remove" onclick={() => (mentionedAlbumId = null)}>&#x2715;</button>
+				</span>
+			{/if}
+			{#each mentionedSongs as song (song.id)}
+				<span class="mention-tag">
+					{song.title}
+					<button
+						class="mention-remove"
+						onclick={() => (mentionedSongIds = mentionedSongIds.filter((id) => id !== song.id))}
+						>&#x2715;</button
+					>
+				</span>
+			{/each}
+			{#each mentionedVersions as version (version.id)}
+				<span class="mention-tag version">
+					{pageText('cowriter.versionChip', { number: String(version.version_number) })}
+					<button
+						class="mention-remove"
+						onclick={() =>
+							(mentionedVersionIds = mentionedVersionIds.filter((id) => id !== version.id))}
+						>&#x2715;</button
+					>
+				</span>
+			{/each}
+		</div>
+	{/if}
 {/snippet}
 
 {#snippet proposalWaitingMark()}
@@ -995,119 +1047,27 @@
 		onReject={rejectProposal}
 	/>
 
-	{#if historyLoading}
-		<div class="history-loading">{pageText('cowriter.loadingChat')}</div>
-	{:else if historyError}
-		<div class="history-error" role="alert">{historyError}</div>
-	{:else}
-		<div class="messages" bind:this={container} onscroll={rememberReadingPlace}>
-			{#if messages.length === 0}
-				<p class="empty-hint">{pageText('cowriter.emptyHint')}</p>
-			{/if}
-			{#each messages as msg, i (i)}
-				<div
-					class="message"
-					class:user={msg.role === 'user'}
-					class:assistant={msg.role === 'assistant'}
-				>
-					{#if msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0}
-						<div class="tool-calls">
-							{#each msg.toolCalls as call, ci (ci)}
-								{@const target = cowriterToolCallTarget(
-									call.name,
-									call.input,
-									allSongs,
-									currentSongId
-								)}
-								<div class="tool-call" title={JSON.stringify(call.input)}>
-									<span class="tool-dot" aria-hidden="true">▸</span>
-									<span class="tool-name">{pageText('cowriter.toolRan', { name: call.name })}</span>
-									{#if target}
-										<span
-											class="tool-target"
-											class:foreign={target.foreign}
-											title={target.foreign ? pageText('cowriter.toolForeignTarget') : undefined}
-											>{pageText('cowriter.toolTarget', { title: target.title })}</span
-										>
-									{/if}
-								</div>
-							{/each}
-						</div>
-					{/if}
-					{#if msg.text}
-						<pre class="message-text">{stripMemoryProposals(msg.text)}</pre>
-					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
-						<span class="typing">{cowriterThinkingLabel()}</span>
-					{/if}
-				</div>
-				{#if msg.error && i === retryableMessageIndex}
-					<AgentProblemLine
-						text={msg.error}
-						problem={msg.problem ?? null}
-						waitSeconds={msg.waitSeconds ?? 0}
-						onretry={() => retry(msg.text)}
-					/>
-				{/if}
-			{/each}
-		</div>
-	{/if}
-
-	{#if readOnly}
-		<div class="readonly-banner">
-			<Marked parts={pageParts('cowriter.archivedBanner')} marked={{ link }} />
-		</div>
-	{/if}
-
-	{#if mentionedSongs.length > 0 || mentionedVersions.length > 0 || mentionedAlbumId}
-		<div class="mentions-bar">
-			{#if mentionedAlbumId}
-				<span class="mention-tag album">
-					{currentAlbumTitle || pageText('cowriter.albumFallback')}
-					<button class="mention-remove" onclick={() => (mentionedAlbumId = null)}>&#x2715;</button>
-				</span>
-			{/if}
-			{#each mentionedSongs as song (song.id)}
-				<span class="mention-tag">
-					{song.title}
-					<button
-						class="mention-remove"
-						onclick={() => (mentionedSongIds = mentionedSongIds.filter((id) => id !== song.id))}
-						>&#x2715;</button
-					>
-				</span>
-			{/each}
-			{#each mentionedVersions as version (version.id)}
-				<span class="mention-tag version">
-					{pageText('cowriter.versionChip', { number: String(version.version_number) })}
-					<button
-						class="mention-remove"
-						onclick={() =>
-							(mentionedVersionIds = mentionedVersionIds.filter((id) => id !== version.id))}
-						>&#x2715;</button
-					>
-				</span>
-			{/each}
-		</div>
-	{/if}
-
-	<div class="input-area" bind:this={inputArea}>
-		{#if $showMentions}
-			<MentionDropdown
-				items={activeMentionResults}
-				selectedIndex={selectedMentionIdx}
-				albumTitle={currentAlbumTitle}
-				onselect={selectMentionItem}
-			/>
-		{/if}
-		<ChatInput
-			bind:value={input}
-			disabled={loading || !input.trim() || readOnly}
-			bind:inputRef={inputEl}
-			oninput={handleInput}
-			onkeydown={handleKeydown}
-			onsend={send}
-		/>
-	</div>
+	<HelperChat
+		messages={shownMessages}
+		running={loading}
+		history={chatHistory}
+		helperName={pageText('cowriter.title')}
+		emptyHint={pageText('cowriter.emptyHint')}
+		placeholder={pageText('cowriter.composerPlaceholder')}
+		draft={input}
+		onDraft={handleDraft}
+		onSend={sendMessage}
+		onComposerKeydown={handleComposerKeydown}
+		readOnly={readOnly ? archivedBanner : undefined}
+		{problemLine}
+		{toolCallTarget}
+		toolCallTitle={(call) => JSON.stringify(call.input)}
+		{composerPopup}
+		{composerTop}
+		bind:list={container}
+		onListScroll={rememberReadingPlace}
+		words={kitWords()}
+	/>
 </div>
 
 <style>
@@ -1279,113 +1239,6 @@
 		color: var(--accent);
 	}
 
-	.history-loading {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-subtle);
-		font-style: italic;
-	}
-
-	.history-error {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--fail);
-		font-size: 0.8rem;
-		padding: 20px;
-		text-align: center;
-	}
-
-	.messages {
-		flex: 1;
-		/* Without this, a flex child defaults to min-height: auto — its full
-		   message-list content height — so it never shrinks to the column's
-		   bound and the pinned input below it gets pushed out of view. */
-		min-height: 0;
-		overflow-y: auto;
-		padding: 8px;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.empty-hint {
-		color: var(--text-subtle);
-		font-size: 0.85rem;
-		text-align: center;
-		padding: 20px;
-		font-style: italic;
-	}
-
-	.message {
-		max-width: 90%;
-		padding: 8px 12px;
-		border-radius: 8px;
-		font-size: 1rem;
-		line-height: 1.5;
-	}
-
-	.message.user {
-		background: var(--accent);
-		color: var(--on-accent);
-		align-self: flex-end;
-		border-bottom-right-radius: 2px;
-	}
-
-	.message.assistant {
-		background: var(--surface);
-		color: var(--text);
-		align-self: flex-start;
-		border-bottom-left-radius: 2px;
-	}
-
-	.message-text {
-		white-space: pre-wrap;
-		font-family: var(--font-body);
-		font-size: 1rem;
-		margin: 0;
-	}
-
-	.typing {
-		color: var(--text-muted);
-		font-style: italic;
-	}
-
-	.tool-calls {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		margin-bottom: 6px;
-	}
-
-	.tool-call {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 3px 8px;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		font-family: var(--font-mono, monospace);
-		font-size: 0.75rem;
-		color: var(--text-subtle);
-	}
-
-	.tool-dot {
-		color: var(--accent);
-	}
-
-	.tool-name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
 	.tool-target {
 		flex-shrink: 0;
 		font-family: var(--font-body);
@@ -1402,14 +1255,6 @@
 		font-weight: 600;
 	}
 
-	.readonly-banner {
-		padding: 6px 12px;
-		background: var(--surface);
-		color: var(--text-subtle);
-		font-size: 0.8rem;
-		border-top: 1px solid var(--border);
-	}
-
 	.link {
 		background: none;
 		border: none;
@@ -1424,8 +1269,6 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px;
-		padding: 6px 12px;
-		border-top: 1px solid var(--border);
 		flex-shrink: 0;
 	}
 
@@ -1463,9 +1306,5 @@
 
 	.mention-remove:hover {
 		color: var(--accent);
-	}
-
-	.input-area {
-		position: relative;
 	}
 </style>

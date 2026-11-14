@@ -761,11 +761,9 @@ export type Words = {
     readonly "shareRefusal.personsAgent": string;
     readonly "libraryRefusal.queryRequired": string;
     readonly "cowriter.title": string;
-    readonly "cowriter.thinking": string;
     readonly "cowriter.conversationMenu": string;
     readonly "cowriter.conversationMenuWaiting": string;
     readonly "cowriter.composerPlaceholder": string;
-    readonly "cowriter.send": string;
     readonly "cowriter.newConversation": string;
     readonly "cowriter.memory": string;
     readonly "cowriter.memoryWaiting": string;
@@ -780,14 +778,11 @@ export type Words = {
     readonly "cowriter.confirmRow": (gaps: { readonly messages: string; readonly name: string }) => string;
     readonly "cowriter.messageCount": (count: number) => string;
     readonly "cowriter.today": string;
-    readonly "cowriter.toolRan": (gaps: { readonly name: string }) => string;
     readonly "cowriter.toolTarget": (gaps: { readonly title: string }) => string;
     readonly "cowriter.toolForeignTarget": string;
     readonly "cowriter.historyUnavailable": string;
-    readonly "cowriter.loadingChat": string;
     readonly "cowriter.startFailed": string;
     readonly "cowriter.deleteFailed": string;
-    readonly "cowriter.archivedToast": string;
     readonly "cowriter.archivedBanner": readonly (string | { readonly marker: "link"; readonly text: string })[];
     readonly "cowriter.albumFallback": string;
     readonly "cowriter.noMatches": string;
@@ -2348,11 +2343,9 @@ export const words: Words = {
     "shareRefusal.personsAgent": "A person's own agent cannot share; the person shares in the app.",
     "libraryRefusal.queryRequired": "Search query is required",
     "cowriter.title": "Co-writer",
-    "cowriter.thinking": "Co-writer is thinking…",
     "cowriter.conversationMenu": "Conversation menu",
     "cowriter.conversationMenuWaiting": "Conversation menu, memory proposal waiting",
     "cowriter.composerPlaceholder": "Ask for a rewrite…",
-    "cowriter.send": "Send",
     "cowriter.newConversation": "New conversation",
     "cowriter.memory": "Memory",
     "cowriter.memoryWaiting": "Memory, memory proposal waiting",
@@ -2374,14 +2367,11 @@ export const words: Words = {
         other: numberFormat.format(count) + " msgs",
     })[pluralRules.select(count)],
     "cowriter.today": "today",
-    "cowriter.toolRan": (gaps: { readonly name: string }) => "ran tool: " + gaps.name,
     "cowriter.toolTarget": (gaps: { readonly title: string }) => "for: " + gaps.title,
     "cowriter.toolForeignTarget": "This proposal applies to a different song than the one you have open",
     "cowriter.historyUnavailable": "Conversation history unavailable",
-    "cowriter.loadingChat": "Loading chat…",
     "cowriter.startFailed": "Failed to start new conversation",
     "cowriter.deleteFailed": "Failed to delete conversation",
-    "cowriter.archivedToast": "Viewing an archived conversation — start a new one to reply",
     "cowriter.archivedBanner": ["Archived — ", { marker: "link", text: "start a new conversation" }, " to reply."] as readonly (string | { readonly marker: "link"; readonly text: string })[],
     "cowriter.albumFallback": "Album",
     "cowriter.noMatches": "No matches",

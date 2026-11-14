@@ -737,6 +737,7 @@ songmaker's own exported models; `lib/api` declares no wire shape of its own: ES
 hand-written interface or object type there, and a frontend-only call shape
 carries a line marker with its reason.
 The co-writer's answer arrives in pieces, and the bubble shows the round being written: the first piece after a tool call starts the text anew (`lib/utils/cowriter-stream.ts`), so the words shown at the end are the stored answer.
+`CoWriterPanel.svelte` renders the chat through the design kit's `HelperChat` (messages, thinking line, tool-call rows, composer) and keeps what the kit has no seat for: its header with the conversations menu, the AI notice, the memory editor, the mention list and bar, the problem line with its retry, and the reading-place memory.
 
 `lib/api/` is the transport: it reports what the server answered. A 429 goes to
 the `rateLimited` reaction that `routes/+layout.svelte` installs through

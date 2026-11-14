@@ -14,7 +14,6 @@ import {
 	conversationMenuOrder,
 	conversationMessageCountLabel,
 	conversationRowLabel,
-	cowriterThinkingLabel,
 	COWRITER_PROBLEM_LOOKS,
 	cowriterToolCallTarget,
 	cowriterTurnError,
@@ -22,10 +21,6 @@ import {
 } from './cowriter-ui';
 
 describe('co-writer copy', () => {
-	it('A-thinking names no vendor in the thinking line', () => {
-		expect(cowriterThinkingLabel()).toBe(words['cowriter.thinking']);
-	});
-
 	it.each([
 		[
 			'log in again, with no wait',

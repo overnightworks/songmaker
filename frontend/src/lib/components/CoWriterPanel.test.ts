@@ -46,6 +46,7 @@ import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { historyComesToRest } from '#lib/history/historyController.ts';
 import { words } from '#lib/words/en.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
 import {
 	deleteConversation,
 	fetchMemory,
@@ -54,6 +55,20 @@ import {
 } from '#lib/api/client.ts';
 
 const TRY_AGAIN = words['problemLine.tryAgain'];
+const COMPOSER_SELECTOR = `textarea[aria-label="${kitWords()['helperChat.composerLabel']({ name: words['cowriter.title'] })}"]`;
+
+const composerOf = (target: ParentNode) =>
+	target.querySelector<HTMLTextAreaElement>(COMPOSER_SELECTOR);
+
+function sendButtonOf(target: ParentNode): HTMLButtonElement | undefined {
+	return Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+		(button) => button.textContent?.trim() === kitWords()['helperChat.send']
+	);
+}
+
+function thinkingLine(target: ParentNode): string {
+	return target.querySelector('[role="status"]')?.textContent ?? '';
+}
 function errorText(target: HTMLElement): string | undefined {
 	return target.querySelector<HTMLElement>('.turn-error .text')?.textContent ?? undefined;
 }
@@ -132,9 +147,11 @@ function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
 
 /** The chat as the musician reads it: one entry per bubble, including a failure note. */
 function chatView(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll('.message, .turn-error'), (message) =>
-		(message.textContent ?? '').replace(/\s+/g, ' ').trim()
-	);
+	return Array.from(target.querySelectorAll('.message .bubble, .turn-error'), (entry) => {
+		const shown = entry.cloneNode(true) as Element;
+		shown.querySelector('.mark')?.remove();
+		return (shown.textContent ?? '').replace(/\s+/g, ' ').trim();
+	});
 }
 
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
@@ -158,25 +175,17 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	return target;
 }
 
-async function sendMessage(target: HTMLElement, message: string): Promise<void> {
-	const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
-	if (!input) throw new Error('Expected the chat textarea');
-	input.value = message;
-	input.dispatchEvent(new Event('input', { bubbles: true }));
+async function sendTurn(target: HTMLElement, message: string): Promise<void> {
+	typeIntoChat(target, message);
 	await tick();
-	target.querySelector<HTMLButtonElement>('.send-btn')?.click();
+	sendButtonOf(target)?.click();
+}
+
+async function sendMessage(target: HTMLElement, message: string): Promise<void> {
+	await sendTurn(target, message);
 	await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
 	await tick();
 	await vi.waitFor(() => expect(target.querySelector('.tool-call')).not.toBeNull());
-}
-
-async function sendTurn(target: HTMLElement, message: string): Promise<void> {
-	const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
-	if (!input) throw new Error('Expected the chat textarea');
-	input.value = message;
-	input.dispatchEvent(new Event('input', { bubbles: true }));
-	await tick();
-	target.querySelector<HTMLButtonElement>('.send-btn')?.click();
 }
 
 /** The one line above the chat, as the musician reads it. */
@@ -227,16 +236,7 @@ describe('CoWriterPanel', () => {
 
 	it('greets a new conversation with the catalog hint', async () => {
 		const target = await render();
-		expect(target.querySelector('.empty-hint')?.textContent).toBe(words['cowriter.emptyHint']);
-	});
-
-	it('keeps focus in the composer when Send is pressed, so the bars coming back cannot move Send from under a phone tap', async () => {
-		const target = await render();
-		const pressSend = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
-
-		target.querySelector<HTMLButtonElement>('.send-btn')?.dispatchEvent(pressSend);
-
-		expect(pressSend.defaultPrevented).toBe(true);
+		expect(target.querySelector('.list p')?.textContent).toBe(words['cowriter.emptyHint']);
 	});
 });
 
@@ -313,7 +313,8 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		expect(conversationLine(target)).toBe('Co-writer · archived conversation from Sep 20');
-		target.querySelector<HTMLButtonElement>('.readonly-banner button')?.click();
+		expect([composerOf(target)?.disabled, sendButtonOf(target)?.disabled]).toEqual([true, true]);
+		target.querySelector<HTMLButtonElement>('.read-only button')?.click();
 		await vi.waitFor(() => expect(startNewConversation).toHaveBeenCalledTimes(1));
 		const reopened = await openConversationMenu(target);
 		reopened.querySelector<HTMLButtonElement>('.convo-new')?.click();
@@ -616,7 +617,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		target.querySelector<HTMLButtonElement>('.proposal .accept')?.click();
 		await tick();
 
-		const composer = target.querySelector<HTMLTextAreaElement>('.chat-input');
+		const composer = composerOf(target);
 		composer?.focus();
 		finishSave();
 		await vi.waitFor(() => expect(target.querySelector('.proposal')).toBeNull());
@@ -884,7 +885,7 @@ describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
 			);
 			const target = await render();
 			await vi.waitFor(() => expect(chatView(target)).toHaveLength(2));
-			const list = target.querySelector<HTMLElement>('.messages');
+			const list = target.querySelector<HTMLElement>('.list');
 			if (!list) throw new Error('Expected the message list');
 			const chat = chatBox(list);
 			chat.show(600);
@@ -932,9 +933,8 @@ describe('CoWriterPanel failed turns', () => {
 			expect(target.querySelector('.turn-error svg')).not.toBeNull();
 			const actions = target.querySelectorAll('.turn-error button, .turn-error a');
 			expect(Array.from(actions, (el) => el.textContent?.trim())).toEqual(action ? [action] : []);
-			expect(target.querySelector('.typing')).toBeNull();
+			expect(thinkingLine(target)).toBe('');
 			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-			expect(target.querySelector('.message.user .turn-error')).toBeNull();
 		}
 	);
 
@@ -979,11 +979,11 @@ describe('CoWriterPanel failed turns', () => {
 		await vi.waitFor(() => expect(target.querySelector('.retry-turn')).not.toBeNull());
 		await sendTurn(target, 'newer message');
 		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
-		await vi.waitFor(() => expect(target.querySelector('.typing')).toBeNull());
+		await vi.waitFor(() => expect(thinkingLine(target)).toBe(''));
 
 		const retries = target.querySelectorAll<HTMLButtonElement>('.retry-turn');
 		expect(retries).toHaveLength(1);
-		expect(retries[0].closest('.turn-error')?.previousElementSibling?.textContent).toContain(
+		expect(retries[0].closest('.message')?.querySelector('.bubble')?.textContent).toContain(
 			'newer message'
 		);
 	});
@@ -999,7 +999,7 @@ describe('CoWriterPanel failed turns', () => {
 			await vi.waitFor(() =>
 				expect(errorText(target)).toContain(words['cowriterProblem.noAnswer'])
 			);
-			expect(target.querySelector('.typing')).toBeNull();
+			expect(thinkingLine(target)).toBe('');
 			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
 			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
 		}
@@ -1050,7 +1050,7 @@ describe('CoWriterPanel failed turns', () => {
 				'Codex CLI is temporarily unavailable'
 			)
 		);
-		expect(target.querySelector('.typing')).toBeNull();
+		expect(thinkingLine(target)).toBe('');
 		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe(TRY_AGAIN);
 
@@ -1107,7 +1107,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte')
 		);
-		expect(target.querySelector('.typing')).not.toBeNull();
+		expect(thinkingLine(target)).not.toBe('');
 
 		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
 		expect(target.textContent).not.toContain('Erledigt.');
@@ -1116,7 +1116,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
 		);
-		expect(target.querySelector('.typing')).toBeNull();
+		expect(thinkingLine(target)).toBe('');
 		expect(target.querySelector('.turn-error')).toBeNull();
 		expect(onturncompleted).toHaveBeenCalledTimes(1);
 	});
@@ -1129,7 +1129,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 
 		await vi.waitFor(() => expect(errorText(target)).toContain(words['cowriterProblem.noAnswer']));
 		expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
-		expect(target.querySelector('.typing')).toBeNull();
+		expect(thinkingLine(target)).toBe('');
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
 	});
 
@@ -1163,11 +1163,11 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		);
 
 		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.history-error')?.textContent).toContain(
+			expect(target.querySelector<HTMLElement>('.failure')?.textContent).toContain(
 				words['cowriter.historyUnavailable']
 			)
 		);
-		expect(target.querySelector('.typing')).toBeNull();
+		expect(thinkingLine(target)).toBe('');
 	});
 
 	async function sendInAnOpenConversation(onturncompleted = vi.fn()): Promise<HTMLElement> {
@@ -1192,7 +1192,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			const target = await sendInAnOpenConversation(onturncompleted);
 
 			await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
-			await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+			await vi.waitFor(() => expect(thinkingLine(target)).not.toBe(''));
 			expect(target.querySelector('.turn-error')).toBeNull();
 			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
 
@@ -1200,7 +1200,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			await vi.waitFor(() =>
 				expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
 			);
-			expect(target.querySelector('.typing')).toBeNull();
+			expect(thinkingLine(target)).toBe('');
 			expect(target.querySelector('.turn-error')).toBeNull();
 			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
 			expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
@@ -1257,7 +1257,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
 		);
 		expect(target.querySelector('.turn-error')).toBeNull();
-		expect(target.querySelector('.typing')).toBeNull();
+		expect(thinkingLine(target)).toBe('');
 		expect(onturncompleted).toHaveBeenCalledTimes(1);
 	});
 
@@ -1367,8 +1367,8 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.message.user')?.textContent).toContain('Refrain kürzer')
 		);
-		await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
-		expect(target.querySelector<HTMLTextAreaElement>('.chat-input')?.value).toBe('Ja bitte');
+		await vi.waitFor(() => expect(thinkingLine(target)).not.toBe(''));
+		expect(composerOf(target)?.value).toBe('Ja bitte');
 		expect(target.querySelector('.turn-error')).toBeNull();
 
 		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
@@ -1390,9 +1390,9 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		const target = await sendInAnOpenConversation();
 
 		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
-		await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+		await vi.waitFor(() => expect(thinkingLine(target)).not.toBe(''));
 		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-		expect(target.querySelector<HTMLTextAreaElement>('.chat-input')?.value).toBe('');
+		expect(composerOf(target)?.value).toBe('');
 	});
 
 	it('shows a message whose turn no longer runs as unanswered, without waiting for it', async () => {
@@ -1402,7 +1402,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		const target = await render();
 
 		await vi.waitFor(() => expect(errorText(target)).toContain(words['cowriterProblem.noAnswer']));
-		expect(target.querySelector('.typing')).toBeNull();
+		expect(thinkingLine(target)).toBe('');
 		streamCoWriterTurn.mockReturnValue(turnEvents([]));
 		await sendTurn(target, 'Noch einmal');
 		expect(streamCoWriterTurn).toHaveBeenCalledWith(
@@ -1742,7 +1742,7 @@ describe('CoWriterPanel proposal target (#238)', () => {
 });
 
 function typeIntoChat(target: HTMLElement, text: string): void {
-	const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
+	const input = composerOf(target);
 	if (!input) throw new Error('Expected the chat textarea');
 	input.value = text;
 	input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1793,7 +1793,7 @@ describeBackClosesOverlay({
 	closeWays: [
 		{
 			way: 'Escape',
-			close: (target) => pressEscapeIn(target.querySelector('.chat-input'))
+			close: (target) => pressEscapeIn(composerOf(target))
 		},
 		{
 			way: 'choosing a song',
