@@ -7,10 +7,17 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
 from support.mcp_tool_table import ALICE, BOB
 from support.mcp_world import McpWorld
-from support.postgres_lock_harness import WAIT_SECONDS, StatementPause, in_thread, stop_workers
+from support.postgres_lock_harness import (
+    WAIT_SECONDS,
+    CommitPause,
+    StatementPause,
+    in_thread,
+    race,
+    stop_workers,
+    wrote_to_tables,
+)
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -175,21 +182,19 @@ def test_a_take_deleted_after_the_access_check_reads_like_a_missing_one(
 def test_a_take_deleted_right_after_the_commit_reads_like_a_missing_one(
     world: dict[str, TestClient], pg_factory, path: str, arguments: dict,
 ) -> None:
-    pending = [True]  # the listener fires for the request's commit only
+    def delete_the_take() -> None:
+        with pg_factory() as deleter:
+            deleter.delete(deleter.get(Generation, "take"))
+            deleter.commit()
 
-    def delete_the_take(_session) -> None:
-        if pending:
-            pending.clear()
-            with pg_factory() as deleter:
-                deleter.delete(deleter.get(Generation, "take"))
-                deleter.commit()
+    answers = race(
+        pg_factory,
+        lambda: world[OWNER_ID].post(path, **arguments),
+        delete_the_take,
+        CommitPause(lambda session: wrote_to_tables(session, "generations", "playlist_entries")),
+    )
 
-    event.listen(pg_factory, "after_commit", delete_the_take)
-    try:
-        response = world[OWNER_ID].post(path, **arguments)
-    finally:
-        event.remove(pg_factory, "after_commit", delete_the_take)
-
+    response = answers["first"]
     assert response.status_code == 404
     assert response.json() == refusal_body("generationRefusal.notFound")
 
