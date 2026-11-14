@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from types import SimpleNamespace
 
@@ -21,6 +22,7 @@ from songmaker_cli.lifecycle import owner_gone_reaper_loop, owner_lease_loop
 from songmaker_cli.worker_liveness import owner_lease_key
 
 OWNER = "this-process"
+BLOCK_LIMIT_SECONDS = 10
 
 
 class _RecordingRedis:
@@ -41,6 +43,20 @@ class _RecordingRedis:
 
     def mget(self, keys: list[str]) -> list[str | None]:
         raise RedisConnectionError("down")
+
+
+class _BlockingRedis(_RecordingRedis):
+    """Holds a SET until released, as a slow Redis does."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def set(self, key: str, value: str, *, ex: int) -> bool:
+        self.entered.set()
+        assert self.release.wait(timeout=BLOCK_LIMIT_SECONDS)
+        return super().set(key, value, ex=ex)
 
 
 def _loop_app(redis) -> SimpleNamespace:
@@ -89,3 +105,31 @@ def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
     )
 
     assert statuses[-1] is BackgroundLoopStatus.FAILING
+
+
+def test_cancelling_the_lease_loop_waits_for_the_refresh_in_flight(monkeypatch) -> None:
+    redis = _BlockingRedis()
+    app = _loop_app(redis)
+    real_sleep = asyncio.sleep
+
+    async def no_wait(_seconds: float) -> None:
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", no_wait)
+
+    async def cancel_while_the_refresh_is_blocked() -> bool:
+        loop_task = asyncio.ensure_future(owner_lease_loop(app))
+        assert await asyncio.to_thread(redis.entered.wait, BLOCK_LIMIT_SECONDS)
+        loop_task.cancel()
+        for _ in range(10):
+            await real_sleep(0)
+        ended_while_blocked = loop_task.done()
+        redis.release.set()
+        await asyncio.gather(loop_task, return_exceptions=True)
+        return ended_while_blocked
+
+    ended_while_blocked = asyncio.run(cancel_while_the_refresh_is_blocked())
+
+    assert (ended_while_blocked, redis.leases) == (
+        False, {owner_lease_key(OWNER): OWNER_LEASE_TTL_SECONDS},
+    )

@@ -398,13 +398,23 @@ def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
 
 
 async def owner_lease_loop(app: FastAPI) -> None:
-    """Renew this process's owner lease for the server lifetime."""
+    """Renew this process's owner lease for the server lifetime.
+
+    A cancel waits for the refresh in flight: a running thread cannot be cancelled,
+    and its SET must not land after the shutdown's DELETE of the lease.
+    """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
     while True:
         await asyncio.sleep(OWNER_LEASE_REFRESH_SECONDS)
+        refresh = asyncio.ensure_future(
+            asyncio.to_thread(refresh_owner_lease, ctx.redis, ctx.owner_id),
+        )
         try:
-            await asyncio.to_thread(refresh_owner_lease, ctx.redis, ctx.owner_id)
+            await asyncio.shield(refresh)
+        except asyncio.CancelledError:
+            await asyncio.gather(refresh, return_exceptions=True)
+            raise
         except Exception as exc:
             registry.record_failure(BackgroundLoopName.OWNER_LEASE, exc)
             log.exception("Owner lease refresh failed")
