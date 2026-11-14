@@ -134,16 +134,22 @@ def test_a_killed_process_leaves_the_other_serving(two_processes) -> None:
     )
 
 
+def _fail_after_starting_two(
+    tmp_path: Path, database_url: str, redis_url: str, started: list[WebProcess],
+) -> None:
+    with web_processes(tmp_path, database_url=database_url, redis_url=redis_url) as cluster:
+        started.extend([cluster.start("a"), cluster.start("b")])
+        started[0].kill()
+        raise AssertionError("the case fails")
+
+
 def test_a_failing_case_leaves_no_child_behind(
     tmp_path: Path, database_url: str, redis_url: str,
 ) -> None:
     started: list[WebProcess] = []
 
     with pytest.raises(AssertionError):
-        with web_processes(tmp_path, database_url=database_url, redis_url=redis_url) as cluster:
-            started.extend([cluster.start("a"), cluster.start("b")])
-            started[0].kill()
-            raise AssertionError("the case fails")
+        _fail_after_starting_two(tmp_path, database_url, redis_url, started)
 
     assert [each.process.poll() is not None for each in started] == [True, True]
 
