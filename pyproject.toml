@@ -85,9 +85,9 @@ dev = [
     "imageio-ffmpeg>=0.8,<1",
     # Reads the workflow and Compose files the tests and image-pin check assert on.
     "pyyaml>=6.0,<7",
-    # Brings the catalog generator `design-catalogs`; a git pin by tag like the other
-    # first-party libraries, built from source in CI and local checks only, never in an image.
-    "overnightworks-design[catalogs] @ git+https://github.com/overnightworks/design@v0.31.0",
+    # Brings the catalog generator `design-catalogs`; the release wheel pinned by URL and sha256,
+    # installed in CI and local checks only, never in an image.
+    "overnightworks-design[catalogs] @ https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl#sha256=ad81fde51c1d11265696f60f6810baa9f98ba85792db98d15b3a82de434d842e",
 ]
 
 [project.scripts]

@@ -176,8 +176,8 @@ importers:
   .:
     dependencies:
       overnightworks-design:
-        specifier: https://github.com/overnightworks/design/releases/download/v0.31.0/overnightworks-design-0.31.0.tgz
-        version: https://github.com/overnightworks/design/releases/download/v0.31.0/overnightworks-design-0.31.0.tgz(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+        specifier: https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks-design-0.33.1.tgz
+        version: https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks-design-0.33.1.tgz(svelte@5.57.3(@typescript-eslint/types@8.72.1))
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -1465,9 +1465,9 @@ packages:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
 
-  overnightworks-design@https://github.com/overnightworks/design/releases/download/v0.31.0/overnightworks-design-0.31.0.tgz:
-    resolution: {integrity: sha512-l1UdR9ic8qTdqnFD40OEn2U30kscXdibFPpkeXBaecred3gc4F48wBiP02JTlcigrqkAu9LosEOKNqrx6x4Vhw==, tarball: https://github.com/overnightworks/design/releases/download/v0.31.0/overnightworks-design-0.31.0.tgz}
-    version: 0.31.0
+  overnightworks-design@https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks-design-0.33.1.tgz:
+    resolution: {integrity: sha512-Zf6j7OJPxYuN04fx7D1MOAPoWryS0y3b0xldcCsdO/XTY4soAVomMprwU5/pECnAzkxr62MebPmQh8o/3JKknA==, tarball: https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks-design-0.33.1.tgz}
+    version: 0.33.1
     peerDependencies:
       svelte: ^5.20.0
 
@@ -3033,7 +3033,7 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
-  overnightworks-design@https://github.com/overnightworks/design/releases/download/v0.31.0/overnightworks-design-0.31.0.tgz(svelte@5.57.3(@typescript-eslint/types@8.72.1)):
+  overnightworks-design@https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks-design-0.33.1.tgz(svelte@5.57.3(@typescript-eslint/types@8.72.1)):
     dependencies:
       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
 
