@@ -1750,6 +1750,11 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   the lifecycle reaper to terminalize it (heartbeat threshold plus one tick).
   A second process finds no
   unlocked candidate to clean up.
+- `reconcile_reaped_cover_jobs()` runs at web startup after the cover recovery
+  and after every reaper tick. For a cover job that is FAILED or CANCELLED it
+  deletes the job's pending suggestion rows and commits, then removes their
+  files and the job's staging directory. A COMPLETED job's suggestion stays
+  pending.
 
 ## VRAM Management
 

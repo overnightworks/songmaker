@@ -21,6 +21,7 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
 )
+from songmaker_cli.cover_runner import reconcile_reaped_cover_jobs
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
@@ -330,12 +331,13 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
 def _run_stale_job_reaper_tick(
     ctx: AppContext, *, now: datetime | None = None,
 ) -> tuple[int, int]:
-    """Reap all stale jobs and reconcile crashed LoRAs for one tick.
+    """Reap all stale jobs, reconcile crashed LoRAs and clean ended covers for one tick.
 
     Returns ``(jobs_recovered, loras_reconciled)``.
     """
     recovered_jobs = reap_stale_jobs(ctx, now=now)
     reconciled_loras = reconcile_crashed_loras(ctx)
+    reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
     return recovered_jobs, reconciled_loras
 
 
