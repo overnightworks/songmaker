@@ -1,0 +1,7 @@
+claim_id = "4c9bf8500d31476bb78c255afb2d3b35"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "5ddcc0902b6f227bbfb0298e75ed5ad468e18c41"
+branch = "claude/issue-3155-an-error-toast-on-the-voices-page-covers"
+scope = ["frontend/src/lib/components/ToastContainer.svelte", "frontend/src/routes/settings/voices/+page.svelte"]
+opened_commit = "78f35e60ece5af35813b0940c9901506c7a91157"
