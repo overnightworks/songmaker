@@ -74,6 +74,7 @@ vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 
 import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 import NowPlaying from './NowPlaying.svelte';
+import { queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { words } from '#lib/words/en.ts';
 
 function playingSongDefaults(): Partial<SongItem> {
@@ -272,9 +273,7 @@ describe('NowPlaying', () => {
 	it('closes on the close button', async () => {
 		await renderSurface(info());
 
-		target
-			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlaying.close']}"]`)
-			?.click();
+		queryButtonByLabel(target, words['nowPlaying.close'])?.click();
 
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
@@ -330,9 +329,7 @@ describe('NowPlaying', () => {
 		songList.set([song(playingSongDefaults())]);
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
-		expect(
-			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
-		).toBe(true);
+		expect(queryButtonByLabel(target, words['nowPlaying.nextSong'])?.disabled).toBe(true);
 
 		songList.set([
 			song(playingSongDefaults()),
@@ -340,9 +337,7 @@ describe('NowPlaying', () => {
 		]);
 		await tick();
 
-		expect(
-			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
-		).toBe(false);
+		expect(queryButtonByLabel(target, words['nowPlaying.nextSong'])?.disabled).toBe(false);
 	});
 
 	it('Next moves the playing queue on to its next entry', async () => {
@@ -370,7 +365,7 @@ describe('NowPlaying', () => {
 		});
 		await renderSurface(info());
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.click();
+		queryButtonByLabel(target, words['nowPlaying.nextSong'])?.click();
 
 		await vi.waitFor(() => {
 			const ctx = get(queueContext);
@@ -383,12 +378,12 @@ describe('NowPlaying', () => {
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
 		const shuffleBtn = target.querySelector<HTMLButtonElement>('[aria-pressed]');
-		expect(shuffleBtn?.getAttribute('aria-label')).toBe('Shuffle this album');
+		expect(shuffleBtn?.getAttribute('aria-label')).toBe(words['transport.shuffleAlbum']);
 		shuffleBtn?.click();
 		await tick();
 		expect(get(shuffleEnabled)).toBe(true);
 		expect(shuffleBtn?.getAttribute('aria-pressed')).toBe('true');
-		expect(shuffleBtn?.getAttribute('aria-label')).toBe('Disable shuffle (this album)');
+		expect(shuffleBtn?.getAttribute('aria-label')).toBe(words['transport.unshuffleAlbum']);
 	});
 
 	it('centres play between shuffle · previous and next · an empty slot, with no repeat', async () => {
@@ -402,9 +397,9 @@ describe('NowPlaying', () => {
 				(control) => control.getAttribute('aria-label') ?? 'empty slot'
 			);
 		expect(rest).toHaveLength(0);
-		expect(play?.getAttribute('aria-label')).toBe('Play');
-		expect(controlNames(before)).toEqual([get(shuffleLabel), 'Previous song']);
-		expect(controlNames(after)).toEqual(['Next song', 'empty slot']);
+		expect(play?.getAttribute('aria-label')).toBe(words['transport.play']);
+		expect(controlNames(before)).toEqual([get(shuffleLabel), words['nowPlaying.previousSong']]);
+		expect(controlNames(after)).toEqual([words['nowPlaying.nextSong'], 'empty slot']);
 		expect(after?.lastElementChild?.getAttribute('aria-hidden')).toBe('true');
 		expect(target.querySelector('[aria-label*="repeat" i]')).toBeNull();
 	});
@@ -490,7 +485,9 @@ describe('NowPlaying', () => {
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
-		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Nachtstrom');
+		expect(target.querySelector('.queue-heading')?.textContent).toBe(
+			words['nowPlaying.queueHeading']({ source: 'Nachtstrom' })
+		);
 	});
 
 	it('names the playlist the queue was built from, not the one the listener has open', async () => {
@@ -512,7 +509,9 @@ describe('NowPlaying', () => {
 		});
 		await renderSurface(info());
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
-		expect(target.querySelector('.queue-heading')?.textContent).toBe('Queue · Night Drive');
+		expect(target.querySelector('.queue-heading')?.textContent).toBe(
+			words['nowPlaying.queueHeading']({ source: 'Night Drive' })
+		);
 	});
 
 	it('toggles between Queue and This take', async () => {
@@ -630,7 +629,9 @@ describe('NowPlaying', () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		await renderSurface(info());
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
-		expect(target.querySelector('.mobile-panel-trigger')?.textContent).toContain('Queue');
+		expect(target.querySelector('.mobile-panel-trigger')?.textContent).toContain(
+			words['nowPlaying.queueTab']
+		);
 	});
 
 	it('seeds the sheet open from a take-row request on a stacked layout, never labelling the trigger Queue', async () => {
@@ -642,8 +643,8 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
 		expect(target.querySelector('.np-take')).not.toBeNull();
 		const triggerText = target.querySelector('.mobile-panel-trigger')?.textContent ?? '';
-		expect(triggerText).toContain('This take');
-		expect(triggerText).not.toContain('Queue');
+		expect(triggerText).toContain(words['nowPlaying.takeTab']);
+		expect(triggerText).not.toContain(words['nowPlaying.queueTab']);
 	});
 
 	it('moves focus into the mobile sheet when it opens', async () => {
@@ -705,7 +706,7 @@ describeBackClosesOverlay({
 				)
 		}
 	],
-	over: { name: 'Now Playing', isShown: () => get(nowPlayingOpen) }
+	over: { name: words['transport.nowPlaying'], isShown: () => get(nowPlayingOpen) }
 });
 
 describe('NowPlaying when the take details cannot load', () => {
@@ -783,7 +784,7 @@ describe('NowPlaying when the take details cannot load', () => {
 
 		expect(fetch).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ type: 'error', message: 'Failed to load take details' })
+			expect.objectContaining({ type: 'error', message: words['nowPlaying.takeDetailsFailed'] })
 		]);
 	});
 
@@ -941,7 +942,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Pick"]')?.click();
+		queryButtonByLabel(target, words['nowPlaying.pick'])?.click();
 
 		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
 		await vi.waitFor(() => {
@@ -959,7 +960,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Pick"]')?.click();
+		queryButtonByLabel(target, words['nowPlaying.pick'])?.click();
 
 		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
 		await tick();
@@ -971,7 +972,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Keep"]')?.click();
+		queryButtonByLabel(target, words['nowPlaying.keep'])?.click();
 
 		await vi.waitFor(() => expect(setKeep).toHaveBeenCalledWith('s1', 'g1', true));
 		const ctx = get(queueContext);
@@ -982,7 +983,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
 
-		target.querySelector<HTMLButtonElement>('button[aria-label*="Skip"]')?.click();
+		queryButtonByLabel(target, words['nowPlaying.skip'], '*=')?.click();
 
 		await vi.waitFor(() => {
 			const ctx = get(queueContext);
@@ -1000,9 +1001,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const takes = setupAlbumCuration(1);
 		await renderSurface(takes[0]);
 
-		expect(target.querySelector<HTMLButtonElement>('button[aria-label*="Skip"]')?.disabled).toBe(
-			true
-		);
+		expect(queryButtonByLabel(target, words['nowPlaying.skip'], '*=')?.disabled).toBe(true);
 	});
 
 	it('Done closes Now Playing and exits curation mode', async () => {

@@ -14,6 +14,9 @@ export const songs = words['libraryWall.songCount'];
 
 export const orderFace = (order: LibraryWallOrder) => words[LIBRARY_WALL_ORDER_KEYS[order]];
 
+export const rowLabel = (action: 'play' | 'pause', title: string) =>
+	words[`libraryWall.${action}Title`]({ title });
+
 export const headLabel = (page: 'places.library' | 'places.playlists', count: number) =>
 	words['libraryWall.heading']({ page: words[page], count });
 

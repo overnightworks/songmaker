@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { words } from '#lib/words/en.ts';
 import {
 	nowPlayingFromLabel,
 	nowPlayingTakeLabel,
@@ -9,11 +10,13 @@ import {
 
 describe('nowPlayingTakeLabel', () => {
 	it('names the version and the take', () => {
-		expect(nowPlayingTakeLabel(1, 3)).toBe('v1 · take 3');
+		expect(nowPlayingTakeLabel(1, 3)).toBe(
+			words['nowPlaying.takeVersioned']({ version: '1', take: '3' })
+		);
 	});
 
 	it('names only the take when the row carries no version', () => {
-		expect(nowPlayingTakeLabel(null, 3)).toBe('take 3');
+		expect(nowPlayingTakeLabel(null, 3)).toBe(words['nowPlaying.takeUnversioned']({ take: '3' }));
 	});
 });
 
@@ -59,7 +62,7 @@ describe('nowPlayingTakeMeta', () => {
 		{
 			name: 'no artist',
 			parts: { artist: null, versionNumber: 1, generationNumber: 1, durationSec: 195 },
-			line: 'v1 · take 1 · 3:15'
+			line: `${words['nowPlaying.takeVersioned']({ version: '1', take: '1' })} · 3:15`
 		}
 	];
 
@@ -70,6 +73,8 @@ describe('nowPlayingTakeMeta', () => {
 
 describe('the name Now Playing gives where the music comes from', () => {
 	it('says where the music comes from', () => {
-		expect(nowPlayingFromLabel('Nightdrive')).toBe('from Nightdrive');
+		expect(nowPlayingFromLabel('Nightdrive')).toBe(
+			words['nowPlaying.fromSource']({ title: 'Nightdrive' })
+		);
 	});
 });

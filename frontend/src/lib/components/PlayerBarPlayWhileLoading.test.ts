@@ -85,7 +85,7 @@ const SURFACES = [
 		}
 	},
 	{
-		name: 'Now Playing',
+		name: words['transport.nowPlaying'],
 		render: (target: HTMLElement) => {
 			audioPlayer.load(loadingTake, { autoplay: false });
 			nowPlayingSurface.set('full');

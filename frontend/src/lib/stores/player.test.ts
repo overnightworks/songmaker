@@ -1412,7 +1412,7 @@ describe('a playlist queue keeps its own identity', () => {
 
 		expect(playingPlaylist().entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
 		expect(playingPlaylist().playlist).toEqual(QUEUE_PLAYLIST);
-		expect(get(shuffleLabel)).toBe('Disable shuffle (this playlist)');
+		expect(get(shuffleLabel)).toBe(words['transport.unshufflePlaylist']);
 	});
 });
 
@@ -1682,7 +1682,7 @@ describe('starting library playback from a take', () => {
 
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: '+ Keeps queue failed. Press play to retry.',
+				message: words['player.keepsQueueFailed'],
 				type: 'error'
 			})
 		]);
@@ -2237,8 +2237,8 @@ describe('the queue names its next take', () => {
 		);
 
 		it.each([
-			{ step: 'Previous', from: 1, to: 0, press: playPrevSong },
-			{ step: 'Next', from: 0, to: 1, press: playNextSong }
+			{ step: words['transport.previous'], from: 1, to: 0, press: playPrevSong },
+			{ step: words['transport.next'], from: 0, to: 1, press: playNextSong }
 		])(
 			'$step between the two places of a take starts the other place from its beginning',
 			async ({ from, to, press }) => {
@@ -2269,7 +2269,7 @@ describe('the queue names its next take', () => {
 	describe('a take the player skipped', () => {
 		function skippedToast(songTitle: string) {
 			return expect.objectContaining({
-				message: `${songTitle} couldn't be loaded, skipped.`,
+				message: words['player.takeSkipped']({ title: songTitle }),
 				type: 'error'
 			});
 		}
@@ -4038,11 +4038,11 @@ describe('playTake', () => {
 	});
 
 	it.each([
-		{ failure: 'a non-Error value', thrown: 'offline', toast: 'Playback failed' },
+		{ failure: 'a non-Error value', thrown: 'offline', toast: words['player.playTakeFailed'] },
 		{
 			failure: 'a browser error',
 			thrown: new TypeError('Failed to fetch'),
-			toast: 'Playback failed'
+			toast: words['player.playTakeFailed']
 		},
 		{
 			failure: 'a refusal with a reason',

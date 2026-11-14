@@ -358,7 +358,9 @@ for (const kind of ['song', 'gen'] as const) {
 					);
 					await page.goto(`${BASE_URL}/share/${kind}/layout-proof`);
 					const player = page.locator('.now-playing.page');
-					await expect(player.getByRole('button', { name: 'Play', exact: true })).toBeInViewport({
+					await expect(
+						player.getByRole('button', { name: words['transport.play'], exact: true })
+					).toBeInViewport({
 						ratio: 1
 					});
 					await expect(player.getByRole('slider')).toBeInViewport({ ratio: 1 });
@@ -371,7 +373,9 @@ for (const kind of ['song', 'gen'] as const) {
 					expect(lyrics.y + lyrics.height).toBeLessThanOrEqual(viewport.height);
 					expect(lyrics.height).toBeGreaterThanOrEqual(80);
 					await expect(page.locator('.queue-row, footer.player-bar')).toHaveCount(0);
-					await expect(player.getByRole('button', { name: 'Shuffle', exact: true })).toHaveCount(0);
+					await expect(
+						player.getByRole('button', { name: words['share.shuffle'], exact: true })
+					).toHaveCount(0);
 					const directory = process.env.SHARE_PLAYLIST_SCREENSHOTS;
 					if (directory)
 						await page.screenshot({
@@ -379,8 +383,10 @@ for (const kind of ['song', 'gen'] as const) {
 						});
 					await player.getByRole('slider').fill('1');
 					await expect(player.getByRole('slider')).toHaveValue('1');
-					await player.getByRole('button', { name: 'Play', exact: true }).click();
-					await expect(player.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+					await player.getByRole('button', { name: words['transport.play'], exact: true }).click();
+					await expect(
+						player.getByRole('button', { name: words['transport.pause'], exact: true })
+					).toBeVisible();
 					if (kind === 'gen') {
 						await page.route(`**/shared/${kind}/layout-proof`, (route) =>
 							route.fulfill({ json: { ...payload, audio_url: null } })
@@ -388,7 +394,9 @@ for (const kind of ['song', 'gen'] as const) {
 						await page.reload();
 						await expect(page.getByRole('status')).toHaveText('No audio available yet.');
 						await expect(page.locator('.np-page-lyrics')).toHaveCount(0);
-						await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeDisabled();
+						await expect(
+							page.getByRole('button', { name: words['transport.play'], exact: true })
+						).toBeDisabled();
 						if (!phone) {
 							const [column, progress] = await boundingBoxes(
 								player.locator('.np-player-col'),

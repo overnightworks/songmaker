@@ -211,12 +211,12 @@ const INVENTORY = [
 	},
 	{
 		name: 'transport-previous',
-		selector: '.nav-btn[data-hitbox="frequent"][aria-label="Previous"]',
+		selector: `.nav-btn[data-hitbox="frequent"][aria-label="${words['transport.previous']}"]`,
 		component: 'TransportBarFrame'
 	},
 	{
 		name: 'transport-next',
-		selector: '.nav-btn[data-hitbox="frequent"][aria-label="Next"]',
+		selector: `.nav-btn[data-hitbox="frequent"][aria-label="${words['transport.next']}"]`,
 		component: 'TransportBarFrame'
 	}
 ] as const satisfies ReadonlyArray<{

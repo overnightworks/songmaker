@@ -127,7 +127,7 @@ describe('shared generation (take) page', () => {
 
 		expect(target.querySelector('h1')?.textContent).toBe('Solo Track');
 		expect(target.textContent).toContain('Album · Artist');
-		expect(target.textContent).not.toContain('take 3');
+		expect(target.textContent).not.toContain(words['nowPlaying.takeUnversioned']({ take: '3' }));
 		// #141/10: the page names a take; only the URL segment stays /share/gen/.
 		expect(document.title).toContain(
 			words['shareTakePage.documentTitle']({ number: '3', title: 'Solo Track', app: APP_NAME })

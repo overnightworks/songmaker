@@ -304,7 +304,9 @@ async function heldTakePosition(page: Page): Promise<number> {
 async function shownTakePosition(page: Page, phoneTakeSeconds: number | null): Promise<number> {
 	const transport = page.getByRole('contentinfo');
 	if (phoneTakeSeconds === null) {
-		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
+		return Number(
+			await transport.getByRole('slider', { name: words['transport.seek'] }).inputValue()
+		);
 	}
 	const progress = await transport
 		.locator('.mobile-progress-fill')

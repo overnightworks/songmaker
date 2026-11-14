@@ -9,7 +9,7 @@ import { reactiveProps } from '../../tests/reactive-fixtures.svelte';
 import NowPlayingLyrics from './NowPlayingLyrics.svelte';
 import nowPlayingLyricsSource from './NowPlayingLyrics.svelte?raw';
 
-const EMPTY_LABEL = 'No lyrics for this take';
+const EMPTY_LABEL = pageWords['nowPlaying.noLyrics'];
 
 const LINE_1 = 'the lantern hums quietly tonight';
 const LINE_2 = 'we count the fading city lights';
@@ -223,12 +223,16 @@ async function render(props: LyricsProps) {
 describe('NowPlayingLyrics', () => {
 	it('1374_rule_2 names the song in the heading when given one, else only Lyrics', async () => {
 		await render({ lyrics: LINE_1, cues: null, whisperText: null, songTitle: 'Paper Lanterns' });
-		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics · Paper Lanterns');
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe(
+			pageWords['nowPlaying.lyricsHeadingTitled']({ title: 'Paper Lanterns' })
+		);
 	});
 
 	it('keeps the plain Lyrics heading without a song title', async () => {
 		await render({ lyrics: LINE_1, cues: null, whisperText: null });
-		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics');
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe(
+			pageWords['nowPlaying.lyricsHeading']
+		);
 	});
 
 	it('shows the named empty state when there are no lyrics', async () => {

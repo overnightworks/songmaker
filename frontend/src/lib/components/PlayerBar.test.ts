@@ -8,6 +8,7 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
+import { queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { words } from '#lib/words/en.ts';
 import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
 import {
@@ -255,7 +256,7 @@ describe('PlayerBar stream boundaries', () => {
 		await mountPlayerBar();
 
 		expect(audioPlayer.current).toBeNull();
-		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
+		const play = queryButtonByLabel(target, words['transport.play']);
 		expect(play?.disabled).toBe(false);
 		expect(target.querySelector('.track-title')?.textContent).toBe(words['places.library']);
 		play?.click();
@@ -273,7 +274,7 @@ describe('PlayerBar stream boundaries', () => {
 			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 			await mountPlayerBar();
 
-			const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+			const transport = queryButtonByLabel(target, words['transport.pause']);
 			expect(transport?.querySelector('.spinner')).not.toBeNull();
 			transport?.click();
 			expect(playIdleStart).toHaveBeenCalledOnce();
@@ -519,13 +520,13 @@ describe('PlayerBar stream boundaries', () => {
 		);
 		await mountPlayerBar();
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
+		queryButtonByLabel(target, words['transport.play'])?.click();
 		await vi.waitFor(() => expect(target.textContent).toContain(words['player.nothingToPlay']));
 		expect(target.querySelector('.track-detail')).toBeNull();
 		expect(audioPlayer.current).toBeNull();
 
 		selectedPlaylistDetail.set(playlistItem(playablePlaylistDefaults()));
-		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
+		queryButtonByLabel(target, words['transport.play'])?.click();
 		await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('Tide'));
 		expect(target.textContent).not.toContain(words['player.nothingToPlay']);
 	});
@@ -546,8 +547,8 @@ describe('PlayerBar stream boundaries', () => {
 		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
 		await mountPlayerBar();
 
-		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous"]');
-		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next"]');
+		const previous = queryButtonByLabel(target, words['transport.previous']);
+		const next = queryButtonByLabel(target, words['transport.next']);
 		expect(previous?.disabled).toBe(true);
 		expect(next?.disabled).toBe(false);
 
@@ -653,8 +654,8 @@ describe('PlayerBar take identifier', () => {
 	// L9: the mini-player names the playing take through the one owner,
 	// nowPlayingTakeLabel — never a second, ad-hoc format.
 	it.each([
-		[7, 'v7 · take 2'],
-		[null, 'take 2']
+		[7, words['nowPlaying.takeVersioned']({ version: '7', take: '2' })],
+		[null, words['nowPlaying.takeUnversioned']({ take: '2' })]
 	])('reads the take as %s from nowPlayingTakeLabel', async (versionNumber, expected) => {
 		queueContext.set({ type: 'library' });
 		audioPlayer.load(
@@ -695,14 +696,14 @@ describe('PlayerBar shuffle', () => {
 		await mountPlayerBar();
 
 		expect(shuffleButton().getAttribute('aria-pressed')).toBe('false');
-		expect(shuffleButton().getAttribute('aria-label')).toBe('Shuffle this album');
+		expect(shuffleButton().getAttribute('aria-label')).toBe(words['transport.shuffleAlbum']);
 
 		shuffleButton().click();
 		await tick();
 
 		expect(get(shuffleEnabled)).toBe(true);
 		expect(shuffleButton().getAttribute('aria-pressed')).toBe('true');
-		expect(shuffleButton().getAttribute('aria-label')).toBe('Disable shuffle (this album)');
+		expect(shuffleButton().getAttribute('aria-label')).toBe(words['transport.unshuffleAlbum']);
 	});
 });
 
@@ -973,7 +974,9 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		const transport = Array.from(
 			bar().querySelectorAll<HTMLButtonElement>('.transport-controls button')
 		).map((button) => button.getAttribute('aria-label'));
-		expect(transport).toEqual(['Previous', words['transport.play'], 'Next']);
+		expect(transport).toEqual(
+			(['previous', 'play', 'next'] as const).map((name) => words[`transport.${name}`])
+		);
 		expect(target.querySelector('.shuffle-btn')).toBeNull();
 		expect(target.querySelector('.now-playing-btn')).toBeNull();
 	});
@@ -1082,7 +1085,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		{ gesture: 'a move down', start: swipeStarts.title, rise: -NOW_PLAYING_SWIPE_RISE_PX },
 		{
 			gesture: 'a swipe up from Previous',
-			start: swipeStarts.control('Previous'),
+			start: swipeStarts.control(words['transport.previous']),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		},
 		{
@@ -1092,7 +1095,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		},
 		{
 			gesture: 'a swipe up from Next',
-			start: swipeStarts.control('Next'),
+			start: swipeStarts.control(words['transport.next']),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		}
 	])('leaves Now Playing closed on $gesture', async ({ start, rise, drift }) => {
@@ -1137,8 +1140,8 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 			expectActed: () => expect(get(nowPlayingSurface)).toBe('closed')
 		},
 		{
-			control: 'Next',
-			press: swipeStarts.control('Next'),
+			control: words['transport.next'],
+			press: swipeStarts.control(words['transport.next']),
 			expectActed: () => expect(playerStore.playNextSong).toHaveBeenCalledOnce()
 		}
 	])(
@@ -1160,12 +1163,12 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 	);
 
 	it.each([
-		{ step: 'Previous', action: 'playPrevSong' as const },
-		{ step: 'Next', action: 'playNextSong' as const }
+		{ step: words['transport.previous'], action: 'playPrevSong' as const },
+		{ step: words['transport.next'], action: 'playNextSong' as const }
 	])('steps with $step', async ({ step, action }) => {
 		const played = vi.spyOn(playerStore, action).mockResolvedValue();
 		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
-		audio.currentTime = step === 'Previous' ? 15 : 0;
+		audio.currentTime = step === words['transport.previous'] ? 15 : 0;
 		audio.fire('timeupdate');
 		await mountBar();
 
@@ -1327,7 +1330,7 @@ describe('PlayerBar failure line', () => {
 
 		expect(target.querySelector('.offline-strip')).not.toBeNull();
 		expect(target.querySelector('.phone-failure, .error-text')).toBeNull();
-		expect(target.querySelector('.play-btn')?.getAttribute('aria-label')).toBe('Retry');
+		expect(queryButtonByLabel(target, words['transport.retry'])?.matches('.play-btn')).toBe(true);
 	});
 
 	// The target's own label replaces its words for a screen reader.

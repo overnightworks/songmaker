@@ -132,7 +132,7 @@ for (const cell of CASES) {
 				).toBe('0px');
 				if (cell.shell === 'desktop') {
 					// The wide share keeps its inline player visible beside the scrolling songs.
-					await expect(control(page, 'Pause')).toBeInViewport({ ratio: 1 });
+					await expect(control(page, words['transport.pause'])).toBeInViewport({ ratio: 1 });
 					await expect(transport).toHaveCount(0);
 					await expect(lastContent).toBeInViewport({ ratio: 1 });
 					await page.screenshot({ path: testInfo.outputPath('bottom-geometry.png') });

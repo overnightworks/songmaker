@@ -352,7 +352,10 @@ describe('1354_rule_14 Listen', () => {
 			arrangeCurrentSong(type);
 			audioPlayer.status = 'playing';
 			await showListen();
-			const playingRow = getByRoleButton(target, `Pause ${title}`).closest('.library-row');
+			const playingRow = getByRoleButton(
+				target,
+				words['libraryWall.pauseTitle']({ title: title })
+			).closest('.library-row');
 			expect(
 				playingRow?.querySelector(`[role="img"][aria-label="${words['playingMark.playing']}"]`)
 			).not.toBeNull();
@@ -375,7 +378,7 @@ describe('1354_rule_14 Listen', () => {
 			arrangeCurrentSong(type);
 			audioPlayer.status = 'paused';
 			await showListen();
-			getByRoleButton(target, `Play ${title}`);
+			getByRoleButton(target, words['libraryWall.playTitle']({ title: title }));
 			expect(target.textContent).toContain(
 				words[type === 'album' ? 'homeListen.albumStopped' : 'homeListen.playlistStopped']({
 					number: '2'

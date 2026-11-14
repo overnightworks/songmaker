@@ -1,6 +1,7 @@
 import { makeGeneration as makeGen } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '#lib/api/types.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,
@@ -129,8 +130,8 @@ vi.mock('./continuousDeck', () => {
 const NO_STRIP_SHOWN = (): boolean => false;
 const SECOND = 1000;
 const RECOVERY_DEADLINE = 2 * 60 * SECOND;
-const STALLED = 'Playback stalled. Press Retry.';
-const WAITING_FOR_NETWORK = 'Waiting for the network.';
+const STALLED = words['transport.stalled'];
+const WAITING_FOR_NETWORK = words['transport.waitingForNetwork'];
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
 	return {
@@ -1675,7 +1676,7 @@ describe('stream playback', () => {
 		}).toEqual({
 			signInAsked: true,
 			status: 'error',
-			error: 'Playback failed. Press Retry.',
+			error: words['transport.playbackFailed'],
 			src: '/shared/queue-streams/snap/audio'
 		});
 	});
@@ -1841,8 +1842,8 @@ describe('error handling', () => {
 	);
 
 	it.each([
-		{ answer: 401, outcome: { signInAsked: true, error: 'Playback failed. Press Retry.' } },
-		{ answer: 404, outcome: { signInAsked: false, error: 'Audio file not found.' } }
+		{ answer: 401, outcome: { signInAsked: true, error: words['transport.playbackFailed'] } },
+		{ answer: 404, outcome: { signInAsked: false, error: words['transport.fileNotFound'] } }
 	])(
 		'names a $answer answer to a mid-track media error at once instead of reloading',
 		async ({ answer, outcome }) => {
@@ -1960,7 +1961,7 @@ describe('error handling', () => {
 			await loseNetworkAtTheStart(false);
 			audioPlayer.resumeAfterNetworkReturn();
 			expect(audioPlayer.status).toBe('error');
-			expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+			expect(audioPlayer.error).toBe(words['transport.playbackFailed']);
 		});
 	});
 
@@ -1969,7 +1970,7 @@ describe('error handling', () => {
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('error');
-		expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+		expect(audioPlayer.error).toBe(words['transport.playbackFailed']);
 	});
 
 	it('decodes MEDIA_ERR_DECODE', async () => {
@@ -2202,7 +2203,7 @@ describe('toggle / play / pause', () => {
 		audioPlayer.play();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('paused');
-		expect(audioPlayer.error).toBe('Autoplay blocked. Press Play to start.');
+		expect(audioPlayer.error).toBe(words['transport.autoplayBlocked']);
 	});
 
 	it('AbortError on play is silently ignored', async () => {

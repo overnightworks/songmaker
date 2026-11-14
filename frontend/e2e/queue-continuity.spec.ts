@@ -373,7 +373,7 @@ test('Prev on an album starts the previous take and the queue continues into the
 
 	await playAlbum(page, library.albumId);
 	await expectTransportMovesOn(page, first, second);
-	await transport.getByRole('button', { name: 'Previous', exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.previous'], exact: true }).click();
 
 	await expectTransportMovesOn(page, first, second);
 	expect(timeline.elementsPlayed).toBe(1);
@@ -402,7 +402,7 @@ test('Next between two places of one take in a playlist moves the audio to the s
 		})
 		.click();
 	await expect.poll(() => timeline.requestsOf(trackOf(library, twice))).toBeGreaterThanOrEqual(2);
-	await transport.getByRole('button', { name: 'Next', exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.next'], exact: true }).click();
 
 	await expect.poll(() => timeline.seeks).toHaveLength(1);
 	expect(timeline.seeks[0]).toBeGreaterThan(SECOND_PLACE_STARTS_AFTER_SECONDS);
@@ -476,7 +476,9 @@ test('an album whose next take fails on the network for a while plays that take 
 	expect(timeline.sourcesPlayed).toEqual(['blob:']);
 	expect(timeline.stops).toEqual([]);
 	expect(timeline.recoveryRequests).toEqual([]);
-	await expect(page.getByText(`${second.songTitle} couldn't be loaded, skipped.`)).toHaveCount(0);
+	await expect(
+		page.getByText(words['player.takeSkipped']({ title: second.songTitle }))
+	).toHaveCount(0);
 	await expect(transport.getByRole('button', { name: words['transport.retry'] })).toHaveCount(0);
 	guard.assertClean();
 });
@@ -493,7 +495,7 @@ test('an album whose second take is refused names it once, when playback reaches
 	const library = readSeededLibrary();
 	const [first, second, third] = library.albumTracks;
 	const toasts = await ToastLog.watch(page);
-	const skipped = `${second.songTitle} couldn't be loaded, skipped.`;
+	const skipped = words['player.takeSkipped']({ title: second.songTitle });
 	const upNext = (track: SeededTrack) =>
 		page.getByText(words['nowPlaying.upNext']({ title: track.songTitle }), { exact: true });
 	const playsUntilUpNextNames = (track: SeededTrack) =>

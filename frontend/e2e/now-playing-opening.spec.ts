@@ -116,7 +116,9 @@ test(
 		await openAlbumFromRail(page, shellOf(testInfo), library.albumTitle);
 		await playCollection(page, 'album');
 		await expect(
-			page.getByRole('contentinfo').getByRole('button', { name: 'Next', exact: true })
+			page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: words['transport.next'], exact: true })
 		).toBeEnabled();
 		// Next is enabled only with two queued takes, and the album's takes are set in
 		// one call, so the queue has grown behind the tab, which stays where it opened.

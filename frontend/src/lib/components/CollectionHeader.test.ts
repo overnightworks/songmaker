@@ -274,7 +274,9 @@ describe('CollectionHeader', () => {
 		const actions = requireElement(target, '.header-actions');
 
 		expect(actions.textContent).not.toMatch(/play/i);
-		expect(requireElement(actions, '.play-circle').getAttribute('aria-label')).toBe('Play album');
+		expect(requireElement(actions, '.play-circle').getAttribute('aria-label')).toBe(
+			words['collectionHeader.playAlbum']
+		);
 	});
 
 	it('uses the album art fill when an album has no cover', async () => {

@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, expect, it, vi } from 'vitest';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { words } from '#lib/words/en.ts';
 import LibraryRow from './LibraryRow.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -16,7 +17,7 @@ it.each([
 		id: '1354_rule_10',
 		action: 'play',
 		openLabel: 'Open album Long album title',
-		actionLabel: 'Play Long album title',
+		actionLabel: words['libraryWall.playTitle']({ title: 'Long album title' }),
 		trailing: (run: () => void) => ({ onplay: run })
 	},
 	{
@@ -81,9 +82,13 @@ it.each(['playing', 'paused', 'loading', 'recovering', 'waiting-for-network'] as
 			}
 		});
 		await tick();
-		expect(document.querySelector('[role="img"]')).toHaveAccessibleName('Playing');
+		expect(document.querySelector('[role="img"]')).toHaveAccessibleName(
+			words['playingMark.playing']
+		);
 		expect(document.querySelector('.row-play')).toHaveAccessibleName(
-			`${status === 'paused' ? 'Play' : 'Pause'} Album`
+			(status === 'paused' ? words['libraryWall.playTitle'] : words['libraryWall.pauseTitle'])({
+				title: 'Album'
+			})
 		);
 		expect(document.querySelector('.tile-subtitle')).toHaveTextContent('3 songs');
 	}

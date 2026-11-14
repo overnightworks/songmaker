@@ -87,7 +87,9 @@ describe('NowPlayingTake', () => {
 				audio_duration_sec: 195
 			})
 		});
-		expect(target.querySelector('.take-heading')?.textContent).toBe('v3 · take 3 · 3:15 · xl-sft');
+		expect(target.querySelector('.take-heading')?.textContent).toBe(
+			`${words['nowPlaying.takeVersioned']({ version: '3', take: '3' })} · 3:15 · xl-sft`
+		);
 	});
 
 	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
@@ -102,7 +104,7 @@ describe('NowPlayingTake', () => {
 			})
 		});
 		expect(target.querySelector('.take-heading')?.textContent).toBe(
-			'v4 · take 4 · 3:08 · xl-turbo'
+			`${words['nowPlaying.takeVersioned']({ version: '4', take: '4' })} · 3:08 · xl-turbo`
 		);
 	});
 
@@ -111,7 +113,7 @@ describe('NowPlayingTake', () => {
 			generation: generation({ ...generationDefaults, version_number: 1, generation_number: 1 })
 		});
 		const heading = target.querySelector('.take-heading')?.textContent ?? '';
-		expect(heading).toBe('v1 · take 1 · sft');
+		expect(heading).toBe(`${words['nowPlaying.takeVersioned']({ version: '1', take: '1' })} · sft`);
 		expect(heading).not.toContain('0:00');
 	});
 
@@ -338,14 +340,18 @@ describe('NowPlayingTake', () => {
 
 	it('flips pick through takeActions', async () => {
 		await render({ generation: generation(generationDefaults) });
-		target.querySelector<HTMLButtonElement>('button[aria-label="Pick"]')?.click();
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlaying.pick']}"]`)
+			?.click();
 		await tick();
 		expect(setPick).toHaveBeenCalledWith('s1', 'g1', true);
 	});
 
 	it('flips keep through takeActions', async () => {
 		await render({ generation: generation({ ...generationDefaults, is_kept: true }) });
-		target.querySelector<HTMLButtonElement>('button[aria-label="Unkeep"]')?.click();
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlaying.unkeep']}"]`)
+			?.click();
 		await tick();
 		expect(setKeep).toHaveBeenCalledWith('s1', 'g1', false);
 	});

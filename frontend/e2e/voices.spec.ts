@@ -356,13 +356,22 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			await page.getByRole('tab', { name: new RegExp(`^${words['songTabs.takes']}`) }).click();
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
 			await expect(deletedVoiceTake).toBeVisible();
-			await deletedVoiceTake.getByRole('button', { name: 'Play v1 · take 1', exact: true }).click();
+			await deletedVoiceTake
+				.getByRole('button', {
+					name: words['takeRow.playTake']({
+						take: words['takeRow.takeVersioned']({ version: '1', take: '1' })
+					}),
+					exact: true
+				})
+				.click();
 			await expect(deletedVoiceTake).toHaveClass(/playing/);
 		} else {
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
 			await expect(deletedVoiceTake).toContainText(`Voice: ${voiceName} — voice deleted`);
 			const deletedVoicePlayTarget = deletedVoiceTake.getByRole('button', {
-				name: 'Play v1 · take 1',
+				name: words['takeRow.playTake']({
+					take: words['takeRow.takeVersioned']({ version: '1', take: '1' })
+				}),
 				exact: true
 			});
 			await expect(deletedVoicePlayTarget).toBeVisible();

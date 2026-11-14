@@ -277,7 +277,9 @@ async function holdTheSavedSongBack(
 async function shownPosition(page: Page, shell: Shell, takeSeconds: number): Promise<number> {
 	const { transport } = transportOf(page);
 	if (shell === 'desktop') {
-		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
+		return Number(
+			await transport.getByRole('slider', { name: words['transport.seek'] }).inputValue()
+		);
 	}
 	const fill = transport.locator('.mobile-progress-fill');
 	const percent = parseFloat(await fill.evaluate((line) => (line as HTMLElement).style.width));

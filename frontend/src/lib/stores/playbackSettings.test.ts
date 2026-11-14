@@ -24,9 +24,9 @@ describe('library take pool trio', () => {
 
 	// Spec: REQ-LIBRARY-01 -- the choices carry the labels Picks, + Keeps and All takes.
 	it('labels mix as "+ Keeps"', () => {
-		expect(words[LIBRARY_TAKE_POOL_LABELS.mix]).toBe('+ Keeps');
-		expect(words[LIBRARY_TAKE_POOL_LABELS.picks]).toBe('Picks');
-		expect(words[LIBRARY_TAKE_POOL_LABELS.all]).toBe('All takes');
+		expect(words[LIBRARY_TAKE_POOL_LABELS.mix]).toBe(words['nowPlaying.poolKeeps']);
+		expect(words[LIBRARY_TAKE_POOL_LABELS.picks]).toBe(words['nowPlaying.poolPicks']);
+		expect(words[LIBRARY_TAKE_POOL_LABELS.all]).toBe(words['nowPlaying.poolAll']);
 	});
 
 	// Spec: REQ-LIBRARY-02 -- with nothing stored in the browser profile the pool is Picks.

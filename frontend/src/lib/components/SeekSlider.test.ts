@@ -137,6 +137,8 @@ describe('SeekSlider', () => {
 	it('reads its position out as the time of the song', async () => {
 		await renderSeek(72);
 
-		expect(slider().getAttribute('aria-valuetext')).toBe('1:12 of 3:00');
+		expect(slider().getAttribute('aria-valuetext')).toBe(
+			words['transport.seekPosition']({ position: '1:12', length: '3:00' })
+		);
 	});
 });

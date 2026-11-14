@@ -1128,7 +1128,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 			await sharePage.goto(PLAYLIST_URL);
 			await sharePage
 				.locator('.now-playing.page')
-				.getByRole('button', { name: 'Play', exact: true })
+				.getByRole('button', { name: words['transport.play'], exact: true })
 				.click();
 			const historyLength = await sharePage.evaluate(() => window.history.length);
 			await sharePage
@@ -1140,7 +1140,9 @@ test.describe('Back closes the open overlay outside the library', () => {
 				await bar.getByRole('button', { name: 'Back to the player' }).first().click();
 			}
 			await expect(
-				sharePage.locator('.now-playing.page').getByRole('button', { name: 'Pause', exact: true })
+				sharePage
+					.locator('.now-playing.page')
+					.getByRole('button', { name: words['transport.pause'], exact: true })
 			).toBeInViewport({ ratio: 1 });
 			expect(await sharePage.evaluate(() => window.history.length)).toBe(historyLength);
 			await expect(bar).toBeHidden();

@@ -270,8 +270,11 @@ function pauseButton(transport: Locator): Locator {
  */
 async function expectCompactTransport(transport: Locator, playingSongTitle: string): Promise<void> {
 	const play = pauseButton(transport);
-	const previous = transport.getByRole('button', { name: 'Previous', exact: true });
-	const next = transport.getByRole('button', { name: 'Next', exact: true });
+	const previous = transport.getByRole('button', {
+		name: words['transport.previous'],
+		exact: true
+	});
+	const next = transport.getByRole('button', { name: words['transport.next'], exact: true });
 	const titleTarget = transport.getByRole('button', {
 		name: words['player.openNowPlaying']({ title: playingSongTitle }),
 		exact: true

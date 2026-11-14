@@ -428,7 +428,9 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		stubLayout(true);
 		const target = await renderCollection({ tracks: [sharedTrack('first', 'Tide')] });
 		expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
-		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics · Tide');
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe(
+			words['nowPlaying.lyricsHeadingTitled']({ title: 'Tide' })
+		);
 		expect(target.querySelector('.lyrics-empty')?.textContent).toBe(words['share.noLyrics']);
 		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
 			words['share.nowPlaying']({ title: 'Tide', position: '1', total: '1' })
@@ -615,12 +617,12 @@ describe('Shared playlist metadata and artwork', () => {
 		]);
 		rows()[1].click();
 		await tick();
-		getByRoleButton(target, 'Shuffle').click();
+		getByRoleButton(target, words['share.shuffle']).click();
 		await tick();
 		assertLabels();
 		expect(audioPlayer.current?.albumTitle).toBe('Album b');
 		expect(target.querySelector('.queue-row.current .queue-title')?.textContent).toBe('Song b');
-		getByRoleButton(target, 'Disable shuffle').click();
+		getByRoleButton(target, words['share.disableShuffle']).click();
 		await tick();
 		expect(rows().map((row) => row.querySelector('.queue-title')?.textContent)).toEqual([
 			'Song a',

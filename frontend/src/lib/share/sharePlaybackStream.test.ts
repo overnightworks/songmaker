@@ -8,6 +8,7 @@ import {
 	playableTracks,
 	type SharedCollectionView
 } from './sharedCollection';
+import { words } from '#lib/words/en.ts';
 import { SharePlayback } from './sharePlayback.svelte';
 import {
 	albumSong,
@@ -82,7 +83,7 @@ describe('shuffle before the first Play', () => {
 
 describe('a share with no playable track', () => {
 	it.each([
-		['Play', (playback: SharePlayback) => playback.play()],
+		[words['transport.play'], (playback: SharePlayback) => playback.play()],
 		['a seek', (playback: SharePlayback) => playback.seek(30)]
 	])('does nothing on %s', (_name, act) => {
 		const playback = new SharePlayback();

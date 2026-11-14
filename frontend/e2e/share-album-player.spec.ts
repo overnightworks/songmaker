@@ -104,7 +104,9 @@ async function expectNowPlayingLine(page: Page, title: string, position: number,
 }
 
 async function expectLyricsOf(page: Page, title: string): Promise<void> {
-	await expect(page.locator('.lyrics-heading')).toHaveText(`Lyrics · ${title}`);
+	await expect(page.locator('.lyrics-heading')).toHaveText(
+		words['nowPlaying.lyricsHeadingTitled']({ title })
+	);
 }
 
 async function scrollPageTo(page: Page, edge: 'top' | 'bottom'): Promise<void> {
@@ -380,9 +382,12 @@ test.describe('controls', () => {
 		const { page } = visitor;
 		await songRow(page, mockSongTitle(3)).click();
 
-		await control(page, 'Shuffle').click();
+		await control(page, words['share.shuffle']).click();
 
-		await expect(control(page, 'Disable shuffle')).toHaveAttribute('aria-pressed', 'true');
+		await expect(control(page, words['share.disableShuffle'])).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
 		await expectLyricsOf(page, mockSongTitle(3));
 		await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(3)));
 	});
