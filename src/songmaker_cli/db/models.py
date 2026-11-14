@@ -717,6 +717,12 @@ class UserLora(Base):
             ) + ")",
             name="ck_user_loras_model_mode",
         ),
+        CheckConstraint(
+            "error_message IS NULL OR ("
+            "COALESCE(json_typeof(error_message->'key'), '') = 'string' "
+            "AND COALESCE(json_typeof(error_message->'values'), '') = 'object')",
+            name="ck_user_loras_error_message_shape",
+        ),
         UniqueConstraint("user_id", "slug", name="uq_user_lora_user_slug"),
     )
 
@@ -735,7 +741,7 @@ class UserLora(Base):
     training_job_id: Mapped[str | None] = mapped_column(
         ForeignKey("jobs.id", ondelete=SET_NULL), nullable=True, index=True,
     )
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(

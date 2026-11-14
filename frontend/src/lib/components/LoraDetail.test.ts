@@ -406,13 +406,43 @@ describe('LoraDetail', () => {
 			lora({
 				status: 'failed',
 				training_job_id: cancelledJob.id,
-				error: 'Training crashed or was interrupted'
+				error_message: { key: 'voiceFailure.crashed', values: {} }
 			})
 		);
 
 		expect(target.textContent).toContain(words['voiceDetail.trainingCancelled']);
-		expect(target.textContent).not.toContain('Training crashed or was interrupted');
+		expect(target.textContent).not.toContain(words['voiceFailure.crashed']);
 		expect(target.querySelector('.banner.error')).toBeNull();
+	});
+
+	it('words a failed voice reason from its message and keeps the heading', async () => {
+		const target = await render(
+			lora({
+				status: 'failed',
+				error_message: {
+					key: 'voiceFailure.modeMismatch',
+					values: { workerMode: "'sft'", requestedMode: "'turbo'" }
+				}
+			})
+		);
+
+		const banner = target.querySelector('.banner.error');
+		expect(banner?.textContent).toContain(words['voiceDetail.trainingFailed']);
+		expect(banner?.textContent).toContain(
+			words['voiceFailure.modeMismatch']({ workerMode: "'sft'", requestedMode: "'turbo'" })
+		);
+	});
+
+	it('shows only the heading of a failed voice whose message key the page lacks and reports the key', async () => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const target = await render(
+			lora({ status: 'failed', error_message: { key: 'voiceFailure.retired', values: {} } })
+		);
+
+		const banner = target.querySelector('.banner.error');
+		expect(banner?.textContent).toBe(words['voiceDetail.trainingFailed']);
+		expect(report).toHaveBeenCalledWith(expect.stringContaining('voiceFailure.retired'));
+		report.mockRestore();
 	});
 
 	it('wraps the complete queue-limit sentence without truncation in a 375 px container', async () => {
@@ -426,7 +456,10 @@ describe('LoraDetail', () => {
 		const target = await render(
 			lora({
 				status: 'failed',
-				error: 'The worker restarted before epoch 31 could finish.',
+				error_message: {
+					key: 'voiceFailure.recorded',
+					values: { cause: 'The worker restarted before epoch 31 could finish.' }
+				},
 				samples: [
 					sample('s1', 'one', 'one', 0),
 					sample('s2', 'two', 'two', 1),

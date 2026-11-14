@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from songmaker_cli.constants import (
-    JOB_ERROR_INTERNAL,
     USER_LORA_TRAINING_TMP_DIRNAME,
     USER_LORAS_DIRNAME,
 )
@@ -16,6 +15,7 @@ from songmaker_cli.jobs.lora_training import (
     _sanitize_training_error,
     _validated_lora_adapter_handoff,
 )
+from songmaker_cli.messages import message
 
 USER_ID = "u1"
 
@@ -78,7 +78,7 @@ def test_a_path_outside_the_user_folder_fails_the_handoff_as_an_internal_error(
 ) -> None:
     with pytest.raises(RuntimeError) as failure:
         _handoff(audio_dir, tmp_output, "/etc")
-    assert _sanitize_training_error(failure.value, "job-1") == JOB_ERROR_INTERNAL
+    assert _sanitize_training_error(failure.value, "job-1") == message("jobFailure.internal")
 
 
 def test_a_link_inside_that_leads_out_fails_the_handoff(

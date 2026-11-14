@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field
 
 from songmaker_cli.constants import LoraStatus
+from songmaker_cli.messages import Message, stored_sentence
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation, UserLora, UserLoraSample
@@ -63,6 +64,7 @@ class UserLoraResponse(BaseModel):
     tensor_path: str | None = None
     training_job_id: str | None = None
     error: str | None = None
+    error_message: Message | None = None
     created_at: str
     completed_at: str | None = None
     deleted_at: str | None = None
@@ -81,7 +83,8 @@ class UserLoraResponse(BaseModel):
             storage_path=lora.storage_path,
             tensor_path=lora.tensor_path,
             training_job_id=lora.training_job_id,
-            error=lora.error,
+            error=stored_sentence(lora.error_message, f"Voice {lora.id} failure"),
+            error_message=lora.error_message,
             created_at=lora.created_at.isoformat(),
             completed_at=lora.completed_at.isoformat() if lora.completed_at else None,
             deleted_at=lora.deleted_at.isoformat() if lora.deleted_at else None,

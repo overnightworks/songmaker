@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import cast
@@ -9,6 +10,8 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
+
+log = logging.getLogger(__name__)
 
 
 class Message(BaseModel):
@@ -39,3 +42,14 @@ class Message(BaseModel):
 
 def message(key: Key, /, **gaps: str) -> Message:
     return Message(key=key, values=gaps)
+
+
+def stored_sentence(stored: Message | None, owner: str) -> str | None:
+    """The sentence of a message a row holds; a key the catalog lacks logs `owner` and fails."""
+    if stored is None:
+        return None
+    try:
+        return stored.sentence()
+    except (KeyError, TypeError):
+        log.exception("%s holds the message key %s, which has no sentence", owner, stored.key)
+        raise

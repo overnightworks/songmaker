@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
-    JOB_ERROR_WORKER_TRAINING_FAILED,
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
@@ -39,7 +38,7 @@ from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_l
 from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS, STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
-from songmaker_cli.messages import message
+from songmaker_cli.messages import Message, message
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     DispatchOptions,
@@ -52,22 +51,17 @@ from songmaker_cli.scheduler import (
 )
 from songmaker_cli.settings import LoraTrainingJobConfig
 
-from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
+from ._runtime import _failure_message, _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)
 
 
-def _sanitize_training_error(exc: Exception, job_id: str) -> str:
+def _sanitize_training_error(exc: Exception, job_id: str) -> Message:
     """Keep a worker failure truthful to the training task the musician started."""
-    if isinstance(
-        exc,
-        LoraTrainingModelModeError,
-    ):
-        return str(exc)
-    message = _sanitize_error(exc, job_id)
-    if isinstance(exc, WorkerTaskFailed):
-        return JOB_ERROR_WORKER_TRAINING_FAILED
-    return message
+    if isinstance(exc, LoraTrainingModelModeError):
+        return exc.failure
+    failure = _failure_message(exc, job_id)
+    return failure if failure is not None else message("voiceFailure.workerTrainingFailed")
 
 
 WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL: Final = (
@@ -151,6 +145,10 @@ class LoraTrainingModelModeError(ValueError):
     """A completed training job did not preserve the voice's model identity."""
 
     error_type: str
+
+    def __init__(self, failure: Message) -> None:
+        super().__init__(failure.sentence())
+        self.failure = failure
 
 
 class UnsupportedLoraTrainingModelModeError(LoraTrainingModelModeError):
@@ -289,12 +287,15 @@ def _validate_completed_training_model_mode(
     """Accept only a supported worker mode that preserves the request's identity."""
     if worker_mode not in LORA_TRAINING_MODEL_MODES:
         raise UnsupportedLoraTrainingModelModeError(
-            f"Worker completed LoRA training with unsupported model mode: {worker_mode!r}",
+            message("voiceFailure.modeUnsupported", workerMode=repr(worker_mode)),
         )
     if worker_mode != requested_mode:
         raise LoraTrainingModelModeMismatchError(
-            "Worker completed LoRA training with model mode "
-            f"{worker_mode!r}, expected {requested_mode!r}",
+            message(
+                "voiceFailure.modeMismatch",
+                workerMode=repr(worker_mode),
+                requestedMode=repr(requested_mode),
+            ),
         )
     return worker_mode
 
@@ -805,7 +806,7 @@ def cleanup_failed_lora(
     session: Session,
     lora_id: str,
     user_id: str,
-    error_message: str,
+    error_message: Message,
 ) -> None:
     """Mark one LoRA FAILED and write its audit record in ``session``.
 
@@ -817,7 +818,7 @@ def cleanup_failed_lora(
         session,
         lora_id,
         status=LoraStatus.FAILED,
-        error=error_message,
+        error_message=error_message,
         completed_at=datetime.now(timezone.utc),
     )
     record_audit(
@@ -826,7 +827,7 @@ def cleanup_failed_lora(
         AuditAction.TRAIN_LORA,
         ResourceType.LORA,
         lora_id,
-        f"failed: {error_message}",
+        f"failed: {error_message.sentence()}",
     )
 
 
@@ -836,7 +837,7 @@ def cleanup_failed_lora_with_factory(
     user_id: str,
     audio_dir: Path,
     db_factory: sessionmaker[Session],
-    error_message: str,
+    error_message: Message,
 ) -> None:
     """Persist a LoRA failure, then remove its disposable working paths.
 
@@ -919,7 +920,7 @@ def reconcile_crashed_loras(
     """Reconcile terminal-job LoRAs one locked row and transaction at a time."""
     reconciled = 0
     excluded_ids: set[str] = set()
-    error_message = "Training crashed or was interrupted"
+    error_message = message("voiceFailure.crashed")
 
     while True:
         lora_id: str | None = None
@@ -1002,7 +1003,7 @@ def _persist_crashed_lora_reconciliation(
     user_id: str,
     completed_model_mode: str | None,
     recovered_adapter: bool,
-    error_message: str,
+    error_message: Message,
 ) -> None:
     if not recovered_adapter:
         cleanup_failed_lora(
@@ -1194,7 +1195,7 @@ async def _defer_lora_training_for_generation(
     if waited_seconds is None:
         return
     if waited_seconds >= STALE_JOB_THRESHOLDS[JobType.LORA_TRAINING].queued_seconds:
-        error_message = "Generation queue did not drain before LoRA training could start"
+        error_message = message("voiceFailure.drainTimeout")
         cleanup_failed_lora_with_factory(
             lora_id=lora_id,
             user_id=user_id,
@@ -1206,7 +1207,7 @@ async def _defer_lora_training_for_generation(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=error_message,
+            error=error_message.sentence(),
             error_type="generation_queue_timeout",
         )
         return
@@ -1426,7 +1427,7 @@ def _handle_cancelled_lora_training(
     lora_id: str,
     user_id: str,
 ) -> None:
-    error_message = "Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown"
+    error_message = message("voiceFailure.cancelled")
     log.warning("LoRA training job %s cancelled", job_id)
     cleanup_failed_lora_with_factory(
         lora_id=lora_id,
@@ -1439,7 +1440,7 @@ def _handle_cancelled_lora_training(
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=error_message,
+        error=error_message.sentence(),
         error_type="timeout",
     )
 
@@ -1480,7 +1481,7 @@ def _keep_restored_lora_adapter(
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=_sanitize_training_error(exc, job_id),
+        error=_sanitize_training_error(exc, job_id).sentence(),
         error_type="lora_training_error",
     )
 
@@ -1494,18 +1495,18 @@ def _fail_lora_training(
     lora_id: str,
     user_id: str,
 ) -> None:
-    sanitized_error = _sanitize_training_error(exc, job_id)
+    failure = _sanitize_training_error(exc, job_id)
     cleanup_failed_lora_with_factory(
         lora_id=lora_id,
         user_id=user_id,
         audio_dir=audio_dir,
         db_factory=db_factory,
-        error_message=sanitized_error,
+        error_message=failure,
     )
     _update_job(
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=sanitized_error,
+        error=failure.sentence(),
         error_type=error_type,
     )

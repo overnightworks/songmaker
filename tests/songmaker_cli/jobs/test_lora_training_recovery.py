@@ -17,6 +17,7 @@ from songmaker_cli.jobs.lora_training import (
     cleanup_failed_lora_with_factory,
     log_orphaned_lora_work_dirs,
 )
+from songmaker_cli.messages import message
 
 ORPHAN_WARNING = "orphaned LoRA work dir"
 
@@ -82,7 +83,7 @@ def test_failed_cleanup_audits_the_work_dirs_it_could_not_remove(
                 user_id=seeded["user_id"],
                 audio_dir=seeded["audio_dir"],
                 db_factory=pg_factory,
-                error_message="testing",
+                error_message=message("voiceFailure.recorded", cause="testing"),
             )
     finally:
         dataset_dir.chmod(0o700)

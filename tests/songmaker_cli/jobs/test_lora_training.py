@@ -19,7 +19,6 @@ import pytest
 from support.lora_training_world import seed_queued_lora
 
 from songmaker_cli.constants import (
-    JOB_ERROR_INTERNAL,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORAS_DIRNAME,
@@ -242,7 +241,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
         assert lora.status == LoraStatus.READY
         assert lora.storage_path is not None
         assert lora.storage_path.endswith(f"/{seeded['lora_id']}/{USER_LORA_OUTPUT_DIRNAME}")
-        assert lora.error is None
+        assert lora.error_message is None
         assert lora.completed_at is not None
 
         job = get_job(session, "job-1")
@@ -333,16 +332,18 @@ def test_matching_worker_mode_is_recorded_when_training_completes(
 
 
 @pytest.mark.parametrize(
-    ("worker_mode", "expected_error", "expected_error_type"),
+    ("worker_mode", "expected_error", "expected_key", "expected_error_type"),
     [
         (
             "turbo",
             "Worker completed LoRA training with model mode 'turbo', expected 'sft'",
+            "voiceFailure.modeMismatch",
             "lora_mode_mismatch",
         ),
         (
             "xl-sft",
             "Worker completed LoRA training with unsupported model mode: 'xl-sft'",
+            "voiceFailure.modeUnsupported",
             "lora_mode_invalid",
         ),
     ],
@@ -352,6 +353,7 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
     db_factory,
     worker_mode: str,
     expected_error: str,
+    expected_key: str,
     expected_error_type: str,
 ) -> None:
     output_dir = (
@@ -384,7 +386,8 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
         job = get_job(session, "job-1")
         assert lora.status == LoraStatus.FAILED
         assert lora.model_mode == "sft"
-        assert lora.error == expected_error
+        assert lora.error_message.key == expected_key
+        assert lora.error_message.sentence() == expected_error
         assert job.status == JobStatus.FAILED
         assert job.error == expected_error
         assert job.error_type == expected_error_type
@@ -508,7 +511,7 @@ def test_missing_sample_audio_raises_and_marks_failed(
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert lora.error is not None
+        assert lora.error_message is not None
 
 
 def test_worker_training_failure_keeps_a_training_specific_reason(
@@ -534,7 +537,7 @@ def test_worker_training_failure_keeps_a_training_specific_reason(
         lora = get_user_lora(session, seeded["lora_id"])
         job = get_job(session, "job-1")
         assert lora.status == LoraStatus.FAILED
-        assert lora.error == "Worker training failed"
+        assert lora.error_message == message("voiceFailure.workerTrainingFailed")
         assert job.status == JobStatus.FAILED
         assert job.error == "Worker training failed"
 
@@ -615,7 +618,9 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
         )
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
-        assert (lora.status, lora.error) == (LoraStatus.FAILED, JOB_ERROR_INTERNAL)
+        assert (lora.status, lora.error_message) == (
+            LoraStatus.FAILED, message("jobFailure.internal"),
+        )
 
 
 def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
@@ -631,7 +636,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
         user_id=seeded["user_id"],
         audio_dir=audio_dir,
         db_factory=db_factory,
-        error_message="testing",
+        error_message=message("voiceFailure.recorded", cause="testing"),
     )
     assert not (lora_root / USER_LORA_DATASET_DIRNAME).exists()
     assert (lora_root / USER_LORA_OUTPUT_DIRNAME).exists()
@@ -640,7 +645,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert lora.error == "testing"
+        assert lora.error_message.sentence() == "testing"
         audit = (
             session.query(AuditLog)
             .filter_by(

@@ -278,9 +278,10 @@
 		<p class="banner warn">{pageText('voiceDetail.deletedBanner')}</p>
 	{:else if lockedStatus && !trainingCancelled}
 		<p class="banner info">{pageText(ACTIVE_STATUS_KEYS[lockedStatus].banner)}</p>
-	{:else if lora.status === 'failed' && lora.error && !trainingCancelled}
+	{:else if lora.status === 'failed' && lora.error_message && !trainingCancelled}
+		{@const reason = messageText(lora.error_message)}
 		<p class="banner error">
-			<strong>{pageText('voiceDetail.trainingFailed')}</strong><br />{lora.error}
+			<strong>{pageText('voiceDetail.trainingFailed')}</strong>{#if reason}<br />{reason}{/if}
 		</p>
 	{/if}
 

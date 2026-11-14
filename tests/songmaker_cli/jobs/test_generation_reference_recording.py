@@ -26,7 +26,6 @@ from songmaker_cli.api_models import (
     SharedGenerationResponse,
 )
 from songmaker_cli.api_models.songs import ReferenceResponse
-from songmaker_cli.constants import JOB_ERROR_GPU_OUT_OF_MEMORY, JOB_ERROR_UNEXPECTED
 from songmaker_cli.db.models import (
     Generation,
     ReferenceRecording,
@@ -38,6 +37,7 @@ from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_job, update_job_s
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
 from songmaker_cli.jobs._runtime import ReferenceDeletedDuringTake
+from songmaker_cli.messages import message
 from songmaker_cli.scheduler import WorkerGpuOutOfMemory, WorkerTaskFailed
 
 REFERENCE_A = "u1/refs/aaaaaaaa-0000-0000-0000-000000000001.wav"
@@ -368,7 +368,7 @@ def test_a_gpu_memory_failure_still_wins_over_a_later_take_failure(
 
     status, error, error_type = _job_outcome(seeded_db)
     assert (status, error_type) == ("failed", "gpu_out_of_memory")
-    assert error == JOB_ERROR_GPU_OUT_OF_MEMORY
+    assert error == message("jobFailure.gpuOutOfMemory").sentence()
 
 
 def test_a_reference_gone_after_an_earlier_take_was_saved_and_deleted_fails_the_job(
@@ -422,7 +422,7 @@ def test_a_take_number_conflict_fails_the_job_as_unexpected_and_saves_no_take(
         _run_job(seeded_db, tmp_path)
 
     status, error, _ = _job_outcome(seeded_db)
-    assert (status, error) == ("failed", JOB_ERROR_UNEXPECTED)
+    assert (status, error) == ("failed", message("jobFailure.unexpected").sentence())
     assert _saved_takes(seeded_db) == []
 
 

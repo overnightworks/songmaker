@@ -15,6 +15,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
+from songmaker_cli.messages import Message
 
 
 def create_user_lora(
@@ -81,7 +82,7 @@ def update_user_lora(
     storage_path: str | None = None,
     tensor_path: str | None = None,
     training_job_id: str | None = None,
-    error: str | None = None,
+    error_message: Message | None = None,
     completed_at: datetime | None = None,
     model_mode: str | None = None,
     clear_error: bool = False,
@@ -97,10 +98,10 @@ def update_user_lora(
         lora.tensor_path = tensor_path
     if training_job_id is not None:
         lora.training_job_id = training_job_id
-    if error is not None:
-        lora.error = error
+    if error_message is not None:
+        lora.error_message = error_message
     elif clear_error:
-        lora.error = None
+        lora.error_message = None
     if completed_at is not None:
         lora.completed_at = completed_at
     if model_mode is not None:

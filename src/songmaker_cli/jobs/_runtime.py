@@ -5,20 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from typing import Any, Callable, Final
+from typing import Any, Final
 
 from sqlalchemy.orm import Session
 
 from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import (
-    JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
-    JOB_ERROR_GENERATION_TIMED_OUT,
-    JOB_ERROR_INTERNAL,
-    JOB_ERROR_NO_WORKERS,
     JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
-    JOB_ERROR_SERVER_UNREACHABLE,
     JOB_ERROR_SONG_NOT_FOUND,
-    JOB_ERROR_UNEXPECTED,
     JOB_ERROR_USER_LORA_UNAVAILABLE,
     JOB_ERROR_VERSION_NOT_FOUND,
 )
@@ -30,6 +24,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.job_timing import JOB_HEARTBEAT_INTERVAL_SECONDS
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.messages import Message, message
 from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerTaskFailed,
@@ -37,12 +32,14 @@ from songmaker_cli.scheduler import (
 
 log = logging.getLogger(__name__)
 
-_USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
-    (AudioDownloadError, JOB_ERROR_AUDIO_DOWNLOAD_FAILED),
-    (ConnectionError, JOB_ERROR_SERVER_UNREACHABLE),
-    (TimeoutError, JOB_ERROR_GENERATION_TIMED_OUT),
-    (NoCapacityError, JOB_ERROR_NO_WORKERS),
-    (RuntimeError, JOB_ERROR_INTERNAL),
+_UNEXPECTED_FAILURE: Final = message("jobFailure.unexpected")
+
+_USER_FACING_ERRORS: tuple[tuple[type[Exception], Message], ...] = (
+    (AudioDownloadError, message("jobFailure.audioDownloadFailed")),
+    (ConnectionError, message("jobFailure.serverUnreachable")),
+    (TimeoutError, message("jobFailure.generationTimedOut")),
+    (NoCapacityError, message("jobFailure.noWorkers")),
+    (RuntimeError, message("jobFailure.internal")),
 )
 
 JOB_ERROR_REFERENCE_DELETED_DURING_TAKE: Final[str] = (
@@ -62,8 +59,8 @@ def generation_error_messages() -> frozenset[str]:
     """Expose the runtime-owned messages allowed on Generate reads."""
     return (
         _GENERATION_SETUP_MESSAGES
-        | {JOB_ERROR_UNEXPECTED}
-        | {message for _, message in _USER_FACING_ERRORS}
+        | {_UNEXPECTED_FAILURE.sentence()}
+        | {failure.sentence() for _, failure in _USER_FACING_ERRORS}
     )
 
 
@@ -75,31 +72,27 @@ class ReferenceDeletedDuringTake(GenerationSetupError):
     """The take's reference row was gone when the take reached persistence; it ends the job."""
 
 
-def _sanitize_error(exc: Exception, job_id: str) -> str:
-    """Return the musician-facing message and log the raw failure in full."""
+def _failure_message(exc: Exception, job_id: str) -> Message | None:
+    """Log the raw failure in full; return the catalog message that words it for the musician.
+
+    None means the failure's own text is already the musician's line: a worker's account of its
+    task, or a setup message the runtime vetted.
+    """
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
-    for error_type, sanitizer in _ERROR_SANITIZERS:
-        if isinstance(exc, error_type):
-            return sanitizer(exc)
-    return _default_error_message(exc)
-
-
-def _sanitize_generation_setup_error(exc: Exception) -> str:
-    message = str(exc)
-    return message if message in _GENERATION_SETUP_MESSAGES else JOB_ERROR_UNEXPECTED
-
-
-def _default_error_message(exc: Exception) -> str:
-    for exc_type, message in _USER_FACING_ERRORS:
+    if isinstance(exc, WorkerTaskFailed):
+        return None
+    if isinstance(exc, GenerationSetupError):
+        return None if str(exc) in _GENERATION_SETUP_MESSAGES else _UNEXPECTED_FAILURE
+    for exc_type, failure in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
-            return message
-    return JOB_ERROR_UNEXPECTED
+            return failure
+    return _UNEXPECTED_FAILURE
 
 
-_ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = (
-    (WorkerTaskFailed, str),
-    (GenerationSetupError, _sanitize_generation_setup_error),
-)
+def _sanitize_error(exc: Exception, job_id: str) -> str:
+    """Return the musician-facing sentence that `jobs.error` stores and log the raw failure."""
+    failure = _failure_message(exc, job_id)
+    return str(exc) if failure is None else failure.sentence()
 
 
 def _job_is_terminal(factory, job_id: str) -> bool:

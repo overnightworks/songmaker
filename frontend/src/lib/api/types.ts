@@ -999,6 +999,7 @@ export interface UserLoraItem {
 	tensor_path?: string | null;
 	training_job_id?: string | null;
 	error?: string | null;
+	error_message?: Message | null;
 	created_at: string;
 	completed_at?: string | null;
 	deleted_at?: string | null;

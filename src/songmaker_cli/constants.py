@@ -11,19 +11,7 @@ APP_NAME = "Hallucinai"
 
 INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # noqa: S105 - the name of an HTTP header and no secret
 
-JOB_ERROR_AUDIO_DOWNLOAD_FAILED: Final[str] = "Failed to download generated audio"
-JOB_ERROR_SERVER_UNREACHABLE: Final[str] = "ACE-Step server not reachable"
-JOB_ERROR_GENERATION_TIMED_OUT: Final[str] = "Generation timed out"
-JOB_ERROR_NO_WORKERS: Final[str] = "No ACE-Step workers available"
-JOB_ERROR_GENERATION_UNAVAILABLE: Final[str] = "Generating isn't available right now."
-JOB_ERROR_GPU_OUT_OF_MEMORY: Final[str] = (
-    "Too long for the GPU right now — try a shorter duration."
-)
-JOB_ERROR_GENERATION_FAILED: Final[str] = "Generating failed — try again."
-JOB_ERROR_WORKER_TRAINING_FAILED: Final[str] = "Worker training failed"
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"
-JOB_ERROR_INTERNAL: Final[str] = "Internal error during processing"
-JOB_ERROR_UNEXPECTED: Final[str] = "An unexpected error occurred"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"

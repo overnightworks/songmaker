@@ -1773,8 +1773,12 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
 - `reconcile_crashed_loras()` runs once at web startup and after the web
   reaper; MusicWorker calls the same job-owned reconciliation after it
   terminalizes a `lora_training` job. The path locks one active LoRA candidate
-  with `skip_locked`, commits its FAILED status and one audit entry in that
-  transaction, then removes its working files. Only a LoRA whose training job
+  with `skip_locked`, commits its FAILED status (its reason `voiceFailure.crashed`) and one audit
+  entry in that transaction, then removes its working files. Every voice failure stores its reason
+  as a `Message` token in `user_loras.error_message` (a `jobFailure.*`, `voiceFailure.*` or
+  `jobRefusal.queueUnavailable` key; `MessageColumn`, with a shape CHECK, SQL NULL when cleared);
+  the voice answer carries it as `error_message` and beside it `error`, the same reason as the
+  agent's English sentence, which the voice page words from the token. Only a LoRA whose training job
   is missing or terminal is a candidate; a still-RUNNING job's LoRA waits for
   the lifecycle reaper to terminalize it (heartbeat threshold plus one tick).
   A second process finds no
