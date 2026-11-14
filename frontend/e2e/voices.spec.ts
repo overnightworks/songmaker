@@ -176,10 +176,12 @@ async function expandVoice(voice: Locator): Promise<void> {
 
 async function openAdminVoices(page: Page): Promise<Locator> {
 	await page.goto('/settings/users');
-	await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
-	const tabs = page.getByRole('combobox', { name: /Admin (tabs|sections)/ });
+	await expect(
+		page.getByRole('heading', { name: words['adminPage.heading'], exact: true })
+	).toBeVisible();
+	const tabs = page.getByRole('combobox', { name: words['adminPage.sections'], exact: true });
 	if (await tabs.count()) await tabs.selectOption('voices');
-	else await page.getByRole('button', { name: 'Voices', exact: true }).click();
+	else await page.getByRole('button', { name: words['adminPage.tabVoices'], exact: true }).click();
 	const section = page
 		.locator('section')
 		.filter({ has: page.getByRole('heading', { name: 'Voice operations' }) });

@@ -6,15 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CowriterSettings } from '#lib/api/types.ts';
 import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
-import { ADMIN_TABS_LABEL } from '#lib/constants/admin.ts';
-import { ADMIN_VOICES_EMPTY } from '#lib/constants/voice.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
-import {
-	MODELS_ROUTE_GATEWAY_LABEL,
-	MODELS_SAVE_FAILED_FALLBACK,
-	MODELS_SET_BY_AGENT_FILE_LABEL
-} from '#lib/constants/models.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -43,6 +36,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 });
 
 import AdminPage from './+page.svelte';
+import { words } from '#lib/words/en.ts';
 
 const VIEWPORT_PX = 320;
 const VOICES = [
@@ -56,7 +50,14 @@ function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSe
 	};
 }
 
-const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Models', 'ACE-Step', 'Cleanup'];
+const TAB_LABELS = [
+	words['adminPage.tabVoices'],
+	words['adminPage.tabRateLimits'],
+	words['adminPage.tabGeneration'],
+	words['adminPage.tabModels'],
+	words['adminPage.tabAcestep'],
+	words['adminPage.tabCleanup']
+];
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -109,7 +110,7 @@ async function renderPage(compact: boolean): Promise<HTMLElement> {
 async function selectTab(target: HTMLElement, tab: string): Promise<void> {
 	const select = requireElement<HTMLSelectElement>(
 		target,
-		`select[aria-label="${ADMIN_TABS_LABEL}"]`
+		`select[aria-label="${words['adminPage.sections']}"]`
 	);
 	select.value = tab;
 	select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -197,7 +198,7 @@ describe('C2: requested admin tab', () => {
 		const target = await renderPage(true);
 		const select = requireElement<HTMLSelectElement>(
 			target,
-			`select[aria-label="${ADMIN_TABS_LABEL}"]`
+			`select[aria-label="${words['adminPage.sections']}"]`
 		);
 		expect(select.value).toBe(expected);
 		if (expected === 'acestep') expect(target.textContent).toContain('Worker');
@@ -215,7 +216,7 @@ describe('admin settings compact layout', () => {
 		const target = await renderPage(true);
 		const select = requireElement<HTMLSelectElement>(
 			target,
-			`select[aria-label="${ADMIN_TABS_LABEL}"]`
+			`select[aria-label="${words['adminPage.sections']}"]`
 		);
 		const style = getComputedStyle(select);
 
@@ -230,7 +231,7 @@ describe('admin settings compact layout', () => {
 
 	it('shows every voice as read-only operational state', async () => {
 		const target = await renderPage(true);
-		const voices = sectionByHeading(target, 'Voice operations');
+		const voices = sectionByHeading(target, words['adminVoices.heading']);
 
 		expect(api.fetchAdminVoices).toHaveBeenCalledOnce();
 		expect(voices.textContent).toContain('Warm Tenor');
@@ -246,10 +247,10 @@ describe('admin settings compact layout', () => {
 	it('names a voices loading failure instead of showing an empty state', async () => {
 		api.fetchAdminVoices.mockRejectedValueOnce(serverRefusal('Voice index is rebuilding'));
 		const target = await renderPage(true);
-		const voices = sectionByHeading(target, 'Voice operations');
+		const voices = sectionByHeading(target, words['adminVoices.heading']);
 
 		expect(voices.textContent).toContain('Voice index is rebuilding');
-		expect(voices.textContent).not.toContain('No voices have been created.');
+		expect(voices.textContent).not.toContain(words['adminVoices.empty']);
 	});
 
 	it('keeps desktop tab buttons and no tab selector', async () => {
@@ -257,7 +258,7 @@ describe('admin settings compact layout', () => {
 		const buttons = Array.from(target.querySelectorAll('.tabs button')).map((button) =>
 			button.textContent?.trim()
 		);
-		expect(target.querySelector(`select[aria-label="${ADMIN_TABS_LABEL}"]`)).toBeNull();
+		expect(target.querySelector(`select[aria-label="${words['adminPage.sections']}"]`)).toBeNull();
 		expect(buttons).toEqual(TAB_LABELS);
 	});
 });
@@ -276,8 +277,12 @@ describe('admin error ownership (#1447)', () => {
 	});
 
 	const races = [
-		{ action: 'Save Defaults', tab: 'ratelimits', request: 'updateRateLimits' },
-		{ action: 'Save Defaults', tab: 'generation', request: 'updateGenerationDefaults' },
+		{ action: words['adminPage.saveDefaults'], tab: 'ratelimits', request: 'updateRateLimits' },
+		{
+			action: words['adminPage.saveDefaults'],
+			tab: 'generation',
+			request: 'updateGenerationDefaults'
+		},
 		{ action: 'MODEL ON', tab: 'acestep', request: 'toggleModel' }
 	] as const;
 
@@ -341,9 +346,9 @@ describe('admin reads and actions that fail', () => {
 		reportResourceStreamReachable(false);
 		api.fetchAdminVoices.mockRejectedValueOnce(lostNetwork());
 		const target = await renderPage(true);
-		const voices = sectionByHeading(target, 'Voice operations');
+		const voices = sectionByHeading(target, words['adminVoices.heading']);
 
-		expect(voices.textContent).not.toContain(ADMIN_VOICES_EMPTY);
+		expect(voices.textContent).not.toContain(words['adminVoices.empty']);
 		expect(voices.querySelector('.error')).toBeNull();
 
 		reportResourceStreamReachable(true);
@@ -360,7 +365,9 @@ describe('admin reads and actions that fail', () => {
 		budget.dispatchEvent(new Event('change', { bubbles: true }));
 		await flush();
 
-		expect(requireElement(target, '.budget-error').textContent).toBe(MODELS_SAVE_FAILED_FALLBACK);
+		expect(requireElement(target, '.budget-error').textContent).toBe(
+			words['modelsTable.saveFailed']
+		);
 		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 });
@@ -370,22 +377,31 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		const models = sectionByHeading(target, 'Models');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover']);
-		expect(columnNames(models)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
+		const models = sectionByHeading(target, words['modelsTable.heading']);
+		expect(taskNames(models)).toEqual([
+			words['modelsTable.taskCowriter'],
+			words['modelsTable.taskCover']
+		]);
+		expect(columnNames(models)).toEqual([
+			words['modelsTable.columnTask'],
+			words['modelsTable.columnProvider'],
+			words['modelsTable.columnRoute'],
+			words['modelsTable.columnModel'],
+			words['modelsTable.columnStatus']
+		]);
 		expect(headings(target)).not.toContain('Providers');
 		expect(models.querySelector('.route-card')).toBeNull();
 		expect(saveButtons(models)).toEqual([]);
 	});
 
-	it.each(['Co-Writer', 'Cover'])(
+	it.each([words['modelsTable.taskCowriter'], words['modelsTable.taskCover']])(
 		'C16 shows the %s row as set by the agent file through the gateway, without a choice',
 		async (task) => {
 			const target = await renderPage(true);
 			await selectTab(target, 'models');
 			const row = rowNamed(target, task);
-			expect(row.textContent).toContain(MODELS_SET_BY_AGENT_FILE_LABEL);
-			expect(row.textContent).toContain(MODELS_ROUTE_GATEWAY_LABEL);
+			expect(row.textContent).toContain(words['modelsTable.setByAgentFile']);
+			expect(row.textContent).toContain(words['modelsTable.routeGateway']);
 			expect(row.querySelector('select, button, [role="group"]')).toBeNull();
 		}
 	);
@@ -405,7 +421,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'generation');
 
-		const section = sectionByHeading(target, 'Generation Defaults');
+		const section = sectionByHeading(target, words['generationDefaults.heading']);
 		expect(requireElement(section, '.error').textContent).toContain('Defaults unavailable');
 		expect(section.querySelector('.save-btn')).toBeNull();
 		expect(section.querySelector('.gen-model-tab')).toBeNull();
@@ -424,7 +440,7 @@ describe('admin models tab', () => {
 		await selectTab(target, 'users');
 		await selectTab(target, 'generation');
 
-		const section = sectionByHeading(target, 'Generation Defaults');
+		const section = sectionByHeading(target, words['generationDefaults.heading']);
 		const save = requireElement<HTMLButtonElement>(section, '.save-btn');
 		const stepsInput = requireElement<HTMLInputElement>(section, 'input');
 		expect(save.disabled).toBe(false);
@@ -458,14 +474,14 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'generation');
 
-		const failed = sectionByHeading(target, 'Generation Defaults');
+		const failed = sectionByHeading(target, words['generationDefaults.heading']);
 		expect(requireElement(failed, '.error').textContent).toContain('Defaults unavailable');
 		expect(failed.querySelector('.save-btn')).toBeNull();
 
 		await selectTab(target, 'users');
 		await selectTab(target, 'generation');
 
-		const section = sectionByHeading(target, 'Generation Defaults');
+		const section = sectionByHeading(target, words['generationDefaults.heading']);
 		requireElement<HTMLButtonElement>(section, '.save-btn').click();
 		await flush();
 		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith(stored);
@@ -508,13 +524,13 @@ describe('admin models tab', () => {
 				.mockResolvedValue(recoveredStored);
 			const target = await renderPage(true);
 			await selectTab(target, 'generation');
-			modeTab(sectionByHeading(target, 'Generation Defaults'), 'SFT').click();
+			modeTab(sectionByHeading(target, words['generationDefaults.heading']), 'SFT').click();
 			await flush();
 			await selectTab(target, 'users');
 			await selectTab(target, 'generation');
 			await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS[0]);
 
-			const section = sectionByHeading(target, 'Generation Defaults');
+			const section = sectionByHeading(target, words['generationDefaults.heading']);
 			expect(requireElement<HTMLInputElement>(section, 'input').value).toBe('41');
 			await typeSteps(section, '30');
 			requireElement<HTMLButtonElement>(section, '.save-btn').click();
@@ -531,14 +547,14 @@ describe('admin models tab', () => {
 			api.fetchGenerationDefaults.mockResolvedValue(stored);
 			const target = await renderPage(true);
 			await selectTab(target, 'generation');
-			const first = sectionByHeading(target, 'Generation Defaults');
+			const first = sectionByHeading(target, words['generationDefaults.heading']);
 			modeTab(first, 'SFT').click();
 			await flush();
 			await typeSteps(first, '77');
 			await selectTab(target, 'acestep');
 			await selectTab(target, 'generation');
 
-			const section = sectionByHeading(target, 'Generation Defaults');
+			const section = sectionByHeading(target, words['generationDefaults.heading']);
 			expect(requireElement<HTMLInputElement>(section, 'input').value).toBe('77');
 			requireElement<HTMLButtonElement>(section, '.save-btn').click();
 			await flush();
@@ -556,7 +572,7 @@ describe('admin models tab', () => {
 		await selectTab(target, 'models');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Models'),
+			sectionByHeading(target, words['modelsTable.heading']),
 			'details'
 		);
 		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
@@ -565,13 +581,13 @@ describe('admin models tab', () => {
 		await flush();
 
 		expect(disclosure.textContent).toContain('Tail budget out of range');
-		expect(disclosure.textContent).not.toContain('Saved.');
+		expect(disclosure.textContent).not.toContain(words['modelsTable.saved']);
 
 		api.updateCowriterSettings.mockResolvedValue(cowriterSettings({ tail_token_budget: 999999 }));
 		requireElement<HTMLButtonElement>(disclosure, '.retry').click();
 		await flush();
 
-		expect(disclosure.textContent).toContain('Saved.');
+		expect(disclosure.textContent).toContain(words['modelsTable.saved']);
 		expect(disclosure.textContent).not.toContain('Tail budget out of range');
 	});
 
@@ -580,11 +596,11 @@ describe('admin models tab', () => {
 		await selectTab(target, 'models');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Models'),
+			sectionByHeading(target, words['modelsTable.heading']),
 			'details'
 		);
 		expect(disclosure.open).toBe(false);
-		expect(disclosure.textContent).toContain('History tail (tokens)');
+		expect(disclosure.textContent).toContain(words['modelsTable.historyTail']);
 
 		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
 		budget.value = '24000';
@@ -592,6 +608,6 @@ describe('admin models tab', () => {
 		await flush();
 
 		expect(api.updateCowriterSettings).toHaveBeenCalledWith(24000);
-		expect(disclosure.textContent).toContain('Saved.');
+		expect(disclosure.textContent).toContain(words['modelsTable.saved']);
 	});
 });

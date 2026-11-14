@@ -1,11 +1,8 @@
 import { createRawSnippet, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-	MODELS_ROUTE_GATEWAY_LABEL,
-	MODELS_SET_BY_AGENT_FILE_LABEL
-} from '#lib/constants/models.ts';
 import ModelsCowriterRow from './ModelsCowriterRow.svelte';
+import { words } from '#lib/words/en.ts';
 
 const mounted: ReturnType<typeof mount>[] = [];
 
@@ -31,7 +28,7 @@ describe('A1 the Co-writer row', () => {
 		const target = renderRow();
 
 		expect(rowText(target)).toBe(
-			`Co-Writer Provider ${MODELS_SET_BY_AGENT_FILE_LABEL} Route ${MODELS_ROUTE_GATEWAY_LABEL} Model ${MODELS_SET_BY_AGENT_FILE_LABEL}`
+			`Co-Writer Provider ${words['modelsTable.setByAgentFile']} Route ${words['modelsTable.routeGateway']} Model ${words['modelsTable.setByAgentFile']}`
 		);
 		expect(target.querySelector('.st, .note')).toBeNull();
 	});
@@ -39,7 +36,9 @@ describe('A1 the Co-writer row', () => {
 	it('keeps the history tail under Advanced', () => {
 		const target = renderRow();
 
-		expect(target.querySelector('details summary')?.textContent).toBe('Advanced');
+		expect(target.querySelector('details summary')?.textContent).toBe(
+			words['modelsTable.advanced']
+		);
 		expect(target.querySelector('details')?.textContent).toContain('24000');
 	});
 

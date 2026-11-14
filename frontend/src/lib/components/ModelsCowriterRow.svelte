@@ -1,10 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import {
-		MODELS_ROUTE_GATEWAY_LABEL,
-		MODELS_SET_BY_AGENT_FILE_LABEL,
-		MODELS_TASK_COWRITER_LABEL
-	} from '#lib/constants/models.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import ModelsServiceRow from './ModelsServiceRow.svelte';
 
 	interface Props {
@@ -15,9 +11,9 @@
 </script>
 
 <ModelsServiceRow
-	task={MODELS_TASK_COWRITER_LABEL}
-	provider={MODELS_SET_BY_AGENT_FILE_LABEL}
-	route={MODELS_ROUTE_GATEWAY_LABEL}
-	model={MODELS_SET_BY_AGENT_FILE_LABEL}
+	task={pageText('modelsTable.taskCowriter')}
+	provider={pageText('modelsTable.setByAgentFile')}
+	route={pageText('modelsTable.routeGateway')}
+	model={pageText('modelsTable.setByAgentFile')}
 	{advanced}
 />

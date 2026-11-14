@@ -4,6 +4,7 @@ import type { GenerationRetentionReport } from '#lib/api/client.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 import { lostNetwork } from '#lib/test-utils/network.ts';
 import { addToast } from '#lib/stores/toast.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -83,14 +84,16 @@ describe('generation retention failures', () => {
 		vi.mocked(runGenerationRetention).mockRejectedValueOnce(lostNetwork());
 		const target = await render();
 		await openConfirmation(target);
-		clickButton(target, 'Delete 2');
+		clickButton(target, words['takeRetention.delete']({ count: 2 }));
 
-		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Cleanup failed', 'error'));
+		await vi.waitFor(() =>
+			expect(addToast).toHaveBeenCalledWith(words['takeRetention.runFailed'], 'error')
+		);
 	});
 });
 
 async function openConfirmation(target: HTMLElement): Promise<void> {
-	clickButton(target, 'Run now');
+	clickButton(target, words['takeRetention.runNow']);
 	await vi.waitFor(() => expect(target.querySelector('.confirm')).not.toBeNull());
 }
 
@@ -106,9 +109,15 @@ describe('generation retention panel', () => {
 		const target = await render();
 
 		expect(target.textContent).not.toMatch(/generation/i);
-		expect(target.querySelector('h2')?.textContent).toBe('Take Retention');
-		expect(target.querySelector('.auto')?.textContent).toContain('daily 05:00 UTC');
-		expect(buttonLabels(target)).toEqual(['What this does', 'Refresh', 'Run now']);
+		expect(target.querySelector('h2')?.textContent).toBe(words['takeRetention.heading']);
+		expect(target.querySelector('.auto')?.textContent).toContain(
+			words['takeRetention.schedule']({ hour: '05' })
+		);
+		expect(buttonLabels(target)).toEqual([
+			words['takeRetention.whatThisDoes'],
+			words['takeRetention.refresh'],
+			words['takeRetention.runNow']
+		]);
 	});
 
 	it('asks with both numbers before it deletes anything, and Cancel runs nothing', async () => {
@@ -121,11 +130,14 @@ describe('generation retention panel', () => {
 
 		expect(runGenerationRetention).not.toHaveBeenCalled();
 		expect(target.querySelector('.confirm p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-			'Archive 12 takes and permanently delete 3. Deleting cannot be undone.'
+			confirmSentence(12, 3)
 		);
-		expect(buttonLabels(target).slice(-2)).toEqual(['Cancel', 'Delete 3']);
+		expect(buttonLabels(target).slice(-2)).toEqual([
+			words['takeRetention.cancel'],
+			words['takeRetention.delete']({ count: 3 })
+		]);
 
-		clickButton(target, 'Cancel');
+		clickButton(target, words['takeRetention.cancel']);
 		await tick();
 		expect(target.querySelector('.confirm')).toBeNull();
 		expect(runGenerationRetention).not.toHaveBeenCalled();
@@ -141,10 +153,13 @@ describe('generation retention panel', () => {
 		const target = await render();
 
 		await openConfirmation(target);
-		clickButton(target, 'Delete 3');
+		clickButton(target, words['takeRetention.delete']({ count: 3 }));
 
 		await vi.waitFor(() =>
-			expect(addToast).toHaveBeenCalledWith('Archived 12, deleted 3', 'success')
+			expect(addToast).toHaveBeenCalledWith(
+				words['takeRetention.outcome']({ archived: '12', deleted: '3' }),
+				'success'
+			)
 		);
 	});
 
@@ -157,8 +172,27 @@ describe('generation retention panel', () => {
 		await openConfirmation(target);
 
 		expect(target.querySelector('.confirm p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-			'Archive 1 take and permanently delete 1. Deleting cannot be undone.'
+			confirmSentence(1, 1)
 		);
+	});
+
+	it.each([
+		{ days: 1, expected: '1 day' },
+		{ days: 30, expected: '30 days' }
+	])('reads a window of $days as "$expected"', async ({ days, expected }) => {
+		vi.mocked(previewGenerationRetention).mockResolvedValue(report({ retention_days: days }));
+		const target = await render();
+
+		expect(target.querySelector('.card .number')?.textContent).toBe(expected);
+	});
+
+	it('groups the thousands of a large count', async () => {
+		vi.mocked(previewGenerationRetention).mockResolvedValue(
+			report({ archived_count: 1234, deleted_count: 0 })
+		);
+		const target = await render();
+
+		expect(target.querySelectorAll('.card .number')[2]?.textContent).toBe('1,234');
 	});
 
 	it('shows what is due after a run, not what the run just did', async () => {
@@ -172,11 +206,14 @@ describe('generation retention panel', () => {
 		const target = await render();
 
 		await openConfirmation(target);
-		clickButton(target, 'Delete 3');
+		clickButton(target, words['takeRetention.delete']({ count: 3 }));
 
-		await vi.waitFor(() => expect(target.textContent).toContain('Nothing to clean up right now'));
-		expect(addToast).toHaveBeenCalledWith('Archived 12, deleted 3', 'success');
-		expect(buttonLabels(target)).toEqual(['What this does']);
+		await vi.waitFor(() => expect(target.textContent).toContain(words['takeRetention.nothingDue']));
+		expect(addToast).toHaveBeenCalledWith(
+			words['takeRetention.outcome']({ archived: '12', deleted: '3' }),
+			'success'
+		);
+		expect(buttonLabels(target)).toEqual([words['takeRetention.whatThisDoes']]);
 	});
 
 	it('confirms with the counts that are current when Run now is pressed', async () => {
@@ -187,7 +224,10 @@ describe('generation retention panel', () => {
 
 		await openConfirmation(target);
 
-		expect(buttonLabels(target).slice(-2)).toEqual(['Cancel', 'Delete 9']);
+		expect(buttonLabels(target).slice(-2)).toEqual([
+			words['takeRetention.cancel'],
+			words['takeRetention.delete']({ count: 9 })
+		]);
 	});
 
 	it('shows the empty state and no confirmation when the fresh preview has nothing due', async () => {
@@ -196,9 +236,9 @@ describe('generation retention panel', () => {
 			.mockResolvedValue(report({ archived_count: 0, deleted_count: 0 }));
 		const target = await render();
 
-		clickButton(target, 'Run now');
+		clickButton(target, words['takeRetention.runNow']);
 
-		await vi.waitFor(() => expect(target.textContent).toContain('Nothing to clean up right now'));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['takeRetention.nothingDue']));
 		expect(target.querySelector('.confirm')).toBeNull();
 	});
 
@@ -208,8 +248,8 @@ describe('generation retention panel', () => {
 		);
 		const target = await render();
 
-		expect(target.textContent).toContain('Nothing to clean up right now');
-		expect(buttonLabels(target)).toEqual(['What this does']);
+		expect(target.textContent).toContain(words['takeRetention.nothingDue']);
+		expect(buttonLabels(target)).toEqual([words['takeRetention.whatThisDoes']]);
 	});
 });
 
@@ -217,4 +257,11 @@ function buttonLabels(target: HTMLElement): string[] {
 	return Array.from(target.querySelectorAll('button')).map(
 		(el) => el.getAttribute('aria-label') ?? el.textContent?.trim() ?? ''
 	);
+}
+
+// The confirmation sentence read from its parts, as the person sees it.
+function confirmSentence(archived: number, deleted: number): string {
+	return words['takeRetention.confirm'](archived, { deleted: String(deleted) })
+		.map((part) => (typeof part === 'string' ? part : part.text))
+		.join('');
 }

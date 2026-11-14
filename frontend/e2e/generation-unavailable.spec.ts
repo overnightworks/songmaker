@@ -1,7 +1,7 @@
 import { expect, test as base, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import type { JobItem } from '../src/lib/api/types';
-import { ADMIN_TABS_LABEL, ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
+import { ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
 import { EDITOR_OPEN_WORKER_POOL_LABEL } from '../src/lib/constants/song';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
@@ -47,7 +47,9 @@ async function arrangeAudience(page: Page, role: (typeof ROLES)[number]): Promis
 async function expectWorkerPool(page: Page, width: number): Promise<void> {
 	await expect(page).toHaveURL(/\/settings\/users\?tab=acestep$/);
 	if (width === 390) {
-		await expect(page.getByRole('combobox', { name: ADMIN_TABS_LABEL })).toHaveValue('acestep');
+		await expect(page.getByRole('combobox', { name: words['adminPage.sections'] })).toHaveValue(
+			'acestep'
+		);
 	} else {
 		await expect(page.getByRole('button', { name: 'ACE-Step', exact: true })).toHaveClass(/active/);
 	}

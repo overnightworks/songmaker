@@ -1,11 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import {
-		MODELS_ADVANCED_LABEL,
-		MODELS_COLUMN_MODEL_LABEL,
-		MODELS_COLUMN_PROVIDER_LABEL,
-		MODELS_COLUMN_ROUTE_LABEL
-	} from '#lib/constants/models.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		task: string;
@@ -21,15 +16,15 @@
 <div class="tt-row">
 	<div class="cell cell-task">{task}</div>
 	<div class="cell">
-		<span class="k" aria-hidden="true">{MODELS_COLUMN_PROVIDER_LABEL}</span>
+		<span class="k" aria-hidden="true">{pageText('modelsTable.columnProvider')}</span>
 		<span class="ro">{provider}</span>
 	</div>
 	<div class="cell">
-		<span class="k" aria-hidden="true">{MODELS_COLUMN_ROUTE_LABEL}</span>
+		<span class="k" aria-hidden="true">{pageText('modelsTable.columnRoute')}</span>
 		<span class="ro">{route}</span>
 	</div>
 	<div class="cell">
-		<span class="k" aria-hidden="true">{MODELS_COLUMN_MODEL_LABEL}</span>
+		<span class="k" aria-hidden="true">{pageText('modelsTable.columnModel')}</span>
 		<span class="ro">{model}</span>
 	</div>
 </div>
@@ -37,7 +32,7 @@
 {#if advanced}
 	<div class="tt-sub">
 		<details class="adv">
-			<summary>{MODELS_ADVANCED_LABEL}</summary>
+			<summary>{pageText('modelsTable.advanced')}</summary>
 			<div class="adv-body">{@render advanced()}</div>
 		</details>
 	</div>
