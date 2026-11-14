@@ -60,9 +60,7 @@ def parse_catalog(text: str) -> dict[EntryKey, str]:
 
 
 def conflict_block(ours: str | None, theirs: str | None) -> str:
-    return "\n".join(
-        [CONFLICT_OURS, ours or "", CONFLICT_SEPARATOR, theirs or "", CONFLICT_THEIRS]
-    )
+    return "\n".join([CONFLICT_OURS, ours or "", CONFLICT_SEPARATOR, theirs or "", CONFLICT_THEIRS])
 
 
 def merge_order(
@@ -78,7 +76,9 @@ def merge_order(
             continue
         position = 0 if anchor is None else order.index(anchor) + 1
         # Entries only ours added sit after the anchor too; ours stays first.
-        while position < len(order) and order[position] not in base and order[position] not in theirs:
+        while (
+            position < len(order) and order[position] not in base and order[position] not in theirs
+        ):
             position += 1
         order.insert(position, key)
         seen.add(key)
