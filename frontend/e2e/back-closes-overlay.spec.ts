@@ -44,7 +44,6 @@ const LIBRARY_HEADING = { name: words['places.library'] };
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
 // The base library's songs each carry one seeded take, their first.
 const SEEDED_TAKE_NUMBER = 1;
-const SHARE_WARNING_LABEL = 'Missing from the share page';
 const DRAFT_LINE = 'a line nobody saved';
 
 interface Pages {
@@ -1007,7 +1006,7 @@ test(
 				.getByRole('dialog', { name: words['collectionMenu.label'] })
 				.getByRole('button', { name: words['collectionMenu.albumShare'], exact: true })
 				.click();
-			const warning = page.getByRole('dialog', { name: SHARE_WARNING_LABEL });
+			const warning = page.getByRole('dialog', { name: words['shareDialog.title'] });
 			await expect(warning).toBeVisible();
 
 			await page.goBack();
@@ -1137,7 +1136,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 			const bar = sharePage.locator('footer.player-bar');
 			await expect(sharePage.locator('.queue-row').last()).toBeInViewport();
 			if (shell === 'mobile') {
-				await bar.getByRole('button', { name: 'Back to the player' }).first().click();
+				await bar.getByRole('button', { name: words['share.backToPlayer'] }).first().click();
 			}
 			await expect(
 				sharePage

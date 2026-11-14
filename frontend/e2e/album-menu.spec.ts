@@ -133,7 +133,7 @@ test('the public playlist opens with the page-player order', async ({ browser },
 			sharePage.locator('.now-playing-line'),
 			sharePage.locator('.now-playing.page .transport'),
 			sharePage.locator('.lyrics-heading'),
-			sharePage.getByRole('heading', { name: 'Songs', exact: true })
+			sharePage.getByRole('heading', { name: words['share.songs'], exact: true })
 		);
 		if (shellOf(testInfo) === 'mobile') {
 			for (let index = 1; index < boxes.length; index++)

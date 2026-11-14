@@ -231,7 +231,7 @@ interface AppPage {
 }
 
 const HOME: AppPage = {
-	name: 'Home',
+	name: words['places.home'],
 	open: async (page) => {
 		await page.goto(HOME_PATH);
 		await expectHomeShown(page);
@@ -267,7 +267,7 @@ const ALBUM: AppPage = {
 };
 
 const SETTINGS: AppPage = {
-	name: 'Settings',
+	name: words['places.settings'],
 	open: async (page, shell, library) => {
 		await LIBRARY.open(page, shell, library);
 		await openSettings(page, shell);

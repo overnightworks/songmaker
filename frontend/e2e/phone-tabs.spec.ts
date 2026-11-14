@@ -15,13 +15,13 @@ import {
 import { openSearchSheet } from './phone-search';
 import { readSeededLibrary } from './seed';
 
+const TAB_LABELS = [words['places.home'], words['places.library'], words['places.playlists']];
+
 const tabs = (page: Page) => page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 
 async function expectCurrent(page: Page, label: string | null): Promise<void> {
 	await expect(tabs(page)).toBeVisible();
-	await expect(tabs(page).getByRole('button')).toHaveText(
-		PHONE_TABS.map((tab) => words[tab.labelKey])
-	);
+	await expect(tabs(page).getByRole('button')).toHaveText(TAB_LABELS);
 	await expect(tabs(page).locator('[aria-current="page"]')).toHaveCount(label ? 1 : 0);
 	if (label)
 		await expect(tabs(page).getByRole('button', { name: label, exact: true })).toHaveAttribute(
@@ -41,7 +41,7 @@ test(
 		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 		await expect(rail).toBeVisible();
 		const links = rail.locator('.rail-page-link');
-		await expect(links).toHaveText(PHONE_TABS.map(({ labelKey }) => new RegExp(words[labelKey])));
+		await expect(links).toHaveText(TAB_LABELS.map((label) => new RegExp(label)));
 		const icons = await links
 			.locator('svg')
 			.evaluateAll((nodes) => nodes.map((node) => node.innerHTML));

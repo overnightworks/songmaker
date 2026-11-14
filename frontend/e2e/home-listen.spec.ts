@@ -158,7 +158,7 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 			await expect(
 				listenRegion(page).getByRole('button', { name: albumLabel, exact: true })
 			).toHaveCount(0);
-			await page.getByRole('button', { name: 'Undo', exact: true }).click();
+			await page.getByRole('button', { name: words['albumPage.undo'], exact: true }).click();
 			await expect(
 				listenRegion(page).getByRole('button', { name: albumLabel, exact: true })
 			).toBeVisible();

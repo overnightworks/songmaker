@@ -131,7 +131,7 @@ test('album content begins at its header, song and take content at their breadcr
 
 	await page.goto(albumAddress);
 	await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
-	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
+	await expect(surface.getByRole('navigation', { name: words['breadcrumb.label'] })).toHaveCount(0);
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
 	await surface
@@ -151,7 +151,9 @@ test('album content begins at its header, song and take content at their breadcr
 		await expect(surface.locator('.mobile-album-line')).toHaveCount(0);
 	} else {
 		await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
-		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+		await expect(
+			surface.getByRole('navigation', { name: words['breadcrumb.label'] })
+		).toBeVisible();
 	}
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
@@ -164,7 +166,9 @@ test('album content begins at its header, song and take content at their breadcr
 		await expect(surface.locator('.mobile-album-line')).toHaveCount(0);
 	} else {
 		await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
-		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+		await expect(
+			surface.getByRole('navigation', { name: words['breadcrumb.label'] })
+		).toBeVisible();
 	}
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
@@ -261,7 +265,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 						contentType: 'image/png'
 					});
 					if (failure === 'refusal') {
-						await toast.getByRole('button', { name: 'Dismiss' }).click();
+						await toast.getByRole('button', { name: words['toast.dismiss'] }).click();
 						await expect(toast).toHaveCount(0);
 					}
 				} finally {

@@ -309,16 +309,16 @@ test(
 			const share = menu.getByRole('button', { name: words['takeMenu.share'], exact: true });
 			const hint = share.locator('.menu-item-hint');
 			await expect(share).toHaveAttribute('aria-pressed', 'false');
-			await expect(hint).toHaveText('off');
+			await expect(hint).toHaveText(words['takeMenu.shareOff']);
 
 			await share.click();
 			await expect(share).toHaveAttribute('aria-pressed', 'true');
-			await expect(hint).toHaveText('on');
+			await expect(hint).toHaveText(words['takeMenu.shareOn']);
 			await expect(menu).toBeVisible();
 
 			await share.click();
 			await expect(share).toHaveAttribute('aria-pressed', 'false');
-			await expect(hint).toHaveText('off');
+			await expect(hint).toHaveText(words['takeMenu.shareOff']);
 			await expect(menu).toBeVisible();
 		});
 	}

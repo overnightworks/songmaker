@@ -398,7 +398,10 @@ test.describe('song page at phone width', () => {
 				.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 				.click();
 
-			const settingsHeading = page.getByRole('heading', { name: 'Generation', level: 1 });
+			const settingsHeading = page.getByRole('heading', {
+				name: words['settingsSections.generation'],
+				level: 1
+			});
 			await expect(page).toHaveURL(/\/settings\/generation$/);
 			await expect(settingsHeading).toBeVisible();
 			await page.reload();
@@ -724,7 +727,9 @@ test.describe('song page at phone width', () => {
 				.click();
 
 			await expect(page).toHaveURL(/\/settings\/generation$/);
-			await expect(page.getByRole('heading', { name: 'Generation', level: 1 })).toBeVisible();
+			await expect(
+				page.getByRole('heading', { name: words['settingsSections.generation'], level: 1 })
+			).toBeVisible();
 		}
 	);
 });

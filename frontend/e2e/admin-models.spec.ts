@@ -73,9 +73,11 @@ async function openModelsTab(page: Page): Promise<void> {
 	if (await compactTabs.count()) {
 		await compactTabs.selectOption('models');
 	} else {
-		await page.getByRole('button', { name: 'Models', exact: true }).click();
+		await page.getByRole('button', { name: words['adminPage.tabModels'], exact: true }).click();
 	}
-	await expect(page.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: words['modelsTable.heading'], exact: true })
+	).toBeVisible();
 }
 
 /**

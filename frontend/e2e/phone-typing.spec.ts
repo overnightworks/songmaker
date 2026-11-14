@@ -33,7 +33,6 @@ import { readSeededLibrary, runMarker, seedRunningGenerationJob, seedSongPhoneSo
 
 const PHONE_TYPING_SONG_TITLE = 'Phone Typing';
 const COWRITER_COMPOSER_PLACEHOLDER = /^Ask for a rewrite/;
-const COWRITER_SEND_LABEL = 'Send';
 const NO_RESERVED_ROOM = '0px';
 const ON_SCREEN_KEYBOARD_HEIGHT_PX = 320;
 const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of the song`).join(
@@ -170,7 +169,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await composer.click();
 		await expect(miniPlayer).toBeHidden();
 		await expect(
-			page.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true })
+			page.getByRole('button', { name: words['cowriter.send'], exact: true })
 		).toBeVisible();
 
 		await composer.blur();
@@ -353,7 +352,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await composer.fill(COWRITER_MESSAGE);
 		await expect(miniPlayer).toBeHidden();
 
-		await page.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).tap();
+		await page.getByRole('button', { name: words['cowriter.send'], exact: true }).tap();
 
 		await expect.poll(() => sentMessages).toEqual([COWRITER_MESSAGE]);
 		await expect(page.getByText(COWRITER_TURN_REFUSAL)).toBeVisible();

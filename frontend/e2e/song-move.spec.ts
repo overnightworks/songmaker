@@ -194,7 +194,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await expect(page.getByRole('heading', { name: SONG_TITLE, exact: true })).toBeVisible();
 			await expect(lyrics).toHaveValue(DRAFT_LYRICS);
 			if (shell === 'desktop') {
-				const crumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+				const crumb = page.getByRole('navigation', { name: words['breadcrumb.label'] });
 				await expect(crumb.getByText(otherTitle, { exact: true })).toBeVisible();
 			} else {
 				await expect(

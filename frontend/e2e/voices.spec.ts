@@ -324,7 +324,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			deleteDialog.getByRole('heading', { name: words['voicesPage.deleteTitle'], exact: true })
 		).toBeVisible();
 		await expect(deleteDialog).toContainText(
-			`${voiceName} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.`
+			words['voicesPage.deleteWarning']({ name: voiceName })
 		);
 		await deleteDialog
 			.getByRole('button', { name: words['voicesPage.delete'], exact: true })
@@ -367,7 +367,9 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			await expect(deletedVoiceTake).toHaveClass(/playing/);
 		} else {
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
-			await expect(deletedVoiceTake).toContainText(`Voice: ${voiceName} — voice deleted`);
+			await expect(deletedVoiceTake).toContainText(
+				words['takeRow.voiceDeleted']({ name: voiceName })
+			);
 			const deletedVoicePlayTarget = deletedVoiceTake.getByRole('button', {
 				name: words['takeRow.playTake']({
 					take: words['takeRow.takeVersioned']({ version: '1', take: '1' })

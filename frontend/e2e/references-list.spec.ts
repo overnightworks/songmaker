@@ -221,7 +221,7 @@ test('Settings › References plays a recording again after its first audio answ
 			})
 			.click();
 
-		await expect(row.getByRole('alert')).toHaveText("Can't play this recording");
+		await expect(row.getByRole('alert')).toHaveText(words['referencesPage.playFault']);
 		const served = page.waitForResponse(
 			(response) => audioRoute.test(response.url()) && response.ok()
 		);
@@ -312,7 +312,7 @@ test('Settings › References deletes an unused recording from its menu after a 
 			.click();
 		const confirm = page.getByRole('dialog', { name: words['referencesPage.deleteTitle'] });
 		await expect(confirm).toContainText('its audio file');
-		await confirm.getByRole('button', { name: 'Delete' }).click();
+		await confirm.getByRole('button', { name: words['deleteDialog.confirm'] }).click();
 
 		await expect(workspace(page).getByText(EMPTY_SENTENCE)).toBeVisible();
 		await expect(workspace(page).getByRole('listitem')).toHaveCount(0);
@@ -432,7 +432,7 @@ test('Settings › References shows the in-use notice on the row when a song too
 			.click();
 		await page
 			.getByRole('dialog', { name: words['referencesPage.deleteTitle'] })
-			.getByRole('button', { name: 'Delete' })
+			.getByRole('button', { name: words['deleteDialog.confirm'] })
 			.click();
 
 		await expect(row.getByRole('alert')).toHaveText(words['referencesPage.inUseFault']);
@@ -510,7 +510,7 @@ test('Settings › References tags a deleted song without a link', async ({
 
 		await row.getByRole('button', { name: 'Used in 1 version' }).click();
 
-		await expect(row.getByText('Deleted')).toBeVisible();
+		await expect(row.getByText(words['referenceUses.deletedTag'])).toBeVisible();
 		await expect(row.getByText('Version v1')).toBeVisible();
 		await expect(row.getByRole('link')).toHaveCount(0);
 		guard.assertClean();

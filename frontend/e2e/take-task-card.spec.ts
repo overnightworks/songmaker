@@ -130,7 +130,7 @@ test('With a card open the Recipe holds no Repaint row, no Off and no Source bar
 		const recipe = page.getByRole('region', { name: words['recipe.panel'], exact: true });
 		await expect(recipe).toBeVisible();
 		await expect(recipe).not.toContainText(words['takeTask.repaint']);
-		await expect(recipe).not.toContainText('Off');
+		await expect(recipe).not.toContainText(words['takeRecipe.off']);
 		await expect(recipe).not.toContainText('Source');
 	});
 });
