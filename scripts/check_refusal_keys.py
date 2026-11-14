@@ -373,13 +373,11 @@ def _strings(value: object) -> tuple[str, ...]:
     return ()
 
 
-def read_migration(path: Path) -> Migration | None:
-    """The migration's chain place and stored keys, or None when it names no stored key."""
+def read_migration(path: Path) -> Migration:
+    """The migration's chain place and the stored keys it names, none for an ordinary migration."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     table = _literal(tree, STORED_TABLE_NAME)
     retired = _literal(tree, RETIRED_NAME)
-    if table is None and retired is None:
-        return None
     revision = _strings(_literal(tree, "revision"))
     return Migration(
         path=path,
@@ -407,8 +405,7 @@ def _ancestors(migration: Migration, by_revision: dict[str, Migration]) -> set[s
 def migrations_in(directory: Path) -> list[Migration]:
     if not directory.is_dir():
         return []
-    found = (read_migration(path) for path in sorted(directory.glob("*.py")))
-    return [migration for migration in found if migration is not None]
+    return [read_migration(path) for path in sorted(directory.glob("*.py"))]
 
 
 def read_stored_keys(text: str) -> set[str]:
@@ -490,9 +487,7 @@ def _base_problems(
         key
         for name in added.stdout.split()
         if name.endswith(".py")
-        for migration in [read_migration(migrations_directory / name)]
-        if migration is not None
-        for key in migration.retired_keys
+        for key in read_migration(migrations_directory / name).retired_keys
     }
     return [
         Violation(shown, 1, f"{key!r} left the set since {base_sha[:12]}; "
