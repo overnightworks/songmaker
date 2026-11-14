@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from support.mcp_tool_table import BOB
 from support.mcp_world import McpWorld
 
 
@@ -30,11 +31,12 @@ def test_a_take_nobody_owns_is_refused_with_its_sentence_and_key(household: McpW
     }
 
 
-def test_a_preset_nobody_owns_is_refused_with_its_sentence_and_key(household: McpWorld) -> None:
-    reply = household.call("update_preset", {"preset_id": "no-such-preset", "name": "Fresh"})
+def test_a_preset_of_another_person_is_refused_like_a_missing_one(household: McpWorld) -> None:
+    foreign = household.call("update_preset", {"preset_id": f"preset-{BOB}", "name": "Fresh"})
+    missing = household.call("update_preset", {"preset_id": "no-such-preset", "name": "Fresh"})
 
-    assert reply.is_error
-    assert reply.json() == {
+    assert foreign.is_error
+    assert foreign.json() == missing.json() == {
         "detail": "Preset not found",
         "message": {"key": "presetRefusal.notFound", "values": {}},
     }
