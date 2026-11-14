@@ -1,0 +1,8 @@
+claim_id = "9cd29b96132c45f790912e53daca614e"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "e313c374fe52b4ddf5fdbd4af37a44251dc45faf"
+branch = "claude/issue-3138-notices-toasts-and-dialogs-read-their-wo"
+scope = ["frontend/src/lib/api/fetch.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/ConfirmDialog.svelte", "frontend/src/lib/components/ConfirmDialog.test.ts", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/OfflineStrip.svelte", "frontend/src/lib/components/OfflineStrip.test.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/ToastContainer.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/WorkerPoolPanel.test.ts", "frontend/src/lib/constants/connectivity.ts", "frontend/src/lib/constants/dialog.ts", "frontend/src/lib/constants/http.ts", "frontend/src/lib/constants/resource-sync.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/rateLimitNotice.test.ts", "frontend/src/lib/stores/rateLimitNotice.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/settings/about/+page.svelte", "src/songmaker_cli/words.py"]
+opened_commit = "2a4a3e229207751ecbc2adcfcaa1def4f953fee3"
+whole_reason = "notices, toasts and dialogs are one frame surface of one-line swaps"
