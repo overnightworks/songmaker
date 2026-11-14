@@ -59,11 +59,15 @@ class RedisProxy:
             self._cut = False
 
     def restart_empty(self) -> None:
-        """Lose every key and report an uptime counted from now, as a restarted server does."""
-        with Redis.from_url(self._server_url) as server:
-            server.flushdb()
+        """Lose every key and report an uptime counted from now, as a restarted server does.
+
+        The young uptime is reported before the keys go, so no reader sees the empty
+        server with its old age.
+        """
         with self._lock:
             self._restarted_at = time.monotonic()
+        with Redis.from_url(self._server_url) as server:
+            server.flushdb()
         self._drop_connections()
 
     def close(self) -> None:

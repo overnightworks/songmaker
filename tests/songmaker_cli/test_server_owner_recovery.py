@@ -191,10 +191,11 @@ def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     _, owner_a = _start_owner(cluster, redis_client, "a")
     _start_owner(cluster, redis_client, "b")
     jobs = _seed_running_jobs(factory, cluster, owner_a)
-    ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
     restarted_at = time.monotonic()
 
     proxy.restart_empty()
+
+    ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
 
     assert poll_until(
         lambda: redis_client.exists(owner_lease_key(owner_a)) == 1,
