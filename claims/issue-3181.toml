@@ -1,8 +1,0 @@
-claim_id = "6879e1c316d942a5a87047c839f2d4de"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "14349f8d2c5ebe944665f5c5835074293579bc3f"
-branch = "claude/issue-3181-two-web-processes-run-in-ci-against-one"
-scope = [".github/workflows/coveragerc-ci.ini", "docs/testing.md", "quality/baseline.toml", "tests/songmaker_cli/test_server_two_web_processes.py", "tests/songmaker_cli/test_two_web_processes.py", "tests/support/app_processes.py"]
-opened_commit = "f18969d3525bff4d7dfa00850f77b9228f9f338f"
-whole_reason = "The harness has its first caller only in the proof test."
