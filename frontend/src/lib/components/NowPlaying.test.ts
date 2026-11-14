@@ -586,7 +586,7 @@ describe('NowPlaying', () => {
 		const rows = target.querySelectorAll('.queue-row');
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain('Tide');
-		expect(target.textContent).not.toContain('Up next');
+		expect(target.textContent).not.toContain(words['nowPlaying.upNext']({ title: '' }));
 	});
 
 	it('renders the docked panel inline, with no transport and no sheet to open', async () => {
@@ -725,7 +725,7 @@ describe('NowPlaying when the take details cannot load', () => {
 
 		expect(fetch).toHaveBeenCalledWith('/api/songs/s1', expect.anything());
 		const shown = [...get(toasts).map((toast) => toast.message), target.textContent];
-		expect(shown.join(' ')).not.toMatch(/Failed to (fetch|load take details)/);
+		expect(shown.join(' ')).not.toMatch(new RegExp(`Failed to fetch|${words['nowPlaying.takeDetailsFailed']}`));
 	});
 
 	type PendingFetch = { resolve: (response: unknown) => void; reject: (error: Error) => void };
@@ -929,7 +929,7 @@ describe('NowPlaying curation mode (#228)', () => {
 	it('shows the album progress while curating', async () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
-		expect(target.textContent).toContain('Pick album takes · Song 1 of 2');
+		expect(target.textContent).toContain(words['nowPlaying.curateProgress']({ index: '1', total: '2' }));
 	});
 
 	it('does not render the curation bar outside curation mode', async () => {

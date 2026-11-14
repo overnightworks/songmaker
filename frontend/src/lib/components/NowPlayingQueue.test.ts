@@ -199,7 +199,7 @@ describe('NowPlayingQueue', () => {
 		const rows = target.querySelectorAll('.queue-row');
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain('Tide');
-		expect(target.textContent).not.toContain('Up next');
+		expect(target.textContent).not.toContain(words['nowPlaying.upNext']({ title: '' }));
 	});
 
 	it('labels a versioned row with version and take number', async () => {
