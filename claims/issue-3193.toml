@@ -1,0 +1,8 @@
+claim_id = "308f86826d394be6ae9c71f4fc17c9c4"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "2b709e685150e9ebfdc6f843ddad8ca485a356e8"
+branch = "claude/issue-3193-a-job-s-queue-wait-is-stored-as-a-messag"
+scope = [".github/workflows/ci.yml", "docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/LoraDetail.svelte", "frontend/src/lib/components/LoraDetail.test.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.svelte", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/words", "quality/baseline.toml", "scripts/check_refusal_keys.py", "scripts/static_checks.sh", "scripts/stored_message_keys.txt", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/message_column.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/words.py", "tests/scripts", "tests/songmaker_cli", "tests/support"]
+opened_commit = "f75769a35a2b8e91629e2a00ce45c0871b54df8a"
+whole_reason = "The column, its validating type, the writers, the migration, the stored-key checks and the renderers are true only together: a token column no page renders, or a key set no check holds, would lie."
