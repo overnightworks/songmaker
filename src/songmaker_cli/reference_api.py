@@ -229,7 +229,7 @@ def api_reference_audio(
 ) -> FileResponse:
     recording = get_owned_reference_recording(session, user.id, reference_id)
     if recording is None:
-        raise HTTPException(404)
+        raise HTTPException(404)  # unread: media
     storage_path = recording.storage_path
     recording_id = recording.id
     session.commit()  # end the transaction: the pooled connection must not outlive the transfer
@@ -244,7 +244,7 @@ def api_reference_audio(
             "Reference audio unusable for user %s, reference %s: %s",
             user.id, recording_id, type(exc).__name__,
         )
-        raise HTTPException(404) from None
+        raise HTTPException(404) from None  # unread: media
     return OpenedFileResponse(
         audio_path, stat_result=stat_result, media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix),
     )

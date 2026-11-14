@@ -29,7 +29,7 @@ def verify_internal_token(
 ) -> None:
     expected = get_settings().songmaker_internal_token.get_secret_value()
     if not hmac.compare_digest(x_internal_token.encode(), expected.encode()):
-        raise HTTPException(401, "Invalid internal token")
+        raise HTTPException(401, "Invalid internal token")  # unread: machine
 
 
 router = APIRouter(

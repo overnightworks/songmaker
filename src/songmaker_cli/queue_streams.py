@@ -310,7 +310,7 @@ def prepare_queue_stream_admission(
     sources: list[QueueStreamSource],
 ) -> QueueStreamAdmission:
     if not sources:
-        raise HTTPException(422, "Queue has no playable tracks")
+        raise HTTPException(422, "Queue has no playable tracks")  # unread: share
     windowed_by_count = len(sources) > QUEUE_STREAM_MAX_TRACKS
     sources = sources[:QUEUE_STREAM_MAX_TRACKS]
     prepared: list[QueueStreamPreparedSource] = []
@@ -318,7 +318,7 @@ def prepare_queue_stream_admission(
     for source in sources:
         gen = source.generation
         if not gen.mp3_path:
-            raise HTTPException(422, "Queue contains a generation without audio")
+            raise HTTPException(422, "Queue contains a generation without audio")  # unread: share
         audio_path = canonical_audio_path(ctx.audio_dir, gen.mp3_path)
         try:
             stat = audio_path.stat()
@@ -327,7 +327,7 @@ def prepare_queue_stream_admission(
         duration = probe_audio_duration(audio_path)
         total_duration += duration
         if total_duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
-            raise HTTPException(422, QUEUE_STREAM_DURATION_LIMIT_DETAIL)
+            raise HTTPException(422, QUEUE_STREAM_DURATION_LIMIT_DETAIL)  # unread: share
         prepared.append(
             QueueStreamPreparedSource(
                 source=source,
@@ -434,22 +434,22 @@ def _find_reusable_snapshot(
 
 def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
     if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
     manifest_path = _stream_dir(ctx) / f"{snapshot_id}.json"
     if not manifest_path.exists():
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
     manifest = QueueStreamManifest.load(manifest_path)
     if manifest is None:
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
+        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
 
     now = datetime.now(timezone.utc)
     if manifest.expires_at < now:
         delete_snapshot_files(ctx, snapshot_id)
-        raise HTTPException(404, "Queue stream expired")
+        raise HTTPException(404, "Queue stream expired")  # unread: share
 
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
     if not audio_path.exists():
-        raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL)
+        raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL)  # unread: share
     return manifest
 
 
@@ -457,7 +457,7 @@ def queue_stream_audio_path(ctx: AppContext, snapshot_id: str) -> Path:
     stream_dir = _stream_dir(ctx)
     path = confined_under(stream_dir, stream_dir / f"{snapshot_id}.mp3")
     if path is None:
-        raise HTTPException(403, "Path traversal denied")
+        raise HTTPException(403, "Path traversal denied")  # unread: share
     return path
 
 
@@ -513,7 +513,7 @@ def probe_audio_duration(audio_path: Path) -> float:
     """Request-boundary wrapper: an unreadable file is a 422, not a None."""
     duration = audio_files.read_audio_duration(audio_path)
     if duration is None:
-        raise HTTPException(422, "Could not read audio duration")
+        raise HTTPException(422, "Could not read audio duration")  # unread: share
     return duration
 
 
@@ -525,7 +525,7 @@ def write_concat_file(concat_path: Path, audio_paths: list[Path]) -> None:
 def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
-        raise HTTPException(503, "ffmpeg is not available")
+        raise HTTPException(503, "ffmpeg is not available")  # unread: share
 
     cmd = [
         ffmpeg,
@@ -555,12 +555,12 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
         )
     except subprocess.TimeoutExpired as exc:
         output_path.unlink(missing_ok=True)
-        raise HTTPException(504, "Queue stream build timed out") from exc
+        raise HTTPException(504, "Queue stream build timed out") from exc  # unread: share
     except subprocess.CalledProcessError as exc:
         output_path.unlink(missing_ok=True)
         detail = str.strip(exc.stderr or exc.stdout or "")
         log.warning("ffmpeg queue stream build failed: %s", detail)
-        raise HTTPException(422, "Could not build queue stream") from exc
+        raise HTTPException(422, "Could not build queue stream") from exc  # unread: share
 
 
 def public_queue_stream_manifest(

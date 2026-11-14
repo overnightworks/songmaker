@@ -68,7 +68,7 @@ def check_rate_limit(
             unavailable_log_message="Shared rate limiter unavailable -- allowing request",
         )
     except RateLimitRejected as rejected:
-        raise HTTPException(
+        raise HTTPException(  # unread: share
             429, "Too many requests",
             headers={"Retry-After": str(rejected.retry_after_seconds)},
         ) from rejected

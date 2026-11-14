@@ -126,6 +126,17 @@ A call must name a string-literal key that is a plain entry of `words.py`, and p
 exactly the sentence's gaps as keywords with no `**` spread. A `Refusal` call also needs an
 int literal status and a key of the form `<resource>Refusal.<reason>`, and may add `headers=`
 for response headers, so a sentence names no gap `headers`.
+
+The same check walks every `HTTPException(...)` call (by name or attribute), the raw answer
+that carries an English `detail` only. Each carries a `# unread: <tag>` comment on one of its
+lines, the tag giving the reason no person reads the answer; an unmarked call, an unknown tag
+and a marker with no such call on its lines fail. The tags are `share` (public share routes,
+the public queue-stream build and the shared-access 429), `media` (media and static-file
+fetches), `sse` (EventSource streams), `machine` (health and internal answers), `session`
+(the 401 that ends a session) and `token` (a body whose `detail` is a typed token the page
+words from the catalog). The summary line prints the count per tag. A raw answer a person
+reads is raised as a `Refusal` instead.
+
 `tests/scripts/test_check_refusal_keys.py` seeds a package for each rule and runs the check over
 the real tree.
 

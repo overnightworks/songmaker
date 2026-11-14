@@ -247,9 +247,9 @@ def _acquire_job_stream_lease(
         token = limiter.acquire(user_id)
     except Exception as exc:
         log.warning("Job stream limiter unavailable")
-        raise HTTPException(503, JOB_STREAM_LIMITER_UNAVAILABLE) from exc
+        raise HTTPException(503, JOB_STREAM_LIMITER_UNAVAILABLE) from exc  # unread: sse
     if token is None:
-        raise HTTPException(
+        raise HTTPException(  # unread: sse
             429,
             JOB_STREAM_LIMIT_DETAIL,
             headers={"Retry-After": "5"},

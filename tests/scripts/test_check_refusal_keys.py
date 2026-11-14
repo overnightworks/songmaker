@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -161,6 +162,71 @@ def test_a_catalog_text_call_beside_sqlalchemy_text_is_the_only_one_counted(
 
     assert code == 0, output
     assert "calls=1, violations=0" in output
+
+
+RAW_IMPORT = "from fastapi import HTTPException\n"
+
+
+def _unread_counts(output: str) -> dict[str, int]:
+    tags = re.findall(r"(\w+)=(\d+)", output.split("unread:")[1])
+    return {tag: int(count) for tag, count in tags}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        RAW_IMPORT + 'raise HTTPException(404, "Gone")  # unread: media\n',
+        RAW_IMPORT + 'raise HTTPException(\n    429, "Slow",  # unread: share\n    headers=h,\n)\n',
+        "import fastapi\n" + 'raise fastapi.HTTPException(401, "No")  # unread: session\n',
+    ],
+    ids=["one-line", "multi-line", "attribute"],
+)
+def test_a_marked_raw_exception_passes_and_is_counted_under_its_tag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], source: str
+) -> None:
+    code, output = _scan(tmp_path, capsys, source)
+
+    assert code == 0, output
+    assert "violations=0" in output
+    assert sum(_unread_counts(output).values()) == 1
+
+
+def test_the_summary_counts_every_tag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = RAW_IMPORT + "".join(
+        f'raise HTTPException(404, "Gone")  # unread: {tag}\n' for tag in checker.UNREAD_TAGS
+    )
+
+    code, output = _scan(tmp_path, capsys, source)
+
+    assert code == 0, output
+    assert _unread_counts(output) == dict.fromkeys(checker.UNREAD_TAGS, 1)
+
+
+@pytest.mark.parametrize(
+    ("source", "problem"),
+    [
+        (RAW_IMPORT + 'raise HTTPException(404, "Gone")\n', "answers English only"),
+        (RAW_IMPORT + 'raise HTTPException(404)  # unread: whatever\n', "unknown unread tag"),
+        (RAW_IMPORT + 'raise HTTPException(404, "Gone")  # unread:\n', "unknown unread tag"),
+        (
+            RAW_IMPORT + 'raise HTTPException(\n    404, "Gone",\n)\n# unread: media\n',
+            "answers English only",
+        ),
+        (RAW_IMPORT + 'x = 1  # unread: media\n' + 'raise HTTPException(404)  # unread: sse\n',
+         "marks no raw HTTPException call"),
+    ],
+    ids=["unmarked", "unknown-tag", "empty-tag", "marker-below-the-call", "orphan-marker"],
+)
+def test_a_raw_exception_without_a_known_tag_or_a_marker_without_a_call_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], source: str, problem: str
+) -> None:
+    code, output = _scan(tmp_path, capsys, source)
+
+    assert code == 1
+    assert "route.py:2:" in output
+    assert problem in output
 
 
 def test_a_missing_words_module_stops_the_check(
