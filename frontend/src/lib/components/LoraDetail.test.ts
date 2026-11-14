@@ -328,7 +328,7 @@ describe('LoraDetail', () => {
 		expect(target.textContent).toContain(words['voiceDetail.remainingCalculating']);
 	});
 
-	it('cancels the training job and names the cancelled state', async () => {
+	it('cancels the training job and says the cancelled state once in the training section', async () => {
 		const runningJob = job({ status: 'running', current_epoch: 31, train_epochs: 50 });
 		const cancelledJob = job({ status: 'cancelled', completed_at: '2026-09-05T12:00:00Z' });
 		fetchJob.mockResolvedValueOnce(runningJob);
@@ -341,7 +341,9 @@ describe('LoraDetail', () => {
 
 		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith(runningJob.id));
 		await vi.waitFor(() => expect(removeJob).toHaveBeenCalledWith(runningJob.id));
-		expect(target.textContent).toContain(words['voiceDetail.trainingCancelled']);
+		const cancelledLine = words['voiceDetail.trainingCancelled'];
+		expect(target.textContent?.split(cancelledLine).length).toBe(2);
+		expect(target.querySelector('.training-progress')?.textContent).toContain(cancelledLine);
 	});
 
 	it('wraps the complete queue-limit sentence without truncation in a 375 px container', async () => {

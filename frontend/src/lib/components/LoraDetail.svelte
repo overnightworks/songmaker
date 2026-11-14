@@ -273,9 +273,7 @@
 <div class="lora-detail" class:deleted>
 	{#if deleted}
 		<p class="banner warn">{pageText('voiceDetail.deletedBanner')}</p>
-	{:else if displayedTrainingJob?.status === 'cancelled'}
-		<p class="banner info">{pageText('voiceDetail.trainingCancelled')}</p>
-	{:else if lockedStatus}
+	{:else if lockedStatus && displayedTrainingJob?.status !== 'cancelled'}
 		<p class="banner info">{pageText(ACTIVE_STATUS_KEYS[lockedStatus].banner)}</p>
 	{:else if lora.status === 'failed' && lora.error}
 		<p class="banner error">
