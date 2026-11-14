@@ -8,12 +8,19 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 
 import httpx
 import pytest
 from redis import Redis
-from support.app_processes import HEALTH_PATH, WebProcess, WebProcesses, web_processes
+from support.app_processes import (
+    HEALTH_PATH,
+    WebProcess,
+    WebProcesses,
+    die_with_parent,
+    web_processes,
+)
 from support.web_app import issued_cookies, seed_user
 
 from songmaker_cli.app_context import AppContext, build_web_auth_config
@@ -175,3 +182,17 @@ def test_the_children_die_with_a_test_process_that_is_killed(
             holder.kill()
             holder.wait()
         holder.stdout.close()
+
+
+def test_a_child_whose_parent_is_already_gone_dies_before_it_runs() -> None:
+    not_the_parent = os.getpid() + 1
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(600)"],
+        preexec_fn=partial(die_with_parent, not_the_parent),  # noqa: PLW1509 - runs in the child
+    )
+    try:
+        assert child.wait(timeout=CHILD_DEATH_DEADLINE_SECONDS) == -signal.SIGKILL
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait()

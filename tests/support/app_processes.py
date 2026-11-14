@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import IO, Final
 from unittest.mock import patch
@@ -49,8 +50,15 @@ def environment_name(settings_class: type[BaseSettings], field_name: str) -> str
     return settings_class.model_fields[field_name].alias or field_name.upper()
 
 
-def _die_with_parent() -> None:
+def die_with_parent(parent_pid: int) -> None:
+    """Run in a forked child: die with the parent, or at once when it is already gone.
+
+    The signal follows the thread that forked and arrives only when that parent dies after
+    this call; a parent that died before it left the child reparented, so `getppid()` tells.
+    """
     ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGKILL)
 
 
 def _free_port() -> int:
@@ -155,7 +163,7 @@ class WebProcesses:
                 "--port", str(port), "--root", str(directory),
             ],
             cwd=directory, env=environment, stdout=log, stderr=subprocess.STDOUT,
-            preexec_fn=_die_with_parent,  # noqa: PLW1509 - PR_SET_PDEATHSIG must run in the child
+            preexec_fn=partial(die_with_parent, os.getpid()),  # noqa: PLW1509 - runs in the child
         )
         web_process = WebProcess(name, port, worker_id, process, log, log_path)
         self._processes.append(web_process)
