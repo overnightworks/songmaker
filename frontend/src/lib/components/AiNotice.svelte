@@ -1,11 +1,8 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import { pageText } from '#lib/utils/page-words.ts';
 
-	// The words are ruled German (Art. 50 AI Act) and stay German in the English UI.
-	const WORDS = {
-		generated: 'KI-generiert',
-		writing: 'Du schreibst mit einer KI'
-	} as const;
+	// The words are ruled German (Art. 50 AI Act) and stay German in the English UI: `lang="de"` marks them.
 
 	// A badge's lead text and the badge share one wrapping row: a long lead pushes the badge
 	// onto its own row, whole.
@@ -16,13 +13,16 @@
 	<span class="row">
 		{#if lead}<span class="lead">{lead}</span>{/if}
 		<span class="ai-notice badge" lang="de"
-			><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span
-			>{WORDS.generated}</span
+			><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{pageText(
+				'aiNotice.generated'
+			)}</span
 		>
 	</span>
 {:else}
 	<p class="ai-notice line" lang="de">
-		<span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{WORDS.writing}
+		<span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{pageText(
+			'aiNotice.writing'
+		)}
 	</p>
 {/if}
 

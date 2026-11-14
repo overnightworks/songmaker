@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -44,7 +45,7 @@ describe('1906_E3 CoWriterPanel (Art. 50 AI Act)', () => {
 
 		const header = target.querySelector('.convo');
 		const notice = target.querySelector('.ai-notice');
-		expect(notice).toHaveTextContent('Du schreibst mit einer KI');
+		expect(notice).toHaveTextContent(words['aiNotice.writing']);
 		expect(notice).toHaveAttribute('lang', 'de');
 		expect(header?.nextElementSibling).toBe(notice);
 		expect(header).not.toContainElement(notice as HTMLElement);

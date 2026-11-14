@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { pageText } from '#lib/utils/page-words.ts';
+
 	export interface BreadcrumbItem {
 		label: string;
 		onclick?: () => void;
@@ -11,7 +13,7 @@
 	let { items }: Props = $props();
 </script>
 
-<nav class="breadcrumb" aria-label="Breadcrumb">
+<nav class="breadcrumb" aria-label={pageText('breadcrumb.label')}>
 	{#each items as item, index (index)}
 		{#if index === items.length - 1}
 			<span class="crumb crumb-current" aria-current="page"

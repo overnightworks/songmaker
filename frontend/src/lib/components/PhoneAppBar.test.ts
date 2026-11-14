@@ -10,7 +10,6 @@ import {
 	minSquarePx,
 	setPointer
 } from '#lib/test-utils/hitbox.ts';
-import { APP_NAME } from '#lib/constants/app.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { words } from '#lib/words/en.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
@@ -285,7 +284,7 @@ describe('PhoneAppBar', () => {
 		await tick();
 
 		const header = target.querySelector('header');
-		expect(header?.textContent).toContain(APP_NAME);
+		expect(header?.textContent).toContain(words['app.name']);
 		const circle = getByRoleButton(target, ACCOUNT_CIRCLE_NAME);
 		expect(circle.textContent?.trim()).toBe('F');
 		expect(header?.lastElementChild?.contains(circle)).toBe(true);
@@ -321,7 +320,7 @@ describe('PhoneAppBar', () => {
 			await tick();
 
 			expect(backName(target)).toBeNull();
-			expect(target.querySelector('.brand')?.textContent).toBe(APP_NAME);
+			expect(target.querySelector('.brand')?.textContent).toBe(words['app.name']);
 			expect(queryButton(target, words['phoneAppBar.searchOpen'])).not.toBeNull();
 			expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).not.toBeNull();
 		}

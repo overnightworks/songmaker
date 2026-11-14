@@ -12,10 +12,10 @@ const { goto, page } = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/state', () => ({ page }));
 
+import { words } from '#lib/words/en.ts';
 import ErrorPage from './+error.svelte';
 
-const OFFLINE_SENTENCE =
-	'This page needs the network. It opens by itself when you are back online.';
+const OFFLINE_SENTENCE = words['routeError.offline'];
 const ADDRESS = 'http://localhost/settings/references';
 
 let mounted: ReturnType<typeof mount> | undefined;

@@ -120,6 +120,15 @@ describe('generation retention panel', () => {
 		]);
 	});
 
+	it('draws the explanation button as an icon, not a letter', async () => {
+		vi.mocked(previewGenerationRetention).mockResolvedValue(report());
+		const target = await render();
+
+		const info = target.querySelector('.info');
+		expect(info?.querySelector('svg')).not.toBeNull();
+		expect(info?.textContent?.trim()).toBe('');
+	});
+
 	it('asks with both numbers before it deletes anything, and Cancel runs nothing', async () => {
 		vi.mocked(previewGenerationRetention).mockResolvedValue(
 			report({ archived_count: 12, deleted_count: 3 })

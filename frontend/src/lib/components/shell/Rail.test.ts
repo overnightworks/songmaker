@@ -181,6 +181,16 @@ describe('Rail', () => {
 		expect(target.querySelector('.rail-top + .rail-search-region .rail-search')).not.toBeNull();
 	});
 
+	it('shows the first letter of the app name as the collapsed brand mark, named by the whole name', async () => {
+		const target = await renderCollapsedRail();
+		const brand = requireElement<HTMLButtonElement>(target, '.brand');
+
+		expect(requireElement<HTMLElement>(brand, '.brand-mark').textContent).toBe(
+			words['app.name'].charAt(0)
+		);
+		expect(brand.getAttribute('aria-label')).toBe(words['app.name']);
+	});
+
 	it('reduces the rail to labelled group icons when collapsed', async () => {
 		const target = await renderCollapsedRail();
 		const rail = requireElement<HTMLElement>(target, '.rail');

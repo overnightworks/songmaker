@@ -1,4 +1,5 @@
 import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
+import { words } from '#lib/words/en.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, type Writable } from 'svelte/store';
 
@@ -214,7 +215,7 @@ describe('loadSongData', () => {
 		expect(get(editLyrics)).toBe('opens at once');
 		await vi.waitFor(() =>
 			expect(get(toasts)).toEqual([
-				expect.objectContaining({ message: 'Could not load versions', type: 'error' })
+				expect.objectContaining({ message: words['versions.loadFailed'], type: 'error' })
 			])
 		);
 	});

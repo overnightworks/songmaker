@@ -116,6 +116,21 @@ describe('EditorHeader', () => {
 		expect(onclick).toHaveBeenCalledTimes(1);
 	});
 
+	it.each([1, 3])(
+		'counts %i songs in the compact album line in the singular or plural',
+		async (count) => {
+			const { target } = await render({
+				songRail: true,
+				albumTitle: 'Anfield',
+				albumSongCount: count
+			});
+
+			expect(target.querySelector('.mobile-album-line')?.textContent).toContain(
+				words['songHeader.albumLine'](count, { album: 'Anfield' })
+			);
+		}
+	);
+
 	it('renders one compact album line with album skip controls', async () => {
 		const onselectprevious = vi.fn();
 		const onselectnext = vi.fn();
@@ -130,7 +145,7 @@ describe('EditorHeader', () => {
 
 		const line = target.querySelector('.mobile-album-line');
 		if (!line) throw new Error('Expected mobile album line');
-		expect(line.textContent).toContain('Anfield · 2 songs');
+		expect(line.textContent).toContain(words['songHeader.albumLine'](2, { album: 'Anfield' }));
 		expect(line.querySelector('.album-line-cover')).not.toBeNull();
 		expect(line.querySelector('.breadcrumb')).toBeNull();
 		line

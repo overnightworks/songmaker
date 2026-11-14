@@ -2,9 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Icon from '#lib/components/Icon.svelte';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
 
-	const OFFLINE_WORDS = 'This page needs the network. It opens by itself when you are back online.';
 	const LOAD_FAILED_STATUS = 500;
 
 	// A page chunk that fails to load is a 500 to the router; offline it is the lost network.
@@ -31,7 +31,7 @@
 <section class="route-error" role="alert">
 	{#if waitsForNetwork || retrying}
 		<Icon name="cloud-off" size={32} class="route-error-glyph" />
-		<p class="route-error-words">{OFFLINE_WORDS}</p>
+		<p class="route-error-words">{pageText('routeError.offline')}</p>
 	{:else}
 		<h1 class="route-error-status">{page.status}</h1>
 		<p class="route-error-words">{page.error?.message}</p>

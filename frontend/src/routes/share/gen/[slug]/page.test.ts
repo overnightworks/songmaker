@@ -1,5 +1,4 @@
 import { mount, tick, unmount } from 'svelte';
-import { APP_NAME } from '#lib/constants/app.ts';
 import { words } from '#lib/words/en.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '#lib/api/types.ts';
@@ -130,7 +129,11 @@ describe('shared generation (take) page', () => {
 		expect(target.textContent).not.toContain(words['nowPlaying.takeUnversioned']({ take: '3' }));
 		// #141/10: the page names a take; only the URL segment stays /share/gen/.
 		expect(document.title).toContain(
-			words['shareTakePage.documentTitle']({ number: '3', title: 'Solo Track', app: APP_NAME })
+			words['shareTakePage.documentTitle']({
+				number: '3',
+				title: 'Solo Track',
+				app: words['app.name']
+			})
 		);
 		expect(document.title).not.toContain('Gen #');
 
@@ -176,7 +179,7 @@ describe('shared generation (take) page', () => {
 	it('shows the error status when the fetch fails', async () => {
 		const target = await openSharedTake({ ok: false, status: 500 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Could not load this take');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.errorTake']);
 	});
 });
 

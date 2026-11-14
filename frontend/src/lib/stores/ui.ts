@@ -8,6 +8,7 @@ import { describeFailure } from '#lib/api/fetch.ts';
 import { addToast } from '#lib/stores/toast.ts';
 import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '#lib/constants/library.ts';
 import { isEditableElement } from '#lib/utils/escape-level-up.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 
 interface PhoneAppBarState {
@@ -283,7 +284,8 @@ export async function chooseTheme(next: ThemeChoice): Promise<void> {
 			serverChoice = next;
 		}
 	} catch (error) {
-		if (current(startedIn)) addToast(describeFailure(error, 'Saving the theme failed'), 'error');
+		if (current(startedIn))
+			addToast(describeFailure(error, pageText('account.themeSaveFailed')), 'error');
 	} finally {
 		if (current(startedIn)) {
 			savesPending -= 1;

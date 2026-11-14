@@ -1,6 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APP_NAME } from '#lib/constants/app.ts';
 import { words } from '#lib/words/en.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
@@ -159,10 +158,10 @@ describe('shared song page', () => {
 		const target = await openSharedSong({ ok: false, status: 404 });
 
 		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundSong']);
-		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		expect(target.textContent).toContain(words['shareStatus.invalidLink']);
 		const wayBack = target.querySelector<HTMLAnchorElement>('.share-status a');
 		expect([wayBack?.textContent, wayBack?.getAttribute('href')]).toEqual([
-			`Open ${APP_NAME}`,
+			words['shareStatus.openApp']({ app: words['app.name'] }),
 			'/login'
 		]);
 		expect(target.querySelector('.now-playing')).toBeNull();

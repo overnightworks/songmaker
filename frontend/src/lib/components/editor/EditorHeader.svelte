@@ -158,7 +158,9 @@
 							>
 						{/if}
 					</span>
-					<span class="album-line-title">{albumTitle} · {albumSongCount} songs</span>
+					<span class="album-line-title"
+						>{pageText('songHeader.albumLine', albumSongCount, { album: albumTitle })}</span
+					>
 					<div class="song-neighbors">
 						<button
 							type="button"

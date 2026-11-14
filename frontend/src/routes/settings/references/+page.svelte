@@ -21,7 +21,6 @@
 	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
 	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants/reference.ts';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { createReferencePreview } from '#lib/services/referencePreview.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { formatDecimal, formatPercent } from '#lib/utils/format.ts';
@@ -215,7 +214,7 @@
 </script>
 
 <svelte:head>
-	<title>{pageText('referencesPage.documentTitle', { app: APP_NAME })}</title>
+	<title>{pageText('referencesPage.documentTitle', { app: pageText('app.name') })}</title>
 </svelte:head>
 
 <div class="page">

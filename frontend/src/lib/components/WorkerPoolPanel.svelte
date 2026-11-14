@@ -490,7 +490,7 @@
 							<p>{pageText('workerPool.restartWarning')}</p>
 							<div class="confirmation-actions">
 								<button class="action-btn" onclick={current.layer.answer(closeConfirmation)}
-									>{pageText('dialog.cancel')}</button
+									>{pageText('workerPool.cancel')}</button
 								>
 								<button
 									class="action-btn danger"

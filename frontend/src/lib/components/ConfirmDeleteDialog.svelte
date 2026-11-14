@@ -2,12 +2,13 @@
 	import { onMount, tick } from 'svelte';
 	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let {
 		title,
 		items,
-		warning = 'This cannot be undone.',
-		confirmLabel = 'Delete',
+		warning = pageText('deleteDialog.warning'),
+		confirmLabel = pageText('deleteDialog.confirm'),
 		onconfirm,
 		oncancel
 	}: {
@@ -66,7 +67,9 @@
 		</ul>
 		<p class="warning">{warning}</p>
 		<div class="actions">
-			<button class="cancel-btn" bind:this={cancelButton} onclick={cancel}>Cancel</button>
+			<button class="cancel-btn" bind:this={cancelButton} onclick={cancel}
+				>{pageText('deleteDialog.cancel')}</button
+			>
 			<button class="confirm-btn" onclick={historyLayer.answer(onconfirm)}>{confirmLabel}</button>
 		</div>
 	</div>

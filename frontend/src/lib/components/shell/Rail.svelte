@@ -7,7 +7,6 @@
 	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import { standingPathname } from '#lib/routes/standingAddress.ts';
 	import { followPlainClick, openHome } from '#lib/stores/navigation.ts';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { kineticScroll } from '#lib/actions/kineticScroll.ts';
 	import Icon from '../Icon.svelte';
@@ -101,14 +100,14 @@
 		<button
 			type="button"
 			class="brand"
-			aria-label={collapsed ? APP_NAME : undefined}
+			aria-label={collapsed ? pageText('app.name') : undefined}
 			onclick={() => openHome()}
-			data-text={APP_NAME}
+			data-text={pageText('app.name')}
 		>
 			{#if collapsed}
-				<span class="brand-mark" aria-hidden="true">H</span>
+				<span class="brand-mark" aria-hidden="true">{pageText('app.name').charAt(0)}</span>
 			{:else}
-				{APP_NAME}
+				{pageText('app.name')}
 			{/if}
 		</button>
 	</div>

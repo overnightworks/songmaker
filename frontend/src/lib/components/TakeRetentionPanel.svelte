@@ -2,6 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { Marked } from 'overnightworks-design';
 	import { describeFailure } from '#lib/api/fetch.ts';
+	import Icon from '#lib/components/Icon.svelte';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import {
@@ -82,7 +83,7 @@
 				aria-label={pageText('takeRetention.whatThisDoes')}
 				aria-expanded={explaining}
 				aria-describedby={explaining ? 'retention-explanation' : undefined}
-				onclick={() => (explaining = !explaining)}>i</button
+				onclick={() => (explaining = !explaining)}><Icon name="info" size={14} /></button
 			>
 			{#if explaining}
 				<span id="retention-explanation" role="tooltip" class="explanation"
@@ -184,8 +185,9 @@
 		border-radius: 50%;
 		background: none;
 		color: var(--text-muted);
-		font-size: 0.75rem;
-		font-style: italic;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		cursor: pointer;
 	}
 

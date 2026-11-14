@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkError } from '#lib/api/fetch.ts';
 import type { ReleaseInfo } from '#lib/api/types.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
-import { APP_NAME, APP_REPOSITORY_URL } from '#lib/constants/app.ts';
+import { APP_REPOSITORY_URL } from '#lib/constants/app.ts';
 import { words } from '#lib/words/en.ts';
 import {
 	reportResourceStreamReachable,
@@ -73,11 +73,21 @@ afterEach(async () => {
 });
 
 describe('about page', () => {
+	it('says it is loading while the release is still being read', async () => {
+		mocks.fetchRelease.mockReturnValue(new Promise(() => undefined));
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(AboutPage, { target });
+		await tick();
+
+		expect(target.textContent).toContain(words['aboutPage.loading']);
+	});
+
 	it('names the release, its day, its commit and where to read more', async () => {
 		const target = await renderAboutPage({ tag: TAG, commit: COMMIT });
 
 		expect(rows(target)).toEqual({
-			[LABELS.app]: { value: APP_NAME, href: null },
+			[LABELS.app]: { value: words['app.name'], href: null },
 			[LABELS.version]: { value: TAG, href: null },
 			[LABELS.released]: { value: '28 Oct 2026', href: null },
 			[LABELS.commit]: {

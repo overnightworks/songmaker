@@ -1,7 +1,6 @@
 import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APP_NAME } from '#lib/constants/app.ts';
 import { signOutFailed } from '#lib/stores/auth.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 
@@ -46,7 +45,7 @@ describe('no-access page', () => {
 
 		expect(target.querySelector('h1')?.textContent).toBe(kitWords()['signIn.noAccess']);
 		expect(target.textContent).toContain(
-			kitWords()['signIn.noAccessSentence']({ appName: APP_NAME })
+			kitWords()['signIn.noAccessSentence']({ appName: words['app.name'] })
 		);
 	});
 

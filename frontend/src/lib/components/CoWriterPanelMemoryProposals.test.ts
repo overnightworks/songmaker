@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { words } from '#lib/words/en.ts';
 
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
@@ -73,7 +74,7 @@ async function openPanelWithWaitingProposal(): Promise<HTMLElement> {
 	target.querySelector<HTMLButtonElement>('button.convo-menu-btn')?.click();
 	await tick();
 	Array.from(target.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-		.find((item) => item.textContent?.trim() === 'Memory')
+		.find((item) => item.textContent?.trim() === words['cowriter.memory'])
 		?.click();
 	await tick();
 	await vi.waitFor(() => expect(target.querySelector('.proposal')).not.toBeNull());

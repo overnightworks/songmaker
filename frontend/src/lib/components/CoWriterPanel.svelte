@@ -25,7 +25,8 @@
 	import { addToast } from '#lib/stores/toast.ts';
 	import {
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
-		COWRITER_RUNNING_TURN_POLL_MS
+		COWRITER_RUNNING_TURN_POLL_MS,
+		cowriterMentionToken
 	} from '#lib/constants/cowriter.ts';
 	import { Marked } from 'overnightworks-design';
 	import { pageParts, pageText } from '#lib/utils/page-words.ts';
@@ -780,14 +781,12 @@
 
 	function selectMentionItem(item: MentionItem): void {
 		if (!inputEl) return;
+		if (item.type !== 'song')
+			input = replaceMentionToken(input, mentionCursorPos, `${cowriterMentionToken(item)} `);
 		if (item.type === 'album') {
-			input = replaceMentionToken(input, mentionCursorPos, '@album ');
 			mentionedAlbumId = currentAlbumId || null;
 		} else if (item.type === 'version') {
-			input = replaceMentionToken(input, mentionCursorPos, `@v${item.item.version_number} `);
-			if (!mentionedVersionIds.includes(item.item.id)) {
-				mentionedVersionIds = [...mentionedVersionIds, item.item.id];
-			}
+			mentionedVersionIds = [...new Set([...mentionedVersionIds, item.item.id])];
 		} else if (!mentionedSongIds.includes(item.item.id)) {
 			input = replaceMentionToken(input, mentionCursorPos, `@${item.item.title} `);
 			mentionedSongIds = [...mentionedSongIds, item.item.id];
@@ -1079,7 +1078,7 @@
 			{/each}
 			{#each mentionedVersions as version (version.id)}
 				<span class="mention-tag version">
-					v{version.version_number}
+					{pageText('cowriter.versionChip', { number: String(version.version_number) })}
 					<button
 						class="mention-remove"
 						onclick={() =>

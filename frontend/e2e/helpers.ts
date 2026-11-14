@@ -9,7 +9,6 @@ import {
 	type Response,
 	type TestInfo
 } from '@playwright/test';
-import { APP_NAME } from '../src/lib/constants/app';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -358,7 +357,7 @@ export async function openAlbumFromRail(
 
 /** Home through the brand or the phone's guarded return to its tabs. */
 export async function openHome(page: Page, shell: Shell): Promise<void> {
-	const brand = { name: APP_NAME, exact: true };
+	const brand = { name: words['app.name'], exact: true };
 	if (shell === 'desktop') {
 		await (await openRailNav(page, shell)).getByRole('button', brand).click();
 	} else {

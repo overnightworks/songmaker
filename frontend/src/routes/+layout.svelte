@@ -24,7 +24,6 @@
 	import type { Place } from '#lib/stores/libraryContext.ts';
 	import NowPlaying from '#lib/components/NowPlaying.svelte';
 	import PlayerBar from '#lib/components/PlayerBar.svelte';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { HITBOX_STYLE } from '#lib/styles/hitbox.ts';
 	import OfflineStrip from '#lib/components/OfflineStrip.svelte';
 	import {
@@ -295,7 +294,7 @@
 {/snippet}
 
 <svelte:head>
-	<title>{APP_NAME}</title>
+	<title>{pageText('app.name')}</title>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 </svelte:head>

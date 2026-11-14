@@ -15,7 +15,6 @@
 	import ToastContainer from '#lib/components/ToastContainer.svelte';
 	import LoraDetail from '#lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { LORA_POLL_INTERVAL_MS } from '#lib/constants/lora.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import type { UserLoraItem } from '#lib/api/types.ts';
@@ -135,7 +134,7 @@
 </script>
 
 <svelte:head>
-	<title>{pageText('voicesPage.documentTitle', { app: APP_NAME })}</title>
+	<title>{pageText('voicesPage.documentTitle', { app: pageText('app.name') })}</title>
 </svelte:head>
 
 <div class="page">

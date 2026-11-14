@@ -1,7 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import { APP_NAME } from '#lib/constants/app.ts';
 import { words } from '#lib/words/en.ts';
 import ShareStatus from './ShareStatus.svelte';
 
@@ -37,7 +35,7 @@ describe('ShareStatus', () => {
 		expect(target.querySelector('.status-mark.missing')).not.toBeNull();
 		const links = target.querySelectorAll('a');
 		expect(links).toHaveLength(1);
-		expect(links[0].textContent).toBe(words['shareStatus.openApp']({ app: APP_NAME }));
+		expect(links[0].textContent).toBe(words['shareStatus.openApp']({ app: words['app.name'] }));
 		expect(links[0].getAttribute('href')).toBe('/login');
 	});
 
