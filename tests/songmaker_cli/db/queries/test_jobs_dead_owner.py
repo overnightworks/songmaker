@@ -5,7 +5,7 @@ from __future__ import annotations
 import fakeredis
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
-from sqlalchemy import text
+from sqlalchemy import event, text
 from support.web_app import make_authenticated_user, seed_user
 
 from songmaker_cli.api_helpers import create_job_with_rate_limit
@@ -107,7 +107,9 @@ def test_the_age_recovery_fails_the_job_of_an_owner_the_given_liveness_reads_dea
 
 
 class _OwnerLeaseServer(fakeredis.FakeRedis):
-    """A Redis that has run for the lease TTL, holds no lease, and notes who held a lock.
+    """A Redis that has run for the lease TTL, holds no lease, and notes when it was read.
+
+    ``events`` lists, in order, each owner reading and each commit of the session.
 
     fakeredis answers no INFO, which the owner reading needs; ``readable=False`` makes
     that reading fail as an unreachable server does.
@@ -118,8 +120,11 @@ class _OwnerLeaseServer(fakeredis.FakeRedis):
         self._session = session
         self._readable = readable
         self.advisory_locks_held_at_the_reading = 0
+        self.events: list[str] = []
+        event.listen(session, "after_commit", lambda _session: self.events.append("commit"))
 
     def info(self, section=None, *args, **kwargs):
+        self.events.append("reading")
         self.advisory_locks_held_at_the_reading = self._session.execute(text(
             "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()",
         )).scalar_one()
@@ -152,6 +157,7 @@ def test_a_submission_ends_the_job_of_a_dead_owner_instead_of_refusing_for_the_f
             JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type,
         )
         assert server.advisory_locks_held_at_the_reading == 0
+        assert server.events[:2] == ["reading", "commit"]
 
 
 def test_a_submission_that_cannot_read_owner_liveness_leaves_the_job_and_is_refused(
