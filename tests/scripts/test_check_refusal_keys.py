@@ -318,28 +318,29 @@ def test_a_migration_key_missing_from_the_stored_set_is_reported(
     assert "'takeRefusal.archived' is stored by the migration but not in stored.txt" in output
 
 
-def test_a_migration_key_a_later_migration_retires_may_leave_the_stored_set(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    "migrations",
+    [
+        pytest.param(
+            {
+                "a1": _migration_source("a1", None, table={"Wait.": "takeRefusal.archived"}),
+                "a2": _migration_source("a2", "a1", retired=("takeRefusal.archived",)),
+            },
+            id="adjacent",
+        ),
+        pytest.param(
+            {
+                "a1": _migration_source("a1", None, table={"Wait.": "takeRefusal.archived"}),
+                "a2": _migration_source("a2", "a1"),
+                "a3": _migration_source("a3", "a2", retired=("takeRefusal.archived",)),
+            },
+            id="behind_an_ordinary_migration",
+        ),
+    ],
+)
+def test_a_migration_key_a_later_migration_on_the_chain_retires_may_leave_the_stored_set(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], migrations: dict[str, str]
 ) -> None:
-    migrations = {
-        "a1": _migration_source("a1", None, table={"Wait.": "takeRefusal.archived"}),
-        "a2": _migration_source("a2", "a1", retired=("takeRefusal.archived",)),
-    }
-
-    code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
-
-    assert code == 0, output
-
-
-def test_a_migration_key_retired_behind_an_ordinary_migration_may_leave_the_stored_set(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    migrations = {
-        "a1": _migration_source("a1", None, table={"Wait.": "takeRefusal.archived"}),
-        "a2": _migration_source("a2", "a1"),
-        "a3": _migration_source("a3", "a2", retired=("takeRefusal.archived",)),
-    }
-
     code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
 
     assert code == 0, output
