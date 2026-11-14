@@ -15,7 +15,6 @@
 
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, containing, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
@@ -46,7 +45,7 @@ test.afterEach(({}, testInfo) => {
 /** The workspace is up: no bootstrap gate left standing, no bootstrap failure. */
 async function expectWorkspaceStanding(page: Page): Promise<void> {
 	await expect(page.getByText(words['libraryWorkspace.loading'], { exact: true })).toHaveCount(0);
-	await expect(page.getByText(RESOURCE_SYNC_ERROR, { exact: true })).toHaveCount(0);
+	await expect(page.getByText(words['resourceSync.error'], { exact: true })).toHaveCount(0);
 }
 
 test(

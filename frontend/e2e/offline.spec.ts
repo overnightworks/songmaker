@@ -12,7 +12,6 @@ import {
 } from '../src/lib/constants/song';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS
 } from '../src/lib/constants/resource-sync';
 import {
@@ -257,7 +256,7 @@ test.describe('losing the network on the phone', { tag: ONLY_IN_SHELL.mobile }, 
 		await expect(generate).toBeDisabled();
 		await expect(generate).toHaveAccessibleName(GENERATE_LABEL);
 		await expect(generate).not.toContainText('ⓘ');
-		await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+		await expect(page.getByText(words['resourceSync.error'])).toHaveCount(0);
 		const [generateBox, stripBox, miniPlayerBox] = await boundingBoxes(
 			generate,
 			offlineStrip(page),
@@ -270,7 +269,7 @@ test.describe('losing the network on the phone', { tag: ONLY_IN_SHELL.mobile }, 
 
 		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
 		await expect(generate).toHaveAccessibleName(GENERATE_LABEL);
-		await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+		await expect(page.getByText(words['resourceSync.error'])).toHaveCount(0);
 
 		console.log(`Offline flow /api requests: ${guard.apiRequestCount}`);
 		guard.assertClean();
@@ -290,12 +289,12 @@ test.describe('a server the online browser cannot reach', () => {
 			await page.goto(HOME_PATH);
 
 			await expect(offlineStrip(page)).toBeVisible();
-			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+			await expect(page.getByText(words['resourceSync.error'])).toHaveCount(0);
 
 			await serverReturns(page);
 
 			await expect(offlineStrip(page)).toHaveCount(0, { timeout: SERVER_BACK_MS });
-			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+			await expect(page.getByText(words['resourceSync.error'])).toHaveCount(0);
 		});
 	}
 

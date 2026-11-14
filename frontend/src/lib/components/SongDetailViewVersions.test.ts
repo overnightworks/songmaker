@@ -34,7 +34,6 @@ import {
 import { navigateToSongTab, openEditTab } from '#lib/stores/navigation.ts';
 import { recipeModel } from '#lib/stores/recipe.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
-import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 
 // Stands in for the router the way the real one behaves for this app: a song
 // selection can cross into the song's own address, which writeLibraryHistory
@@ -289,7 +288,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		const dialog = replaceDialog();
 		if (!dialog) throw new Error('Expected the replace-draft confirm');
 		expect(dialog.textContent).toContain(words['versions.replaceMessage']({ number: '1' }));
-		clickNamed(dialog, DIALOG_CANCEL_LABEL);
+		clickNamed(dialog, words['dialog.cancel']);
 		await settleRender();
 
 		expect(replaceDialog()).toBeNull();
@@ -522,7 +521,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			const dialog = deleteConfirm();
 			if (!dialog) throw new Error('Expected the version delete confirm');
 			expect(confirmLines(dialog)).toEqual(shown);
-			clickNamed(dialog, DIALOG_CANCEL_LABEL);
+			clickNamed(dialog, words['dialog.cancel']);
 			await tick();
 
 			expect(deleteConfirm()).toBeNull();

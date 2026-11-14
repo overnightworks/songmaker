@@ -9,7 +9,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
 import { words } from '#lib/words/en.ts';
-import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
 import {
 	PLAYER_WAITING_FOR_NETWORK,
@@ -1374,7 +1373,7 @@ describe('PlayerBar offline strip (#1080)', () => {
 		browserReportsOnline(false);
 		await tick();
 
-		expect(offlineStrip()?.textContent?.trim()).toBe(OFFLINE_STRIP_MESSAGE);
+		expect(offlineStrip()?.textContent?.trim()).toBe(words['connectivity.offlineStrip']);
 		expect(offlineStrip()?.closest('.offline-edge')?.nextElementSibling).toHaveClass('player-bar');
 	});
 

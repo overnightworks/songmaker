@@ -1,12 +1,8 @@
 import type { JobItem, RefusalMessage } from './types';
 import { SIGN_IN_NEXT_PARAM } from '#lib/constants/auth.ts';
-import {
-	RATE_LIMITED_STATUS,
-	SERVER_ERROR_STATUS_FLOOR,
-	API_ERROR_GENERIC_MESSAGE
-} from '#lib/constants/http.ts';
+import { RATE_LIMITED_STATUS, SERVER_ERROR_STATUS_FLOOR } from '#lib/constants/http.ts';
 import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { refusalText } from '#lib/utils/page-words.ts';
+import { pageText, refusalText } from '#lib/utils/page-words.ts';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -51,7 +47,7 @@ export class ApiError extends Error {
 		public readonly jobId: string | null = null,
 		public readonly refusal: RefusalMessage | null = null
 	) {
-		super(detail || API_ERROR_GENERIC_MESSAGE);
+		super(detail || pageText('http.genericError'));
 		this.name = 'ApiError';
 	}
 }

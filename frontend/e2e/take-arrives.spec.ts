@@ -14,8 +14,6 @@
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
-import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
-import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import type { VersionItem } from '../src/lib/api/types';
 import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
@@ -180,7 +178,7 @@ test.describe(
 
 			await page.unroute(JOB_STREAM_ROUTE);
 			await loseNetwork(page, context);
-			await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toBeVisible();
+			await expect(page.getByText(words['connectivity.offlineStrip'])).toBeVisible();
 			await regainNetwork(page, context);
 
 			await expect(
@@ -193,8 +191,8 @@ test.describe(
 				timeout: TAKE_AFTER_RETURN_MS
 			});
 			await expect(panel.getByRole('progressbar')).toHaveCount(0);
-			await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toHaveCount(0);
-			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+			await expect(page.getByText(words['connectivity.offlineStrip'])).toHaveCount(0);
+			await expect(page.getByText(words['resourceSync.error'])).toHaveCount(0);
 
 			console.log(`Take-after-return flow /api requests: ${guard.apiRequestCount}`);
 			guard.assertClean();

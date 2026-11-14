@@ -4,7 +4,6 @@ import { toasts } from '#lib/stores/toast.ts';
 import { closeTopLayer, dropLayersFrom } from '#lib/stores/layers.ts';
 import { localClockTime } from '#lib/utils/format.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import type { WorkerPoolResponse } from '#lib/api/types.ts';
 import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '#lib/constants/worker.ts';
 import {
@@ -12,6 +11,7 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import WorkerPoolPanel from './WorkerPoolPanel.svelte';
+import { words } from '#lib/words/en.ts';
 
 let poolResponse: WorkerPoolResponse;
 let poolFailure: Response | Error | undefined;
@@ -37,7 +37,7 @@ async function openRestartConfirmation(root: HTMLElement) {
 	await tick();
 	const dialog = root.querySelector<HTMLElement>('[role="dialog"]');
 	if (!dialog) throw new Error('Expected confirmation');
-	const cancel = findButtonByText(dialog, 'Cancel');
+	const cancel = findButtonByText(dialog, words['dialog.cancel']);
 	if (!cancel) throw new Error('Expected Cancel');
 	const restart = findButtonByText(dialog, 'Restart');
 	if (!restart) throw new Error('Expected Restart');

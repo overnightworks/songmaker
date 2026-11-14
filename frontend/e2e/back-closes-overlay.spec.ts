@@ -6,7 +6,6 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
@@ -428,7 +427,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		open: (page, playlist) => openDeleteConfirm(page, 'mobile', playlist),
 		leave: async (page) => {
 			await deleteConfirm(page)
-				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+				.getByRole('button', { name: words['dialog.cancel'], exact: true })
 				.click();
 		},
 		expectLeft: async (page, _pages, playlist) => {

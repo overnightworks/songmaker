@@ -2,12 +2,12 @@
 	import { tick } from 'svelte';
 	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
 	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
-	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '#lib/constants/dialog.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let {
 		title,
 		message,
-		confirmLabel = DIALOG_CONFIRM_LABEL,
+		confirmLabel = pageText('dialog.confirm'),
 		destructive,
 		onconfirm,
 		secondaryLabel,
@@ -44,7 +44,11 @@
 <svelte:window onkeydown={onWindowKeydown} />
 
 <div class="overlay" {@attach historyLayer.hold}>
-	<button class="overlay-backdrop" tabindex="-1" onclick={cancel} aria-label={DIALOG_CANCEL_LABEL}
+	<button
+		class="overlay-backdrop"
+		tabindex="-1"
+		onclick={cancel}
+		aria-label={pageText('dialog.cancel')}
 	></button>
 	<div
 		bind:this={dialog}
@@ -57,7 +61,7 @@
 		<h3>{title}</h3>
 		<p class="message">{message}</p>
 		<div class="actions">
-			<button class="cancel-btn" onclick={cancel}>{DIALOG_CANCEL_LABEL}</button>
+			<button class="cancel-btn" onclick={cancel}>{pageText('dialog.cancel')}</button>
 			{#if secondaryLabel && onsecondary}
 				<button class="secondary-btn" onclick={historyLayer.answer(onsecondary)}
 					>{secondaryLabel}</button

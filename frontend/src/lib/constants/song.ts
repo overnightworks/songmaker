@@ -1,5 +1,3 @@
-export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
-
 export const EDITOR_QUEUED_LABEL = 'Queued';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
