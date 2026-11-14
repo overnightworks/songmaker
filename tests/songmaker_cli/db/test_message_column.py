@@ -11,7 +11,7 @@ from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.messages import Message, message
 
 
-def _add_job(session, job_id: str, wait: Message | None) -> None:
+def _add_queued_job(session, job_id: str, wait: Message | None) -> None:
     session.add(Job(id=job_id, type="generate", status="queued", queue_reason_message=wait))
     session.flush()
 
@@ -25,7 +25,7 @@ def _stored_as_sql_null(session, job_id: str) -> bool:
 def test_a_message_is_stored_and_read_back_equal(pg_factory):
     wait = message("jobWait.voiceTraining")
     with pg_factory() as session:
-        _add_job(session, "j1", wait)
+        _add_queued_job(session, "j1", wait)
         session.commit()
     with pg_factory() as session:
         assert get_job(session, "j1").queue_reason_message == wait
@@ -44,7 +44,7 @@ def test_a_message_is_stored_and_read_back_equal(pg_factory):
 def test_a_wrong_key_or_wrong_gaps_raise_on_write_and_store_nothing(pg_factory, wrong):
     with pg_factory() as session:
         with pytest.raises(StatementError):
-            _add_job(session, "j1", wrong)
+            _add_queued_job(session, "j1", wrong)
         session.rollback()
         assert session.query(Job).count() == 0
 
@@ -65,8 +65,8 @@ def test_reading_an_unknown_key_only_checks_the_shape(pg_factory):
 
 def test_no_message_is_sql_null_when_added_without_one_and_when_cleared(pg_factory):
     with pg_factory() as session:
-        _add_job(session, "without", None)
-        _add_job(session, "cleared", message("jobWait.voiceTraining"))
+        _add_queued_job(session, "without", None)
+        _add_queued_job(session, "cleared", message("jobWait.voiceTraining"))
         get_job(session, "cleared").queue_reason_message = None
         session.flush()
         assert _stored_as_sql_null(session, "without")

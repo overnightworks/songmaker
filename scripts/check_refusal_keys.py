@@ -464,7 +464,8 @@ def _set_problems(
 
 def _git(directory: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed git subcommands; the only input is the commit id of the pull request
-        ["git", *arguments], cwd=directory, capture_output=True, text=True, check=False
+        ["git", *arguments],  # noqa: S607 - git is found on PATH like in every other CI step
+        cwd=directory, capture_output=True, text=True, check=False,
     )
 
 

@@ -11,7 +11,6 @@ import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.exc import IntegrityError
 from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
-from support.reference_link_migration import execute
 from support.repository_root import REPOSITORY_ROOT
 
 from songmaker_cli.words import SOURCE_LANGUAGE, text
@@ -27,22 +26,28 @@ UNKNOWN_SENTENCE = "Waiting for the next GPU slot."
 SENTENCES = list(MIGRATION.STORED_MESSAGE_KEYS)
 
 
-def _insert_job(engine, job_id: str, column: str, value: object) -> None:
-    placeholder = ":value" if column == OLD_COLUMN else "CAST(:value AS json)"
-    stored = value if column == OLD_COLUMN else json.dumps(value)
-    execute(
-        engine,
-        "INSERT INTO jobs (id, type, status, progress, heartbeat_at, started_at, "
-        f"{column}) VALUES (:id, 'generate', 'queued', 0, CURRENT_TIMESTAMP, "  # noqa: S608 - column is a constant of this module
-        f"CURRENT_TIMESTAMP, {placeholder})",
-        id=job_id,
-        value=stored,
+def _jobs(column: str) -> sa.TableClause:
+    return sa.table(
+        "jobs", sa.column("id"), sa.column("type"), sa.column("status"), sa.column("progress"),
+        sa.column("heartbeat_at"), sa.column("started_at"), sa.column(column),
     )
 
 
+def _insert_job(engine, job_id: str, column: str, value: object) -> None:
+    stored = value if column == OLD_COLUMN else sa.cast(json.dumps(value), sa.JSON)
+    jobs = _jobs(column)
+    with engine.begin() as connection:
+        connection.execute(sa.insert(jobs).values(
+            id=job_id, type="generate", status="queued", progress=0.0,
+            heartbeat_at=sa.func.current_timestamp(), started_at=sa.func.current_timestamp(),
+            **{column: stored},
+        ))
+
+
 def _stored(engine, column: str) -> dict[str, object]:
+    jobs = _jobs(column)
     with engine.connect() as connection:
-        rows = connection.execute(sa.text(f"SELECT id, {column} FROM jobs")).all()  # noqa: S608 - column is a constant of this module
+        rows = connection.execute(sa.select(jobs.c.id, jobs.c[column])).all()
     return {job_id: value for job_id, value in rows}
 
 
@@ -78,9 +83,10 @@ def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
 
 def test_an_unknown_sentence_becomes_sql_null_and_its_count_is_logged(upgraded, caplog):
     _, engine = upgraded
+    jobs = _jobs(NEW_COLUMN)
     with engine.connect() as connection:
         null_ids = set(connection.execute(
-            sa.text(f"SELECT id FROM jobs WHERE {NEW_COLUMN} IS NULL")  # noqa: S608 - column is a constant of this module
+            sa.select(jobs.c.id).where(jobs.c[NEW_COLUMN].is_(None))
         ).scalars())
     assert null_ids == {"unknown", "none"}
     logged = [r.getMessage() for r in caplog.get_records("setup") if r.name.startswith("alembic")]

@@ -241,9 +241,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.READY
         assert lora.storage_path is not None
-        assert lora.storage_path.endswith(
-            f"/{seeded['lora_id']}/{USER_LORA_OUTPUT_DIRNAME}",
-        )
+        assert lora.storage_path.endswith(f"/{seeded['lora_id']}/{USER_LORA_OUTPUT_DIRNAME}")
         assert lora.error is None
         assert lora.completed_at is not None
 

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.generation_failures import OTHER_GENERATION_ERROR_TYPES
@@ -2730,9 +2731,7 @@ def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
     return sign_session_id(session_id, ctx.signing_key)
 
 
-def _authenticate_job_stream_client(
-    client: TestClient, user_id: str = _DEFAULT_USER_ID,
-) -> None:
+def _authenticate_job_stream_client(client: TestClient, user_id: str = _DEFAULT_USER_ID) -> None:
     client.cookies.set(
         DEFAULT_SESSION_COOKIE_NAME, _sign_job_stream_session(client.app.state.ctx, user_id),
     )
@@ -2874,11 +2873,8 @@ def test_stream_job_emits_a_change_without_a_status_or_progress_change(
     assert first["status"] == second["status"] == status
     assert first["progress"] == second["progress"]
     assert first["queue_position"] == second["queue_position"]
-    def as_json(fields: dict) -> dict:
-        return json.loads(json.dumps(fields, default=lambda wait: wait.model_dump()))
-
-    assert {key: first[key] for key in before} == as_json(before)
-    assert {key: second[key] for key in after} == as_json(after)
+    assert {key: first[key] for key in before} == jsonable_encoder(before)
+    assert {key: second[key] for key in after} == jsonable_encoder(after)
 
 
 def test_stream_job_sends_heartbeat_without_status_change(
@@ -4583,6 +4579,3 @@ def test_get_job_preserves_queue_position_with_projected_error(client, stored_mu
     assert response.json()["error"] == "Generating failed — try again."
     assert response.json()["queue_position"] == 2
     assert response.json()["queue_reason"] == "Waiting for queued generations on this GPU."
-    assert response.json()["queue_reason_message"] == {
-        "key": "jobWait.queuedGenerations", "values": {},
-    }

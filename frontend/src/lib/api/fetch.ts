@@ -2,7 +2,7 @@ import type { JobItem, Message } from './types';
 import { SIGN_IN_NEXT_PARAM } from '#lib/constants/auth.ts';
 import { RATE_LIMITED_STATUS, SERVER_ERROR_STATUS_FLOOR } from '#lib/constants/http.ts';
 import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { pageText, messageText } from '#lib/utils/page-words.ts';
+import { pageText, reportedMessageText } from '#lib/utils/page-words.ts';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -98,16 +98,10 @@ export function describeFailure(
 ): string {
 	if (err instanceof NetworkError && wording.offline) return wording.offline;
 	if (err instanceof ApiError && !wording.withholdServerDetail) {
-		if (err.refusal) return refusalSentence(err.refusal) ?? fallback;
+		if (err.refusal) return reportedMessageText(err.refusal) ?? fallback;
 		if (err.detail) return err.detail;
 	}
 	return fallback;
-}
-
-function refusalSentence(refusal: Message): string | null {
-	const sentence = messageText(refusal);
-	if (sentence === null) console.error(`The page has no words for the refusal key ${refusal.key}`);
-	return sentence;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { pageParts, pageText, messageText } from '#lib/utils/page-words.ts';
+import { pageParts, pageText, messageText, reportedMessageText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
 import { sourceLanguage } from '#lib/words/index.ts';
 
@@ -49,6 +49,27 @@ describe('messageText', () => {
 		{ key: 'newPlace.heading', why: 'the entry is a marked sentence, not text' }
 	])('gives null when $why', ({ key }) => {
 		expect(messageText({ key, values: { library: 'Library' } })).toBeNull();
+	});
+});
+
+describe('reportedMessageText', () => {
+	it('reads a message the page has words for as messageText does', () => {
+		const wait = { key: 'jobWait.voiceTraining', values: {} };
+		expect(reportedMessageText(wait)).toBe(messageText(wait));
+	});
+
+	it.each([null, undefined])('gives null for %s without reporting', (absent) => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect(reportedMessageText(absent)).toBeNull();
+		expect(report).not.toHaveBeenCalled();
+		report.mockRestore();
+	});
+
+	it('gives null for a key the page has no words for and reports the key', () => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect(reportedMessageText({ key: 'jobWait.retired', values: {} })).toBeNull();
+		expect(report).toHaveBeenCalledWith(expect.stringContaining('jobWait.retired'));
+		report.mockRestore();
 	});
 });
 

@@ -64,3 +64,11 @@ export function messageText({ key, values }: Message): string | null {
 	const sentence: unknown = entry(values);
 	return typeof sentence === 'string' ? sentence : null;
 }
+
+/** `messageText` for a surface that shows a line of its own when the page has no words for the message: the key is reported and the answer is null; an absent message is null. */
+export function reportedMessageText(message: Message | null | undefined): string | null {
+	if (!message) return null;
+	const sentence = messageText(message);
+	if (sentence === null) console.error(`The page has no words for the message key ${message.key}`);
+	return sentence;
+}

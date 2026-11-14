@@ -127,6 +127,7 @@ function job(overrides: Record<string, unknown> = {}) {
 		train_epochs: null,
 		remaining_time_estimate: null,
 		queue_reason: null,
+		queue_reason_message: null,
 		queue_position: null,
 		error: null,
 		error_type: null,
@@ -293,6 +294,7 @@ describe('LoraDetail', () => {
 	it('renders worker waiting data received from the training job stream', async () => {
 		const queuedJob = job({
 			queue_reason: 'Waiting for queued generations on this GPU.',
+			queue_reason_message: { key: 'jobWait.queuedGenerations', values: {} },
 			queue_position: 2
 		});
 		fetchJob.mockResolvedValueOnce(queuedJob);
@@ -302,9 +304,26 @@ describe('LoraDetail', () => {
 		await tick();
 
 		expect(target.textContent).toContain(words['voiceDetail.waiting']);
-		expect(target.textContent).toContain('Waiting for queued generations on this GPU.');
+		expect(target.textContent).toContain(words['jobWait.queuedGenerations']);
 		expect(target.textContent).toContain(words['voiceDetail.queuePosition']({ position: '2' }));
 		await vi.waitFor(() => expect(trackJob).toHaveBeenCalledWith(queuedJob, {}));
+	});
+
+	it('words a queue wait the page has no key for as the default wait and reports the key', async () => {
+		const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const queuedJob = job({
+			queue_reason_message: { key: 'jobWait.retired', values: {} },
+			queue_position: null
+		});
+		fetchJob.mockResolvedValueOnce(queuedJob);
+		const target = await render(lora({ status: 'queued', training_job_id: queuedJob.id }));
+
+		jobStore.activeJobs.set([{ job: queuedJob }]);
+		await tick();
+
+		expect(target.textContent).toContain(words['voiceDetail.waitingDefault']);
+		expect(report).toHaveBeenCalledWith(expect.stringContaining('jobWait.retired'));
+		report.mockRestore();
 	});
 
 	it('renders epoch progress and the remaining estimate received from the training job stream', async () => {

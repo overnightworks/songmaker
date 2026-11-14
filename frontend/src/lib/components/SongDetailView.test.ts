@@ -699,7 +699,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 			{
 				job: jobStatus({
 					status: 'queued',
-					queue_reason: 'Waiting for LoRA training on this GPU.',
+					queue_reason_message: { key: 'jobWait.voiceTraining', values: {} },
 					queue_position: 2
 				}),
 				songId: 's1'
@@ -712,7 +712,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		);
 		expect(generateBtn(target)).toBeNull();
 		expect(target.querySelector('.generate-action .reason')?.textContent).toBe(
-			'Waiting for LoRA training on this GPU.'
+			words['jobWait.voiceTraining']
 		);
 	});
 });

@@ -285,7 +285,7 @@ def test_the_repository_source_passes(capsys: pytest.CaptureFixture[str]) -> Non
     assert code == 0, capsys.readouterr().out
 
 
-def _migration(revision: str, down: str | None, *, table: dict | None = None,
+def _migration_source(revision: str, down: str | None, *, table: dict | None = None,
                retired: tuple[str, ...] | None = None) -> str:
     lines = [f'revision: str = "{revision}"', f"down_revision: str | None = {down!r}"]
     if table is not None:
@@ -310,7 +310,7 @@ def test_a_message_key_missing_from_the_stored_set_is_reported_with_its_line(
 def test_a_migration_key_missing_from_the_stored_set_is_reported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    migrations = {"a1": _migration("a1", None, table={"Wait.": "takeRefusal.archived"})}
+    migrations = {"a1": _migration_source("a1", None, table={"Wait.": "takeRefusal.archived"})}
 
     code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
 
@@ -322,8 +322,8 @@ def test_a_migration_key_a_later_migration_retires_may_leave_the_stored_set(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     migrations = {
-        "a1": _migration("a1", None, table={"Wait.": "takeRefusal.archived"}),
-        "a2": _migration("a2", "a1", retired=("takeRefusal.archived",)),
+        "a1": _migration_source("a1", None, table={"Wait.": "takeRefusal.archived"}),
+        "a2": _migration_source("a2", "a1", retired=("takeRefusal.archived",)),
     }
 
     code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
@@ -335,8 +335,8 @@ def test_a_migration_key_retired_only_by_an_earlier_migration_is_still_reported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     migrations = {
-        "a1": _migration("a1", None, retired=("takeRefusal.archived",)),
-        "a2": _migration("a2", "a1", table={"Wait.": "takeRefusal.archived"}),
+        "a1": _migration_source("a1", None, retired=("takeRefusal.archived",)),
+        "a2": _migration_source("a2", "a1", table={"Wait.": "takeRefusal.archived"}),
     }
 
     code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
@@ -348,7 +348,7 @@ def test_a_migration_key_retired_only_by_an_earlier_migration_is_still_reported(
 def test_a_writer_key_a_migration_retires_is_still_reported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    migrations = {"a1": _migration("a1", None, retired=("takeRefusal.archived",))}
+    migrations = {"a1": _migration_source("a1", None, retired=("takeRefusal.archived",))}
 
     code, output = _scan(
         tmp_path, capsys, MESSAGE_IMPORT + 'message("takeRefusal.archived")\n',
@@ -400,7 +400,7 @@ def _scan_against(
 ) -> tuple[int, str]:
     migrations = None
     if retiring is not None:
-        migrations = {"a2": _migration("a2", "a1", retired=retiring)}
+        migrations = {"a2": _migration_source("a2", "a1", retired=retiring)}
         versions = tmp_path / "songmaker_cli" / MIGRATIONS
         versions.mkdir(parents=True)
         (versions / "a2.py").write_text(migrations["a2"], encoding="utf-8")
@@ -441,7 +441,7 @@ def test_a_key_dropped_by_a_migration_the_base_already_had_is_reported(
     versions = tmp_path / "songmaker_cli" / MIGRATIONS
     versions.mkdir(parents=True)
     (versions / "a2.py").write_text(
-        _migration("a2", "a1", retired=STORED_KEYS[1:]), encoding="utf-8"
+        _migration_source("a2", "a1", retired=STORED_KEYS[1:]), encoding="utf-8"
     )
     (tmp_path / "songmaker_cli" / "words.py").write_text(WORDS_MODULE, encoding="utf-8")
     base = _commit_stored_keys(tmp_path, *STORED_KEYS)

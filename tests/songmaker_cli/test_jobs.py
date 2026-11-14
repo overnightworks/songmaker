@@ -57,9 +57,7 @@ from songmaker_cli.jobs import (
 )
 from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgressTracker
 from songmaker_cli.messages import message
-from songmaker_cli.scheduler import (
-    WorkerTaskFailed,
-)
+from songmaker_cli.scheduler import WorkerTaskFailed
 from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
     ScorerOutcome,
