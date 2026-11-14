@@ -764,25 +764,28 @@ def test_add_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]
 # ── Patch sample ──────────────────────────────────────────────────────
 
 
-def test_patch_sample_partial_update(
-    client_and_ctx: tuple[TestClient, AppContext],
+@pytest.mark.parametrize(
+    ("field", "other_field"), [("caption", "lyrics"), ("lyrics", "caption")],
+)
+def test_patch_sample_saves_one_field_while_the_other_is_still_empty(
+    client_and_ctx: tuple[TestClient, AppContext], field: str, other_field: str,
 ) -> None:
     client, ctx = client_and_ctx
     lora_id = make_lora(ctx)
     with ctx.db() as session:
-        sample = add_user_lora_sample(
-            session, lora_id, "a/1.wav", caption="old", lyrics="old lyrics",
-        )
+        sample = add_user_lora_sample(session, lora_id, "a/1.wav", caption="", lyrics="")
         session.commit()
         sample_id = sample.id
 
     resp = client.patch(
-        f"/api/loras/{lora_id}/samples/{sample_id}",
-        json={"caption": "new caption"},
+        f"/api/loras/{lora_id}/samples/{sample_id}", json={field: "entered"},
     )
+
     assert resp.status_code == 200
-    assert resp.json()["caption"] == "new caption"
-    assert resp.json()["lyrics"] == "old lyrics"
+    with ctx.db() as session:
+        stored = session.get(UserLoraSample, sample_id)
+        assert getattr(stored, field) == "entered"
+        assert getattr(stored, other_field) == ""
 
 
 def test_patch_sample_reorders_positions(
@@ -812,40 +815,19 @@ def test_patch_sample_reorders_positions(
     assert positions[s1_id] == 2
 
 
-def test_patch_sample_empty_caption_rejected(
-    client_and_ctx: tuple[TestClient, AppContext],
+@pytest.mark.parametrize("field", ["caption", "lyrics"])
+def test_patch_sample_blank_field_rejected(
+    client_and_ctx: tuple[TestClient, AppContext], field: str,
 ) -> None:
     client, ctx = client_and_ctx
     lora_id = make_lora(ctx)
     with ctx.db() as session:
-        sample = add_user_lora_sample(
-            session, lora_id, "a/1.wav", caption="c", lyrics="l",
-        )
+        sample = add_user_lora_sample(session, lora_id, "a/1.wav", caption="c", lyrics="l")
         session.commit()
         sample_id = sample.id
 
     resp = client.patch(
-        f"/api/loras/{lora_id}/samples/{sample_id}",
-        json={"caption": "   "},
-    )
-    assert resp.status_code == 422
-
-
-def test_patch_sample_empty_lyrics_rejected(
-    client_and_ctx: tuple[TestClient, AppContext],
-) -> None:
-    client, ctx = client_and_ctx
-    lora_id = make_lora(ctx)
-    with ctx.db() as session:
-        sample = add_user_lora_sample(
-            session, lora_id, "a/1.wav", caption="c", lyrics="l",
-        )
-        session.commit()
-        sample_id = sample.id
-
-    resp = client.patch(
-        f"/api/loras/{lora_id}/samples/{sample_id}",
-        json={"lyrics": "  "},
+        f"/api/loras/{lora_id}/samples/{sample_id}", json={field: "   "},
     )
     assert resp.status_code == 422
 

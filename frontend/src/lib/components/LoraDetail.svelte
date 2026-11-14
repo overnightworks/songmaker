@@ -201,13 +201,18 @@
 		}
 	}
 
-	async function saveSample(sample: UserLoraSampleItem, caption: string, lyrics: string) {
+	async function saveSample(sampleId: string, patch: { caption?: string; lyrics?: string }) {
 		try {
-			await patchLoraSample(lora.id, sample.id, { caption, lyrics });
+			await patchLoraSample(lora.id, sampleId, patch);
 			await refreshLora(lora.id);
 		} catch (e) {
 			addToast(describeFailure(e, pageText('voiceDetail.saveFailed')), 'error');
 		}
+	}
+
+	function save(field: { value: string }, sample: UserLoraSampleItem, key: 'caption' | 'lyrics') {
+		field.value = field.value.trim() || sample[key];
+		if (field.value !== sample[key]) saveSample(sample.id, { [key]: field.value });
 	}
 
 	async function removeSample(sample: UserLoraSampleItem) {
@@ -322,10 +327,7 @@
 							rows="2"
 							disabled={active || deleted}
 							value={sample.caption}
-							onblur={(e) => {
-								const v = (e.target as HTMLTextAreaElement).value.trim();
-								if (v && v !== sample.caption) saveSample(sample, v, sample.lyrics);
-							}}></textarea>
+							onblur={(e) => save(e.currentTarget, sample, 'caption')}></textarea>
 					</label>
 					<label class="field">
 						<span class="field-label">{pageText('voiceDetail.lyricsLabel')}</span>
@@ -334,10 +336,7 @@
 							rows="4"
 							disabled={active || deleted}
 							value={sample.lyrics}
-							onblur={(e) => {
-								const v = (e.target as HTMLTextAreaElement).value.trim();
-								if (v && v !== sample.lyrics) saveSample(sample, sample.caption, v);
-							}}></textarea>
+							onblur={(e) => save(e.currentTarget, sample, 'lyrics')}></textarea>
 					</label>
 				</li>
 			{/each}

@@ -228,6 +228,40 @@ describe('LoraDetail', () => {
 		expect(addToast).toHaveBeenCalledWith(sentence, 'error');
 	});
 
+	it('saves only the edited field of a sample whose other field is still empty', async () => {
+		patchLoraSample.mockResolvedValue({ id: 's1' });
+		refreshLora.mockResolvedValue(lora());
+		const target = await render(lora({ samples: [sample('s1', '', '', 0)] }));
+		const caption = target.querySelector<HTMLTextAreaElement>('#caption-s1');
+		const lyrics = target.querySelector<HTMLTextAreaElement>('#lyrics-s1');
+		if (!caption || !lyrics) throw new Error('Expected sample fields');
+
+		caption.value = 'warm tenor';
+		caption.dispatchEvent(new Event('blur'));
+		await vi.waitFor(() => expect(patchLoraSample).toHaveBeenCalledTimes(1));
+		lyrics.value = 'A line';
+		lyrics.dispatchEvent(new Event('blur'));
+		await vi.waitFor(() => expect(patchLoraSample).toHaveBeenCalledTimes(2));
+
+		expect(patchLoraSample).toHaveBeenNthCalledWith(1, 'l1', 's1', { caption: 'warm tenor' });
+		expect(patchLoraSample).toHaveBeenNthCalledWith(2, 'l1', 's1', { lyrics: 'A line' });
+	});
+
+	it.each([
+		['caption', '#caption-s1'],
+		['lyrics', '#lyrics-s1']
+	])('puts the saved %s back when its field is cleared and left', async (fieldName, selector) => {
+		const target = await render(lora({ samples: [sample('s1', 'warm tenor', 'A line', 0)] }));
+		const field = target.querySelector<HTMLTextAreaElement>(selector);
+		if (!field) throw new Error('Expected sample field');
+
+		field.value = '  ';
+		field.dispatchEvent(new Event('blur'));
+
+		expect(field.value).toBe(fieldName === 'caption' ? 'warm tenor' : 'A line');
+		expect(patchLoraSample).not.toHaveBeenCalled();
+	});
+
 	it('uploads an audio file with the entered caption and lyrics', async () => {
 		addLoraSample.mockResolvedValueOnce({ id: 's1' });
 		refreshLora.mockResolvedValueOnce(lora());

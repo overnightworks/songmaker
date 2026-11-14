@@ -19,7 +19,7 @@
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1310
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1800
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
-"frontend/src/lib/components/LoraDetail.svelte" = 953
+"frontend/src/lib/components/LoraDetail.svelte" = 952
 "frontend/src/lib/components/NowPlaying.test.ts" = 1077
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1095
 "frontend/src/lib/components/PlayerBar.test.ts" = 1615
@@ -57,7 +57,7 @@
 "tests/songmaker_cli/test_db_postgresql.py" = 831
 "tests/songmaker_cli/test_jobs.py" = 3102
 "tests/songmaker_cli/test_library_api.py" = 1621
-"tests/songmaker_cli/test_lora_api.py" = 1188
+"tests/songmaker_cli/test_lora_api.py" = 1170
 "tests/songmaker_cli/test_playlist_api.py" = 1100
 "tests/songmaker_cli/test_queue_streams.py" = 2310
 "tests/songmaker_cli/test_resource_event_api.py" = 1155
