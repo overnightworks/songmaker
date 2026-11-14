@@ -19,9 +19,7 @@
 		LORA_MIN_SAMPLES_FOR_TRAINING
 	} from '#lib/constants/lora.ts';
 	import { formatDecimal, formatList, formatRemainingTime } from '#lib/utils/format.ts';
-	import { pageParts, pageText, type TextKey } from '#lib/utils/page-words.ts';
-
-	type ActiveStatus = Exclude<UserLoraItem['status'], 'draft' | 'ready' | 'failed'>;
+	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 
 	const ACTIVE_STATUS_KEYS = {
 		queued: { banner: 'voiceDetail.lockedQueued', button: 'voiceDetail.trainButtonQueued' },
@@ -34,7 +32,7 @@
 			banner: 'voiceDetail.lockedExporting',
 			button: 'voiceDetail.trainButtonExporting'
 		}
-	} as const satisfies Record<ActiveStatus, { banner: TextKey; button: TextKey }>;
+	} as const;
 
 	interface Props {
 		lora: UserLoraItem;
@@ -62,7 +60,7 @@
 	const samples = $derived([...lora.samples].sort((a, b) => a.position - b.position));
 	const active = $derived(isLoraActive(lora.status));
 	const deleted = $derived(lora.deleted_at !== null);
-	const lockedStatus = $derived(active ? (lora.status as ActiveStatus) : null);
+	const lockedStatus = $derived(isLoraActive(lora.status) ? lora.status : null);
 	const atCapacity = $derived(samples.length >= LORA_MAX_SAMPLES);
 	const canAddSample = $derived(!active && !deleted && !atCapacity);
 
@@ -121,7 +119,7 @@
 		}
 	}
 
-	function acceptsAudio(file: File): boolean {
+	function isAudioOrToast(file: File): boolean {
 		const name = file.name.toLowerCase();
 		const accepted = LORA_AUDIO_EXTENSIONS.some((ext) => name.endsWith(ext));
 		if (!accepted) {
@@ -139,7 +137,7 @@
 	function onFilePicked(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0] ?? null;
-		newFile = file && acceptsAudio(file) ? file : null;
+		newFile = file && isAudioOrToast(file) ? file : null;
 		if (file && !newFile) input.value = '';
 	}
 
@@ -147,7 +145,7 @@
 		e.preventDefault();
 		dragOver = false;
 		const file = e.dataTransfer?.files?.[0] ?? null;
-		if (file && acceptsAudio(file)) newFile = file;
+		if (file && isAudioOrToast(file)) newFile = file;
 	}
 
 	async function submitNewSample() {

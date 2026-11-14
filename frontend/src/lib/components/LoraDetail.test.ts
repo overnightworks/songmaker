@@ -2,6 +2,8 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
 import type { UserLoraItem, UserLoraSampleItem } from '#lib/api/types.ts';
+import { LORA_AUDIO_EXTENSIONS, LORA_MIN_SAMPLES_FOR_TRAINING } from '#lib/constants/lora.ts';
+import { formatList } from '#lib/utils/format.ts';
 import { words } from '#lib/words/en.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 
@@ -416,8 +418,14 @@ describe('LoraDetail', () => {
 	);
 
 	it.each([
-		{ count: 0, problem: words['voiceDetail.needSamples'](3, { have: '0' }) },
-		{ count: 2, problem: words['voiceDetail.needSamples'](3, { have: '2' }) }
+		{
+			count: 0,
+			problem: words['voiceDetail.needSamples'](LORA_MIN_SAMPLES_FOR_TRAINING, { have: '0' })
+		},
+		{
+			count: 2,
+			problem: words['voiceDetail.needSamples'](LORA_MIN_SAMPLES_FOR_TRAINING, { have: '2' })
+		}
 	])('asks for the missing samples when a voice has $count', async ({ count, problem }) => {
 		const samples = Array.from({ length: count }, (_, i) =>
 			sample(`s${i}`, 'caption', 'lyrics', i)
@@ -427,15 +435,32 @@ describe('LoraDetail', () => {
 		expect(target.querySelector('.problems')?.textContent).toContain(problem);
 	});
 
-	it('names the accepted formats when a dropped file is not audio', async () => {
+	it.each([
+		{
+			entry: 'picked',
+			arrive: (target: HTMLElement, file: File) => {
+				const input = target.querySelector<HTMLInputElement>('input[type="file"]');
+				if (!input) throw new Error('Expected sample file input');
+				Object.defineProperty(input, 'files', { value: [file] });
+				input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		},
+		{
+			entry: 'dropped',
+			arrive: (target: HTMLElement, file: File) => {
+				const zone = target.querySelector<HTMLElement>('.drop-zone');
+				if (!zone) throw new Error('Expected sample drop zone');
+				const drop = new Event('drop', { bubbles: true, cancelable: true });
+				Object.defineProperty(drop, 'dataTransfer', { value: { files: [file] } });
+				zone.dispatchEvent(drop);
+			}
+		}
+	])('names the accepted formats when a $entry file is not audio', async ({ arrive }) => {
 		const target = await render();
-		const input = target.querySelector<HTMLInputElement>('input[type="file"]');
-		if (!input) throw new Error('Expected sample file input');
-		Object.defineProperty(input, 'files', { value: [new File(['x'], 'notes.txt')] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
+		arrive(target, new File(['x'], 'notes.txt'));
 
 		expect(addToast).toHaveBeenCalledWith(
-			words['voiceDetail.unsupportedFormat']({ formats: '.wav, .mp3, .flac' }),
+			words['voiceDetail.unsupportedFormat']({ formats: formatList(LORA_AUDIO_EXTENSIONS) }),
 			'error'
 		);
 	});

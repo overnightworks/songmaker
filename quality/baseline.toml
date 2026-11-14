@@ -21,7 +21,7 @@
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1472
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1804
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
-"frontend/src/lib/components/LoraDetail.svelte" = 958
+"frontend/src/lib/components/LoraDetail.svelte" = 956
 "frontend/src/lib/components/NowPlaying.test.ts" = 1092
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1101
 "frontend/src/lib/components/PlayerBar.test.ts" = 1620

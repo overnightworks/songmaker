@@ -20,7 +20,9 @@ const LORA_ACTIVE_STATUSES: ReadonlySet<string> = new Set([
 	LORA_STATUS_EXPORTING
 ]);
 
-export function isLoraActive(status: string): boolean {
+type LoraActiveStatus = Exclude<UserLoraItem['status'], 'draft' | 'ready' | 'failed'>;
+
+export function isLoraActive(status: string): status is LoraActiveStatus {
 	return LORA_ACTIVE_STATUSES.has(status);
 }
 
