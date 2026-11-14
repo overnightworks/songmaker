@@ -1042,8 +1042,8 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 
 	await page.goto(LIBRARY_PATH);
 	await expect(orders.getByRole('button')).toHaveText([
-		words[LIBRARY_WALL_ORDER_KEYS.title],
-		words[LIBRARY_WALL_ORDER_KEYS.played]
+		words['libraryWall.orderTitle'],
+		words['libraryWall.orderPlayed']
 	]);
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.filter({ hasText: library.albumTitle })).toHaveCount(1);

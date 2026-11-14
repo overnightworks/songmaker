@@ -63,7 +63,9 @@ test(
 
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 		await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
-		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
+		await expect(surface.getByRole('navigation', { name: words['breadcrumb.label'] })).toHaveCount(
+			0
+		);
 		await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 		await expectWorkspaceStanding(page);
 	}

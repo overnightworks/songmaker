@@ -4,6 +4,7 @@ import {
 	JOB_STREAM_MAX_CONNECTION_ERRORS
 } from '#lib/constants/jobs.ts';
 import { get } from 'svelte/store';
+import { words } from '#lib/words/en.ts';
 
 const VRAM_CAUSE =
 	'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
@@ -814,10 +815,7 @@ describe('jobs store', () => {
 			makeJob({ status: 'failed', error: 'Server restarted', error_type: 'server_restart' })
 		);
 		await vi.advanceTimersByTimeAsync(0);
-		const all = get(toasts);
-		expect(all).toHaveLength(1);
-		expect(all[0].type).toBe('error');
-		expect(all[0].message).toBe('Server restarted — please retry');
+		expect(get(toasts)).toMatchObject([{ type: 'error', message: words['jobEnd.serverRestart'] }]);
 	});
 
 	describe('hydrateGenerationFailure', () => {

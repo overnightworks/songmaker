@@ -212,7 +212,7 @@ describe('1354_rule_14 915_C1 LibraryWall + New head', () => {
 		playlistList.set([playlist({ id: 'p-road', title: 'Road Trip', share_slug: null })]);
 		const root = await render();
 
-		expect(newButtonOnHead(root)?.textContent).toContain('New');
+		expect(newButtonOnHead(root)?.textContent).toContain(words['newPlace.face']);
 		expect(newButtonOnHead(root)?.querySelector('svg')).not.toBeNull();
 		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(
 			words['libraryWall.libraryEmpty']({ home: words['places.home'] })

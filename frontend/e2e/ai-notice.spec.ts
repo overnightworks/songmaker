@@ -8,9 +8,6 @@ import { words } from '../src/lib/words/en';
 import { FlowGuard, shellOf, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
-const AI_GENERATED_WORDS = 'KI-generiert';
-const WRITING_WITH_AI_WORDS = 'Du schreibst mit einer KI';
-
 let guard: FlowGuard;
 
 test.beforeEach(({ page }) => {
@@ -43,7 +40,7 @@ test('1906_P5: the full player says KI-generiert and the mini-player bar does no
 	await expect(
 		bar.getByRole('button', { name: words['transport.pause'], exact: true })
 	).toBeVisible();
-	await expect(bar.getByText(AI_GENERATED_WORDS)).toHaveCount(0);
+	await expect(bar.getByText(words['aiNotice.generated'])).toHaveCount(0);
 
 	await bar
 		.getByRole('button', {
@@ -57,7 +54,7 @@ test('1906_P5: the full player says KI-generiert and the mini-player bar does no
 
 	// A layer on the phone, the docked complementary panel on desktop.
 	const player = page.locator('.now-playing');
-	const notice = player.getByText(AI_GENERATED_WORDS, { exact: true });
+	const notice = player.getByText(words['aiNotice.generated'], { exact: true });
 	await expect(notice).toBeVisible();
 	await expect(notice).toHaveAttribute('lang', 'de');
 	await expectWhollyInView(page, notice);
@@ -77,7 +74,7 @@ test('1906_E3: the co-writer says Du schreibst mit einer KI under its header', a
 	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 	await page.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 
-	const notice = page.locator('.cowriter').getByText(WRITING_WITH_AI_WORDS, { exact: true });
+	const notice = page.locator('.cowriter').getByText(words['aiNotice.writing'], { exact: true });
 	await expect(notice).toBeVisible();
 	await expect(notice).toHaveAttribute('lang', 'de');
 	await expectWhollyInView(page, notice);

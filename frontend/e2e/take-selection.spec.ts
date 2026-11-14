@@ -112,7 +112,7 @@ test(
 				words['takesList.selectAllUnkept'],
 				words['takesList.selectedCount'](SELECTED_TAKE_COUNT),
 				words['takesList.bulkDeleteLabel'](SELECTED_TAKE_COUNT),
-				'Cancel'
+				words['takesList.cancel']
 			]);
 
 			const deleteButton = toolbar.getByRole('button', {
@@ -124,13 +124,15 @@ test(
 			});
 			await deleteButton.click();
 			await expect(dialog).toContainText(words['takesList.deleteMessage']);
-			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+			await dialog.getByRole('button', { name: words['dialog.cancel'], exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(toolbar).toContainText(words['takesList.selectedCount'](SELECTED_TAKE_COUNT));
 			expect(await takeIdsOf(page, songId)).toEqual(before);
 
 			await deleteButton.click();
-			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+			await dialog
+				.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true })
+				.click();
 			await expect(rows).toHaveCount(TAKES_PER_SONG - SELECTED_TAKE_COUNT);
 			await expect(toolbar).toHaveCount(0);
 			expect((await takeIdsOf(page, songId)).sort()).toEqual(

@@ -392,7 +392,7 @@ for (const kind of ['song', 'gen'] as const) {
 							route.fulfill({ json: { ...payload, audio_url: null } })
 						);
 						await page.reload();
-						await expect(page.getByRole('status')).toHaveText('No audio available yet.');
+						await expect(page.getByRole('status')).toHaveText(words['share.noAudio']);
 						await expect(page.locator('.np-page-lyrics')).toHaveCount(0);
 						await expect(
 							page.getByRole('button', { name: words['transport.play'], exact: true })

@@ -202,7 +202,7 @@ async function expectAlbumForm(page: Page, menu: Locator, title: string): Promis
 		expect(rowBox.height).toBeCloseTo(HITBOX_FREQUENT_PX, 0);
 
 	const heading = menu.locator('.menu-heading');
-	await expect(heading).toHaveText(`Song · ${title}`);
+	await expect(heading).toHaveText(words['songMenu.heading']({ title }));
 	await expect(heading).toHaveCSS('text-transform', 'uppercase');
 	await expect(page.locator('.menu-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 

@@ -184,8 +184,6 @@ describe('shared generation (take) page', () => {
 });
 
 describe('shared generation (take) AI mark', () => {
-	const AI_MARK = 'KI-generiert';
-
 	async function openWith(response: unknown): Promise<HTMLElement> {
 		mockFetch.mockReturnValueOnce(response);
 		const target = document.createElement('div');
@@ -205,7 +203,7 @@ describe('shared generation (take) AI mark', () => {
 		);
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Solo Track'));
-		expect(target.textContent).toContain(AI_MARK);
+		expect(target.textContent).toContain(words['aiNotice.generated']);
 	});
 
 	it.each([
@@ -216,6 +214,6 @@ describe('shared generation (take) AI mark', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('h1')).not.toBeNull());
 		expect(target.textContent).not.toContain('Solo Track');
-		expect(target.textContent).not.toContain(AI_MARK);
+		expect(target.textContent).not.toContain(words['aiNotice.generated']);
 	});
 });

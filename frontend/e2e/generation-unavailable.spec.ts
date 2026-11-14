@@ -49,7 +49,9 @@ async function expectWorkerPool(page: Page, width: number): Promise<void> {
 			'acestep'
 		);
 	} else {
-		await expect(page.getByRole('button', { name: 'ACE-Step', exact: true })).toHaveClass(/active/);
+		await expect(
+			page.getByRole('button', { name: words['adminPage.tabAcestep'], exact: true })
+		).toHaveClass(/active/);
 	}
 }
 

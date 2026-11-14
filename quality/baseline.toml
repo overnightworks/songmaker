@@ -11,7 +11,7 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1203
+"frontend/e2e/back-closes-overlay.spec.ts" = 1202
 "frontend/e2e/helpers.ts" = 819
 "frontend/e2e/library.spec.ts" = 1260
 "frontend/e2e/seed.ts" = 1174
@@ -33,7 +33,7 @@
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 684
-"frontend/src/lib/stores/jobs.test.ts" = 900
+"frontend/src/lib/stores/jobs.test.ts" = 898
 "frontend/src/lib/stores/libraryContext.test.ts" = 2085
 "frontend/src/lib/stores/libraryContext.ts" = 1178
 "frontend/src/lib/stores/navigation.test.ts" = 2964

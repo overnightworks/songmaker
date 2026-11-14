@@ -226,7 +226,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await v1Row(page).click();
 		await expect(workspace(page).locator('.take-row.selected')).toHaveCount(1);
 
-		await toolbar(page).getByRole('button', { name: 'Cancel' }).click();
+		await toolbar(page).getByRole('button', { name: words['takesList.cancel'] }).click();
 		await tickTakes(page, song.v1[0]);
 		await expectSelected(page, 1);
 		await v1Row(page).click();

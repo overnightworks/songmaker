@@ -192,7 +192,7 @@ describe('SongDetailView share link', () => {
 		const target = await renderView();
 
 		const chip = target.querySelector<HTMLButtonElement>('.share-link-chip');
-		expect(chip?.textContent?.trim()).toBe('Copy link');
+		expect(chip?.textContent?.trim()).toBe(words['libraryShares.copyLink']);
 		expect(chip?.title).toBe(share_url);
 		expect(target.textContent).not.toContain(share_url);
 	});
@@ -240,7 +240,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await unmount(view);
 		await tick();
 		expect(get(phoneAppBar)).toBeNull();
-		expect(bar.querySelector('.brand')?.textContent).toBe('Hallucinai');
+		expect(bar.querySelector('.brand')?.textContent).toBe(words['app.name']);
 	});
 
 	it('switches between Edit and the real Takes list at phone width without losing the draft', async () => {
@@ -529,7 +529,7 @@ describe('SongDetailView recipe and takes', () => {
 		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
 			'Voice: Folk Alto — voice deleted'
 		);
-		expect(visibleText(target)).not.toContain('Custom');
+		expect(visibleText(target)).not.toContain(words['recipe.presetCustom']);
 	});
 
 	it('shows symbol actions and the row body instead of labelled source buttons in take rows', async () => {
@@ -595,15 +595,15 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		target.querySelector<HTMLButtonElement>('.take-row .menu-trigger')?.click();
 		await tick();
-		clickNamed(target, 'Delete');
+		clickNamed(target, words['takeMenu.delete']);
 		await tick();
 		const dialog = target.querySelector<HTMLElement>('[role="dialog"]');
 		if (!dialog) throw new Error('Expected a delete confirmation');
 		expect(target.querySelectorAll('[role="dialog"]')).toHaveLength(1);
 		expect(dialog.querySelector('input')).toBeNull();
-		expect(dialog.textContent).toContain('Audio files will be permanently deleted');
+		expect(dialog.textContent).toContain(words['takesList.deleteMessage']);
 		expect(deleteGeneration).not.toHaveBeenCalled();
-		clickNamed(dialog, choice);
+		clickNamed(dialog, words[choice === 'Delete' ? 'takesList.deleteConfirm' : 'dialog.cancel']);
 		await tick();
 		if (choice === 'Delete') {
 			expect(deleteGeneration).toHaveBeenCalledExactlyOnceWith('g1');
@@ -624,9 +624,9 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		toggleSelection('g1');
 		await tick();
-		clickNamed(target, 'Delete 1');
+		clickNamed(target, words['takesList.bulkDeleteLabel'](1));
 		await tick();
-		clickNamed(document.body, 'Delete');
+		clickNamed(document.body, words['takesList.deleteConfirm']);
 		await tick();
 		await vi.waitFor(() => expect(get(selectedGenerationId)).toBeNull());
 		expect(historyEntry().generationId).toBeNull();
@@ -688,11 +688,10 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		expect(target.querySelector('.takes-list')?.textContent ?? '').not.toContain(cause);
 		expect(action.querySelectorAll('button')).toHaveLength(1);
 		getByRoleButton(action, words['generate.button']).click();
-		await vi.waitFor(() =>
-			expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued')
-		);
+		const status = () => action.querySelector('[role="status"]')?.textContent;
+		await vi.waitFor(() => expect(status()).toContain(words['generate.queued']));
 		expect(action.textContent).not.toContain(cause);
-		expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued');
+		expect(status()).toContain(words['generate.queued']);
 	});
 
 	it('shows a queued generation reason and its position from the job stream', async () => {
@@ -798,7 +797,8 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		const btn = generateBtn(target);
 
 		btn.click();
-		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Generation failed', 'error'));
+		const startFailed = words['generate.startFailed'];
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(startFailed, 'error'));
 
 		generateSong.mockResolvedValueOnce(jobStatus({ status: 'completed' }));
 		generateBtn(target).click();
@@ -831,7 +831,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		expect(target.querySelector('.dialog h3')?.textContent).toBe(words['songPage.unsavedTitle']);
 		expect(get(selectedSongId)).toBe('s1');
 
-		clickNamed(target, 'Cancel');
+		clickNamed(target, words['dialog.cancel']);
 		await tick();
 
 		expect(get(selectedSongId)).toBe('s1');
@@ -958,8 +958,8 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 
 	it.each([
-		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'repaint' },
-		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'seed' },
+		{ choice: 'Cancel', button: words['dialog.cancel'], saveFails: false, use: 'repaint' },
+		{ choice: 'Cancel', button: words['dialog.cancel'], saveFails: false, use: 'seed' },
 		{
 			choice: 'a failed Save',
 			button: words['songPage.unsavedSave'],

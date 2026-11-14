@@ -85,7 +85,9 @@ for (const width of WIDTHS) {
 					}
 
 					const action = page.locator('.generate-action:visible');
-					const generate = action.getByRole('button', { name: nameStartingWith('Generate') });
+					const generate = action.getByRole('button', {
+						name: nameStartingWith(words['generate.button'])
+					});
 					await expect(generate).toBeEnabled();
 					await expect(action.locator('.reason')).toHaveCount(0);
 					await generate.click();

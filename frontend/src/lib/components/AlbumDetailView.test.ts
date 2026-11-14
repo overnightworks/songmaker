@@ -284,7 +284,7 @@ describe('AlbumDetailView header', () => {
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 		expect(target.querySelectorAll('.song-row')).toHaveLength(1);
 		expect(target.querySelector('nav')).toBeNull();
-		expect(target.textContent).not.toContain('Library');
+		expect(target.textContent).not.toContain(words['places.library']);
 		expect(
 			[...target.querySelectorAll('button')].filter((button) =>
 				/shuffle/i.test(accessibleName(button))

@@ -37,7 +37,6 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 
 import AdminPage from './+page.svelte';
 import { words } from '#lib/words/en.ts';
-import { ADMIN_VOICE_STATUS_TEXT_KEYS } from '#lib/constants/admin.ts';
 
 const VIEWPORT_PX = 320;
 const VOICES = [
@@ -237,9 +236,9 @@ describe('admin settings compact layout', () => {
 		expect(api.fetchAdminVoices).toHaveBeenCalledOnce();
 		expect(voices.textContent).toContain('Warm Tenor');
 		expect(voices.textContent).toContain('jane');
-		expect(voices.textContent).toContain(words[ADMIN_VOICE_STATUS_TEXT_KEYS.training]);
+		expect(voices.textContent).toContain(words['adminPage.voiceStatusTraining']);
 		expect(voices.textContent).toContain('Dry Spoken Word');
-		expect(voices.textContent).toContain(words[ADMIN_VOICE_STATUS_TEXT_KEYS.ready]);
+		expect(voices.textContent).toContain(words['adminPage.voiceStatusReady']);
 		expect(voices.querySelectorAll('button')).toHaveLength(0);
 		expect(voices.textContent).not.toContain('sft');
 		expect(voices.textContent).not.toContain('turbo');

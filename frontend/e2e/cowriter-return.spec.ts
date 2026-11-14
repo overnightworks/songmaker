@@ -416,7 +416,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await menuButton.click();
 
 		await expect(rowNames).toHaveText(firstNames);
-		await page.getByRole('menuitem', { name: 'Delete conversation' }).last().click();
+		await page.getByRole('menuitem', { name: words['cowriter.deleteConversation'] }).last().click();
 		await expect(
 			page
 				.getByRole('dialog', { name: words['cowriter.deleteConversationTitle'] })

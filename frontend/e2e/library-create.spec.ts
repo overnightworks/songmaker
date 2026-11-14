@@ -450,7 +450,10 @@ test(
 			await create.click();
 			await expect(toastMessages(page)).toHaveText(['Second reason']);
 
-			await page.locator('.toast-container').getByRole('button', { name: 'Dismiss' }).click();
+			await page
+				.locator('.toast-container')
+				.getByRole('button', { name: words['toast.dismiss'] })
+				.click();
 			await expect(toastMessages(page)).toHaveCount(0);
 
 			await create.click();

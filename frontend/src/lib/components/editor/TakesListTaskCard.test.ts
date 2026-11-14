@@ -1,4 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
+import { words } from '#lib/words/en.ts';
 import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
@@ -92,7 +93,7 @@ describe('task card in the take list (S4, #1912 acceptance 1, 2, 5, 6, 7)', () =
 		setSourceFromGeneration(takes[0], 'cover');
 		await tick();
 		expect(rowIdsWithCard(target)).toEqual(['c1']);
-		expect(target.querySelector('.task .what')?.textContent).toBe('Cover');
+		expect(target.querySelector('.task .what')?.textContent).toBe(words['takeTask.cover']);
 		setSourceFromGeneration(takes[1], 'cover');
 		await tick();
 		expect(rowIdsWithCard(target)).toEqual(['c2']);

@@ -181,16 +181,19 @@ describeBackClosesOverlay({
 	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
 	afterBack: () => expect(deletions).toEqual([]),
 	closeWays: [
-		{ way: 'Cancel', close: (target) => button(target, 'Cancel').click() },
+		{ way: 'Cancel', close: (target) => button(target, words['deleteDialog.cancel']).click() },
 		{
 			way: 'Delete',
-			close: (target) => button(target, 'Delete').click(),
+			close: (target) => button(target, words['deleteDialog.confirm']).click(),
 			actionSawHistoryAt: () => deletionSawHistoryAt
 		},
 		{
 			way: 'the backdrop',
 			close: (target) => target.querySelector<HTMLElement>('.overlay')?.click()
 		},
-		{ way: 'Escape', close: (target) => pressKey(button(target, 'Cancel'), 'Escape') }
+		{
+			way: 'Escape',
+			close: (target) => pressKey(button(target, words['deleteDialog.cancel']), 'Escape')
+		}
 	]
 });

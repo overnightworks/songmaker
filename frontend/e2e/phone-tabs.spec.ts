@@ -15,13 +15,18 @@ import {
 import { openSearchSheet } from './phone-search';
 import { readSeededLibrary } from './seed';
 
+const TAB_LABEL_BY_PLACE = {
+	home: words['places.home'],
+	library: words['places.library'],
+	playlists: words['places.playlists']
+};
+const TAB_LABELS = Object.values(TAB_LABEL_BY_PLACE);
+
 const tabs = (page: Page) => page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 
 async function expectCurrent(page: Page, label: string | null): Promise<void> {
 	await expect(tabs(page)).toBeVisible();
-	await expect(tabs(page).getByRole('button')).toHaveText(
-		PHONE_TABS.map((tab) => words[tab.labelKey])
-	);
+	await expect(tabs(page).getByRole('button')).toHaveText(TAB_LABELS);
 	await expect(tabs(page).locator('[aria-current="page"]')).toHaveCount(label ? 1 : 0);
 	if (label)
 		await expect(tabs(page).getByRole('button', { name: label, exact: true })).toHaveAttribute(
@@ -41,7 +46,7 @@ test(
 		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 		await expect(rail).toBeVisible();
 		const links = rail.locator('.rail-page-link');
-		await expect(links).toHaveText(PHONE_TABS.map(({ labelKey }) => new RegExp(words[labelKey])));
+		await expect(links).toHaveText(TAB_LABELS.map((label) => new RegExp(label)));
 		const icons = await links
 			.locator('svg')
 			.evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
@@ -65,8 +70,8 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await page.setViewportSize(MOBILE_VIEWPORT);
 		await page.goto(HOME_PATH);
 		await expectCurrent(page, words['places.home']);
-		for (const { labelKey, place } of PHONE_TABS) {
-			const label = words[labelKey];
+		for (const { place } of PHONE_TABS) {
+			const label = TAB_LABEL_BY_PLACE[place];
 			const tab = tabs(page).getByRole('button', { name: label, exact: true });
 			await expect(tab.locator('svg')).toBeVisible();
 			await tab.click();

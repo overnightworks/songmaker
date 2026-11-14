@@ -151,7 +151,7 @@ test.describe('before Play', () => {
 					control(page, words['transport.play']),
 					page.getByRole('slider', { name: words['transport.seek'] }),
 					page.locator('.lyrics-heading'),
-					songs(page).getByRole('heading', { name: 'Songs' })
+					songs(page).getByRole('heading', { name: words['share.songs'] })
 				];
 				const boxes = await boundingBoxes(...stackedTop);
 				const phone = (testInfo.project.use.viewport?.width ?? 0) <= 768;
@@ -205,7 +205,7 @@ test.describe('before Play', () => {
 		await openMockAlbum(visitor);
 		const { page } = visitor;
 
-		const notice = page.getByText('KI-generiert', { exact: true });
+		const notice = page.getByText(words['aiNotice.generated'], { exact: true });
 		await expect(notice).toHaveAttribute('lang', 'de');
 		await expect(notice).toBeInViewport({ ratio: 1 });
 	});
@@ -217,7 +217,7 @@ test.describe('before Play', () => {
 			const longName = Array(12).fill('A very long artist and album name').join(' ');
 			await openMockAlbum(visitor, mockSongs(3), longName);
 			const { page } = visitor;
-			const notice = page.getByText('KI-generiert', { exact: true });
+			const notice = page.getByText(words['aiNotice.generated'], { exact: true });
 			const nameText = page.getByText(words['share.albumSubtitle']({ artist: longName }), {
 				exact: true
 			});
@@ -275,7 +275,7 @@ test('1374_rule_2 B6: no playable song shows only the title and no-audio notice'
 	await openMockAlbum(visitor, [
 		{ title: MOCK_UNPLAYABLE_TITLE, lyrics: 'Hidden words', playable: false }
 	]);
-	await expect(visitor.page.getByRole('status')).toHaveText('No audio available yet.');
+	await expect(visitor.page.getByRole('status')).toHaveText(words['share.noAudio']);
 	await expect(
 		visitor.page.locator('.now-playing, .np-page-lyrics, .np-page-songs, .player-bar')
 	).toHaveCount(0);

@@ -258,8 +258,8 @@ test('an API-seeded suggestion can be chosen and its selected cover removed', as
 	await expect(editing).toHaveCount(0);
 	await expect(surface.locator('.header-cover img')).toBeVisible();
 
-	await surface.getByRole('button', { name: 'More' }).click();
-	await surface.getByRole('button', { name: 'Cover', exact: true }).click();
+	await surface.getByRole('button', { name: words['collectionMenu.label'] }).click();
+	await surface.getByRole('button', { name: words['collectionMenu.cover'], exact: true }).click();
 	await editing.getByRole('button', { name: words['albumCover.remove'], exact: true }).click();
 	await expect(surface.locator('.header-cover img')).toHaveCount(0);
 });

@@ -405,9 +405,9 @@ describe('NowPlayingTake', () => {
 	});
 
 	it.each([
-		['Repaint', 'repaint'],
-		['Cover', 'cover'],
-		['Use seed', 'seed']
+		[words['nowPlayingTake.repaint'], 'repaint'],
+		[words['nowPlayingTake.cover'], 'cover'],
+		[words['nowPlayingTake.useSeed'], 'seed']
 	] as const)(
 		'%s hands the take over, closes Now Playing, and navigates to its song',
 		async (label, use) => {

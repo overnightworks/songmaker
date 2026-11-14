@@ -267,7 +267,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await page.getByRole('button', { name: words['collectionMenu.archive'], exact: true }).click();
 		await openHome(page, shellOf(testInfo));
 		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
-		await page.getByRole('button', { name: 'Undo', exact: true }).click();
+		await page.getByRole('button', { name: words['albumPage.undo'], exact: true }).click();
 		await expect(writeBodies(page)).toHaveCount(3);
 		await expectWrittenOrder(page, await writtenAnswer(page));
 	} finally {

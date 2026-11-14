@@ -95,7 +95,7 @@ describe('EditorHeader', () => {
 		expect(target.querySelector('.editor-views')).toBeNull();
 		const generateButtons = target.querySelectorAll('.generate-action .primary-button');
 		expect(generateButtons).toHaveLength(1);
-		expect(generateButtons[0].textContent).toContain('Generate');
+		expect(generateButtons[0].textContent).toContain(words['generate.button']);
 	});
 
 	it('keeps Share beside the desktop song menu', async () => {

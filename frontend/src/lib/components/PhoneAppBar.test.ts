@@ -231,7 +231,7 @@ describe('PhoneAppBar', () => {
 		for (const name of [
 			words['pageBack.backTo']({ page: 'Cold Harbour' }),
 			words['phoneAppBar.searchOpen'],
-			'Share song',
+			words['shareButton.songLabel'],
 			words['songMenu.label']
 		]) {
 			expectFrequentHitbox(getByRoleButton(target, name), name);
@@ -259,7 +259,7 @@ describe('PhoneAppBar', () => {
 		await tick();
 		const songControls = (): Element[] => [
 			target.querySelector('h1') as Element,
-			getByRoleButton(target, 'Share song'),
+			getByRoleButton(target, words['shareButton.songLabel']),
 			getByRoleButton(target, words['songMenu.label'])
 		];
 		const otherControls = [getByRoleButton(target, words['phoneAppBar.searchOpen'])];

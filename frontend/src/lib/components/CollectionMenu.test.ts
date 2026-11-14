@@ -8,7 +8,6 @@ import { openCollectionMenu } from './shell/rail-test-fixtures';
 import { words } from '#lib/words/en.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
-const SHARE_WARNING_LABEL = 'Missing from the share page';
 
 beforeEach(() => {
 	Object.defineProperty(navigator, 'clipboard', {
@@ -66,7 +65,7 @@ async function openMenuAndShare(
 }
 
 function shareWarningDialog(target: HTMLElement): Element | null {
-	return target.querySelector(`[role="dialog"][aria-label="${SHARE_WARNING_LABEL}"]`);
+	return target.querySelector(`[role="dialog"][aria-label="${words['shareDialog.title']}"]`);
 }
 
 describe('CollectionMenu share warning', () => {
@@ -138,8 +137,8 @@ describe('CollectionMenu Share row', () => {
 	] as const;
 
 	it.each([
-		{ isShared: false, state: 'off' },
-		{ isShared: true, state: 'on' }
+		{ isShared: false, state: words['collectionMenu.shareOff'] },
+		{ isShared: true, state: words['collectionMenu.shareOn'] }
 	])(
 		'1480_R2: shows $state in words on the one Share control when isShared is $isShared',
 		async (row) => {
@@ -161,7 +160,9 @@ describe('CollectionMenu Share row', () => {
 		const { target } = await render({ kind: row.kind, isShared: true, shareSlug: 'abc' });
 		await openCollectionMenu(target);
 
-		expect(menuRow(target, row.label).title).toBe(`Shared: ${row.path}`);
+		expect(menuRow(target, row.label).title).toBe(
+			words['shareToggle.sharedTooltip']({ path: row.path })
+		);
 	});
 
 	it('1480_R2: draws a different icon once shared, so the state is not colour alone', async () => {

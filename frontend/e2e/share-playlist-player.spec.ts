@@ -208,7 +208,7 @@ for (const height of [900, 600]) {
 				control(page, words['transport.play']),
 				slider(page),
 				page.locator('.lyrics-heading'),
-				page.getByRole('heading', { name: 'Songs', exact: true })
+				page.getByRole('heading', { name: words['share.songs'], exact: true })
 			);
 			const vertical = (page.viewportSize()?.width ?? 1440) <= 768 ? boxes : boxes.slice(0, 4);
 			for (let i = 1; i < vertical.length; i++)
@@ -461,7 +461,7 @@ test('1374_rule_14 P10: unplayable entries are neither staged nor listed', async
 	});
 	await page.reload();
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(PLAYLIST_TITLE);
-	await expect(page.getByRole('status')).toHaveText('No audio available yet.');
+	await expect(page.getByRole('status')).toHaveText(words['share.noAudio']);
 	await expect(page.locator('.now-playing, .queue-row, .np-page-lyrics, .player-bar')).toHaveCount(
 		0
 	);

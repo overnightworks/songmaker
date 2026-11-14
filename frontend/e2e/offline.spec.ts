@@ -57,7 +57,6 @@ const RESOURCE_STREAM = `**${RESOURCE_EVENT_STREAM_PATH}**`;
 const SESSION_CHECK = '**/api/auth/me';
 const GENERATE_LABEL = words['generate.button'];
 // The toast a generate job's end raises (`notifyTerminalJob` in stores/jobs.ts).
-const JOB_COMPLETED_TOAST = 'generate completed';
 // The ride through three tunnels on #1039's final drive (#1141).
 const OUTAGES_IN_ONE_RIDE = 3;
 // What each outage past the first adds to the running-take flow's cost: the
@@ -629,10 +628,10 @@ test.describe(
 					await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible();
 				}
 				await expect(lastSeenBar).toBeVisible();
-				await expect(page.getByText(JOB_COMPLETED_TOAST)).toHaveCount(0);
+				await expect(page.getByText(words['jobEnd.generateCompleted'])).toHaveCount(0);
 				await regainNetwork(page, context);
 				await expect(playButtons).toHaveCount(seededTakes + 2, { timeout: BACK_ONLINE_MS });
-				await expect(page.getByText(JOB_COMPLETED_TOAST)).toBeVisible();
+				await expect(page.getByText(words['jobEnd.generateCompleted'])).toBeVisible();
 				await expect(panel.getByRole('progressbar')).toHaveCount(0);
 				await expect(runningRing).toHaveCount(0);
 				await expect(offlineStrip(page)).toHaveCount(0);
@@ -661,7 +660,9 @@ test.describe(
 					const { queue_position: position } = await response.json();
 					expect(Number.isInteger(position)).toBe(true);
 					expect(position).toBeGreaterThan(0);
-					await expect(panel.getByText(/Queued #/)).toHaveText(`Queued #${position}`);
+					await expect(panel.getByText(/Queued #/)).toHaveText(
+						words['generate.queuedPosition']({ position: String(position) })
+					);
 				}).toPass({ timeout: BACK_ONLINE_MS });
 			const cleanupErrors: unknown[] = [];
 			try {

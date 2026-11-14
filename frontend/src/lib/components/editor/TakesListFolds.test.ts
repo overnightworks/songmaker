@@ -281,7 +281,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		);
 
 		const row = target.querySelector<HTMLElement>('#take-a3');
-		expect(row?.textContent).toContain('archived');
+		expect(row?.textContent).toContain(words['takeRow.archived']);
 		expect(row?.textContent).toContain('1:01');
 		expect(row?.querySelector('.play-btn, .pick-btn, .keep-btn, .score-badge')).toBeNull();
 		expect(row?.querySelector('.take-origin, .take-voice')).toBeNull();

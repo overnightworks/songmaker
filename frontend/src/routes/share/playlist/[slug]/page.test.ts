@@ -152,7 +152,7 @@ describe('shared playlist page', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundPlaylist'])
 		);
-		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		expect(target.textContent).toContain(words['shareStatus.invalidLink']);
 		expect(target.querySelector('.now-playing')).toBeNull();
 	});
 
@@ -237,8 +237,6 @@ describe('shared playlist page', () => {
 });
 
 describe('shared playlist AI mark', () => {
-	const AI_MARK = 'KI-generiert';
-
 	async function openWith(response: unknown): Promise<HTMLElement> {
 		mockFetch.mockReturnValueOnce(response);
 		const target = document.createElement('div');
@@ -264,7 +262,7 @@ describe('shared playlist AI mark', () => {
 		);
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Shared playlist'));
-		expect(target.textContent).toContain(AI_MARK);
+		expect(target.textContent).toContain(words['aiNotice.generated']);
 	});
 
 	it.each([
@@ -275,6 +273,6 @@ describe('shared playlist AI mark', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('h1')).not.toBeNull());
 		expect(target.textContent).not.toContain('Shared playlist');
-		expect(target.textContent).not.toContain(AI_MARK);
+		expect(target.textContent).not.toContain(words['aiNotice.generated']);
 	});
 });
