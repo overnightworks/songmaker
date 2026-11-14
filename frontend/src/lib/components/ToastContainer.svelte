@@ -35,6 +35,13 @@
 		flex-direction: column-reverse;
 		gap: 0.5rem;
 		max-width: 400px;
+		/* A toast stays until dismissed, so neither the stack nor a toast's text
+		   takes the pointer from a page control beneath it; only its buttons do. */
+		pointer-events: none;
+	}
+
+	.toast button {
+		pointer-events: auto;
 	}
 
 	.toast {
