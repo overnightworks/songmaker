@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -143,43 +144,94 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
     assert not list(audio_dir.rglob(".*.staging"))
 
 
-def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leaves_queue_for_runner(
-    tmp_path: Path, pg_factory,
-) -> None:
-    app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
-    running_job_id = _queue(factory, stack)
-    pending_png = _add_pending_suggestion(factory, audio_dir)
-    interrupted_png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
-    interrupted_png.write_bytes(_png_bytes())
-    interrupted_staging_dir = cover_runner._staging_path(audio_dir, "album", running_job_id)
-    interrupted_staging_dir.mkdir()
-    (interrupted_staging_dir / "partial.png").write_bytes(_png_bytes())
+def _leave_suggestion_and_staging(factory, audio_dir: Path, job_id: str) -> tuple[Path, Path]:
+    """Give a job the published suggestion and the staging directory a cover leaves behind."""
+    png = audio_dir / "cover-suggestions" / "album" / f"{job_id}.png"
+    png.parent.mkdir(parents=True, exist_ok=True)
+    png.write_bytes(_png_bytes())
+    staging_dir = cover_runner._staging_path(audio_dir, "album", job_id)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    (staging_dir / "partial.png").write_bytes(_png_bytes())
     with factory() as session:
-        assert update_job_status(session, running_job_id, JobStatusUpdate(JobStatus.RUNNING))
         session.add(AlbumCoverSuggestion(
-            id="interrupted",
-            album_id="album",
-            job_id=running_job_id,
-            png_path="cover-suggestions/album/interrupted.png",
+            id=job_id, album_id="album", job_id=job_id,
+            png_path=f"cover-suggestions/album/{job_id}.png",
         ))
         session.commit()
+    return png, staging_dir
+
+
+def _end_job(factory, job_id: str, status: str) -> None:
+    with factory() as session:
+        assert update_job_status(session, job_id, JobStatusUpdate(status))
+        session.commit()
+
+
+def test_web_recovery_fails_interrupted_work_and_leaves_queue_for_runner(
+    tmp_path: Path, pg_factory,
+) -> None:
+    app, factory, _audio_dir, stack = _cover_world(tmp_path, pg_factory)
+    running_job_id = _queue(factory, stack)
+    _end_job(factory, running_job_id, JobStatus.RUNNING)
     _queue(factory, stack, "queued")
 
-    assert cover_runner.recover_web_cover_jobs(factory, audio_dir) == 1
+    assert cover_runner.recover_web_cover_jobs(factory, tmp_path) == 1
 
     with factory() as session:
         interrupted = session.get(Job, running_job_id)
         assert (interrupted.status, interrupted.error_type) == (JobStatus.FAILED, "server_restart")
         assert interrupted.session_id is None
         assert session.get(Job, "queued").status == JobStatus.QUEUED
-        assert [item.id for item in session.query(AlbumCoverSuggestion)] == ["pending"]
-    assert not interrupted_png.exists()
-    assert pending_png.is_file()
-    assert not interrupted_staging_dir.exists()
 
     assert asyncio.run(cover_runner.run_next_cover_job(app))
     with factory() as session:
         assert session.get(Job, "queued").status == JobStatus.COMPLETED
+
+
+@pytest.mark.parametrize("ended_status", [JobStatus.FAILED, JobStatus.CANCELLED])
+def test_reconciling_removes_what_an_ended_cover_left_and_keeps_every_other_job_s(
+    tmp_path: Path, pg_factory, ended_status: str,
+) -> None:
+    _app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
+    pending_png = _add_pending_suggestion(factory, audio_dir)
+    ended_job_id = _queue(factory, stack, "ended")
+    ended_png, ended_staging = _leave_suggestion_and_staging(factory, audio_dir, ended_job_id)
+    _end_job(factory, ended_job_id, ended_status)
+    running_job_id = _queue(factory, stack, "running")
+    _end_job(factory, running_job_id, JobStatus.RUNNING)
+    running_staging = cover_runner._staging_path(audio_dir, "album", running_job_id)
+    running_staging.mkdir()
+
+    assert cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir) == 1
+
+    with factory() as session:
+        assert [item.id for item in session.query(AlbumCoverSuggestion)] == ["pending"]
+    assert not ended_png.exists()
+    assert not ended_staging.exists()
+    assert pending_png.is_file()
+    assert running_staging.is_dir()
+    assert cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir) == 0
+
+
+def test_a_start_leaves_an_interrupted_cover_without_suggestion_and_staging_directory(
+    tmp_path: Path, pg_factory,
+) -> None:
+    _app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
+    pending_png = _add_pending_suggestion(factory, audio_dir)
+    job_id = _queue(factory, stack)
+    interrupted_png, interrupted_staging = _leave_suggestion_and_staging(
+        factory, audio_dir, job_id,
+    )
+    _end_job(factory, job_id, JobStatus.RUNNING)
+
+    cover_runner.recover_web_cover_jobs(factory, audio_dir)
+    cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir)
+
+    with factory() as session:
+        assert [item.id for item in session.query(AlbumCoverSuggestion)] == ["pending"]
+    assert not interrupted_png.exists()
+    assert not interrupted_staging.exists()
+    assert pending_png.is_file()
 
 
 def test_cover_prompt_quotes_and_bounds_song_data(tmp_path: Path, pg_factory) -> None:
@@ -228,20 +280,17 @@ def test_tracks_stop_in_track_order_at_the_first_that_does_not_fit() -> None:
     assert numbers == list(range(1, len(numbers) + 1))
 
 
-def test_recovery_of_a_job_whose_staging_directory_is_gone_counts_it_and_raises_nothing(
+def test_reconciling_a_job_whose_staging_directory_is_gone_counts_it_and_raises_nothing(
     tmp_path: Path, pg_factory,
 ) -> None:
     _app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
     job_id = _queue(factory, stack)
-    with factory() as session:
-        assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.RUNNING))
-        session.commit()
-    assert not cover_runner._staging_path(audio_dir, "album", job_id).exists()
+    png, _staging = _leave_suggestion_and_staging(factory, audio_dir, job_id)
+    shutil.rmtree(cover_runner._staging_path(audio_dir, "album", job_id))
+    _end_job(factory, job_id, JobStatus.FAILED)
 
-    assert cover_runner.recover_web_cover_jobs(factory, audio_dir) == 1
-
-    with factory() as session:
-        assert session.get(Job, job_id).status == JobStatus.FAILED
+    assert cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir) == 1
+    assert not png.exists()
 
 
 def test_a_failing_tick_is_recorded_on_the_registry_and_the_loop_goes_on(

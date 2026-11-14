@@ -304,7 +304,12 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
         started.set()
         await asyncio.Future()
 
-    monkeypatch.setattr(server, "recover_web_cover_jobs", lambda *_args: recovered.append(True))
+    monkeypatch.setattr(
+        server, "recover_web_cover_jobs", lambda *_args: recovered.append("recover"),
+    )
+    monkeypatch.setattr(
+        server, "reconcile_reaped_cover_jobs", lambda *_args: recovered.append("reconcile"),
+    )
     monkeypatch.setattr(server, "cover_runner_loop", idle_cover_runner)
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
@@ -314,7 +319,7 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
             "/health/details", headers=monitoring_headers,
         ).json()["background_loops"]
         assert health[BackgroundLoopName.COVER_RUNNER]["state"] == BackgroundLoopStatus.OK
-    assert recovered == [True]
+    assert recovered == ["recover", "reconcile"]
 
 
 def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(

@@ -47,6 +47,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.conversation_api import fail_chat_turns_ended_by_restart
 from songmaker_cli.cover_runner import (
     cover_runner_loop,
+    reconcile_reaped_cover_jobs,
     recover_web_cover_jobs,
 )
 from songmaker_cli.health_api import compute_script_hashes
@@ -114,6 +115,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         session.commit()
 
     await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir)
+    await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
     fail_chat_turns_ended_by_restart(ctx.db)
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
