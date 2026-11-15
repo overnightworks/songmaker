@@ -72,27 +72,31 @@ class ReferenceDeletedDuringTake(GenerationSetupError):
     """The take's reference row was gone when the take reached persistence; it ends the job."""
 
 
-def _failure_message(exc: Exception, job_id: str) -> Message | None:
+def _sanitize_error(exc: Exception, job_id: str) -> Message:
     """Log the raw failure in full; return the catalog message that words it for the musician.
 
-    None means the failure's own text is already the musician's line: a worker's account of its
-    task, or a setup message the runtime vetted.
+    A worker's account of its task and a setup message the runtime vetted already are the
+    musician's line, so they come back as `jobFailure.reported` with that text as its cause.
     """
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
     if isinstance(exc, WorkerTaskFailed):
-        return None
+        return _reported_failure(exc)
     if isinstance(exc, GenerationSetupError):
-        return None if str(exc) in _GENERATION_SETUP_MESSAGES else _UNEXPECTED_FAILURE
+        if str(exc) in _GENERATION_SETUP_MESSAGES:
+            return _reported_failure(exc)
+        return _UNEXPECTED_FAILURE
     for exc_type, failure in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return failure
     return _UNEXPECTED_FAILURE
 
 
-def _sanitize_error(exc: Exception, job_id: str) -> str:
-    """Return the musician-facing sentence that `jobs.error` stores and log the raw failure."""
-    failure = _failure_message(exc, job_id)
-    return str(exc) if failure is None else failure.sentence()
+def _reported_failure(exc: Exception) -> Message:
+    return message("jobFailure.reported", cause=str(exc))
+
+
+def _is_reported_failure(failure: Message) -> bool:
+    return failure.key == message("jobFailure.reported", cause="").key
 
 
 def _job_is_terminal(factory, job_id: str) -> bool:

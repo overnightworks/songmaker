@@ -5173,6 +5173,10 @@ msgctxt "jobFailure.unexpected"
 msgid "An unexpected error occurred"
 msgstr ""
 
+msgctxt "jobFailure.reported"
+msgid "{cause}"
+msgstr ""
+
 msgctxt "jobFailure.generationFailed"
 msgid "Generating failed — try again."
 msgstr ""

@@ -3714,21 +3714,24 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path, pg_factory) -> No
 def test_sanitize_error_known_type() -> None:
     from songmaker_cli.jobs import _sanitize_error
 
-    assert _sanitize_error(ConnectionError("x"), "j1") == "ACE-Step server not reachable"
-    assert _sanitize_error(TimeoutError("x"), "j1") == "Generation timed out"
-    assert _sanitize_error(RuntimeError("x"), "j1") == "Internal error during processing"
+    assert _sanitize_error(ConnectionError("x"), "j1").sentence() == "ACE-Step server not reachable"
+    assert _sanitize_error(TimeoutError("x"), "j1").sentence() == "Generation timed out"
+    assert _sanitize_error(RuntimeError("x"), "j1").sentence() == "Internal error during processing"
 
 
 def test_sanitize_error_unknown_type() -> None:
     from songmaker_cli.jobs import _sanitize_error
 
-    assert _sanitize_error(KeyError("x"), "j1") == "An unexpected error occurred"
+    assert _sanitize_error(KeyError("x"), "j1").sentence() == "An unexpected error occurred"
 
 
 def test_sanitize_error_generation_setup() -> None:
     from songmaker_cli.jobs import GenerationSetupError, _sanitize_error
+    from songmaker_cli.messages import message
 
-    assert _sanitize_error(GenerationSetupError("Song not found"), "j1") == "Song not found"
+    assert _sanitize_error(GenerationSetupError("Song not found"), "j1") == message(
+        "jobFailure.reported", cause="Song not found",
+    )
 
 
 def test_sanitize_error_hides_unknown_generation_setup_details(
@@ -3738,7 +3741,7 @@ def test_sanitize_error_hides_unknown_generation_setup_details(
 
     raw_error = "/srv/songmaker/private.db is unavailable"
     with caplog.at_level(logging.ERROR, logger="songmaker_cli.jobs._runtime"):
-        message = _sanitize_error(GenerationSetupError(raw_error), "j1")
+        message = _sanitize_error(GenerationSetupError(raw_error), "j1").sentence()
 
     assert message == "An unexpected error occurred"
     assert raw_error in caplog.text

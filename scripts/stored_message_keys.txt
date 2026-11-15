@@ -5,6 +5,7 @@ jobFailure.generationUnavailable
 jobFailure.gpuOutOfMemory
 jobFailure.internal
 jobFailure.noWorkers
+jobFailure.reported
 jobFailure.serverUnreachable
 jobFailure.unexpected
 jobRefusal.queueUnavailable

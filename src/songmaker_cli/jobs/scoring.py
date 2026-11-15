@@ -122,7 +122,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error=_sanitize_error(exc, job_id).sentence(),
             error_type="timeout",
         )
     except Exception as exc:
@@ -131,7 +131,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error=_sanitize_error(exc, job_id).sentence(),
             error_type="scoring_error",
         )
 

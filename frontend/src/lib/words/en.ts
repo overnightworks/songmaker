@@ -1258,6 +1258,7 @@ export type Words = {
     readonly "jobFailure.noWorkers": string;
     readonly "jobFailure.internal": string;
     readonly "jobFailure.unexpected": string;
+    readonly "jobFailure.reported": (gaps: { readonly cause: string }) => string;
     readonly "jobFailure.generationFailed": string;
     readonly "jobFailure.generationUnavailable": string;
     readonly "jobFailure.gpuOutOfMemory": string;
@@ -2934,6 +2935,7 @@ export const words: Words = {
     "jobFailure.noWorkers": "No ACE-Step workers available",
     "jobFailure.internal": "Internal error during processing",
     "jobFailure.unexpected": "An unexpected error occurred",
+    "jobFailure.reported": (gaps: { readonly cause: string }) => gaps.cause,
     "jobFailure.generationFailed": "Generating failed — try again.",
     "jobFailure.generationUnavailable": "Generating isn't available right now.",
     "jobFailure.gpuOutOfMemory": "Too long for the GPU right now — try a shorter duration.",

@@ -1004,7 +1004,7 @@ async def _build_generation_job_context(
             db_factory,
             request.job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, request.job_id),
+            error=_sanitize_error(exc, request.job_id).sentence(),
             error_type="setup_error",
         )
         return None

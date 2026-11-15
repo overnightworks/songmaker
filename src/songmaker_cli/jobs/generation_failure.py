@@ -38,7 +38,7 @@ class GenerationFailure:
 
 def generation_failure(exc: Exception, job_id: str) -> GenerationFailure:
     """Log the full cause and select the musician's line and its type together."""
-    sentence = _sanitize_error(exc, job_id)
+    sentence = _sanitize_error(exc, job_id).sentence()
     if isinstance(exc, WorkerGpuOutOfMemory):
         return GenerationFailure(_GPU_OUT_OF_MEMORY.sentence(), GPU_OUT_OF_MEMORY)
     if isinstance(exc, (WorkerGenerationUnavailable, NoCapacityError)):
