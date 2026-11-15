@@ -216,15 +216,12 @@ SCORER_TIMEOUT_SECONDS = 120
 TEXT_ACCURACY_TIMEOUT_SECONDS = 300
 
 # arq worker
-RECOVERY_LOCK_TTL_SECONDS = 30
 ARQ_MUSIC_QUEUE_NAME = "arq:queue:music"
 ARQ_SCORING_QUEUE_NAME = "arq:queue:scoring"
 ARQ_MUSIC_HEALTH_KEY = f"{ARQ_MUSIC_QUEUE_NAME}:health-check"
 ARQ_SCORING_HEALTH_KEY = f"{ARQ_SCORING_QUEUE_NAME}:health-check"
 ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
 WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
-RECOVERY_LOCK_MUSIC_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:music"
-RECOVERY_LOCK_SCORING_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:scoring"
 
 # Score backfill (issue #222): catches up generations that predate
 # auto-scoring, or that an auto-score attempt could not reach (worker down,

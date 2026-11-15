@@ -12,7 +12,7 @@ import logging
 from arq import func
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
-from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, RECOVERY_LOCK_SCORING_KEY
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME
 from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.redis_client import build_arq_redis_settings
@@ -24,7 +24,6 @@ log = logging.getLogger(__name__)
 
 class ScoringWorker(WorkerBase):
     job_types = (JobType.SCORE,)
-    recovery_lock_key = RECOVERY_LOCK_SCORING_KEY
     queue_name = ARQ_SCORING_QUEUE_NAME
 
     async def score(self, _ctx, job_id, gen_id, scorers):
@@ -38,7 +37,7 @@ class ScoringWorker(WorkerBase):
             run_scoring_job,
             job_id, gen_id, scorers,
             db_factory=self.get_db_factory(), audio_dir=self.audio_dir(),
-            device=self._settings.scoring_device,
+            owner_id=self.owner_id, device=self._settings.scoring_device,
         )
 
     async def on_startup(self, ctx) -> None:
