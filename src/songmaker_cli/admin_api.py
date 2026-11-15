@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Final
+from typing import Final, NoReturn
 
 import httpx
 from arq.connections import ArqRedis
@@ -207,6 +207,19 @@ def _registry_model(
     )
 
 
+def _fail_unqueued_job(db: Session, job_id: str) -> NoReturn:
+    """End a job the queue would not take as failed and refuse the admin's request."""
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
+
+    update_job_status(
+        db,
+        job_id,
+        JobStatusUpdate(JobStatus.FAILED, error=message("jobRefusal.queueUnavailable")),
+    )
+    db.commit()
+    raise Refusal(503, "jobRefusal.queueUnavailable")
+
+
 @router.post(
     "/workers/{worker_id}/load_model",
     responses={
@@ -225,10 +238,8 @@ async def load_model_on_worker_endpoint(
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     from songmaker_cli.db.queries.jobs import (
-        JobStatusUpdate,
         create_job,
         get_queue_position,
-        update_job_status,
     )
 
     worker = get_worker_identity(db, worker_id)
@@ -246,13 +257,7 @@ async def load_model_on_worker_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(
-            db,
-            job.id,
-            JobStatusUpdate(JobStatus.FAILED, error=message("jobRefusal.queueUnavailable")),
-        )
-        db.commit()
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+        _fail_unqueued_job(db, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
@@ -381,10 +386,8 @@ async def download_model_endpoint(
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     from songmaker_cli.db.queries.jobs import (
-        JobStatusUpdate,
         create_job,
         get_queue_position,
-        update_job_status,
     )
 
     _require_known_model_mode(mode)
@@ -418,13 +421,7 @@ async def download_model_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(
-            db,
-            job.id,
-            JobStatusUpdate(JobStatus.FAILED, error=message("jobRefusal.queueUnavailable")),
-        )
-        db.commit()
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+        _fail_unqueued_job(db, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
