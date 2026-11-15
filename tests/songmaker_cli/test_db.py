@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 from support.web_app import seed_user
+from tandem import Liveness
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli import audio_files
@@ -719,7 +720,7 @@ def _fail_by_lost_heartbeat(session: Session, now: datetime) -> None:
 
 
 def _fail_by_dead_owner(session: Session, _now: datetime) -> None:
-    recover_jobs_of_dead_owners(session, {"owner": WorkerLiveness.DEAD})
+    recover_jobs_of_dead_owners(session, {"owner": Liveness.GONE})
 
 
 @pytest.mark.parametrize("recover", [_fail_by_lost_heartbeat, _fail_by_dead_owner])

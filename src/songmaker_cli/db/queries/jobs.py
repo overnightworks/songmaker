@@ -10,6 +10,7 @@ from typing import Final
 
 from sqlalchemy import and_, func, not_, or_, update
 from sqlalchemy.orm import Session
+from tandem import Liveness
 
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
@@ -468,20 +469,20 @@ def active_job_owner_ids(session: Session) -> set[str]:
 
 
 def _owner_gone_verdict(
-    job: Job, owner_liveness: Mapping[str, WorkerLiveness] | None,
+    job: Job, owner_liveness: Mapping[str, Liveness] | None,
 ) -> JobVerdict | None:
-    """Fail a job only for an owner read as DEAD; an owner the map lacks reads UNKNOWN."""
+    """Fail a job only for an owner read as GONE; an owner the map lacks reads UNKNOWN."""
     if job.owner_id is None or owner_liveness is None:
         return None
-    if owner_liveness.get(job.owner_id, WorkerLiveness.UNKNOWN) is WorkerLiveness.DEAD:
+    if owner_liveness.get(job.owner_id, Liveness.UNKNOWN) is Liveness.GONE:
         return JOB_ERROR_SERVER_RESTARTED
     return None
 
 
 def recover_jobs_of_dead_owners(
-    session: Session, owner_liveness: Mapping[str, WorkerLiveness],
+    session: Session, owner_liveness: Mapping[str, Liveness],
 ) -> dict[str, int]:
-    """Fail the active jobs of every owner read as DEAD and return counts keyed by type."""
+    """Fail the active jobs of every owner read as GONE and return counts keyed by type."""
     if not owner_liveness:
         return {}
     now = datetime.now(timezone.utc)
@@ -514,7 +515,7 @@ def recover_stale_jobs_by_age_and_type(
     user_id: str | None = None,
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
-    owner_liveness: Mapping[str, WorkerLiveness] | None = None,
+    owner_liveness: Mapping[str, Liveness] | None = None,
     max_queue_depth: int | None = None,
 ) -> dict[str, int]:
     """Recover stale jobs using the one per-type liveness policy.
@@ -524,7 +525,7 @@ def recover_stale_jobs_by_age_and_type(
     before failing. The lifecycle reaper uses the configured global queue
     depth; a submission supplies its resolved per-user queue depth. Running
     jobs fail only when their heartbeat is old. A job whose owner ``owner_liveness``
-    reads as DEAD fails at once.
+    reads as GONE fails at once.
     ``user_id`` lets the submission path apply that exact policy before
     enforcing an active-job limit, without defining a second freshness bound.
     """
@@ -574,7 +575,7 @@ def _recover_stale_job(
     thresholds: JobStaleThresholds,
     now: datetime,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None,
-    owner_liveness: Mapping[str, WorkerLiveness] | None,
+    owner_liveness: Mapping[str, Liveness] | None,
     max_queue_depth: int | None,
 ) -> bool:
     status = job.status

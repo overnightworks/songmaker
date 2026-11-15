@@ -38,6 +38,8 @@ JOB_REAPER_INTERVAL_SECONDS: Final[int] = 120
 OWNER_LEASE_TTL_SECONDS: Final[int] = 15
 """A process whose lease lapsed for this long is gone."""
 OWNER_LEASE_REFRESH_SECONDS: Final[int] = 5
+OWNER_LAPSE_CLAIM_SECONDS: Final[int] = 30
+"""How long one web process holds the claim on a lapsed owner while it fails that owner's jobs."""
 OWNER_GONE_CHECK_INTERVAL_SECONDS: Final[int] = 5
 GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS: Final[int] = JOB_REAPER_INTERVAL_SECONDS
 GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS: Final[int] = (

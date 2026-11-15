@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 from support.web_app import (
     TEST_SECRET,
+    make_fake_async_redis,
     make_fake_redis,
     make_test_app,
     seed_session,
@@ -157,6 +158,7 @@ def _sveltekit_app_client(tmp_path: Path, factory, assets: dict[str, bytes]) -> 
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     return web_client(create_app(audio_dir, data_dir, project_root, ctx=ctx))
 
@@ -226,6 +228,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path, pg_factory) -> Non
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -285,6 +288,7 @@ def auth_server_app(tmp_path: Path, pg_factory):
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -336,6 +340,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
@@ -509,6 +514,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings, pg_
             data_dir=data_dir,
             signing_key=TEST_SECRET,
             redis=make_fake_redis(),
+            async_redis=make_fake_async_redis(),
         )
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = web_client(app, cookies={})
@@ -650,6 +656,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, p
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
 
     released_leases = []
@@ -713,6 +720,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
 
     async def _run():
@@ -763,6 +771,7 @@ def test_lifespan_fails_on_redis_unavailable(tmp_path: Path, pg_factory) -> None
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
 
     async def _run():
@@ -867,6 +876,7 @@ def test_cors_wildcard_or_list_raises_at_startup(
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
 
     with patch.dict("os.environ", {"CORS_ORIGIN": cors_origin}):
@@ -894,6 +904,7 @@ def test_cors_specific_origin(tmp_path: Path, pg_factory, fresh_settings) -> Non
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
@@ -942,6 +953,7 @@ def test_wildcard_allowed_host_raises_at_startup(
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": allowed_hosts}):
@@ -1004,6 +1016,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch, pg_factory, fresh_settin
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1036,6 +1049,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch, pg_factory
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1073,6 +1087,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path, pg_factory) -> None:
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -1176,6 +1191,7 @@ def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers, 
     redis = make_fake_redis()
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1222,6 +1238,7 @@ def test_health_with_worker_running(
     redis = make_fake_redis()
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1265,6 +1282,7 @@ def test_health_degraded_no_worker(
     redis = make_fake_redis()
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1306,6 +1324,7 @@ def test_health_queue_depth_cap_reached(
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1352,6 +1371,7 @@ def _make_metrics_client(tmp_path: Path, factory, mock_arq_pool=None) -> TestCli
     redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     return web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
@@ -1410,6 +1430,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers, pg
     redis = make_fake_redis()
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1702,6 +1723,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=sync_redis,
+        async_redis=make_fake_async_redis(),
     )
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
@@ -1756,6 +1778,7 @@ def test_metrics_endpoint_offline_worker(
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
     )
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
@@ -1800,6 +1823,7 @@ def _pwa_test_app(tmp_path: Path, factory, *, create_files: bool) -> TestClient:
         data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     return web_client(app)

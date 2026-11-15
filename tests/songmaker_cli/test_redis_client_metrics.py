@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
-from support.web_app import TEST_SECRET, web_client
+from support.web_app import TEST_SECRET, make_fake_async_redis, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import User
@@ -107,6 +107,7 @@ def _make_redis_ctx(tmp_path: Path, factory, fake_redis) -> tuple[AppContext, Pa
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=fake_redis,
+        async_redis=make_fake_async_redis(),
     )
     return ctx, audio_dir, data_dir, project_root
 
@@ -171,6 +172,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory)
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=broken_redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={}, raise_server_exceptions=False)

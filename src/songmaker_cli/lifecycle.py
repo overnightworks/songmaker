@@ -12,6 +12,7 @@ from typing import Final
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
+from tandem import Lapse, Liveness
 
 from songmaker_cli.acestep_state import decode_redis_text
 from songmaker_cli.app_context import AppContext
@@ -29,14 +30,9 @@ from songmaker_cli.health_types import (
 from songmaker_cli.job_timing import (
     JOB_REAPER_INTERVAL_SECONDS,
     OWNER_GONE_CHECK_INTERVAL_SECONDS,
-    OWNER_LEASE_REFRESH_SECONDS,
 )
 from songmaker_cli.job_types import JobType
-from songmaker_cli.worker_liveness import (
-    WorkerLiveness,
-    read_owner_liveness,
-    refresh_owner_lease,
-)
+from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
@@ -377,17 +373,27 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
 
 
-def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
+async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
     """Fail the active jobs of every other process whose lease is gone, then clean its covers.
 
-    Only a DEAD owner's jobs fail: a Redis that cannot be read, or that may have
+    Only a GONE owner's jobs fail: a Redis that cannot be read, or that may have
     restarted empty, reads UNKNOWN. This process's own jobs are never orphaned.
     """
-    from songmaker_cli.db.queries.jobs import active_job_owner_ids, recover_jobs_of_dead_owners
+    owner_ids = await asyncio.to_thread(_active_job_owner_ids_but_own, ctx)
+    owner_liveness = await ctx.owner_leases.liveness(owner_ids)
+    return await asyncio.to_thread(_fail_jobs_of_gone_owners, ctx, owner_liveness)
+
+
+def _active_job_owner_ids_but_own(ctx: AppContext) -> set[str]:
+    from songmaker_cli.db.queries.jobs import active_job_owner_ids
 
     with ctx.db() as session:
-        owner_ids = active_job_owner_ids(session) - {ctx.owner_id}
-    owner_liveness = read_owner_liveness(ctx.redis, owner_ids)
+        return active_job_owner_ids(session) - {ctx.owner_id}
+
+
+def _fail_jobs_of_gone_owners(ctx: AppContext, owner_liveness: Mapping[str, Liveness]) -> int:
+    from songmaker_cli.db.queries.jobs import recover_jobs_of_dead_owners
+
     with ctx.db() as session:
         recovered = recover_jobs_of_dead_owners(session, owner_liveness)
         session.commit()
@@ -397,29 +403,29 @@ def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
     return recovered_count
 
 
-async def owner_lease_loop(app: FastAPI) -> None:
-    """Renew this process's owner lease for the server lifetime.
+async def owner_lapse_loop(app: FastAPI) -> None:
+    """Fail the jobs of an owner as soon as its lease lapses, on the one web process that claims it.
 
-    A cancel waits for the refresh in flight: a running thread cannot be cancelled,
-    and its SET must not land after the shutdown's DELETE of the lease.
+    A lapse is only a trigger: the pass reads liveness again, so an owner that started anew
+    since keeps its jobs, and one whose lapse was lost with a Redis restart is found by
+    ``owner_gone_reaper_loop``.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
-    while True:
-        await asyncio.sleep(OWNER_LEASE_REFRESH_SECONDS)
-        refresh = asyncio.ensure_future(
-            asyncio.to_thread(refresh_owner_lease, ctx.redis, ctx.owner_id),
-        )
+
+    async def fail_jobs_of_lapsed_owner(_lapse: Lapse) -> None:
         try:
-            await asyncio.shield(refresh)
-        except asyncio.CancelledError:
-            await asyncio.gather(refresh, return_exceptions=True)
-            raise
+            await fail_jobs_of_dead_owners(ctx)
         except Exception as exc:
-            registry.record_failure(BackgroundLoopName.OWNER_LEASE, exc)
-            log.exception("Owner lease refresh failed")
-        else:
-            registry.record_success(BackgroundLoopName.OWNER_LEASE)
+            registry.record_failure(BackgroundLoopName.OWNER_LAPSES, exc)
+            raise
+        registry.record_success(BackgroundLoopName.OWNER_LAPSES)
+
+    await ctx.owner_leases.serve_lapses(
+        fail_jobs_of_lapsed_owner,
+        claimer=ctx.owner_id,
+        every=timedelta(seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS),
+    )
 
 
 async def owner_gone_reaper_loop(app: FastAPI) -> None:
@@ -433,7 +439,7 @@ async def owner_gone_reaper_loop(app: FastAPI) -> None:
     while True:
         await asyncio.sleep(OWNER_GONE_CHECK_INTERVAL_SECONDS)
         try:
-            await asyncio.to_thread(fail_jobs_of_dead_owners, ctx)
+            await fail_jobs_of_dead_owners(ctx)
         except Exception as exc:
             registry.record_failure(BackgroundLoopName.OWNER_GONE_REAPER, exc)
             log.exception(OWNER_REAPER_FAILURE_MESSAGE)

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
-from support.web_app import TEST_SECRET
+from support.web_app import TEST_SECRET, make_fake_async_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
@@ -28,6 +28,7 @@ def cleanup_context(tmp_path, pg_factory):
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
         redis=None,
+        async_redis=make_fake_async_redis(),
     )
 
 

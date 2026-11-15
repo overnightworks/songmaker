@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from support.web_app import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME, USER_LORAS_DIRNAME, LoraStatus
@@ -25,6 +25,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
     return AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
         signing_key=TEST_SECRET, redis=make_fake_redis(),
+        async_redis=make_fake_async_redis(),
     )
 
 

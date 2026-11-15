@@ -55,6 +55,8 @@ server = [
     # Bare: Settings imports the client's AgentConfig in every process, and both worker images
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
     "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.44.0",
+    # Cross-pod coordination in Redis: the owner lease. Needs the web and worker images' git too.
+    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.4.0",
 ]
 # Pillow normalizes a generated cover; a container installs it only when its entrypoint reaches it.
 image = [
@@ -119,6 +121,7 @@ include = [
 [tool.uv]
 override-dependencies = [
     "numpy>=1.26",
+    "redis[hiredis]>=8.1,<9",
 ]
 
 [[tool.uv.index]]

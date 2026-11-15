@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from support.generation_job_world import worker_up
 from support.reference_rows import a_reference
 from support.web_app import (
     make_authenticated_user,
+    make_fake_async_redis,
     make_fake_redis,
     make_router_app,
     make_router_ctx,
@@ -33,6 +35,7 @@ from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_jo
 from songmaker_cli.db.queries.songs import delete_song
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_lyrics
+from songmaker_cli.worker_liveness import owner_leases
 
 OWNER_ID = "owner"
 OWNER = make_authenticated_user(OWNER_ID, username="owner")
@@ -194,9 +197,10 @@ def test_a_version_with_finished_takes_and_no_active_job_deletes_and_unlinks_its
 
 def test_a_job_that_names_no_version_holds_none(client):
     with _database(client) as session:
-        job = create_job_with_rate_limit(
+        job = asyncio.run(create_job_with_rate_limit(
             session, OWNER, JobType.SCORE, redis=make_fake_redis(),
-        )
+            owner_leases=owner_leases(make_fake_async_redis()),
+        ))
         session.commit()
         assert job.version_id is None
 
@@ -208,10 +212,10 @@ def test_a_job_for_a_version_that_is_gone_or_belongs_to_another_song_answers_404
     with _database(client) as session:
         redis = make_fake_redis()
         with pytest.raises(HTTPException) as refusal:
-            create_job_with_rate_limit(
+            asyncio.run(create_job_with_rate_limit(
                 session, OWNER, JobType.GENERATE, song_id="song", version_id=version_id,
-                redis=redis,
-            )
+                redis=redis, owner_leases=owner_leases(make_fake_async_redis()),
+            ))
     assert (refusal.value.status_code, refusal.value.detail) == (404, "Version not found")
     with _database(client) as session:
         assert session.query(Job).count() == 0

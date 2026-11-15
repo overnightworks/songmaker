@@ -7,12 +7,13 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import fakeredis
 import pytest
-from redis.exceptions import RedisError
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.worker_base import WorkerBase
-from songmaker_cli.worker_liveness import owner_lease_key
+from songmaker_cli.worker_liveness import owner_leases
 
 
 def _run(coro):
@@ -23,7 +24,6 @@ class _DummyWorker(WorkerBase):
     job_types = ("dummy",)
     queue_name = "dummy_queue"
     max_jobs = 1
-    owner_lease_refresh_seconds = 0
 
 
 def _make_worker_with_db(mock_session: MagicMock) -> _DummyWorker:
@@ -104,102 +104,72 @@ def test_get_db_factory_independent_per_instance() -> None:
 
 # ── owner lease ───────────────────────────────────────────────────
 
-LEASE_DEADLINE_SECONDS = 5.0
+
+class _Server(fakeredis.FakeAsyncRedis):
+    """A Redis that answers until it is taken down."""
+
+    down = False
+
+    async def execute_command(self, *args, **options):
+        if self.down:
+            raise RedisConnectionError("down")
+        return await super().execute_command(*args, **options)
 
 
-class _LeaseRedis:
-    """The Redis calls a lease makes, over a dict; the renewals in `failing_sets` raise."""
-
-    def __init__(self, *, failing_sets: frozenset[int] = frozenset(), drop_fails: bool = False):
-        self.leases: dict[str, str] = {}
-        self.sets = 0
-        self.successful_sets = 0
-        self._failing_sets = failing_sets
-        self._drop_fails = drop_fails
-
-    async def set(self, key: str, value: str, ex: int) -> None:
-        self.sets += 1
-        if self.sets in self._failing_sets:
-            raise RedisError("unreachable")
-        self.successful_sets += 1
-        self.leases[key] = value
-
-    async def delete(self, key: str) -> None:
-        if self._drop_fails:
-            raise RedisError("unreachable")
-        self.leases.pop(key, None)
-
-
-def _worker(monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
+def _worker(monkeypatch: pytest.MonkeyPatch, server: _Server) -> _DummyWorker:
     monkeypatch.setattr("songmaker_cli.logging_config.configure_logging", lambda: None)
+    monkeypatch.setattr("songmaker_cli.worker_base.create_async_redis", lambda _url: server)
     worker = _DummyWorker()
     worker.get_db_factory = MagicMock()
     return worker
 
 
-async def _until(condition) -> None:
-    async with asyncio.timeout(LEASE_DEADLINE_SECONDS):
-        while not condition():
-            await asyncio.sleep(0)
-
-
 def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    redis = _LeaseRedis()
-    worker = _worker(monkeypatch)
-    lease = owner_lease_key(worker.owner_id)
+    server = _Server()
+    worker = _worker(monkeypatch, server)
 
-    async def start_and_stop() -> tuple[bool, bool]:
-        await worker.on_startup({"redis": redis})
-        held_while_running = lease in redis.leases
-        await worker.on_shutdown({"redis": redis})
-        return held_while_running, lease in redis.leases
+    async def start_and_stop() -> tuple[set[str], set[str]]:
+        await worker.on_startup({})
+        held_while_running = set((await owner_leases(server).live()).holders)
+        await worker.on_shutdown({})
+        return held_while_running, set((await owner_leases(server).live()).holders)
 
-    assert _run(start_and_stop()) == (True, False)
+    assert _run(start_and_stop()) == ({worker.owner_id}, set())
 
 
-def test_a_worker_leases_only_after_its_database_has_opened(
+def test_a_worker_connects_for_its_lease_only_after_its_database_has_opened(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    redis = _LeaseRedis()
-    worker = _worker(monkeypatch)
-    leases_while_opening: list[dict[str, str]] = []
-    worker.get_db_factory = lambda: leases_while_opening.append(dict(redis.leases))
+    server = _Server()
+    worker = _worker(monkeypatch, server)
+    steps: list[str] = []
+    worker.get_db_factory = lambda: steps.append("database")
+    monkeypatch.setattr(
+        "songmaker_cli.worker_base.create_async_redis",
+        lambda _url: steps.append("lease") or server,
+    )
 
     async def start_and_stop() -> None:
-        await worker.on_startup({"redis": redis})
-        await worker.on_shutdown({"redis": redis})
+        await worker.on_startup({})
+        await worker.on_shutdown({})
 
     _run(start_and_stop())
 
-    assert leases_while_opening == [{}]
+    assert steps == ["database", "lease"]
 
 
-def test_a_lease_renewal_that_fails_is_tried_again(monkeypatch: pytest.MonkeyPatch) -> None:
-    redis = _LeaseRedis(failing_sets=frozenset({2, 3}))
-    worker = _worker(monkeypatch)
+def test_a_shutdown_that_cannot_end_the_lease_still_ends(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = _Server()
+    worker = _worker(monkeypatch, server)
 
-    async def renewed_after_the_failures() -> int:
-        await worker.on_startup({"redis": redis})
-        await _until(lambda: redis.successful_sets >= 2)
-        await worker.on_shutdown({"redis": redis})
-        return redis.successful_sets
+    async def start_and_stop_with_redis_down() -> None:
+        await worker.on_startup({})
+        server.down = True
+        await worker.on_shutdown({})
 
-    assert _run(renewed_after_the_failures()) >= 2
-
-
-def test_a_shutdown_that_cannot_drop_the_lease_still_ends(monkeypatch: pytest.MonkeyPatch) -> None:
-    redis = _LeaseRedis(drop_fails=True)
-    worker = _worker(monkeypatch)
-
-    async def start_and_stop() -> None:
-        await worker.on_startup({"redis": redis})
-        await worker.on_shutdown({"redis": redis})
-
-    _run(start_and_stop())
-
-    assert redis.leases
+    _run(start_and_stop_with_redis_down())
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:

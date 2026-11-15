@@ -278,7 +278,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
         BackgroundLoopName.RESOURCE_EVENT_CLEANUP: BackgroundLoopStatus.OK,
         BackgroundLoopName.SCORE_BACKFILL: BackgroundLoopStatus.OK,
         BackgroundLoopName.STALE_JOB_REAPER: BackgroundLoopStatus.OK,
-        BackgroundLoopName.OWNER_LEASE: BackgroundLoopStatus.OK,
+        BackgroundLoopName.OWNER_LAPSES: BackgroundLoopStatus.OK,
         BackgroundLoopName.OWNER_GONE_REAPER: BackgroundLoopStatus.OK,
         BackgroundLoopName.COVER_RUNNER: BackgroundLoopStatus.OK,
     }

@@ -8,24 +8,24 @@ whose lease is gone; no worker fails another's jobs.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 import uuid
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import ClassVar
 
-from redis.asyncio import Redis
-from redis.exceptions import RedisError
+from redis.asyncio import Redis as AsyncRedis
+from tandem import StoreError
 
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries.jobs import get_job
-from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
+from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.settings import Settings, get_settings
-from songmaker_cli.worker_liveness import drop_owner_lease_async, refresh_owner_lease_async
+from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +48,6 @@ class WorkerBase:
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
     health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS
-    owner_lease_refresh_seconds: ClassVar[float] = OWNER_LEASE_REFRESH_SECONDS
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -56,7 +55,8 @@ class WorkerBase:
         self._db_factory = None
         self._db_lock = threading.Lock()
         self.owner_id = str(uuid.uuid4())
-        self._lease_task: asyncio.Task[None] | None = None
+        self._owner_redis: AsyncRedis | None = None
+        self._lease_stack: AsyncExitStack | None = None
 
     def worker_name(self) -> str:
         """Return the stable, human-readable name derived from owned job types."""
@@ -90,38 +90,36 @@ class WorkerBase:
         log.info("%s worker starting up...", self.worker_name())
         # Opening the database may wait for it to start; the lease says "alive" only after.
         self.get_db_factory()
-        await self._start_owner_lease(ctx["redis"])
+        await self._start_owner_lease()
         log.info("%s worker ready", self.worker_name())
 
     async def on_shutdown(self, ctx) -> None:
-        if self._lease_task is not None:
-            await self._release_owner_lease(self._lease_task, ctx["redis"])
+        if self._lease_stack is not None:
+            await self._release_owner_lease()
 
         if self._db_engine is not None:
             self._db_engine.dispose()
             log.info("Database connection pool disposed")
 
-    async def _start_owner_lease(self, redis: Redis) -> None:
-        await refresh_owner_lease_async(redis, self.owner_id)
-        self._lease_task = asyncio.create_task(self._renew_owner_lease(redis))
-
-    async def _renew_owner_lease(self, redis: Redis) -> None:
-        """Renew the lease until cancelled, outliving a Redis that fails for a while."""
-        while True:
-            await asyncio.sleep(self.owner_lease_refresh_seconds)
-            try:
-                await refresh_owner_lease_async(redis, self.owner_id)
-            except Exception:
-                log.exception("Owner lease renewal failed")
-
-    async def _release_owner_lease(self, lease_task: asyncio.Task[None], redis: Redis) -> None:
-        """End the lease so a web process fails this worker's jobs within one tick."""
-        lease_task.cancel()
-        await asyncio.gather(lease_task, return_exceptions=True)
+    async def _start_owner_lease(self) -> None:
+        """Say this process lives, on a client of its own: arq's has no retry and no timeouts."""
+        self._owner_redis = create_async_redis(self._settings.redis_url)
+        self._lease_stack = AsyncExitStack()
         try:
-            await drop_owner_lease_async(redis, self.owner_id)
-        except RedisError:
-            log.warning("Could not drop the owner lease; it lapses by itself", exc_info=True)
+            await self._lease_stack.enter_async_context(
+                keep_owner_lease(owner_leases(self._owner_redis), self.owner_id),
+            )
+        except BaseException:
+            await self._owner_redis.aclose()
+            raise
+
+    async def _release_owner_lease(self) -> None:
+        """End the lease so a web process fails this worker's jobs within one tick."""
+        try:
+            await self._lease_stack.aclose()
+        except StoreError:
+            log.warning("Could not end the owner lease; it lapses by itself", exc_info=True)
+        await self._owner_redis.aclose()
 
     def audit_orphaned_files(self) -> None:
         """Log audio files on disk that have no matching DB record."""

@@ -15,11 +15,14 @@ from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+from songmaker_cli.worker_liveness import owner_leases
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from redis import Redis
+    from redis.asyncio import Redis as AsyncRedis
+    from tandem import Leases
 
     from songmaker_cli.settings import Settings
 
@@ -31,9 +34,15 @@ class AppContext:
     data_dir: Path
     signing_key: bytes
     redis: Redis
+    async_redis: AsyncRedis
+    """The asyncio client of the leases; the sync ``redis`` serves everything else."""
     trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     """Names this process on the jobs it runs; its lease in Redis says whether it lives."""
+    owner_leases: Leases = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.owner_leases = owner_leases(self.async_redis)
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:

@@ -297,9 +297,9 @@ async def api_generate_song(
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
-    job = create_job_with_rate_limit(
+    job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song_id, version_id=version.id,
-        redis=ctx.redis,
+        redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -415,8 +415,9 @@ async def api_repaint_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
+    job = await create_job_with_rate_limit(
+        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
+        redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -492,8 +493,9 @@ async def api_cover_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
+    job = await create_job_with_rate_limit(
+        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
+        redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -548,8 +550,9 @@ async def api_score_generation(
 ) -> JobResponse:
     take = check_generation_access(session, gen_id, user)
 
-    job = create_job_with_rate_limit(
-        session, user, JobType.SCORE, take.song_id, redis=ctx.redis,
+    job = await create_job_with_rate_limit(
+        session, user, JobType.SCORE, take.song_id,
+        redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()

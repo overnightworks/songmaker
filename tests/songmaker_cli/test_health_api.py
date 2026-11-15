@@ -63,7 +63,7 @@ def test_health_and_metrics_report_background_loop_health(
         "stale_job_reaper": {
             "state": "ok", "consecutive_failures": 0, "last_error": None,
         },
-        "owner_lease": {
+        "owner_lapses": {
             "state": "ok", "consecutive_failures": 0, "last_error": None,
         },
         "owner_gone_reaper": {
@@ -166,7 +166,7 @@ def expected_health_json() -> bytes:
         b'"resource_event_cleanup":{"state":"ok","consecutive_failures":0,"last_error":null},'
         b'"score_backfill":{"state":"failing","consecutive_failures":3,"last_error":"RuntimeError"},'
         b'"stale_job_reaper":{"state":"ok","consecutive_failures":0,"last_error":null},'
-        b'"owner_lease":{"state":"ok","consecutive_failures":0,"last_error":null},'
+        b'"owner_lapses":{"state":"ok","consecutive_failures":0,"last_error":null},'
         b'"owner_gone_reaper":{"state":"ok","consecutive_failures":0,"last_error":null}},'
         b'"release":{"tag":"' + UNRELEASED_TAG.encode() + b'","commit":"'
         + UNKNOWN_COMMIT.encode() + b'"}}'

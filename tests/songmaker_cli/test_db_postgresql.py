@@ -14,7 +14,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from support.repository_root import REPOSITORY_ROOT
-from support.web_app import make_authenticated_user, seed_user
+from support.web_app import make_authenticated_user, make_fake_async_redis, seed_user
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_models import UserLoraCreateRequest
@@ -435,6 +435,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         data_dir=tmp_path / "data",
         signing_key=b"test",
         redis=None,  # type: ignore[arg-type]
+        async_redis=make_fake_async_redis(),
     )
     ctx.audio_dir.mkdir()
     from songmaker_cli.jobs import lora_training

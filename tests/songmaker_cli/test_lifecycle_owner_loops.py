@@ -1,102 +1,71 @@
-"""The two loops that keep a process's owner lease and end the jobs of an owner that is gone."""
+"""The loops that end the jobs of an owner that is gone."""
 
 from __future__ import annotations
 
 import asyncio
-import threading
+from pathlib import Path
 from types import SimpleNamespace
 
+import fakeredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from support.loop_ticks import run_ticks_observing_status
+from support.web_app import fake_redis_clock, make_fake_async_redis, settle_owner_leases
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
-from songmaker_cli.db.queries.jobs import create_job
+from songmaker_cli.db.models import Job
+from songmaker_cli.db.queries.jobs import (
+    JOB_ERROR_SERVER_RESTARTED,
+    JobStatusUpdate,
+    create_job,
+    update_job_status,
+)
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
     BackgroundLoopStatus,
 )
-from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
-from songmaker_cli.job_types import JobType
-from songmaker_cli.lifecycle import owner_gone_reaper_loop, owner_lease_loop
-from songmaker_cli.worker_liveness import owner_lease_key
+from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.lifecycle import owner_gone_reaper_loop, owner_lapse_loop
+from songmaker_cli.worker_liveness import owner_leases
 
 OWNER = "this-process"
-BLOCK_LIMIT_SECONDS = 10
+ANOTHER = "another-process"
+DEADLINE_SECONDS = 10
 
 
-class _RecordingRedis:
-    """Keeps the leases set on it and the threads that set them."""
-
-    def __init__(self, *, fail: bool = False) -> None:
-        self.fail = fail
-        self.leases: dict[str, int] = {}
-        self.threads: list[str] = []
-
-    def set(self, key: str, value: str, *, ex: int) -> bool:
-        if self.fail:
-            raise RedisConnectionError("down")
-        self.threads.append(threading.current_thread().name)
-        self.leases[key] = ex
-        return True
-
-    def mget(self, keys: list[str]) -> list[str | None]:
+class _UnreachableRedis(fakeredis.FakeAsyncRedis):
+    async def execute_command(self, *args, **options):
         raise RedisConnectionError("down")
 
 
-class _BlockingRedis(_RecordingRedis):
-    """Holds a SET until released, as a slow Redis does."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.entered = threading.Event()
-        self.release = threading.Event()
-
-    def set(self, key: str, value: str, *, ex: int) -> bool:
-        self.entered.set()
-        assert self.release.wait(timeout=BLOCK_LIMIT_SECONDS)
-        return super().set(key, value, ex=ex)
-
-
-def _loop_app(redis) -> SimpleNamespace:
+def _loop_app(async_redis, db, audio_dir: Path) -> SimpleNamespace:
     return SimpleNamespace(state=SimpleNamespace(
-        ctx=SimpleNamespace(redis=redis, owner_id=OWNER),
+        ctx=SimpleNamespace(
+            owner_leases=owner_leases(async_redis), owner_id=OWNER, db=db, audio_dir=audio_dir,
+        ),
         background_loop_registry=BackgroundLoopRegistry(tuple(BackgroundLoopName)),
     ))
 
 
-def test_the_lease_loop_renews_the_lease_off_the_event_loop(monkeypatch) -> None:
-    redis = _RecordingRedis()
-    app = _loop_app(redis)
-
-    run_ticks_observing_status(
-        monkeypatch, owner_lease_loop(app), app.state.background_loop_registry,
-        BackgroundLoopName.OWNER_LEASE, 2,
-    )
-
-    assert redis.leases == {owner_lease_key(OWNER): OWNER_LEASE_TTL_SECONDS}
-    assert threading.main_thread().name not in redis.threads
+def _running_job_of(factory, owner_id: str) -> str:
+    with factory() as session:
+        job = create_job(session, JobType.CHAT, owner_id=owner_id)
+        assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
+        session.commit()
+        return job.id
 
 
-def test_the_lease_loop_keeps_ticking_and_shows_failing_while_redis_is_down(monkeypatch) -> None:
-    app = _loop_app(_RecordingRedis(fail=True))
-
-    statuses = run_ticks_observing_status(
-        monkeypatch, owner_lease_loop(app), app.state.background_loop_registry,
-        BackgroundLoopName.OWNER_LEASE, BACKGROUND_LOOP_FAILURE_THRESHOLD,
-    )
-
-    assert statuses[-1] is BackgroundLoopStatus.FAILING
+def _status_and_error(factory, job_id: str) -> tuple[str, str | None]:
+    with factory() as session:
+        job = session.get(Job, job_id)
+        return job.status, job.error_type
 
 
 def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
-    monkeypatch, pg_factory,
+    monkeypatch, pg_factory, tmp_path,
 ) -> None:
-    with pg_factory() as session:
-        create_job(session, JobType.CHAT, owner_id="another-process")
-        session.commit()
-    app = _loop_app(_RecordingRedis(fail=True))
-    app.state.ctx.db = pg_factory
+    _running_job_of(pg_factory, ANOTHER)
+    app = _loop_app(_UnreachableRedis(), pg_factory, tmp_path)
 
     statuses = run_ticks_observing_status(
         monkeypatch, owner_gone_reaper_loop(app), app.state.background_loop_registry,
@@ -106,29 +75,28 @@ def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
     assert statuses[-1] is BackgroundLoopStatus.FAILING
 
 
-def test_cancelling_the_lease_loop_waits_for_the_refresh_in_flight(monkeypatch) -> None:
-    redis = _BlockingRedis()
-    app = _loop_app(redis)
-    real_sleep = asyncio.sleep
+def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
+    monkeypatch, pg_factory, tmp_path,
+) -> None:
+    server = make_fake_async_redis()
+    clock = fake_redis_clock(monkeypatch)
+    job_id = _running_job_of(pg_factory, ANOTHER)
+    app = _loop_app(server, pg_factory, tmp_path)
 
-    async def no_wait(_seconds: float) -> None:
-        await real_sleep(0)
+    async def end_the_lease_of_another_and_wait_for_its_job() -> tuple[str, str | None]:
+        await settle_owner_leases(server, clock)
+        leases = owner_leases(server)
+        await leases.end(ANOTHER, (await leases.renew(ANOTHER)).generation)
+        loop_task = asyncio.ensure_future(owner_lapse_loop(app))
+        try:
+            async with asyncio.timeout(DEADLINE_SECONDS):
+                while _status_and_error(pg_factory, job_id)[0] == JobStatus.RUNNING:
+                    await asyncio.sleep(0.01)
+        finally:
+            loop_task.cancel()
+            await asyncio.gather(loop_task, return_exceptions=True)
+        return _status_and_error(pg_factory, job_id)
 
-    monkeypatch.setattr(asyncio, "sleep", no_wait)
-
-    async def cancel_while_the_refresh_is_blocked() -> bool:
-        loop_task = asyncio.ensure_future(owner_lease_loop(app))
-        assert await asyncio.to_thread(redis.entered.wait, BLOCK_LIMIT_SECONDS)
-        loop_task.cancel()
-        for _ in range(10):
-            await real_sleep(0)
-        ended_while_blocked = loop_task.done()
-        redis.release.set()
-        await asyncio.gather(loop_task, return_exceptions=True)
-        return ended_while_blocked
-
-    ended_while_blocked = asyncio.run(cancel_while_the_refresh_is_blocked())
-
-    assert (ended_while_blocked, redis.leases) == (
-        False, {owner_lease_key(OWNER): OWNER_LEASE_TTL_SECONDS},
+    assert asyncio.run(end_the_lease_of_another_and_wait_for_its_job()) == (
+        JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type,
     )

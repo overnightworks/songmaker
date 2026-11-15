@@ -10,6 +10,7 @@ port and worker id. Setting and variable names come from the settings classes. A
 
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import os
 import secrets
@@ -32,11 +33,15 @@ import httpx
 import pytest
 from pydantic_settings import BaseSettings
 from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
+from tandem.keys import lease_keys
 
 from acestep_worker.settings import WorkerSettings
+from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.settings import Settings
-from songmaker_cli.worker_liveness import owner_lease_key
+from songmaker_cli.worker_liveness import OWNER_LEASE_FAMILY, owner_leases
 
 HEALTH_PATH: Final = "/health"
 READY_DEADLINE_SECONDS: Final = 60.0
@@ -284,10 +289,31 @@ def poll_until(
     return True
 
 
+def age_the_owner_lease_epoch(redis: Redis) -> None:
+    """Date the owner leases' epoch one lease span back, as on a Redis that has run that long.
+
+    An absent lease reads gone only then; before it, UNKNOWN, as after a restart.
+    """
+    seconds, microseconds = redis.time()
+    now_ms = seconds * 1000 + microseconds // 1000
+    redis.set(
+        lease_keys(REDIS_KEY_PREFIX, OWNER_LEASE_FAMILY).epoch,
+        now_ms - (OWNER_LEASE_TTL_SECONDS + 1) * 1000,
+        nx=True,
+    )
+
+
 def leased_owner_ids(redis: Redis) -> set[str]:
-    """The owner ids whose lease Redis holds; the client decodes its replies."""
-    prefix = owner_lease_key("")
-    return {key.removeprefix(prefix) for key in redis.keys(owner_lease_key("*"))}
+    """The owner ids whose lease Redis holds, as the production roster reads them."""
+    address = redis.connection_pool.connection_kwargs
+
+    async def read_roster() -> set[str]:
+        async with AsyncRedis(
+            host=address["host"], port=address["port"], db=address.get("db", 0),
+        ) as client:
+            return set((await owner_leases(client).live()).holders)
+
+    return asyncio.run(read_roster())
 
 
 def _wait_until_ready(

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from contextlib import AbstractAsyncContextManager
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
 
 from redis.exceptions import RedisError
+from tandem import Client, Hold, Leases
 
 from songmaker_cli.acestep_state import decode_redis_text, worker_is_online, worker_state_key
 from songmaker_cli.constants import (
@@ -18,13 +20,19 @@ from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     WORKER_LAST_ALIVE_TTL_SECONDS,
 )
-from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS, worker_restart_grace_seconds
+from songmaker_cli.job_timing import (
+    OWNER_LAPSE_CLAIM_SECONDS,
+    OWNER_LEASE_REFRESH_SECONDS,
+    OWNER_LEASE_TTL_SECONDS,
+    worker_restart_grace_seconds,
+)
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.timestamps import aware_timestamp, utcnow
 
 log = logging.getLogger(__name__)
 
 _PROCESS_STARTED_AT = datetime.now(timezone.utc)
+OWNER_LEASE_FAMILY = "owner"
 
 
 class WorkerLiveness(StrEnum):
@@ -42,46 +50,24 @@ MUSIC_LAST_ALIVE_KEY = _last_alive_key("music")
 SCORING_LAST_ALIVE_KEY = _last_alive_key("scoring")
 
 
-def owner_lease_key(owner_id: str) -> str:
-    return f"{REDIS_KEY_PREFIX}:owner:{owner_id}"
+def owner_leases(redis: Client) -> Leases:
+    """The leases of the processes that run jobs, one family shared by web and worker.
 
-
-def refresh_owner_lease(redis: Any, owner_id: str) -> None:
-    """Say, for the lease TTL, that the process named ``owner_id`` lives."""
-    redis.set(owner_lease_key(owner_id), "1", ex=OWNER_LEASE_TTL_SECONDS)
-
-
-def drop_owner_lease(redis: Any, owner_id: str) -> None:
-    redis.delete(owner_lease_key(owner_id))
-
-
-async def refresh_owner_lease_async(redis: Any, owner_id: str) -> None:
-    """``refresh_owner_lease`` over an asyncio client, as arq hands one to a worker."""
-    await redis.set(owner_lease_key(owner_id), "1", ex=OWNER_LEASE_TTL_SECONDS)
-
-
-async def drop_owner_lease_async(redis: Any, owner_id: str) -> None:
-    await redis.delete(owner_lease_key(owner_id))
-
-
-def read_owner_liveness(redis: Any, owner_ids: Collection[str]) -> dict[str, WorkerLiveness]:
-    """Read which owners hold a lease; a ``RedisError`` reaches the caller.
-
-    A server that has run for less than the lease TTL may have restarted empty,
-    so an absent lease there proves nothing: it reads UNKNOWN, never DEAD.
+    Every process builds them from the same spans: a lease and a claim are measured by the
+    process that reads them.
     """
-    if not owner_ids:
-        return {}
-    ordered = sorted(owner_ids)
-    leases = redis.mget([owner_lease_key(owner_id) for owner_id in ordered])
-    # The uptime is read after the leases: a restart between the two reads then shows as young.
-    absent = WorkerLiveness.DEAD
-    if redis.info("server")["uptime_in_seconds"] < OWNER_LEASE_TTL_SECONDS:
-        absent = WorkerLiveness.UNKNOWN
-    return {
-        owner_id: WorkerLiveness.ALIVE if lease is not None else absent
-        for owner_id, lease in zip(ordered, leases, strict=True)
-    }
+    return Leases(
+        redis,
+        key_prefix=REDIS_KEY_PREFIX,
+        family=OWNER_LEASE_FAMILY,
+        lasts=timedelta(seconds=OWNER_LEASE_TTL_SECONDS),
+        claim_for=timedelta(seconds=OWNER_LAPSE_CLAIM_SECONDS),
+    )
+
+
+def keep_owner_lease(leases: Leases, owner_id: str) -> AbstractAsyncContextManager[Hold]:
+    """Hold the lease of ``owner_id`` for the block, renewed at the one shared interval."""
+    return leases.kept(owner_id, every=timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS))
 
 
 def _record_alive(redis: Any, key: str, now: datetime) -> None:

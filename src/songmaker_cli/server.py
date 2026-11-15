@@ -20,7 +20,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from redis.exceptions import RedisError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
@@ -52,7 +51,7 @@ from songmaker_cli.lifecycle import (
     cleanup_expired_resource_events,
     fail_jobs_of_dead_owners,
     owner_gone_reaper_loop,
-    owner_lease_loop,
+    owner_lapse_loop,
     reap_stale_jobs,
     reconcile_crashed_loras,
     resource_event_cleanup_loop,
@@ -74,7 +73,7 @@ from songmaker_cli.request_policies import (
     build_security_headers_policy,
 )
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, Settings, get_settings
-from songmaker_cli.worker_liveness import drop_owner_lease, refresh_owner_lease
+from songmaker_cli.worker_liveness import keep_owner_lease
 
 log = logging.getLogger(__name__)
 
@@ -108,7 +107,7 @@ def _start_background_loops(
         ),
         (BackgroundLoopName.SCORE_BACKFILL, asyncio.create_task(score_backfill_loop(app))),
         (BackgroundLoopName.STALE_JOB_REAPER, asyncio.create_task(stale_job_reaper_loop(app))),
-        (BackgroundLoopName.OWNER_LEASE, asyncio.create_task(owner_lease_loop(app))),
+        (BackgroundLoopName.OWNER_LAPSES, asyncio.create_task(owner_lapse_loop(app))),
         (
             BackgroundLoopName.OWNER_GONE_REAPER,
             asyncio.create_task(owner_gone_reaper_loop(app)),
@@ -130,14 +129,6 @@ def _start_background_loops(
     return loop_tasks
 
 
-async def _drop_owner_lease(ctx: AppContext) -> None:
-    """End this process's lease so a sibling fails its jobs within one tick."""
-    try:
-        await asyncio.to_thread(drop_owner_lease, ctx.redis, ctx.owner_id)
-    except RedisError:
-        log.warning("Could not drop the owner lease; it lapses by itself", exc_info=True)
-
-
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
@@ -155,7 +146,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: cleaned up %d expired sessions", deleted)
         session.commit()
 
-    await asyncio.to_thread(fail_jobs_of_dead_owners, ctx)
+    await fail_jobs_of_dead_owners(ctx)
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
@@ -165,19 +156,21 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     log.info("arq pool connected")
 
     app.state.startup_time = datetime.now(timezone.utc)
-    await asyncio.to_thread(refresh_owner_lease, ctx.redis, ctx.owner_id)
-    loop_tasks = _start_background_loops(app, registry)
     try:
-        async with running_mcp_front(app):
-            yield
+        async with keep_owner_lease(ctx.owner_leases, ctx.owner_id):
+            loop_tasks = _start_background_loops(app, registry)
+            try:
+                async with running_mcp_front(app):
+                    yield
+            finally:
+                registry.begin_shutdown()
+                for _name, task in loop_tasks:
+                    task.cancel()
+                await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
     finally:
-        registry.begin_shutdown()
-        for _name, task in loop_tasks:
-            task.cancel()
-        await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
-        await _drop_owner_lease(ctx)
         await drain_lease_releases()
         await close_arq_pool()
+        await ctx.async_redis.aclose()
 
 
 def audio_path_rejected_handler(
@@ -401,7 +394,7 @@ def _include_routers(app: FastAPI) -> None:
 def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
     from songmaker_cli.db.database_url import connection_url_from_settings
     from songmaker_cli.db.engine import init_db
-    from songmaker_cli.redis_client import create_redis, wait_for_redis
+    from songmaker_cli.redis_client import create_async_redis, create_redis, wait_for_redis
 
     settings = get_settings()
     redis_instance = create_redis(settings.redis_url)
@@ -416,6 +409,7 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         data_dir=data_dir,
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
+        async_redis=create_async_redis(settings.redis_url),
         trusted_proxies=parse_trusted_proxies(settings),
     )
 
