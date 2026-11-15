@@ -73,8 +73,9 @@ async def keep_owner_lease(
     owner_id: str,
     *,
     on_new_start: Callable[[], Awaitable[None]] | None = None,
+    every: timedelta = timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS),
 ) -> AsyncIterator[Hold]:
-    """Hold the lease of ``owner_id`` for the block, renewed at the one shared interval.
+    """Hold the lease of ``owner_id`` for the block, renewed every ``every``.
 
     A lease that cannot be started fails the entry. One that cannot be ended because Redis
     is unreachable is left to lapse by itself, so a process always shuts down. When the lease
@@ -83,10 +84,10 @@ async def keep_owner_lease(
     runs.
     """
     ending = AsyncExitStack()
-    hold = await ending.enter_async_context(
-        leases.kept(owner_id, every=timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS)),
+    hold = await ending.enter_async_context(leases.kept(owner_id, every=every))
+    watching = asyncio.create_task(
+        _treat_a_new_generation_as_a_start(hold, owner_id, on_new_start, every),
     )
-    watching = asyncio.create_task(_treat_a_new_generation_as_a_start(hold, owner_id, on_new_start))
     try:
         yield hold
     finally:
@@ -99,11 +100,14 @@ async def keep_owner_lease(
 
 
 async def _treat_a_new_generation_as_a_start(
-    hold: Hold, owner_id: str, on_new_start: Callable[[], Awaitable[None]] | None,
+    hold: Hold,
+    owner_id: str,
+    on_new_start: Callable[[], Awaitable[None]] | None,
+    every: timedelta,
 ) -> None:
     known = hold.generation
     while True:
-        await asyncio.sleep(OWNER_LEASE_REFRESH_SECONDS)
+        await asyncio.sleep(every.total_seconds())
         if hold.generation == known:
             continue
         known = hold.generation
