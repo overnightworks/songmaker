@@ -51,7 +51,7 @@ from songmaker_cli.scheduler import (
 )
 from songmaker_cli.settings import LoraTrainingJobConfig
 
-from ._runtime import _is_reported_failure, _sanitize_error, _touch_heartbeat, _update_job
+from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -60,10 +60,7 @@ def _sanitize_training_error(exc: Exception, job_id: str) -> Message:
     """Keep a worker failure truthful to the training task the musician started."""
     if isinstance(exc, LoraTrainingModelModeError):
         return exc.failure
-    failure = _sanitize_error(exc, job_id)
-    if _is_reported_failure(failure):
-        return message("voiceFailure.workerTrainingFailed")
-    return failure
+    return _sanitize_error(exc, job_id, reported=message("voiceFailure.workerTrainingFailed"))
 
 
 WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL: Final = (

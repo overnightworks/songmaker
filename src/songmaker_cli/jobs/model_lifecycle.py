@@ -8,7 +8,7 @@ import os
 
 from songmaker_cli.job_types import JobStatus
 
-from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
+from ._runtime import _failure_sentence, _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -43,10 +43,10 @@ async def load_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
+            error=_failure_sentence(
                 RuntimeError(f"Worker '{worker_id}' not registered"),
                 job_id,
-            ).sentence(),
+            ),
             error_type="worker_missing",
         )
         return
@@ -61,7 +61,7 @@ async def load_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(ConnectionError(str(exc)), job_id).sentence(),
+            error=_failure_sentence(ConnectionError(str(exc)), job_id),
             error_type="worker_unreachable",
         )
         return
@@ -71,10 +71,10 @@ async def load_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
+            error=_failure_sentence(
                 WorkerTaskFailed(worker_response_cause(response)),
                 job_id,
-            ).sentence(),
+            ),
             error_type="worker_error",
         )
         return
@@ -150,10 +150,10 @@ async def download_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
+            error=_failure_sentence(
                 last_error or RuntimeError("All download attempts exhausted"),
                 job_id,
-            ).sentence(),
+            ),
             error_type="download_error",
         )
     finally:
@@ -167,7 +167,7 @@ def _valid_download_mode(factory, job_id: str, mode: str, model_config_paths) ->
         factory,
         job_id,
         JobStatus.FAILED,
-        error=_sanitize_error(ValueError(f"Unknown model mode '{mode}'"), job_id).sentence(),
+        error=_failure_sentence(ValueError(f"Unknown model mode '{mode}'"), job_id),
         error_type="invalid_mode",
     )
     return False
@@ -188,10 +188,10 @@ async def _acquire_download_slot(
         factory,
         job_id,
         JobStatus.FAILED,
-        error=_sanitize_error(
+        error=_failure_sentence(
             RuntimeError(f"Another download for '{mode}' is already in progress (job {existing})"),
             job_id,
-        ).sentence(),
+        ),
         error_type="duplicate_download",
     )
     return False
@@ -225,7 +225,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id).sentence(),
+            error=_failure_sentence(exc, job_id),
             error_type="no_workers",
         )
         return None
@@ -241,7 +241,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(ConnectionError(str(exc)), job_id).sentence(),
+            error=_failure_sentence(ConnectionError(str(exc)), job_id),
             error_type="worker_unreachable",
         )
         return None
@@ -250,10 +250,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
-                WorkerTaskFailed(worker_response_cause(submit)),
-                job_id,
-            ).sentence(),
+            error=_failure_sentence(WorkerTaskFailed(worker_response_cause(submit)), job_id),
             error_type="worker_error",
         )
         return None
@@ -274,7 +271,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(ConnectionError(str(exc)), job_id).sentence(),
+            error=_failure_sentence(ConnectionError(str(exc)), job_id),
             error_type="sse_transport",
         )
         return None

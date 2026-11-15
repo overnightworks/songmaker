@@ -72,31 +72,30 @@ class ReferenceDeletedDuringTake(GenerationSetupError):
     """The take's reference row was gone when the take reached persistence; it ends the job."""
 
 
-def _sanitize_error(exc: Exception, job_id: str) -> Message:
+def _sanitize_error(
+    exc: Exception, job_id: str, *, reported: Message | None = None,
+) -> Message:
     """Log the raw failure in full; return the catalog message that words it for the musician.
 
     A worker's account of its task and a setup message the runtime vetted already are the
-    musician's line, so they come back as `jobFailure.reported` with that text as its cause.
+    musician's line: they come back as `reported`, by default `jobFailure.reported` with that
+    text as its cause.
     """
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
+    reported = reported or message("jobFailure.reported", cause=str(exc))
     if isinstance(exc, WorkerTaskFailed):
-        return _reported_failure(exc)
+        return reported
     if isinstance(exc, GenerationSetupError):
-        if str(exc) in _GENERATION_SETUP_MESSAGES:
-            return _reported_failure(exc)
-        return _UNEXPECTED_FAILURE
+        return reported if str(exc) in _GENERATION_SETUP_MESSAGES else _UNEXPECTED_FAILURE
     for exc_type, failure in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return failure
     return _UNEXPECTED_FAILURE
 
 
-def _reported_failure(exc: Exception) -> Message:
-    return message("jobFailure.reported", cause=str(exc))
-
-
-def _is_reported_failure(failure: Message) -> bool:
-    return failure.key == message("jobFailure.reported", cause="").key
+def _failure_sentence(exc: Exception, job_id: str) -> str:
+    """The sentence a Text column (`jobs.error`) stores for a failure."""
+    return _sanitize_error(exc, job_id).sentence()
 
 
 def _job_is_terminal(factory, job_id: str) -> bool:

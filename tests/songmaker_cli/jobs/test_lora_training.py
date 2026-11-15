@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -108,8 +109,6 @@ async def _fake_events_ok(*args, **kwargs) -> AsyncIterator[tuple[str, dict]]:
 
 def _patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=None):
     """Return context-manager patches for worker-side HTTP + SSE stubs."""
-    from contextlib import contextmanager
-
     events = events or _fake_events_ok
 
     @contextmanager
@@ -543,8 +542,6 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
         raise asyncio.CancelledError()
         yield  # unreachable
 
-    from contextlib import contextmanager
-
     @contextmanager
     def patches():
         submit = AsyncMock()
@@ -644,13 +641,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
         assert lora.error_message.sentence() == "testing"
-        audit = (
-            session.query(AuditLog)
-            .filter_by(
-                resource_id=seeded["lora_id"],
-            )
-            .all()
-        )
+        audit = session.query(AuditLog).filter_by(resource_id=seeded["lora_id"]).all()
         assert [a.detail for a in audit if "failed" in (a.detail or "")] == ["failed: testing"]
 
 

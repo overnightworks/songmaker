@@ -15,7 +15,7 @@ from songmaker_cli.scheduler import (
     WorkerTaskFailed,
 )
 
-from ._runtime import _sanitize_error, generation_error_messages
+from ._runtime import _failure_sentence, generation_error_messages
 
 GPU_OUT_OF_MEMORY: Final = "gpu_out_of_memory"
 
@@ -38,7 +38,7 @@ class GenerationFailure:
 
 def generation_failure(exc: Exception, job_id: str) -> GenerationFailure:
     """Log the full cause and select the musician's line and its type together."""
-    sentence = _sanitize_error(exc, job_id).sentence()
+    sentence = _failure_sentence(exc, job_id)
     if isinstance(exc, WorkerGpuOutOfMemory):
         return GenerationFailure(_GPU_OUT_OF_MEMORY.sentence(), GPU_OUT_OF_MEMORY)
     if isinstance(exc, (WorkerGenerationUnavailable, NoCapacityError)):

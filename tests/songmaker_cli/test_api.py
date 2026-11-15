@@ -3727,11 +3727,9 @@ def test_sanitize_error_unknown_type() -> None:
 
 def test_sanitize_error_generation_setup() -> None:
     from songmaker_cli.jobs import GenerationSetupError, _sanitize_error
-    from songmaker_cli.messages import message
 
-    assert _sanitize_error(GenerationSetupError("Song not found"), "j1") == message(
-        "jobFailure.reported", cause="Song not found",
-    )
+    setup = _sanitize_error(GenerationSetupError("Song not found"), "j1")
+    assert setup.sentence() == "Song not found"
 
 
 def test_sanitize_error_hides_unknown_generation_setup_details(
@@ -3742,7 +3740,6 @@ def test_sanitize_error_hides_unknown_generation_setup_details(
     raw_error = "/srv/songmaker/private.db is unavailable"
     with caplog.at_level(logging.ERROR, logger="songmaker_cli.jobs._runtime"):
         message = _sanitize_error(GenerationSetupError(raw_error), "j1").sentence()
-
     assert message == "An unexpected error occurred"
     assert raw_error in caplog.text
 

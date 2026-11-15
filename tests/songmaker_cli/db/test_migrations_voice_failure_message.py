@@ -84,13 +84,13 @@ def test_the_migration_follows_the_previous_revision_on_the_single_chain():
     assert is_on_the_single_chain(MIGRATION.revision)
 
 
-def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
+@pytest.mark.parametrize("number", range(len(SENTENCES)))
+def test_a_known_sentence_becomes_its_key_without_gap_values(upgraded, number):
     _, engine = upgraded
-    stored = stored_values(engine, "user_loras", NEW_COLUMN)
-    for number, sentence in enumerate(SENTENCES):
-        token = stored[f"known-{number}"]
-        assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
-        assert text(SOURCE_LANGUAGE, token["key"]) == sentence
+    sentence = SENTENCES[number]
+    token = stored_values(engine, "user_loras", NEW_COLUMN)[f"known-{number}"]
+    assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
+    assert text(SOURCE_LANGUAGE, token["key"]) == sentence
 
 
 def test_the_historic_cancel_sentence_is_kept_as_the_recorded_token(upgraded):
