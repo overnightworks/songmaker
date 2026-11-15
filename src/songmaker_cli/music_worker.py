@@ -52,14 +52,11 @@ class MusicWorker(WorkerBase):
         import structlog
         structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
 
-        typed_repaint = (
-            RepaintTaskParams.model_validate(repaint_params)
-            if repaint_params is not None else None
-        )
-        typed_cover = (
-            CoverTaskParams.model_validate(cover_params)
-            if cover_params is not None else None
-        )
+        task_params = None
+        if repaint_params is not None:
+            task_params = RepaintTaskParams.model_validate(repaint_params)
+        elif cover_params is not None:
+            task_params = CoverTaskParams.model_validate(cover_params)
 
         await run_generation_job(
             job_id, song_id, version_id, count, user_id,
@@ -68,8 +65,7 @@ class MusicWorker(WorkerBase):
             data_dir=self.data_dir(),
             owner_id=self.owner_id,
             seed=seed,
-            repaint_params=typed_repaint,
-            cover_params=typed_cover,
+            task_params=task_params,
             target_model=requested_model,
             redis=ctx["redis"],
         )

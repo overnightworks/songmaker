@@ -139,9 +139,9 @@ def test_generate_passes_repaint_params() -> None:
         ))
 
     kwargs = mock_run.await_args.kwargs
-    assert isinstance(kwargs["repaint_params"], RepaintTaskParams)
-    assert kwargs["repaint_params"].src_wav_path == "/x.wav"
-    assert kwargs["repaint_params"].repainting_end == 1.0
+    assert isinstance(kwargs["task_params"], RepaintTaskParams)
+    assert kwargs["task_params"].src_wav_path == "/x.wav"
+    assert kwargs["task_params"].repainting_end == 1.0
 
 
 def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg_factory) -> None:

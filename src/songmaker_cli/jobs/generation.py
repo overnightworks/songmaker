@@ -852,8 +852,7 @@ async def run_generation_job(
     owner_id: str,
     redis: ArqRedis,
     seed: int | None = None,
-    repaint_params: RepaintTaskParams | None = None,
-    cover_params: CoverTaskParams | None = None,
+    task_params: RepaintTaskParams | CoverTaskParams | None = None,
 ) -> None:
     import structlog
 
@@ -864,12 +863,9 @@ async def run_generation_job(
         song_id=song_id,
     )
 
-    if cover_params:
-        task_type = "cover"
-    elif repaint_params:
-        task_type = "repaint"
-    else:
-        task_type = "generate"
+    repaint_params = task_params if isinstance(task_params, RepaintTaskParams) else None
+    cover_params = task_params if isinstance(task_params, CoverTaskParams) else None
+    task_type = "cover" if cover_params else "repaint" if repaint_params else "generate"
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     admitted_worker = None

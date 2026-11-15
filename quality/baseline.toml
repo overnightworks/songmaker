@@ -44,7 +44,7 @@
 "frontend/src/routes/layout.test.ts" = 1395
 "frontend/src/routes/settings/users/+page.svelte" = 919
 "src/acestep_worker/wrapper.py" = 1073
-"src/songmaker_cli/jobs/generation.py" = 1129
+"src/songmaker_cli/jobs/generation.py" = 1125
 "src/songmaker_cli/jobs/lora_training.py" = 1508
 "src/songmaker_cli/queue_streams.py" = 918
 "tests/acestep_engine/test_client.py" = 818
@@ -99,7 +99,7 @@
 
 [function_lines."src/songmaker_cli/jobs/generation.py"]
 "post_process_generation" = 79
-"run_generation_job" = 102
+"run_generation_job" = 98
 
 [function_lines."src/songmaker_cli/jobs/lora_training.py"]
 "_prepare_and_submit_lora" = 70
