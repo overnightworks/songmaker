@@ -1,8 +1,0 @@
-claim_id = "036a7eb2f6bb4955a5558a846a5a5b56"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "51c4147b5162629e7bf814ad904909249e7e58ee"
-branch = "claude/issue-3197-two-process-tests-reach-a-scripted-gatew"
-scope = ["docs/testing.md", "quality/baseline.toml", "tests/songmaker_cli", "tests/support"]
-opened_commit = "b0ccaab2450bf73574fffd68dd713db4eb426874"
-whole_reason = "Test stand-ins and their one proving test."
