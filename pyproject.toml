@@ -47,7 +47,7 @@ server = [
     "arq>=0.26,<1",
     "mutagen>=1.47,<2",
     "python-multipart>=0.0.7,<1",
-    # The auth layer lives in its own repository. The two first-party libraries are
+    # The auth layer lives in its own repository. The first-party libraries are
     # git pins by tag: a release-asset wheel in the resolved tree makes a uv Dependabot
     # run fail as a whole. Integrity is the commit uv.lock records for the tag, which
     # `uv sync --frozen` installs; the three images carry git for it.
@@ -55,7 +55,7 @@ server = [
     # Bare: Settings imports the client's AgentConfig in every process, and both worker images
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
     "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.44.0",
-    # Cross-pod coordination in Redis: the owner lease. Needs the web and worker images' git too.
+    # Cross-pod coordination in Redis (owner lease). A git pin by tag like the other two.
     "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.4.0",
 ]
 # Pillow normalizes a generated cover; a container installs it only when its entrypoint reaches it.
@@ -121,6 +121,7 @@ include = [
 [tool.uv]
 override-dependencies = [
     "numpy>=1.26",
+    # why: tandem needs redis-py 8.1 and arq caps it below 6; the arq tests run on 8.1.
     "redis[hiredis]>=8.1,<9",
 ]
 

@@ -27,11 +27,12 @@ COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-build --no-dev --no-install-project \
     --no-install-package overnightworks-webauth \
     --no-install-package overnightworks-agents \
-    --extra server --extra image # why: All resolved versions come from the committed uv.lock; --no-build makes any third-party source distribution fail here, so the two git-sourced libraries wait for the next step.
+    --no-install-package overnightworks-tandem \
+    --extra server --extra image # why: All resolved versions come from the committed uv.lock; --no-build makes any third-party source distribution fail here, so the three git-sourced libraries wait for the next step.
 # Building the git-sourced libraries leaves lock files in /tmp whose names are random per build.
 RUN uv sync --frozen --no-dev --no-install-project \
     --extra server --extra image \
-    && rm -f /tmp/uv-*.lock # why: Builds only what the first step left out, the two first-party libraries from their locked git commits.
+    && rm -f /tmp/uv-*.lock # why: Builds only what the first step left out, the three first-party libraries from their locked git commits.
 
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
