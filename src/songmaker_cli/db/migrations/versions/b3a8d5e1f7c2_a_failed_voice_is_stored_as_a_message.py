@@ -13,7 +13,8 @@ NULL. The downgrade writes each token's sentence back; `recorded` writes its cau
 from __future__ import annotations
 
 import re
-from typing import Any, Sequence
+from collections.abc import Mapping
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -89,8 +90,7 @@ def _token_of(sentence: str) -> dict[str, object]:
     return {"key": RECORDED_KEY, "values": {"cause": sentence}}
 
 
-def _sentence_of(lora_id: str, token: dict[str, Any]) -> str:
-    key, values = token["key"], token["values"]
+def _sentence_of(lora_id: str, key: str, values: Mapping[str, str]) -> str:
     if key == RECORDED_KEY:
         return values["cause"]
     if key in MODE_TEMPLATES:
@@ -130,7 +130,7 @@ def downgrade() -> None:
         connection.execute(
             sa.update(user_loras)
             .where(user_loras.c.id == lora_id)
-            .values(error=_sentence_of(lora_id, token)),
+            .values(error=_sentence_of(lora_id, token["key"], token["values"])),
         )
     op.drop_constraint(SHAPE_CONSTRAINT, "user_loras", type_="check")
     op.drop_column("user_loras", "error_message")

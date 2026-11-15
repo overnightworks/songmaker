@@ -9,7 +9,12 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import (
+    column_names,
+    is_on_the_single_chain,
+    seeded_then_upgraded,
+    stored_values,
+)
 from support.reference_link_migration import seed_users
 from support.repository_root import REPOSITORY_ROOT
 
@@ -62,13 +67,6 @@ def _insert_lora(engine, lora_id: str, column: str, value: object) -> None:
         ))
 
 
-def _stored(engine, column: str) -> dict[str, object]:
-    loras = _user_loras(column)
-    with engine.connect() as connection:
-        rows = connection.execute(sa.select(loras.c.id, loras.c[column])).all()
-    return dict(rows)
-
-
 def _seed_voices(engine) -> None:
     seed_users(engine)
     for number, sentence in enumerate(SENTENCES):
@@ -94,7 +92,7 @@ def test_the_migration_follows_the_previous_revision_on_the_single_chain():
 
 def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
     _, engine = upgraded
-    stored = _stored(engine, NEW_COLUMN)
+    stored = stored_values(engine, "user_loras", NEW_COLUMN)
     for number, sentence in enumerate(SENTENCES):
         token = stored[f"known-{number}"]
         assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
@@ -104,7 +102,8 @@ def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
 
 def test_the_historic_cancel_sentence_becomes_the_cancelled_token(upgraded):
     _, engine = upgraded
-    token = _stored(engine, NEW_COLUMN)[f"known-{SENTENCES.index(HISTORIC_CANCEL_SENTENCE)}"]
+    stored = stored_values(engine, "user_loras", NEW_COLUMN)
+    token = stored[f"known-{SENTENCES.index(HISTORIC_CANCEL_SENTENCE)}"]
     assert token == {"key": CANCELLED_KEY, "values": {}}
 
 
@@ -112,14 +111,14 @@ def test_the_historic_cancel_sentence_becomes_the_cancelled_token(upgraded):
 def test_a_mode_error_becomes_its_token_with_the_gap_values_it_quoted(upgraded, number):
     _, engine = upgraded
     sentence = list(MODE_TOKENS)[number]
-    token = _stored(engine, NEW_COLUMN)[f"mode-{number}"]
+    token = stored_values(engine, "user_loras", NEW_COLUMN)[f"mode-{number}"]
     assert token == MODE_TOKENS[sentence]
     assert text(SOURCE_LANGUAGE, token["key"], **token["values"]) == sentence
 
 
 def test_an_unknown_sentence_is_kept_as_the_recorded_token_with_its_text_as_the_cause(upgraded):
     _, engine = upgraded
-    token = _stored(engine, NEW_COLUMN)["unknown"]
+    token = stored_values(engine, "user_loras", NEW_COLUMN)["unknown"]
     assert token == {"key": RECORDED_KEY, "values": {"cause": UNKNOWN_SENTENCE}}
     assert text(SOURCE_LANGUAGE, token["key"], **token["values"]) == UNKNOWN_SENTENCE
 
@@ -160,7 +159,7 @@ def test_downgrade_restores_every_sentence_and_keeps_the_voices_without_a_reason
     config, engine = upgraded
     command.downgrade(config, PREVIOUS_REVISION)
     assert NEW_COLUMN not in column_names(engine, "user_loras")
-    stored = _stored(engine, OLD_COLUMN)
+    stored = stored_values(engine, "user_loras", OLD_COLUMN)
     for number, sentence in enumerate(SENTENCES):
         expected = (
             text(SOURCE_LANGUAGE, MIGRATION.STORED_MESSAGE_KEYS[sentence])
@@ -177,7 +176,7 @@ def test_the_migration_upgrades_again_after_a_downgrade(upgraded):
     config, engine = upgraded
     command.downgrade(config, PREVIOUS_REVISION)
     command.upgrade(config, MIGRATION.revision)
-    assert _stored(engine, NEW_COLUMN)["unknown"] == {
+    assert stored_values(engine, "user_loras", NEW_COLUMN)["unknown"] == {
         "key": RECORDED_KEY, "values": {"cause": UNKNOWN_SENTENCE},
     }
 

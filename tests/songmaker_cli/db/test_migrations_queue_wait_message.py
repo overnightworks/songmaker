@@ -10,7 +10,12 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import (
+    column_names,
+    is_on_the_single_chain,
+    seeded_then_upgraded,
+    stored_values,
+)
 from support.repository_root import REPOSITORY_ROOT
 
 from songmaker_cli.words import SOURCE_LANGUAGE, text
@@ -44,13 +49,6 @@ def _insert_job(engine, job_id: str, column: str, value: object) -> None:
         ))
 
 
-def _stored(engine, column: str) -> dict[str, object]:
-    jobs = _jobs(column)
-    with engine.connect() as connection:
-        rows = connection.execute(sa.select(jobs.c.id, jobs.c[column])).all()
-    return {job_id: value for job_id, value in rows}
-
-
 def _seed_waits(engine) -> None:
     for number, sentence in enumerate(SENTENCES):
         _insert_job(engine, f"known-{number}", OLD_COLUMN, sentence)
@@ -74,7 +72,7 @@ def test_the_migration_follows_the_previous_revision_on_the_single_chain():
 
 def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
     _, engine = upgraded
-    stored = _stored(engine, NEW_COLUMN)
+    stored = stored_values(engine, "jobs", NEW_COLUMN)
     for number, sentence in enumerate(SENTENCES):
         token = stored[f"known-{number}"]
         assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
@@ -119,7 +117,7 @@ def test_downgrade_restores_the_sentences_and_keeps_the_jobs_without_a_wait(upgr
     config, engine = upgraded
     command.downgrade(config, PREVIOUS_REVISION)
     assert NEW_COLUMN not in column_names(engine, "jobs")
-    stored = _stored(engine, OLD_COLUMN)
+    stored = stored_values(engine, "jobs", OLD_COLUMN)
     for number, sentence in enumerate(SENTENCES):
         assert stored[f"known-{number}"] == sentence
     assert stored["unknown"] is None
@@ -130,7 +128,7 @@ def test_the_migration_upgrades_again_after_a_downgrade(upgraded):
     config, engine = upgraded
     command.downgrade(config, PREVIOUS_REVISION)
     command.upgrade(config, MIGRATION.revision)
-    assert _stored(engine, NEW_COLUMN)["known-0"] == {
+    assert stored_values(engine, "jobs", NEW_COLUMN)["known-0"] == {
         "key": MIGRATION.STORED_MESSAGE_KEYS[SENTENCES[0]], "values": {},
     }
 

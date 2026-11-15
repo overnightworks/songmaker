@@ -40,6 +40,13 @@ def column_names(engine: Engine, table: str) -> set[str]:
     return {column["name"] for column in inspect(engine).get_columns(table)}
 
 
+def stored_values(engine: Engine, table: str, column: str) -> dict[str, object]:
+    """The value of `column` of every row of `table`, by the row's id."""
+    rows = sa.table(table, sa.column("id"), sa.column(column))
+    with engine.connect() as connection:
+        return dict(connection.execute(sa.select(rows.c.id, rows.c[column])).all())
+
+
 def job_count(engine: Engine) -> int:
     with engine.connect() as connection:
         return connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
