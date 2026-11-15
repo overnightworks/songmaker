@@ -1616,7 +1616,7 @@ the end of `_lifespan`, in a worker from after its database has opened to its `o
 web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
 serves everything else. The `owner_gone_reaper` loop of every web process runs
 `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
-(5 s) and once at start: it reads the owners of active jobs through `Leases.liveness`
+(5 s) and once at start: it reads the owners of active jobs through `Leases.state` (`worker_liveness.owner_lease_liveness`)
 (`alive`, `gone` or `unknown`) and fails the active jobs of every `gone` owner, whether a web
 process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then

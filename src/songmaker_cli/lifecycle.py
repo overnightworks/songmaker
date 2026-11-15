@@ -32,7 +32,7 @@ from songmaker_cli.job_timing import (
     OWNER_GONE_CHECK_INTERVAL_SECONDS,
 )
 from songmaker_cli.job_types import JobType
-from songmaker_cli.worker_liveness import WorkerLiveness, read_owner_liveness
+from songmaker_cli.worker_liveness import WorkerLiveness, owner_lease_liveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
@@ -380,7 +380,7 @@ async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
     restarted empty, reads UNKNOWN. This process's own jobs are never orphaned.
     """
     owner_ids = await asyncio.to_thread(_active_job_owner_ids_but_own, ctx)
-    owner_liveness = await read_owner_liveness(ctx.owner_leases, owner_ids)
+    owner_liveness = await owner_lease_liveness(ctx.owner_leases, owner_ids)
     return await asyncio.to_thread(_fail_jobs_of_gone_owners, ctx, owner_liveness)
 
 

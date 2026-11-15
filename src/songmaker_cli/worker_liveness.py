@@ -67,7 +67,7 @@ def owner_leases(redis: Client) -> Leases:
     )
 
 
-async def read_owner_liveness(
+async def owner_lease_liveness(
     leases: Leases, owner_ids: Collection[str],
 ) -> dict[str, Liveness]:
     """Whether each owner's lease is live, gone or possibly lost with a Redis restart."""
