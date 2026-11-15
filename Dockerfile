@@ -1,8 +1,8 @@
 # Stage 1: uv binary for the backend stage
-FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
 # Stage 2: Build frontend
-FROM node:26.13.0-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS frontend-builder
+FROM node:26.13.1-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS frontend-builder
 WORKDIR /app/frontend
 
 RUN npm install --global pnpm@12.18.0
@@ -17,7 +17,7 @@ ARG BUILD_SOURCE_MAPS=false
 RUN BUILD_SOURCE_MAPS=$BUILD_SOURCE_MAPS pnpm build
 
 # Stage 3: Python backend
-FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999 AS backend
+FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS backend
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
