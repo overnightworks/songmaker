@@ -31,6 +31,7 @@ from agents.backend.gateway import GatewayBackend
 from agents.turn import FailureCode, Principal, RejectionCode, person_fingerprint
 from fastapi.testclient import TestClient
 from PIL import Image
+from redis.exceptions import RedisError
 from support.cover_album_world import declared_suggest_refusal
 from support.cowriter_gateway import (
     A_REFRESH_TOKEN,
@@ -469,6 +470,93 @@ def test_cancel_during_the_picture_closes_the_request_and_the_next_job_runs(worl
     second = world.queue()
     assert world.run_next() is True
     assert world.job(second).status == JobStatus.COMPLETED
+
+
+class _ChannelLostAfterSubscribing:
+    """A pub/sub whose subscription is confirmed once and whose connection then fails."""
+
+    confirmed = False
+
+    def subscribe(self, _channel: str) -> None:
+        pass
+
+    def get_message(self, timeout: float = 0.0) -> dict[str, str]:
+        if not self.confirmed:
+            self.confirmed = True
+            return {"type": "subscribe"}
+        raise RedisError("connection lost")
+
+    def close(self) -> None:
+        pass
+
+
+class _SubscriptionNeverConfirmed(_ChannelLostAfterSubscribing):
+    def get_message(self, timeout: float = 0.0) -> None:
+        return None
+
+
+class _SubscribeRefused(_ChannelLostAfterSubscribing):
+    def subscribe(self, _channel: str) -> None:
+        raise RedisError("connection refused")
+
+
+def _redis_refuses_to_publish(redis, monkeypatch) -> None:
+    def refuse(*_arguments) -> None:
+        raise RedisError("connection refused")
+
+    monkeypatch.setattr(redis, "publish", refuse)
+
+
+def _redis_pubsub_is(pubsub_class):
+    def break_pubsub(redis, monkeypatch) -> None:
+        monkeypatch.setattr(redis, "pubsub", pubsub_class)
+
+    return break_pubsub
+
+
+class _RedisRefusingEveryPublication:
+    def publish(self, *_arguments) -> None:
+        raise RedisError("connection refused")
+
+
+def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(caplog):
+    forged_id = "job\nforged log line"
+
+    cover_runner.publish_cover_cancel(_RedisRefusingEveryPublication(), forged_id)
+
+    assert "forged" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "break_redis",
+    [
+        _redis_refuses_to_publish,
+        _redis_pubsub_is(_SubscribeRefused),
+        _redis_pubsub_is(_SubscriptionNeverConfirmed),
+        _redis_pubsub_is(_ChannelLostAfterSubscribing),
+    ],
+    ids=["publish_refused", "subscribe_refused", "subscription_unconfirmed", "channel_lost"],
+)
+def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
+    world, monkeypatch, break_redis,
+):
+    held = HeldGateway(picture(_image_bytes("PNG")))
+    world.stack.uses(held)
+    break_redis(world.app.state.ctx.redis, monkeypatch)
+    job_id = world.queue()
+
+    async def scenario() -> bool:
+        running = asyncio.create_task(cover_runner.run_next_cover_job(world.app))
+        assert await asyncio.to_thread(held.received.wait, 10)
+        cancelled = await asyncio.to_thread(world.client.post, f"/api/jobs/{job_id}/cancel")
+        assert cancelled.status_code == 200
+        held.released.set()
+        return await asyncio.wait_for(running, 10)
+
+    assert asyncio.run(scenario()) is True
+
+    assert world.job(job_id).status == JobStatus.CANCELLED
+    assert world.suggestions() == []
 
 
 def test_a_cancel_between_the_start_and_the_picture_sends_no_request(world, monkeypatch):
