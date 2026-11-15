@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -32,6 +33,24 @@ def make_fake_redis() -> fakeredis.FakeRedis:
 def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:
     """The asyncio client of a process's leases; it holds nothing the sync fake holds."""
     return fakeredis.FakeAsyncRedis()
+
+
+def arrange_fake_async_redis(
+    async_redis: fakeredis.FakeAsyncRedis,
+    arrangement: Callable[[fakeredis.FakeAsyncRedis], Awaitable[object]],
+) -> None:
+    """Run ``arrangement`` in its own event loop and free the fake's connection of that loop.
+
+    A connection a fake keeps after the loop ended cannot serve the next loop.
+    """
+
+    async def arrange_and_disconnect() -> None:
+        try:
+            await arrangement(async_redis)
+        finally:
+            await async_redis.connection_pool.disconnect()
+
+    asyncio.run(arrange_and_disconnect())
 
 
 async def settle_owner_leases(async_redis: fakeredis.FakeAsyncRedis) -> None:

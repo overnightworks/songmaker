@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Iterable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
 
 from redis.exceptions import RedisError
-from tandem import Client, Hold, Leases, StoreError
+from tandem import Client, Hold, Leases, Liveness, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text, worker_is_online, worker_state_key
 from songmaker_cli.constants import (
@@ -65,6 +65,14 @@ def owner_leases(redis: Client) -> Leases:
         lasts=timedelta(seconds=OWNER_LEASE_TTL_SECONDS),
         claim_for=timedelta(seconds=OWNER_LAPSE_CLAIM_SECONDS),
     )
+
+
+async def read_owner_liveness(
+    leases: Leases, owner_ids: Collection[str],
+) -> dict[str, Liveness]:
+    """Whether each owner's lease is live, gone or possibly lost with a Redis restart."""
+    states = await leases.state(owner_ids)
+    return {owner_id: state.liveness for owner_id, state in states.items()}
 
 
 @asynccontextmanager

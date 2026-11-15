@@ -74,7 +74,11 @@ from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_types import JobType
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
-from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
+from songmaker_cli.worker_liveness import (
+    WorkerLiveness,
+    read_owner_liveness,
+    read_worker_liveness,
+)
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -270,7 +274,7 @@ async def _read_owner_liveness_or_unknown(
 ) -> Mapping[str, Liveness]:
     """A Redis that cannot be read leaves every owner UNKNOWN, which fails no job."""
     try:
-        return await owner_leases.liveness(owner_ids)
+        return await read_owner_liveness(owner_leases, owner_ids)
     except StoreError:
         _log.warning("Could not read owner liveness", exc_info=True)
         return {}

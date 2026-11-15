@@ -9,6 +9,7 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import event, text
 from support.web_app import (
+    arrange_fake_async_redis,
     make_authenticated_user,
     make_fake_redis,
     seed_user,
@@ -173,7 +174,7 @@ def test_a_submission_ends_the_job_of_a_dead_owner_instead_of_refusing_for_the_f
 ) -> None:
     with pg_factory() as session:
         server = _OwnerLeaseServer(session, readable=True)
-        asyncio.run(settle_owner_leases(server))
+        arrange_fake_async_redis(server, settle_owner_leases)
         server.events.clear()
 
         admitted = asyncio.run(create_job_with_rate_limit(

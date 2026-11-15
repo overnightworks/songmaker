@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import fakeredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from support.loop_ticks import run_ticks_observing_status
-from support.web_app import make_fake_async_redis, settle_owner_leases
+from support.web_app import arrange_fake_async_redis, make_fake_async_redis, settle_owner_leases
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
 from songmaker_cli.cover_runner import cover_staging_path
@@ -93,7 +93,7 @@ def test_the_owner_lease_shows_ok_while_this_process_holds_its_lease(
     monkeypatch, pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
-    asyncio.run(owner_leases(server).renew(OWNER))
+    arrange_fake_async_redis(server, lambda fake: owner_leases(fake).renew(OWNER))
 
     status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
 
@@ -104,7 +104,7 @@ def test_the_owner_lease_shows_failing_while_this_process_holds_none(
     monkeypatch, pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
-    asyncio.run(settle_owner_leases(server))
+    arrange_fake_async_redis(server, settle_owner_leases)
 
     status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
 
@@ -115,8 +115,10 @@ def test_the_owner_lease_shows_failing_while_only_the_old_key_of_this_process_li
     monkeypatch, pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
-    asyncio.run(settle_owner_leases(server))
-    asyncio.run(server.set(old_owner_key(REDIS_KEY_PREFIX, OWNER), "1"))
+    arrange_fake_async_redis(server, settle_owner_leases)
+    arrange_fake_async_redis(
+        server, lambda fake: fake.set(old_owner_key(REDIS_KEY_PREFIX, OWNER), "1"),
+    )
 
     status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
 
