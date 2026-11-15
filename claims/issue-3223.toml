@@ -1,0 +1,8 @@
+claim_id = "8f09cbf82c1047a29b02d124acc7a1e8"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "396083c30ea4e203213c88cf73cb3c91f739f499"
+branch = "claude/issue-3223-songmaker-s-quality-pin-moves-to-v0-20-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "quality/baseline.toml"]
+opened_commit = "7b6fbf13610169fcd577cb759417f41e1d7e23ec"
+whole_reason = "One pin moves in three workflow files plus its baseline."
