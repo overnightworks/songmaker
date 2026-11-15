@@ -1613,7 +1613,10 @@ either kind leaves a live sibling's jobs alone; a clean stop ends the stopped
 process's jobs within one tick after its lifespan or its worker shutdown ends, a
 crash within the lease TTL plus a tick. A worker that is cancelled at its shutdown
 ends its running generation and LoRA jobs itself, and arq queues the cancelled task
-again; the new run finds the job terminal and returns. After a clean restart the
+again; the new run finds the job terminal and returns. A killed worker's job stays in
+the arq queue until its in-progress key expires, then another run does the same. A
+killed generation never decrements the admitted ACE-Step worker's queue depth, which
+the scheduler reads, and it stays raised until that worker restarts. After a clean restart the
 panel shows "Try again" at once; after a crash within 20 s.
 
 `unknown` never fails a job. A Redis that cannot be read fails the pass, which the
