@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import time
 import uuid
 from dataclasses import dataclass
@@ -40,7 +41,6 @@ from songmaker_cli.owner_lease_old_key import old_owner_key
 MARGIN_SECONDS = 5.0
 CRASH_DEADLINE_SECONDS = 30.0
 LOOP_FAILING_DEADLINE_SECONDS = 40.0
-APPLICATION_SHUTDOWN_FAILED = "Application shutdown failed"
 PREVIOUS_RELEASE_SECONDS = 120
 
 
@@ -214,7 +214,7 @@ def test_a_stop_with_redis_unreachable_still_shuts_the_process_down(
     proxy.cut()
     process.stop()
 
-    assert APPLICATION_SHUTDOWN_FAILED not in process.log_path.read_text(errors="replace")
+    assert process.process.returncode != -signal.SIGKILL, "the stop needed the kill"
 
 
 def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
