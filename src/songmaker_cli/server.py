@@ -54,8 +54,8 @@ from songmaker_cli.lifecycle import (
     owner_gone_reaper_loop,
     owner_lapse_loop,
     reap_stale_jobs,
-    reconcile_covers_of_this_owner,
     reconcile_crashed_loras,
+    reconcile_ended_covers,
     resource_event_cleanup_loop,
     score_backfill_loop,
     session_cleanup_loop,
@@ -161,7 +161,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         async with keep_owner_lease(
             ctx.owner_leases, ctx.owner_id,
-            on_new_start=partial(reconcile_covers_of_this_owner, ctx),
+            on_new_start=partial(reconcile_ended_covers, ctx),
         ):
             loop_tasks = _start_background_loops(app, registry)
             try:

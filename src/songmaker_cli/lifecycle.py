@@ -384,8 +384,8 @@ async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
     return await asyncio.to_thread(_fail_jobs_of_gone_owners, ctx, owner_liveness)
 
 
-async def reconcile_covers_of_this_owner(ctx: AppContext) -> None:
-    """Clean what a cover this process still runs left behind after its stored status ended it.
+async def reconcile_ended_covers(ctx: AppContext) -> None:
+    """Clean what every cover whose stored status has ended left behind, whichever owner ran it.
 
     The stored status is the fence: a job that another process failed while this one's lease had
     lapsed stays failed, for a write to an ended job changes nothing.

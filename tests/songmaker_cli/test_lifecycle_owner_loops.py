@@ -29,7 +29,7 @@ from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import (
     owner_gone_reaper_loop,
     owner_lapse_loop,
-    reconcile_covers_of_this_owner,
+    reconcile_ended_covers,
 )
 from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.worker_liveness import owner_leases
@@ -171,6 +171,6 @@ def test_a_cover_another_process_failed_while_this_lease_had_lapsed_leaves_no_st
     staging.mkdir(parents=True)
     ctx = SimpleNamespace(db=pg_factory, audio_dir=tmp_path)
 
-    asyncio.run(reconcile_covers_of_this_owner(ctx))
+    asyncio.run(reconcile_ended_covers(ctx))
 
     assert not staging.exists()

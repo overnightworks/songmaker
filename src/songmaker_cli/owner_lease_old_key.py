@@ -16,7 +16,8 @@ from contextlib import suppress
 from datetime import timedelta
 
 from redis.exceptions import RedisError
-from tandem import Client, Leases, Liveness, Renewal, StoreError
+from tandem import Client, Leases, Liveness, Renewal
+from tandem.errors import store_error
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class OwnerLeasesWithOldKey(Leases):
             keys = [old_owner_key(self._old_key_prefix, holder) for holder in unconfirmed]
             renewed = await self._old_key_client.mget(keys)
         except RedisError as error:
-            raise StoreError("reading the old owner keys failed", outage=True) from error
+            raise store_error("reading the old owner keys", error) from error
         return readings | {
             holder: Liveness.ALIVE
             for holder, value in zip(unconfirmed, renewed, strict=True)
