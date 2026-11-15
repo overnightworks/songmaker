@@ -10,7 +10,13 @@ import pytest
 from agents.backend.fake_gateway import completion
 from pydantic import SecretStr
 from redis import Redis
-from support.app_processes import OIDC_CLIENT_ID, StandIns, WebProcesses, web_processes
+from support.app_processes import (
+    OIDC_CLIENT_ID,
+    StandIns,
+    WebProcess,
+    WebProcesses,
+    web_processes,
+)
 from support.cowriter_gateway import MEMBER_GROUPS, HeldGateway
 from support.fake_oidc_issuer import Person
 from support.gateway_server import serve_gateway
@@ -21,8 +27,22 @@ from support.web_app import issued_cookies, seed_user
 
 from songmaker_cli.app_context import AppContext, build_web_auth_config
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore
+from songmaker_cli.worker_liveness import owner_lease_key
 
 SCRIPTED_REPLY = "The reply the gateway stand-in scripted."
+
+
+def leased_owner_ids(redis_client: Redis) -> set[str]:
+    prefix = owner_lease_key("")
+    return {key.removeprefix(prefix) for key in redis_client.keys(owner_lease_key("*"))}
+
+
+def start_owner(cluster: WebProcesses, redis_client: Redis, name: str) -> tuple[WebProcess, str]:
+    """Start a process and return it with the owner id its lease names."""
+    before = leased_owner_ids(redis_client)
+    process = cluster.start(name)
+    [owner_id] = leased_owner_ids(redis_client) - before
+    return process, owner_id
 
 
 @dataclass(frozen=True)

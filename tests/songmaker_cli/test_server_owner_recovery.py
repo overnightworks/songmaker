@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from redis import Redis
 from support.app_processes import WebProcess, WebProcesses, poll_until
+from support.web_cluster_world import start_owner
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cover_runner import cover_staging_path
@@ -62,19 +63,6 @@ def lease_ttl_has_passed_on_the_server(redis_client: Redis) -> None:
     )
 
 
-def _leased_owner_ids(redis_client: Redis) -> set[str]:
-    prefix = owner_lease_key("")
-    return {key.removeprefix(prefix) for key in redis_client.keys(owner_lease_key("*"))}
-
-
-def _start_owner(cluster: WebProcesses, redis_client: Redis, name: str) -> tuple[WebProcess, str]:
-    """Start a process and return it with the owner id its lease names."""
-    before = _leased_owner_ids(redis_client)
-    process = cluster.start(name)
-    [owner_id] = _leased_owner_ids(redis_client) - before
-    return process, owner_id
-
-
 def _seed_running_jobs(factory, cluster: WebProcesses, owner_id: str) -> RunningJobs:
     with factory() as session:
         chat = create_job(session, JobType.CHAT, owner_id=owner_id)
@@ -113,11 +101,11 @@ def test_a_process_that_starts_ends_the_jobs_of_an_owner_that_is_gone_and_no_liv
     web_cluster, redis_client,
 ) -> None:
     cluster, factory = web_cluster
-    _, owner_a = _start_owner(cluster, redis_client, "a")
+    _, owner_a = start_owner(cluster, redis_client, "a")
     jobs_of_a = _seed_running_jobs(factory, cluster, owner_a)
     jobs_of_a_ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
 
-    _start_owner(cluster, redis_client, "b")
+    start_owner(cluster, redis_client, "b")
 
     assert (
         _statuses(factory, jobs_of_a.ids),
@@ -130,8 +118,8 @@ def test_a_process_that_starts_ends_the_jobs_of_an_owner_that_is_gone_and_no_liv
 def a_and_b(web_cluster, redis_client):
     """A and B on one database and Redis; A runs the seeded jobs, B is the observer."""
     cluster, factory = web_cluster
-    process_a, owner_a = _start_owner(cluster, redis_client, "a")
-    process_b, _ = _start_owner(cluster, redis_client, "b")
+    process_a, owner_a = start_owner(cluster, redis_client, "a")
+    process_b, _ = start_owner(cluster, redis_client, "b")
     return cluster, factory, process_a, owner_a, process_b, _seed_running_jobs(
         factory, cluster, owner_a,
     )
@@ -165,8 +153,8 @@ def test_a_crash_with_redis_unreachable_ends_nothing_until_redis_answers_again(
     proxied_cluster, redis_client,
 ) -> None:
     cluster, factory, proxy = proxied_cluster
-    process_a, owner_a = _start_owner(cluster, redis_client, "a")
-    process_b, _ = _start_owner(cluster, redis_client, "b")
+    process_a, owner_a = start_owner(cluster, redis_client, "a")
+    process_b, _ = start_owner(cluster, redis_client, "b")
     jobs = _seed_running_jobs(factory, cluster, owner_a)
 
     proxy.cut()
@@ -188,8 +176,8 @@ def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     proxied_cluster, redis_client,
 ) -> None:
     cluster, factory, proxy = proxied_cluster
-    _, owner_a = _start_owner(cluster, redis_client, "a")
-    _start_owner(cluster, redis_client, "b")
+    _, owner_a = start_owner(cluster, redis_client, "a")
+    start_owner(cluster, redis_client, "b")
     jobs = _seed_running_jobs(factory, cluster, owner_a)
     restarted_at = time.monotonic()
 
