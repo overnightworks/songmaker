@@ -192,6 +192,11 @@ class WebProcesses:
             TRUSTED_CERTIFICATES_VARIABLE: str(stand_ins.issuer_certificate),
         }
 
+    @property
+    def environment(self) -> dict[str, str]:
+        """The settings every process shares, as the environment a process reads them from."""
+        return dict(self._shared_environment)
+
     def settings(self) -> Settings:
         """The settings every process shares, read the way a process reads them."""
         with patch.dict(os.environ, self._shared_environment):
