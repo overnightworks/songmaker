@@ -98,11 +98,11 @@ def _realm_handler() -> type[BaseHTTPRequestHandler]:
                 self._answer(_NOT_FOUND, b"")
                 return
             body = self.rfile.read(int(self.headers.get("content-length", 0))).decode()
-            form = {
-                name: values[0] for name, values in urllib.parse.parse_qs(body).items()
-            }
+            form = {name: values[0] for name, values in urllib.parse.parse_qs(body).items()}
             request = TokenRequest(
-                self.path, form, SecretStr(self.headers.get("authorization", "")),
+                self.path,
+                form,
+                SecretStr(self.headers.get("authorization", "")),
             )
             answer = self.server.realm.token_answer(request)
             self._answer(answer.status, answer.body)
