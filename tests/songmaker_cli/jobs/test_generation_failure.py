@@ -98,7 +98,8 @@ def test_s8_failure_selection(causes, expected_message, error_type, running, cap
     assert (selected.message.sentence(), selected.error_type) == (expected_message, error_type)
     pair = running_failure_pair(selected)
     expected_pair = (expected_message, error_type) if running else (None, None)
-    assert (pair[0] and pair[0].sentence(), pair[1]) == expected_pair
+    actual_pair = (pair[0] and pair[0].sentence(), pair[1])
+    assert actual_pair == expected_pair
     assert musician_error(expected_message, error_type) == expected_message
 
 
