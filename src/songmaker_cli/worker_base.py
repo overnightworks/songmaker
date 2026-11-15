@@ -81,7 +81,7 @@ class WorkerBase:
                 return False
         return True
 
-    async def on_startup(self, ctx) -> None:
+    async def on_startup(self, _ctx) -> None:
         from songmaker_cli.logging_config import configure_logging
 
         configure_logging()
@@ -92,7 +92,7 @@ class WorkerBase:
         await self._start_owner_lease()
         log.info("%s worker ready", self.worker_name())
 
-    async def on_shutdown(self, ctx) -> None:
+    async def on_shutdown(self, _ctx) -> None:
         if self._lease_stack is not None:
             await self._release_owner_lease()
 
