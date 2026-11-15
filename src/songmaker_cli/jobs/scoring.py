@@ -17,12 +17,13 @@ from songmaker_cli.db.queries.generations import (
 )
 from songmaker_cli.db.queries.jobs import lock_active_job
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.settings import get_settings
 
-from ._runtime import _failure_sentence, _job_is_terminal, _update_job
+from ._runtime import _job_is_terminal, _sanitize_error, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def run_scoring_job(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error="Audio file not found for scoring",
+                error=message("jobFailure.scoringAudioMissing"),
                 error_type="setup_error",
             )
             log.error("Scoring job %s: MP3 not found at %s", job_id, scoring_input.mp3_path_rel)
@@ -119,7 +120,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_failure_sentence(exc, job_id),
+            error=_sanitize_error(exc, job_id),
             error_type="timeout",
         )
     except Exception as exc:
@@ -128,7 +129,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_failure_sentence(exc, job_id),
+            error=_sanitize_error(exc, job_id),
             error_type="scoring_error",
         )
 
@@ -156,7 +157,7 @@ def _load_scoring_input(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error="Generation not found",
+                error=message("jobFailure.scoringGenerationMissing"),
                 error_type="setup_error",
             )
             return None

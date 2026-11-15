@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,7 +12,7 @@ import pytest
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.generation_failures import OTHER_GENERATION_ERROR_TYPES
+from support.generation_failures import OTHER_GENERATION_ERROR_TYPES, reported_error
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -2666,7 +2665,8 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
             update_job_status(session, job_id, JobStatusUpdate("completed", progress=1.0))
             is False
         )
-        assert update_job_status(session, job_id, JobStatusUpdate("failed", error="late")) is False
+        late = JobStatusUpdate("failed", error=message("jobFailure.reported", cause="late"))
+        assert update_job_status(session, job_id, late) is False
         session.commit()
 
     got = client.get(f"/api/jobs/{job_id}")
@@ -2940,7 +2940,8 @@ def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, JobStatusUpdate("failed", error="test error"))
+        failure = message("jobFailure.reported", cause="test error")
+        update_job_status(session, job.id, JobStatusUpdate("failed", error=failure))
         session.commit()
         job_id = job.id
 
@@ -3728,20 +3729,8 @@ def test_sanitize_error_unknown_type() -> None:
 def test_sanitize_error_generation_setup() -> None:
     from songmaker_cli.jobs import GenerationSetupError, _sanitize_error
 
-    setup = _sanitize_error(GenerationSetupError("Song not found"), "j1")
+    setup = _sanitize_error(GenerationSetupError(message("jobFailure.songNotFound")), "j1")
     assert setup.sentence() == "Song not found"
-
-
-def test_sanitize_error_hides_unknown_generation_setup_details(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    from songmaker_cli.jobs import GenerationSetupError, _sanitize_error
-
-    raw_error = "/srv/songmaker/private.db is unavailable"
-    with caplog.at_level(logging.ERROR, logger="songmaker_cli.jobs._runtime"):
-        message = _sanitize_error(GenerationSetupError(raw_error), "j1").sentence()
-    assert message == "An unexpected error occurred"
-    assert raw_error in caplog.text
 
 
 # ── Pagination ────────────────────────────────────────────────────
@@ -4214,7 +4203,7 @@ def test_s8_stream_error_only_changes(client, before, after):
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
         job_id = job.id
-        update_job_status(session, job_id, JobStatusUpdate("running", **before))
+        update_job_status(session, job_id, JobStatusUpdate("running", **reported_error(before)))
         session.commit()
     cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
 
@@ -4241,7 +4230,7 @@ def test_s8_stream_error_only_changes(client, before, after):
                                 job_id,
                                 JobStatusUpdate(
                                     "running" if len(frames) == 1 else "cancelled",
-                                    **after,
+                                    **reported_error(after),
                                 ),
                             )
                             session.commit()

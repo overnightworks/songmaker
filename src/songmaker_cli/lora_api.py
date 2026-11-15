@@ -518,7 +518,7 @@ def _fail_training_job(ctx: AppContext, job_id: str, lora_id: str) -> None:
             update_job_status(
                 session,
                 job_id,
-                JobStatusUpdate(JobStatus.FAILED, error=QUEUE_UNAVAILABLE.sentence()),
+                JobStatusUpdate(JobStatus.FAILED, error=QUEUE_UNAVAILABLE),
             )
             update_user_lora(
                 session, lora_id,

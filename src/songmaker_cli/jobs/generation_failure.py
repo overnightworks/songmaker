@@ -7,7 +7,7 @@ from typing import Final
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_types import JobType
-from songmaker_cli.messages import message
+from songmaker_cli.messages import Message, message
 from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerGenerationUnavailable,
@@ -15,7 +15,7 @@ from songmaker_cli.scheduler import (
     WorkerTaskFailed,
 )
 
-from ._runtime import _failure_sentence, generation_error_messages
+from ._runtime import _sanitize_error, generation_error_messages
 
 GPU_OUT_OF_MEMORY: Final = "gpu_out_of_memory"
 
@@ -25,27 +25,33 @@ _GPU_OUT_OF_MEMORY: Final = message("jobFailure.gpuOutOfMemory")
 _PARTIAL_FAILURE_PREFIX = re.compile(r"\d+/\d+ completed, \d+ failed: ", re.ASCII)
 
 
-def partial_failure_error(completed: int, count: int, message: str) -> str:
-    """Format the persisted partial failure and its musician-facing cause."""
-    return f"{completed}/{count} completed, {count - completed} failed: {message}"
+def partial_failure_error(completed: int, count: int, cause: Message) -> Message:
+    """The persisted partial failure: its counts and the musician-facing cause."""
+    return message(
+        "jobFailure.partialTakes",
+        completed=str(completed),
+        count=str(count),
+        failed=str(count - completed),
+        cause=cause.sentence(),
+    )
 
 
 @dataclass(frozen=True)
 class GenerationFailure:
-    message: str
+    message: Message
     error_type: str
 
 
 def generation_failure(exc: Exception, job_id: str) -> GenerationFailure:
     """Log the full cause and select the musician's line and its type together."""
-    sentence = _failure_sentence(exc, job_id)
+    failure = _sanitize_error(exc, job_id)
     if isinstance(exc, WorkerGpuOutOfMemory):
-        return GenerationFailure(_GPU_OUT_OF_MEMORY.sentence(), GPU_OUT_OF_MEMORY)
+        return GenerationFailure(_GPU_OUT_OF_MEMORY, GPU_OUT_OF_MEMORY)
     if isinstance(exc, (WorkerGenerationUnavailable, NoCapacityError)):
-        return GenerationFailure(_GENERATION_UNAVAILABLE.sentence(), "generation_unavailable")
+        return GenerationFailure(_GENERATION_UNAVAILABLE, "generation_unavailable")
     if isinstance(exc, WorkerTaskFailed):
-        sentence = _GENERATION_FAILED.sentence()
-    return GenerationFailure(message=sentence, error_type="generation_error")
+        failure = _GENERATION_FAILED
+    return GenerationFailure(message=failure, error_type="generation_error")
 
 
 def select_generation_failure(
@@ -63,7 +69,9 @@ def is_visible_generation_failure(error_type: str | None) -> bool:
     return error_type == GPU_OUT_OF_MEMORY
 
 
-def running_failure_pair(failure: GenerationFailure | None) -> tuple[str | None, str | None]:
+def running_failure_pair(
+    failure: GenerationFailure | None,
+) -> tuple[Message | None, str | None]:
     """Only a GPU-memory failure is visible before all takes finish."""
     if failure is not None and is_visible_generation_failure(failure.error_type):
         return failure.message, failure.error_type

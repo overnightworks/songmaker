@@ -12,15 +12,8 @@ APP_NAME = "Hallucinai"
 INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # noqa: S105 - the name of an HTTP header and no secret
 
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"
-JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
-JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
-JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
-JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = "Selected voice is unavailable for this generation"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
-JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
-    "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
-)
 
 # The two PWA icon files SvelteKit's static build emits. Shared by
 # server.py (SPA-fallback 404 exclusion, see `_pwa_exact_paths`) and

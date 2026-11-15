@@ -1262,6 +1262,30 @@ export type Words = {
     readonly "jobFailure.generationFailed": string;
     readonly "jobFailure.generationUnavailable": string;
     readonly "jobFailure.gpuOutOfMemory": string;
+    readonly "jobFailure.songNotFound": string;
+    readonly "jobFailure.versionNotFound": string;
+    readonly "jobFailure.referenceAudioNotFound": string;
+    readonly "jobFailure.referenceDeletedDuringTake": string;
+    readonly "jobFailure.voiceUnavailable": string;
+    readonly "jobFailure.generationCancelled": string;
+    readonly "jobFailure.partialTakes": (gaps: { readonly cause: string; readonly completed: string; readonly count: number; readonly failed: string }) => string;
+    readonly "jobFailure.scoringWorkerDown": string;
+    readonly "jobFailure.scoringEnqueueFailed": string;
+    readonly "jobFailure.scoringAudioMissing": string;
+    readonly "jobFailure.scoringGenerationMissing": string;
+    readonly "jobFailure.serverRestarted": string;
+    readonly "jobFailure.noWorkerAlive": string;
+    readonly "jobFailure.queuedFullQueueBound": string;
+    readonly "jobFailure.tookTooLong": string;
+    readonly "jobFailure.queuedTooLong": string;
+    readonly "chatFailure.clientCancelled": string;
+    readonly "chatFailure.requestCancelled": string;
+    readonly "chatFailure.setupFailed": string;
+    readonly "chatFailure.requestFailed": string;
+    readonly "chatFailure.completionFailed": string;
+    readonly "chatFailure.problem": (gaps: { readonly detail: string; readonly problem: string }) => string;
+    readonly "voiceFailure.notFound": string;
+    readonly "voiceFailure.deleted": string;
     readonly "voiceFailure.workerTrainingFailed": string;
     readonly "voiceFailure.crashed": string;
     readonly "voiceFailure.drainTimeout": string;
@@ -1413,7 +1437,7 @@ export const words: Words = {
     "coverProblem.budgetSpent": "The budget for cover suggestions is used up. Try again later.",
     "coverProblem.notEnabled": "Cover suggestions are not enabled for your account. Ask an admin to enable them.",
     "coverProblem.unavailable": "Cover suggestions are unavailable right now. Try again later.",
-    "coverProblem.signInAgain": "Log in again to get cover suggestions",
+    "coverProblem.signInAgain": "Log in again to get cover suggestions.",
     "cowriterProblem.busy": "The co-writer is busy",
     "cowriterProblem.budgetSpent": "The co-writer's budget is used up. Try again later.",
     "cowriterProblem.notEnabled": "The co-writer is not enabled for your account",
@@ -2939,6 +2963,30 @@ export const words: Words = {
     "jobFailure.generationFailed": "Generating failed — try again.",
     "jobFailure.generationUnavailable": "Generating isn't available right now.",
     "jobFailure.gpuOutOfMemory": "Too long for the GPU right now — try a shorter duration.",
+    "jobFailure.songNotFound": "Song not found",
+    "jobFailure.versionNotFound": "Version not found",
+    "jobFailure.referenceAudioNotFound": "Reference audio not found",
+    "jobFailure.referenceDeletedDuringTake": "The reference track was deleted while this take was generating.",
+    "jobFailure.voiceUnavailable": "Selected voice is unavailable for this generation",
+    "jobFailure.generationCancelled": "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+    "jobFailure.partialTakes": (gaps: { readonly cause: string; readonly completed: string; readonly count: number; readonly failed: string }) => gaps.completed + "/" + numberFormat.format(gaps.count) + " completed, " + gaps.failed + " failed: " + gaps.cause,
+    "jobFailure.scoringWorkerDown": "Scoring worker not running",
+    "jobFailure.scoringEnqueueFailed": "Failed to enqueue auto-score job",
+    "jobFailure.scoringAudioMissing": "Audio file not found for scoring",
+    "jobFailure.scoringGenerationMissing": "Generation not found",
+    "jobFailure.serverRestarted": "Server restarted while job was in progress",
+    "jobFailure.noWorkerAlive": "No worker alive for this job type — please retry.",
+    "jobFailure.queuedFullQueueBound": "Queued longer than a full queue could take — please retry.",
+    "jobFailure.tookTooLong": "Took too long to finish — please retry.",
+    "jobFailure.queuedTooLong": "Queued too long — please retry.",
+    "chatFailure.clientCancelled": "Turn cancelled by the client.",
+    "chatFailure.requestCancelled": "Chat request cancelled",
+    "chatFailure.setupFailed": "Chat setup failed",
+    "chatFailure.requestFailed": "Chat request failed",
+    "chatFailure.completionFailed": "Chat completion failed",
+    "chatFailure.problem": (gaps: { readonly detail: string; readonly problem: string }) => gaps.problem + ": " + gaps.detail,
+    "voiceFailure.notFound": "LoRA not found",
+    "voiceFailure.deleted": "LoRA is deleted",
     "voiceFailure.workerTrainingFailed": "Worker training failed",
     "voiceFailure.crashed": "Training crashed or was interrupted",
     "voiceFailure.drainTimeout": "Generation queue did not drain before LoRA training could start",

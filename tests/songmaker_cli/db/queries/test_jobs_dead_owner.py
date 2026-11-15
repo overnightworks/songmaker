@@ -24,6 +24,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.rate_limits import upsert_rate_limit_setting
 from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.worker_liveness import WorkerLiveness
 
@@ -67,6 +68,22 @@ def test_only_the_jobs_of_a_dead_owner_fail_with_the_restart_verdict(pg_factory)
         still_running = (here, unread, missing_from_the_map)
         assert [_outcome(session, job_id)[0] for job_id in still_running] == [JobStatus.RUNNING] * 3
         assert _outcome(session, unowned)[0] == JobStatus.RUNNING
+
+
+def test_a_failed_job_stores_the_sentence_of_its_message(pg_factory) -> None:
+    with pg_factory() as session:
+        job = create_job(session, JobType.CHAT)
+        failure = message("jobFailure.reported", cause="ACE-Step down")
+        update_job_status(session, job.id, JobStatusUpdate(JobStatus.FAILED, error=failure))
+        session.commit()
+        assert session.get(Job, job.id).error == "ACE-Step down"
+
+
+def test_a_job_of_a_dead_owner_stores_the_restart_sentence(pg_factory) -> None:
+    with pg_factory() as session:
+        gone = _running_job(session, JobType.CHAT, GONE)
+        recover_jobs_of_dead_owners(session, {GONE: WorkerLiveness.DEAD})
+        assert session.get(Job, gone).error == "Server restarted while job was in progress"
 
 
 def test_a_queued_job_of_a_dead_owner_fails_too_and_a_finished_one_is_left(pg_factory) -> None:

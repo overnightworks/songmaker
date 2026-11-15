@@ -20,7 +20,7 @@ msgid "Cover suggestions are unavailable right now. Try again later."
 msgstr ""
 
 msgctxt "coverProblem.signInAgain"
-msgid "Log in again to get cover suggestions"
+msgid "Log in again to get cover suggestions."
 msgstr ""
 
 msgctxt "cowriterProblem.busy"
@@ -5187,6 +5187,102 @@ msgstr ""
 
 msgctxt "jobFailure.gpuOutOfMemory"
 msgid "Too long for the GPU right now — try a shorter duration."
+msgstr ""
+
+msgctxt "jobFailure.songNotFound"
+msgid "Song not found"
+msgstr ""
+
+msgctxt "jobFailure.versionNotFound"
+msgid "Version not found"
+msgstr ""
+
+msgctxt "jobFailure.referenceAudioNotFound"
+msgid "Reference audio not found"
+msgstr ""
+
+msgctxt "jobFailure.referenceDeletedDuringTake"
+msgid "The reference track was deleted while this take was generating."
+msgstr ""
+
+msgctxt "jobFailure.voiceUnavailable"
+msgid "Selected voice is unavailable for this generation"
+msgstr ""
+
+msgctxt "jobFailure.generationCancelled"
+msgid "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
+msgstr ""
+
+msgctxt "jobFailure.partialTakes"
+msgid "{completed}/{count} completed, {failed} failed: {cause}"
+msgstr ""
+
+msgctxt "jobFailure.scoringWorkerDown"
+msgid "Scoring worker not running"
+msgstr ""
+
+msgctxt "jobFailure.scoringEnqueueFailed"
+msgid "Failed to enqueue auto-score job"
+msgstr ""
+
+msgctxt "jobFailure.scoringAudioMissing"
+msgid "Audio file not found for scoring"
+msgstr ""
+
+msgctxt "jobFailure.scoringGenerationMissing"
+msgid "Generation not found"
+msgstr ""
+
+msgctxt "jobFailure.serverRestarted"
+msgid "Server restarted while job was in progress"
+msgstr ""
+
+msgctxt "jobFailure.noWorkerAlive"
+msgid "No worker alive for this job type — please retry."
+msgstr ""
+
+msgctxt "jobFailure.queuedFullQueueBound"
+msgid "Queued longer than a full queue could take — please retry."
+msgstr ""
+
+msgctxt "jobFailure.tookTooLong"
+msgid "Took too long to finish — please retry."
+msgstr ""
+
+msgctxt "jobFailure.queuedTooLong"
+msgid "Queued too long — please retry."
+msgstr ""
+
+msgctxt "chatFailure.clientCancelled"
+msgid "Turn cancelled by the client."
+msgstr ""
+
+msgctxt "chatFailure.requestCancelled"
+msgid "Chat request cancelled"
+msgstr ""
+
+msgctxt "chatFailure.setupFailed"
+msgid "Chat setup failed"
+msgstr ""
+
+msgctxt "chatFailure.requestFailed"
+msgid "Chat request failed"
+msgstr ""
+
+msgctxt "chatFailure.completionFailed"
+msgid "Chat completion failed"
+msgstr ""
+
+msgctxt "chatFailure.problem"
+msgid "{problem}: {detail}"
+msgstr ""
+
+msgctxt "voiceFailure.notFound"
+msgid "LoRA not found"
+msgstr ""
+
+msgctxt "voiceFailure.deleted"
+msgid "LoRA is deleted"
 msgstr ""
 
 msgctxt "voiceFailure.workerTrainingFailed"

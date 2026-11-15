@@ -5,15 +5,28 @@ from __future__ import annotations
 import pytest
 
 from acestep_engine.errors import AudioDownloadError
+from songmaker_cli.messages import Message
 from songmaker_cli.scheduler import NoCapacityError
 
-GENERATION_SETUP_MESSAGES = [
-    "Song not found",
-    "Version not found",
-    "Reference audio not found",
-    "The reference track was deleted while this take was generating.",
-    "Selected voice is unavailable for this generation",
+GENERATION_SETUP_REASONS = [
+    Message(key=key, values={})
+    for key in (
+        "jobFailure.songNotFound",
+        "jobFailure.versionNotFound",
+        "jobFailure.referenceAudioNotFound",
+        "jobFailure.referenceDeletedDuringTake",
+        "jobFailure.voiceUnavailable",
+    )
 ]
+GENERATION_SETUP_MESSAGES = [reason.sentence() for reason in GENERATION_SETUP_REASONS]
+
+
+
+def reported_error(fields: dict[str, str]) -> dict[str, object]:
+    """Job columns whose `error` text is stored as the cause a worker reported."""
+    cause = {"cause": fields["error"]}
+    return {**fields, "error": Message(key="jobFailure.reported", values=cause)}
+
 
 OTHER_GENERATION_ERROR_TYPES = [
     None,

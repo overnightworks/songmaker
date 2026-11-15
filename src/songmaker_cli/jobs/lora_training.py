@@ -1160,7 +1160,7 @@ def _load_lora_training_samples(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error="LoRA not found",
+                error=message("voiceFailure.notFound"),
                 error_type="lora_missing",
             )
             return None
@@ -1169,7 +1169,7 @@ def _load_lora_training_samples(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error="LoRA is deleted",
+                error=message("voiceFailure.deleted"),
                 error_type="lora_deleted",
             )
             return None
@@ -1201,7 +1201,7 @@ async def _defer_lora_training_for_generation(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=error_message.sentence(),
+            error=error_message,
             error_type="generation_queue_timeout",
         )
         return
@@ -1436,7 +1436,7 @@ def _handle_cancelled_lora_training(
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=error_message.sentence(),
+        error=error_message,
         error_type="timeout",
     )
 
@@ -1477,7 +1477,7 @@ def _keep_restored_lora_adapter(
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=_sanitize_training_error(exc, job_id).sentence(),
+        error=_sanitize_training_error(exc, job_id),
         error_type="lora_training_error",
     )
 
@@ -1503,6 +1503,6 @@ def _fail_lora_training(
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=failure.sentence(),
+        error=failure,
         error_type=error_type,
     )

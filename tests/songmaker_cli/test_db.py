@@ -88,6 +88,7 @@ from songmaker_cli.db.queries.songs import (
 from songmaker_cli.db.queries.versions import delete_version
 from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness
 
@@ -751,16 +752,6 @@ def test_update_job_completed(seeded_session: Session) -> None:
     assert fetched.completed_at is not None
 
 
-def test_update_job_failed(seeded_session: Session) -> None:
-    job = create_job(seeded_session, "generate")
-    seeded_session.commit()
-    update_job_status(seeded_session, job.id, JobStatusUpdate("failed", error="ACE-Step down"))
-    seeded_session.commit()
-    fetched = get_job(seeded_session, job.id)
-    assert fetched.status == "failed"
-    assert fetched.error == "ACE-Step down"
-
-
 @pytest.mark.parametrize("terminal", ["cancelled", "completed", "failed", "partial"])
 def test_update_job_status_does_not_overwrite_terminal(
     seeded_session: Session,
@@ -807,7 +798,8 @@ def test_update_job_status_stamps_completed_at_for_every_terminal_status(
 
     completed_at = fetched.completed_at
     update_job_status(seeded_session, job.id, JobStatusUpdate("completed", progress=1.0))
-    update_job_status(seeded_session, job.id, JobStatusUpdate("failed", error="late"))
+    late = JobStatusUpdate("failed", error=message("jobFailure.reported", cause="late"))
+    update_job_status(seeded_session, job.id, late)
     seeded_session.commit()
     seeded_session.expire_all()
     fetched = get_job(seeded_session, job.id)

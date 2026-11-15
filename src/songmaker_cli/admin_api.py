@@ -49,13 +49,13 @@ from songmaker_cli.db.queries.auth import (
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 from songmaker_cli.job_types import JobFunction, JobStatus
+from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 _RELAYED_WORKER_STATUSES: Final = frozenset({400, 409})
 
 
@@ -247,7 +247,9 @@ async def load_model_on_worker_endpoint(
         )
     except ConnectionError:
         update_job_status(
-            db, job.id, JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+            db,
+            job.id,
+            JobStatusUpdate(JobStatus.FAILED, error=message("jobRefusal.queueUnavailable")),
         )
         db.commit()
         raise Refusal(503, "jobRefusal.queueUnavailable")
@@ -417,7 +419,9 @@ async def download_model_endpoint(
         )
     except ConnectionError:
         update_job_status(
-            db, job.id, JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+            db,
+            job.id,
+            JobStatusUpdate(JobStatus.FAILED, error=message("jobRefusal.queueUnavailable")),
         )
         db.commit()
         raise Refusal(503, "jobRefusal.queueUnavailable")
