@@ -1,8 +1,0 @@
-claim_id = "5dc4bf253da744988912549823299f22"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "f6bd4824d054ce2ad1da77fa4d9a7bb048dab833"
-branch = "claude/issue-3212-a-cancel-sent-to-one-web-process-stops-t"
-scope = ["docs/architecture.md", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/lifecycle.py", "tests/songmaker_cli", "tests/support"]
-opened_commit = "91f8cdd95b3bc8fbfd8f31bb42a2eafc9721bca9"
-whole_reason = "R3 replaces the in-process cancel call with a Redis signal that the cover runner's owner receives; the sender, the receiver loop and a two-process test cannot land apart."
