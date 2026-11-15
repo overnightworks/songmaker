@@ -25,7 +25,11 @@ from support.web_app import make_test_app
 from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import AceStepWorker, Job
-from songmaker_cli.health_api import _format_prometheus, _PrometheusMetrics
+from songmaker_cli.health_api import (
+    PROM_NEVER_FAILED_TIMESTAMP,
+    _format_prometheus,
+    _PrometheusMetrics,
+)
 from songmaker_cli.health_types import BackgroundLoopName
 from songmaker_cli.job_types import AgentProblem, JobStatus, JobType
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
@@ -351,7 +355,7 @@ def test_metrics_last_job_failure_timestamp_ignores_gateway_problems_of_agent_jo
 
     body = health_client.get("/metrics", headers=monitoring_headers).text
 
-    expected = failed_at.timestamp() if moves_timestamp else 0.0
+    expected = failed_at.timestamp() if moves_timestamp else PROM_NEVER_FAILED_TIMESTAMP
     assert f"songmaker_last_job_failure_timestamp_seconds {expected}" in body
 
 
