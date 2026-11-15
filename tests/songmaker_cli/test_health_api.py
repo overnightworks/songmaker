@@ -24,9 +24,10 @@ from support.web_app import make_test_app
 
 from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
-from songmaker_cli.db.models import AceStepWorker
+from songmaker_cli.db.models import AceStepWorker, Job
 from songmaker_cli.health_api import _format_prometheus, _PrometheusMetrics
 from songmaker_cli.health_types import BackgroundLoopName
+from songmaker_cli.job_types import AgentProblem, JobStatus, JobType
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 
@@ -323,6 +324,35 @@ def test_reason_follows_the_key_when_the_worker_recovers(health_client, monitori
     assert body["acestep_reason"] is None
     assert body["acestep"] == "healthy"
     assert body["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("job_type", "error_type", "moves_timestamp"),
+    [
+        (JobType.CHAT, AgentProblem.UNAVAILABLE, False),
+        (JobType.COVER, AgentProblem.BUSY, False),
+        (JobType.GENERATE, "gpu_oom", True),
+        (JobType.CHAT, "internal_error", True),
+        (JobType.GENERATE, AgentProblem.UNAVAILABLE, True),
+    ],
+)
+def test_metrics_last_job_failure_timestamp_ignores_gateway_problems_of_agent_jobs(
+    health_client, monitoring_headers,
+    job_type: JobType, error_type: str, moves_timestamp: bool,
+) -> None:
+    """A gateway-named problem of a chat or cover job is no songmaker failure."""
+    failed_at = datetime(2026, 8, 31, 8, 30, tzinfo=timezone.utc)
+    with health_client.app.state.ctx.db() as session:
+        session.add(Job(
+            type=job_type, status=JobStatus.FAILED, error_type=error_type,
+            started_at=failed_at, completed_at=failed_at,
+        ))
+        session.commit()
+
+    body = health_client.get("/metrics", headers=monitoring_headers).text
+
+    expected = failed_at.timestamp() if moves_timestamp else 0.0
+    assert f"songmaker_last_job_failure_timestamp_seconds {expected}" in body
 
 
 def test_metrics_excludes_broken_gpu_worker_from_online_count(

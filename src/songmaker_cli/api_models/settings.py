@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
@@ -10,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, m
 from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
 from songmaker_cli.constants import MEMORY_MAX_LENGTH
+from songmaker_cli.job_types import AgentProblem
 from songmaker_cli.theme_types import ThemeChoice
 
 if TYPE_CHECKING:
@@ -223,16 +223,6 @@ class ChatTurnFinalFrame(BaseModel):
     conversation_id: str
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
-
-
-class AgentProblem(StrEnum):
-    """Why an agent run (a co-writer turn or a cover picture) did not run; each surface words it."""
-
-    UNAVAILABLE = "unavailable"
-    BUSY = "busy"
-    BUDGET_SPENT = "budget_spent"
-    NOT_ENABLED = "not_enabled"
-    SIGN_IN_AGAIN = "sign_in_again"
 
 
 class ChatTurnProblemFrame(BaseModel):
