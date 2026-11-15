@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
+from support.redis_proxy import redis_proxy
 from support.web_app import TEST_SECRET, make_fake_async_redis, web_client
 
 from songmaker_cli.app_context import AppContext
@@ -14,6 +16,7 @@ from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import (
     RedisHttpMetrics,
     build_arq_redis_settings,
+    create_async_redis,
     create_redis,
     redis_health,
 )
@@ -26,6 +29,21 @@ def fake_redis():
 
 
 # ── create_redis / redis_health ─────────────────────────────────
+
+
+def test_the_async_client_replays_a_command_whose_reply_the_line_lost(redis_url: str) -> None:
+    with redis_proxy(redis_url) as proxy:
+
+        async def read_after_a_lost_reply() -> bytes | None:
+            client = create_async_redis(proxy.url)
+            try:
+                await client.set("replayed", "value")
+                proxy.lose_next_reply()
+                return await client.get("replayed")
+            finally:
+                await client.aclose()
+
+        assert asyncio.run(read_after_a_lost_reply()) == b"value"
 
 
 def test_the_sync_client_and_arq_settings_connect_to_the_same_url() -> None:

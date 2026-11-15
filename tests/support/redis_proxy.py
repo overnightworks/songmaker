@@ -31,6 +31,7 @@ class RedisProxy:
         self._lock = threading.Lock()
         self._connections: list[socket.socket] = []
         self._cut = False
+        self._reply_lost = False
         self._closing = threading.Event()
         self._acceptor = threading.Thread(target=self._accept_until_closed, daemon=True)
 
@@ -48,6 +49,11 @@ class RedisProxy:
         with self._lock:
             self._cut = True
         self._drop_connections()
+
+    def lose_next_reply(self) -> None:
+        """Run the next command on the server but drop its reply and the line, as a reset does."""
+        with self._lock:
+            self._reply_lost = True
 
     def restore(self) -> None:
         with self._lock:
@@ -88,7 +94,21 @@ class RedisProxy:
             with self._lock:
                 self._connections.extend((client, server))
             threading.Thread(target=_pump, args=(client, server), daemon=True).start()
-            threading.Thread(target=_pump, args=(server, client), daemon=True).start()
+            threading.Thread(target=self._pump_replies, args=(server, client), daemon=True).start()
+
+    def _pump_replies(self, server: socket.socket, client: socket.socket) -> None:
+        try:
+            while data := server.recv(CHUNK_BYTES):
+                with self._lock:
+                    lost, self._reply_lost = self._reply_lost, False
+                if lost:
+                    return
+                client.sendall(data)
+        except OSError:
+            pass
+        finally:
+            _shut(server)
+            _shut(client)
 
 
 def _pump(source: socket.socket, sink: socket.socket) -> None:

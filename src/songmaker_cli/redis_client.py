@@ -60,15 +60,19 @@ def create_redis(url: str) -> Redis:
 def create_async_redis(url: str) -> AsyncRedis:
     """The asyncio client tandem needs.
 
-    Its retry rides out a Redis restart and its timeouts bound a silent one.
+    Its retry rides out a Redis restart and replays a command whose reply a lost
+    connection took (redis-py 5.x retries only the errors named in ``retry_on_error``);
+    its timeouts bound a silent one.
     """
     from redis.asyncio import Redis as AsyncRedisClient
     from redis.asyncio.retry import Retry
     from redis.backoff import ExponentialBackoff
+    from redis.exceptions import ConnectionError, TimeoutError
 
     return AsyncRedisClient.from_url(
         url,
         retry=Retry(ExponentialBackoff(), _ASYNC_REDIS_RETRY_ATTEMPTS),
+        retry_on_error=[ConnectionError, TimeoutError],
         socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
         socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
     )
