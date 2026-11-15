@@ -30,6 +30,7 @@ interface VoiceState {
 	storage_path: string | null;
 	training_job_id: string | null;
 	error: string | null;
+	error_message: { key: string; values: Record<string, string> } | null;
 }
 
 interface CreatedVoice {
@@ -395,6 +396,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		const failedState = await readVoice(request, failedVoice.id);
 		expect(failedState.status).toBe('failed');
 		expect(failedState.error).toBe('Worker training failed');
+		expect(failedState.error_message?.key).toBe('voiceFailure.workerTrainingFailed');
 		expect((await readJob(request, trainingJobId(failedState))).status).toBe('failed');
 
 		const queuedVoiceOne = await createVoice(page, `E2E Queue One ${marker}`);

@@ -80,6 +80,7 @@ from songmaker_cli.db.queries.loras import (
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
@@ -87,7 +88,7 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
+QUEUE_UNAVAILABLE: Final = message("jobRefusal.queueUnavailable")
 
 
 def _sample_relative_path(user_id: str, lora_id: str, sample_id: str, suffix: str) -> str:
@@ -517,11 +518,11 @@ def _fail_training_job(ctx: AppContext, job_id: str, lora_id: str) -> None:
             update_job_status(
                 session,
                 job_id,
-                JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+                JobStatusUpdate(JobStatus.FAILED, error=QUEUE_UNAVAILABLE.sentence()),
             )
             update_user_lora(
                 session, lora_id,
-                status=LoraStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL,
+                status=LoraStatus.FAILED, error_message=QUEUE_UNAVAILABLE,
             )
             session.commit()
     except Exception:

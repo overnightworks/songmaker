@@ -23,7 +23,7 @@ from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.settings import get_settings
 
-from ._runtime import _job_is_terminal, _sanitize_error, _update_job
+from ._runtime import _failure_sentence, _job_is_terminal, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error=_failure_sentence(exc, job_id),
             error_type="timeout",
         )
     except Exception as exc:
@@ -131,7 +131,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error=_failure_sentence(exc, job_id),
             error_type="scoring_error",
         )
 

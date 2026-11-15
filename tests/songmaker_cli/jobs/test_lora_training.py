@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +20,6 @@ import pytest
 from support.lora_training_world import seed_queued_lora
 
 from songmaker_cli.constants import (
-    JOB_ERROR_INTERNAL,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORAS_DIRNAME,
@@ -109,8 +109,6 @@ async def _fake_events_ok(*args, **kwargs) -> AsyncIterator[tuple[str, dict]]:
 
 def _patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=None):
     """Return context-manager patches for worker-side HTTP + SSE stubs."""
-    from contextlib import contextmanager
-
     events = events or _fake_events_ok
 
     @contextmanager
@@ -242,7 +240,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
         assert lora.status == LoraStatus.READY
         assert lora.storage_path is not None
         assert lora.storage_path.endswith(f"/{seeded['lora_id']}/{USER_LORA_OUTPUT_DIRNAME}")
-        assert lora.error is None
+        assert lora.error_message is None
         assert lora.completed_at is not None
 
         job = get_job(session, "job-1")
@@ -384,7 +382,7 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
         job = get_job(session, "job-1")
         assert lora.status == LoraStatus.FAILED
         assert lora.model_mode == "sft"
-        assert lora.error == expected_error
+        assert lora.error_message.sentence() == expected_error
         assert job.status == JobStatus.FAILED
         assert job.error == expected_error
         assert job.error_type == expected_error_type
@@ -508,7 +506,7 @@ def test_missing_sample_audio_raises_and_marks_failed(
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert lora.error is not None
+        assert lora.error_message is not None
 
 
 def test_worker_training_failure_keeps_a_training_specific_reason(
@@ -534,7 +532,7 @@ def test_worker_training_failure_keeps_a_training_specific_reason(
         lora = get_user_lora(session, seeded["lora_id"])
         job = get_job(session, "job-1")
         assert lora.status == LoraStatus.FAILED
-        assert lora.error == "Worker training failed"
+        assert lora.error_message == message("voiceFailure.workerTrainingFailed")
         assert job.status == JobStatus.FAILED
         assert job.error == "Worker training failed"
 
@@ -543,8 +541,6 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
     async def raising_events(*args, **kwargs):
         raise asyncio.CancelledError()
         yield  # unreachable
-
-    from contextlib import contextmanager
 
     @contextmanager
     def patches():
@@ -596,7 +592,10 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert get_job(session, "job-1").queue_reason_message is None
+        assert lora.error_message == message("voiceFailure.cancelled")
+        job = get_job(session, "job-1")
+        assert job.error == message("voiceFailure.cancelled").sentence()
+        assert job.queue_reason_message is None
 
 
 def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
@@ -615,7 +614,8 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
         )
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
-        assert (lora.status, lora.error) == (LoraStatus.FAILED, JOB_ERROR_INTERNAL)
+        assert lora.error_message == message("jobFailure.internal")
+        assert lora.status == LoraStatus.FAILED
 
 
 def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
@@ -631,7 +631,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
         user_id=seeded["user_id"],
         audio_dir=audio_dir,
         db_factory=db_factory,
-        error_message="testing",
+        error_message=message("voiceFailure.recorded", cause="testing"),
     )
     assert not (lora_root / USER_LORA_DATASET_DIRNAME).exists()
     assert (lora_root / USER_LORA_OUTPUT_DIRNAME).exists()
@@ -640,15 +640,9 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert lora.error == "testing"
-        audit = (
-            session.query(AuditLog)
-            .filter_by(
-                resource_id=seeded["lora_id"],
-            )
-            .all()
-        )
-        assert any("failed" in (a.detail or "") for a in audit)
+        assert lora.error_message.sentence() == "testing"
+        audit = session.query(AuditLog).filter_by(resource_id=seeded["lora_id"]).all()
+        assert [a.detail for a in audit if "failed" in (a.detail or "")] == ["failed: testing"]
 
 
 @pytest.mark.parametrize(
@@ -982,6 +976,7 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
         assert job.error == "Generation queue did not drain before LoRA training could start"
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
+        assert lora.error_message == message("voiceFailure.drainTimeout")
 
 
 def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_factory) -> None:

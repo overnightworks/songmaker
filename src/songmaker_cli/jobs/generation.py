@@ -74,8 +74,8 @@ from ._runtime import (
     JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
     GenerationSetupError,
     ReferenceDeletedDuringTake,
+    _failure_sentence,
     _job_is_terminal,
-    _sanitize_error,
     _touch_heartbeat,
     _update_job,
 )
@@ -1004,7 +1004,7 @@ async def _build_generation_job_context(
             db_factory,
             request.job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, request.job_id),
+            error=_failure_sentence(exc, request.job_id),
             error_type="setup_error",
         )
         return None

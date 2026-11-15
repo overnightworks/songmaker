@@ -28,8 +28,6 @@ from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskPa
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     INTERNAL_TOKEN_HEADER,
-    JOB_ERROR_GENERATION_FAILED,
-    JOB_ERROR_GENERATION_UNAVAILABLE,
 )
 from songmaker_cli.db.models import (
     Generation,
@@ -741,7 +739,7 @@ def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error == message("jobFailure.generationUnavailable").sentence()
         assert job.error_type == "generation_unavailable"
         assert session.query(Generation).count() == 0
 
@@ -799,7 +797,7 @@ def test_generation_job_selects_musician_line(
         assert job.status == ("partial" if completed else "failed")
         assert job.error_type == "generation_error"
         prefix = "1/2 completed, 1 failed: " if completed else ""
-        assert job.error == prefix + JOB_ERROR_GENERATION_FAILED
+        assert job.error == prefix + message("jobFailure.generationFailed").sentence()
         generations = session.query(Generation).all()
         assert len(generations) == completed
         for generation in generations:
@@ -853,7 +851,7 @@ def test_generation_job_sanitizes_auto_load_response(
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert job.error_type == "generation_unavailable"
-        assert job.error == JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error == message("jobFailure.generationUnavailable").sentence()
     assert "j1" in caplog.text
     assert cause in caplog.text
 
@@ -879,7 +877,7 @@ def test_s5_generation_job_worker_disappears_before_request(
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error == message("jobFailure.generationUnavailable").sentence()
         assert job.error_type == "generation_unavailable"
         assert session.query(Generation).count() == 0
     assert "j1" in caplog.text
@@ -923,7 +921,7 @@ def test_s5_generation_job_reload_unavailable(
         job = get_job(session, "j1")
         assert job.status == ("partial" if completed else "failed")
         prefix = "1/2 completed, 1 failed: " if completed else ""
-        assert job.error == prefix + JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error == prefix + message("jobFailure.generationUnavailable").sentence()
         assert job.error_type == "generation_unavailable"
         generations = session.query(Generation).all()
         assert len(generations) == completed
@@ -2497,7 +2495,6 @@ def test_load_model_on_worker_success(seeded_db, internal_token: str) -> None:
 
 
 def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
-    from songmaker_cli.constants import JOB_ERROR_INTERNAL
     from songmaker_cli.jobs import load_model_on_worker
 
     with seeded_db() as session:
@@ -2509,7 +2506,7 @@ def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
     with seeded_db() as session:
         job = get_job(session, "job1")
         assert job.status == "failed"
-        assert job.error == JOB_ERROR_INTERNAL
+        assert job.error == message("jobFailure.internal").sentence()
         assert job.error_type == "worker_missing"
 
 
@@ -2904,7 +2901,6 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
 
 def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> None:
     from songmaker_cli.acestep_state import download_key
-    from songmaker_cli.constants import JOB_ERROR_INTERNAL
     from songmaker_cli.jobs import download_model_on_worker
 
     _seed_download_job(seeded_db, "dl10")
@@ -2921,7 +2917,7 @@ def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> Non
         job = get_job(session, "dl10")
         assert job.status == "failed"
         assert job.error_type == "duplicate_download"
-        assert job.error == JOB_ERROR_INTERNAL
+        assert job.error == message("jobFailure.internal").sentence()
     assert redis.store[download_key("sft")] == "previous-job"
 
 

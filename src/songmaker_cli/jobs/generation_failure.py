@@ -5,13 +5,9 @@ from dataclasses import dataclass
 from typing import Final
 
 from songmaker_cli.api_models import JobResponse
-from songmaker_cli.constants import (
-    JOB_ERROR_GENERATION_FAILED,
-    JOB_ERROR_GENERATION_UNAVAILABLE,
-    JOB_ERROR_GPU_OUT_OF_MEMORY,
-)
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_types import JobType
+from songmaker_cli.messages import message
 from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerGenerationUnavailable,
@@ -19,10 +15,13 @@ from songmaker_cli.scheduler import (
     WorkerTaskFailed,
 )
 
-from ._runtime import _sanitize_error, generation_error_messages
+from ._runtime import _failure_sentence, generation_error_messages
 
 GPU_OUT_OF_MEMORY: Final = "gpu_out_of_memory"
 
+_GENERATION_FAILED: Final = message("jobFailure.generationFailed")
+_GENERATION_UNAVAILABLE: Final = message("jobFailure.generationUnavailable")
+_GPU_OUT_OF_MEMORY: Final = message("jobFailure.gpuOutOfMemory")
 _PARTIAL_FAILURE_PREFIX = re.compile(r"\d+/\d+ completed, \d+ failed: ", re.ASCII)
 
 
@@ -39,14 +38,14 @@ class GenerationFailure:
 
 def generation_failure(exc: Exception, job_id: str) -> GenerationFailure:
     """Log the full cause and select the musician's line and its type together."""
-    message = _sanitize_error(exc, job_id)
+    sentence = _failure_sentence(exc, job_id)
     if isinstance(exc, WorkerGpuOutOfMemory):
-        return GenerationFailure(JOB_ERROR_GPU_OUT_OF_MEMORY, GPU_OUT_OF_MEMORY)
+        return GenerationFailure(_GPU_OUT_OF_MEMORY.sentence(), GPU_OUT_OF_MEMORY)
     if isinstance(exc, (WorkerGenerationUnavailable, NoCapacityError)):
-        return GenerationFailure(JOB_ERROR_GENERATION_UNAVAILABLE, "generation_unavailable")
+        return GenerationFailure(_GENERATION_UNAVAILABLE.sentence(), "generation_unavailable")
     if isinstance(exc, WorkerTaskFailed):
-        message = JOB_ERROR_GENERATION_FAILED
-    return GenerationFailure(message=message, error_type="generation_error")
+        sentence = _GENERATION_FAILED.sentence()
+    return GenerationFailure(message=sentence, error_type="generation_error")
 
 
 def select_generation_failure(
@@ -78,9 +77,10 @@ def musician_error(error: str | None, error_type: str | None) -> str | None:
     partial = _PARTIAL_FAILURE_PREFIX.match(error)
     prefix = partial.group() if partial else ""
     cause = error[len(prefix) :]
-    if cause in generation_error_messages() | {JOB_ERROR_GENERATION_FAILED}:
+    generation_failed = _GENERATION_FAILED.sentence()
+    if cause in generation_error_messages() | {generation_failed}:
         return error
-    return prefix + JOB_ERROR_GENERATION_FAILED
+    return prefix + generation_failed
 
 
 def musician_job_response(job: Job, *, queue_position: int | None = None) -> JobResponse:

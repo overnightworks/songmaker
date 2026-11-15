@@ -10,7 +10,13 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import (
+    column_names,
+    frozen_table,
+    is_on_the_single_chain,
+    seeded_then_upgraded,
+    stored_values,
+)
 from support.repository_root import REPOSITORY_ROOT
 
 from songmaker_cli.words import SOURCE_LANGUAGE, text
@@ -24,31 +30,18 @@ NEW_COLUMN = "queue_reason_message"
 STORED_KEYS_FILE = REPOSITORY_ROOT / "scripts" / "stored_message_keys.txt"
 UNKNOWN_SENTENCE = "Waiting for the next GPU slot."
 SENTENCES = list(MIGRATION.STORED_MESSAGE_KEYS)
-
-
-def _jobs(column: str) -> sa.TableClause:
-    return sa.table(
-        "jobs", sa.column("id"), sa.column("type"), sa.column("status"), sa.column("progress"),
-        sa.column("heartbeat_at"), sa.column("started_at"), sa.column(column),
-    )
+JOB_COLUMNS = ("id", "type", "status", "progress", "heartbeat_at", "started_at")
 
 
 def _insert_job(engine, job_id: str, column: str, value: object) -> None:
     stored = value if column == OLD_COLUMN else sa.cast(json.dumps(value), sa.JSON)
-    jobs = _jobs(column)
+    jobs = frozen_table("jobs", JOB_COLUMNS, column)
     with engine.begin() as connection:
         connection.execute(sa.insert(jobs).values(
             id=job_id, type="generate", status="queued", progress=0.0,
             heartbeat_at=sa.func.current_timestamp(), started_at=sa.func.current_timestamp(),
             **{column: stored},
         ))
-
-
-def _stored(engine, column: str) -> dict[str, object]:
-    jobs = _jobs(column)
-    with engine.connect() as connection:
-        rows = connection.execute(sa.select(jobs.c.id, jobs.c[column])).all()
-    return {job_id: value for job_id, value in rows}
 
 
 def _seed_waits(engine) -> None:
@@ -74,7 +67,7 @@ def test_the_migration_follows_the_previous_revision_on_the_single_chain():
 
 def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
     _, engine = upgraded
-    stored = _stored(engine, NEW_COLUMN)
+    stored = stored_values(engine, "jobs", NEW_COLUMN)
     for number, sentence in enumerate(SENTENCES):
         token = stored[f"known-{number}"]
         assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
@@ -83,7 +76,7 @@ def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
 
 def test_an_unknown_sentence_becomes_sql_null_and_its_count_is_logged(upgraded, caplog):
     _, engine = upgraded
-    jobs = _jobs(NEW_COLUMN)
+    jobs = frozen_table("jobs", JOB_COLUMNS, NEW_COLUMN)
     with engine.connect() as connection:
         null_ids = set(connection.execute(
             sa.select(jobs.c.id).where(jobs.c[NEW_COLUMN].is_(None))
@@ -119,7 +112,7 @@ def test_downgrade_restores_the_sentences_and_keeps_the_jobs_without_a_wait(upgr
     config, engine = upgraded
     command.downgrade(config, PREVIOUS_REVISION)
     assert NEW_COLUMN not in column_names(engine, "jobs")
-    stored = _stored(engine, OLD_COLUMN)
+    stored = stored_values(engine, "jobs", OLD_COLUMN)
     for number, sentence in enumerate(SENTENCES):
         assert stored[f"known-{number}"] == sentence
     assert stored["unknown"] is None
@@ -130,7 +123,7 @@ def test_the_migration_upgrades_again_after_a_downgrade(upgraded):
     config, engine = upgraded
     command.downgrade(config, PREVIOUS_REVISION)
     command.upgrade(config, MIGRATION.revision)
-    assert _stored(engine, NEW_COLUMN)["known-0"] == {
+    assert stored_values(engine, "jobs", NEW_COLUMN)["known-0"] == {
         "key": MIGRATION.STORED_MESSAGE_KEYS[SENTENCES[0]], "values": {},
     }
 

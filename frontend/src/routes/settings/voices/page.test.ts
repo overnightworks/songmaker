@@ -300,6 +300,7 @@ describe('voices page', () => {
 			status: 'failed',
 			model_mode: 'sft',
 			error: failureReason,
+			error_message: { key: 'voiceFailure.recorded', values: { cause: failureReason } },
 			created_at: '2026-09-05T00:00:00Z',
 			deleted_at: null,
 			samples: [0, 1, 2].map((position) => ({

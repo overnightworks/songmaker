@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from math import ceil
 from typing import Final, Literal
@@ -11,9 +10,7 @@ from pydantic import BaseModel
 
 from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, GenerationPhase, JobStatus, JobType
-from songmaker_cli.messages import Message
-
-log = logging.getLogger(__name__)
+from songmaker_cli.messages import Message, stored_sentence
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]
@@ -58,18 +55,6 @@ def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
         return REMAINING_TIME_ESTIMATE_CALCULATING
     seconds_per_epoch = elapsed_seconds / current_epoch
     return ceil(seconds_per_epoch * (train_epochs - current_epoch))
-
-
-def _queue_reason_sentence(job) -> str | None:
-    """The agent sentence of a job's queue wait; a key the catalog lacks fails this response."""
-    wait = job.queue_reason_message
-    if wait is None:
-        return None
-    try:
-        return wait.sentence()
-    except (KeyError, TypeError):
-        log.exception("Job %s queue wait key %s has no sentence", job.id, wait.key)
-        raise
 
 
 class JobResponse(BaseModel):
@@ -117,7 +102,7 @@ class JobResponse(BaseModel):
             error=job.error,
             error_type=job.error_type,
             retry_after_seconds=job.retry_after_seconds,
-            queue_reason=_queue_reason_sentence(job),
+            queue_reason=stored_sentence(job.queue_reason_message, f"Job {job.id} queue wait"),
             queue_reason_message=job.queue_reason_message,
             queue_position=queue_position,
             started_at=job.started_at.isoformat() if job.started_at else None,

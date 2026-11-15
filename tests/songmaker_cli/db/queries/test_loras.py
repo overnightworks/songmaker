@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, LoraStatus
-from songmaker_cli.db.models import Job, User
+from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
     count_user_lora_samples,
@@ -21,6 +21,7 @@ from songmaker_cli.db.queries.loras import (
     update_user_lora_sample,
 )
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import message
 
 _USER_A = "u-a"
 _USER_B = "u-b"
@@ -116,7 +117,7 @@ def test_update_user_lora_sets_fields(session: Session) -> None:
         storage_path="/data/audio/user_loras/u-a/x/lora",
         tensor_path="/data/audio/user_loras/u-a/x/lora/adapter.safetensors",
         training_job_id="job-xyz",
-        error="transient",
+        error_message=message("voiceFailure.recorded", cause="transient"),
         completed_at=completed,
         model_mode="turbo",
     )
@@ -126,7 +127,7 @@ def test_update_user_lora_sets_fields(session: Session) -> None:
     assert fresh.storage_path.endswith("/lora")
     assert fresh.tensor_path.endswith("/adapter.safetensors")
     assert fresh.training_job_id == "job-xyz"
-    assert fresh.error == "transient"
+    assert fresh.error_message == message("voiceFailure.recorded", cause="transient")
     assert fresh.completed_at is not None
     assert fresh.completed_at.replace(tzinfo=timezone.utc) == completed
     assert fresh.model_mode == "turbo"
@@ -135,7 +136,8 @@ def test_update_user_lora_sets_fields(session: Session) -> None:
     session.commit()
     fresh = get_user_lora(session, lora.id)
     assert fresh.status == LoraStatus.READY
-    assert fresh.error is None
+    assert fresh.error_message is None
+    assert session.query(UserLora).filter(UserLora.error_message.is_(None)).count() == 1
 
 
 def test_update_user_lora_missing_raises(session: Session) -> None:

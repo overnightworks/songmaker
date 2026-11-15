@@ -221,7 +221,7 @@ def test_apply_user_lora_path_rejects_another_users_voice(db_factory, tmp_path) 
 def test_unavailable_voice_setup_error_is_exposed_to_the_job() -> None:
     error = GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
 
-    assert _sanitize_error(error, "job-1") == JOB_ERROR_USER_LORA_UNAVAILABLE
+    assert _sanitize_error(error, "job-1").sentence() == JOB_ERROR_USER_LORA_UNAVAILABLE
 
 
 def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:

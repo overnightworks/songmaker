@@ -1252,6 +1252,23 @@ export type Words = {
     readonly "generate.startFailed": string;
     readonly "jobWait.voiceTraining": string;
     readonly "jobWait.queuedGenerations": string;
+    readonly "jobFailure.audioDownloadFailed": string;
+    readonly "jobFailure.serverUnreachable": string;
+    readonly "jobFailure.generationTimedOut": string;
+    readonly "jobFailure.noWorkers": string;
+    readonly "jobFailure.internal": string;
+    readonly "jobFailure.unexpected": string;
+    readonly "jobFailure.reported": (gaps: { readonly cause: string }) => string;
+    readonly "jobFailure.generationFailed": string;
+    readonly "jobFailure.generationUnavailable": string;
+    readonly "jobFailure.gpuOutOfMemory": string;
+    readonly "voiceFailure.workerTrainingFailed": string;
+    readonly "voiceFailure.crashed": string;
+    readonly "voiceFailure.drainTimeout": string;
+    readonly "voiceFailure.cancelled": string;
+    readonly "voiceFailure.modeUnsupported": (gaps: { readonly workerMode: string }) => string;
+    readonly "voiceFailure.modeMismatch": (gaps: { readonly requestedMode: string; readonly workerMode: string }) => string;
+    readonly "voiceFailure.recorded": (gaps: { readonly cause: string }) => string;
     readonly "jobEnd.serverRestart": string;
     readonly "jobEnd.generateCompleted": string;
     readonly "jobEnd.generatePartial": string;
@@ -2912,6 +2929,23 @@ export const words: Words = {
     "generate.startFailed": "Generation failed",
     "jobWait.voiceTraining": "Waiting for LoRA training on this GPU.",
     "jobWait.queuedGenerations": "Waiting for queued generations on this GPU.",
+    "jobFailure.audioDownloadFailed": "Failed to download generated audio",
+    "jobFailure.serverUnreachable": "ACE-Step server not reachable",
+    "jobFailure.generationTimedOut": "Generation timed out",
+    "jobFailure.noWorkers": "No ACE-Step workers available",
+    "jobFailure.internal": "Internal error during processing",
+    "jobFailure.unexpected": "An unexpected error occurred",
+    "jobFailure.reported": (gaps: { readonly cause: string }) => gaps.cause,
+    "jobFailure.generationFailed": "Generating failed — try again.",
+    "jobFailure.generationUnavailable": "Generating isn't available right now.",
+    "jobFailure.gpuOutOfMemory": "Too long for the GPU right now — try a shorter duration.",
+    "voiceFailure.workerTrainingFailed": "Worker training failed",
+    "voiceFailure.crashed": "Training crashed or was interrupted",
+    "voiceFailure.drainTimeout": "Generation queue did not drain before LoRA training could start",
+    "voiceFailure.cancelled": "Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown",
+    "voiceFailure.modeUnsupported": (gaps: { readonly workerMode: string }) => "Worker completed LoRA training with unsupported model mode: " + gaps.workerMode,
+    "voiceFailure.modeMismatch": (gaps: { readonly requestedMode: string; readonly workerMode: string }) => "Worker completed LoRA training with model mode " + gaps.workerMode + ", expected " + gaps.requestedMode,
+    "voiceFailure.recorded": (gaps: { readonly cause: string }) => gaps.cause,
     "jobEnd.serverRestart": "Server restarted — please retry",
     "jobEnd.generateCompleted": "generate completed",
     "jobEnd.generatePartial": "generate partially completed",
