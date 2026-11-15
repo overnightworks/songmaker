@@ -5,13 +5,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from redis.exceptions import RedisError
 
 import songmaker_cli.worker_base as wb_mod
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.worker_base import WorkerBase
+from songmaker_cli.worker_liveness import owner_lease_key
 
 
 def _run(coro):
@@ -20,7 +22,6 @@ def _run(coro):
 
 class _DummyWorker(WorkerBase):
     job_types = ("dummy",)
-    recovery_lock_key = "test:lock:dummy"
     queue_name = "dummy_queue"
     max_jobs = 1
 
@@ -101,122 +102,118 @@ def test_get_db_factory_independent_per_instance() -> None:
     assert mock_init.call_count == 2
 
 
-# ── on_startup ────────────────────────────────────────────────────
+# ── owner lease ───────────────────────────────────────────────────
+
+LEASE_DEADLINE_SECONDS = 5.0
 
 
-# ── on_shutdown ───────────────────────────────────────────────────
+class _LeaseRedis:
+    """The Redis calls a lease makes, over a dict; the renewals in `failing_sets` raise."""
+
+    def __init__(self, *, failing_sets: frozenset[int] = frozenset(), drop_fails: bool = False):
+        self.leases: dict[str, str] = {}
+        self.sets = 0
+        self.successful_sets = 0
+        self._failing_sets = failing_sets
+        self._drop_fails = drop_fails
+        self.closed = False
+
+    def set(self, key: str, value: str, ex: int) -> None:
+        self.sets += 1
+        if self.sets in self._failing_sets:
+            raise RedisError("unreachable")
+        self.successful_sets += 1
+        self.leases[key] = value
+
+    def delete(self, key: str) -> None:
+        if self._drop_fails:
+            raise RedisError("unreachable")
+        self.leases.pop(key, None)
+
+    def close(self) -> None:
+        self.closed = True
 
 
-def test_on_shutdown_recovers_jobs() -> None:
-    mock_session = MagicMock()
-    worker = _make_worker_with_db(mock_session)
-
-    redis = AsyncMock()
-    with patch(
-        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={"dummy": 2},
-    ) as mock_recover:
-        _run(worker.on_shutdown({"redis": redis}))
-
-    mock_recover.assert_called_once_with(
-        mock_session, {"dummy": frozenset({wb_mod.JobStatus.RUNNING})},
-    )
-    mock_session.commit.assert_called_once()
-
-
-def test_on_shutdown_skips_when_lock_held() -> None:
+def _worker_on(redis: _LeaseRedis, monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
+    monkeypatch.setattr(wb_mod, "create_redis", lambda _url: redis)
+    monkeypatch.setattr(wb_mod, "OWNER_LEASE_REFRESH_SECONDS", 0)
+    monkeypatch.setattr("songmaker_cli.logging_config.configure_logging", lambda: None)
     worker = _DummyWorker()
-    worker.get_db_factory = MagicMock()  # not called when lock is held
-
-    redis = AsyncMock()
-    redis.set = AsyncMock(return_value=False)
-
-    with patch(
-        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type",
-    ) as mock_recover:
-        _run(worker.on_shutdown({"redis": redis}))
-
-    mock_recover.assert_not_called()
+    worker.get_db_factory = MagicMock()
+    return worker
 
 
-# ── _recover_on_startup ───────────────────────────────────────────
+async def _until(condition) -> None:
+    async with asyncio.timeout(LEASE_DEADLINE_SECONDS):
+        while not condition():
+            await asyncio.sleep(0)
 
 
-def test_recover_on_startup_acquires_lock_and_recovers() -> None:
-    mock_session = MagicMock()
-    worker = _make_worker_with_db(mock_session)
+def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    redis = _LeaseRedis()
+    worker = _worker_on(redis, monkeypatch)
+    lease = owner_lease_key(worker.owner_id)
 
-    ctx = {"redis": AsyncMock()}
-    with patch(
-        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={"dummy": 3},
-    ) as mock_recover:
-        result = _run(worker._recover_on_startup(ctx))
+    async def start_and_stop() -> tuple[bool, bool, bool]:
+        await worker.on_startup({})
+        held_while_running = lease in redis.leases
+        await worker.on_shutdown({})
+        return held_while_running, lease in redis.leases, redis.closed
 
-    assert result == 3
-    mock_recover.assert_called_once_with(
-        mock_session, {"dummy": frozenset({wb_mod.JobStatus.RUNNING})},
-    )
-    mock_session.commit.assert_called_once()
-    ctx["redis"].delete.assert_called_once_with("test:lock:dummy")
+    assert _run(start_and_stop()) == (True, False, True)
 
 
-def test_recover_on_startup_skips_when_lock_held() -> None:
-    worker = _DummyWorker()
-    worker.get_db_factory = MagicMock()  # the database opens first; recovery is still skipped
-
-    ctx = {"redis": AsyncMock()}
-    ctx["redis"].set = AsyncMock(return_value=False)
-
-    with patch(
-        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type",
-    ) as mock_recover:
-        result = _run(worker._recover_on_startup(ctx))
-
-    assert result == 0
-    mock_recover.assert_not_called()
+def test_two_workers_hold_leases_of_their_own() -> None:
+    assert _DummyWorker().owner_id != _DummyWorker().owner_id
 
 
-def test_recover_on_startup_holds_no_lock_while_the_database_opens() -> None:
-    held: set[str] = set()
-    redis = AsyncMock()
+def test_a_worker_leases_only_after_its_database_has_opened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    redis = _LeaseRedis()
+    worker = _worker_on(redis, monkeypatch)
+    leases_while_opening: list[dict[str, str]] = []
+    worker.get_db_factory = lambda: leases_while_opening.append(dict(redis.leases))
 
-    async def set_lock(key: str, *_args: object, **_kwargs: object) -> bool:
-        held.add(key)
-        return True
+    async def start_and_stop() -> None:
+        await worker.on_startup({})
+        await worker.on_shutdown({})
 
-    redis.set = set_lock
-    worker = _make_worker_with_db(MagicMock())
-    locks_held_while_opening: list[set[str]] = []
+    _run(start_and_stop())
 
-    def open_database() -> MagicMock:
-        locks_held_while_opening.append(set(held))
-        return MagicMock()
-
-    worker.get_db_factory = open_database
-
-    with patch("songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={}):
-        _run(worker._recover_on_startup({"redis": redis}))
-
-    assert locks_held_while_opening == [set()]
+    assert leases_while_opening == [{}]
 
 
-def test_recover_on_startup_releases_lock_on_error() -> None:
-    worker = _DummyWorker()
-    mock_factory = MagicMock()
-    mock_factory.return_value.__enter__ = MagicMock(
-        side_effect=RuntimeError("db error"),
-    )
-    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
-    worker.get_db_factory = MagicMock(return_value=mock_factory)
+def test_a_lease_renewal_that_fails_is_tried_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    redis = _LeaseRedis(failing_sets=frozenset({2, 3}))
+    worker = _worker_on(redis, monkeypatch)
 
-    ctx = {"redis": AsyncMock()}
+    async def renewed_after_the_failures() -> int:
+        await worker.on_startup({})
+        await _until(lambda: redis.successful_sets >= 2)
+        await worker.on_shutdown({})
+        return redis.successful_sets
 
-    with patch("songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type"):
-        try:
-            _run(worker._recover_on_startup(ctx))
-        except RuntimeError:
-            pass
+    assert _run(renewed_after_the_failures()) >= 2
 
-    ctx["redis"].delete.assert_called_once_with("test:lock:dummy")
+
+def test_a_shutdown_that_cannot_drop_the_lease_still_ends(monkeypatch: pytest.MonkeyPatch) -> None:
+    redis = _LeaseRedis(drop_fails=True)
+    worker = _worker_on(redis, monkeypatch)
+
+    async def start_and_stop() -> None:
+        await worker.on_startup({})
+        await worker.on_shutdown({})
+
+    _run(start_and_stop())
+
+    assert redis.closed
+
+
+def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:
+    _run(_DummyWorker().on_shutdown({}))
 
 
 # ── audit_orphaned_files ──────────────────────────────────────────

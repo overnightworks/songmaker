@@ -86,6 +86,7 @@ def _score(db_factory, result: SongScores, audio_dir: Path) -> dict[str, object]
     ):
         run_scoring_job(
             JOB_ID, GENERATION_ID, None, db_factory=db_factory, audio_dir=audio_dir,
+            owner_id="o1",
         )
 
     with db_factory() as session:

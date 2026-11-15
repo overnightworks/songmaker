@@ -160,6 +160,7 @@ def test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch(
                         redis=redis,
                         target_mode="sft",
                         training_config=get_settings().lora_training_config,
+                        owner_id="o1",
                     )
                     with lora_auth_db() as session:
                         lora = get_user_lora(session, "lora")

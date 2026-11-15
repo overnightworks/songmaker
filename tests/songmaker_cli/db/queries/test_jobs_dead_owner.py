@@ -19,7 +19,6 @@ from songmaker_cli.db.queries.jobs import (
     create_job,
     recover_jobs_of_dead_owners,
     recover_stale_jobs_by_age_and_type,
-    recover_stale_jobs_by_type,
     update_job_status,
 )
 from songmaker_cli.db.queries.rate_limits import upsert_rate_limit_setting
@@ -185,19 +184,6 @@ def test_the_age_reaper_without_a_dead_owner_leaves_a_fresh_job_alone(
         recover_stale_jobs_by_age_and_type(session, owner_liveness=owner_liveness)
 
         assert _outcome(session, gone)[0] == JobStatus.RUNNING
-
-
-def test_the_remaining_bulk_recovery_uses_the_one_restart_verdict(pg_factory) -> None:
-    with pg_factory() as session:
-        job = _running_job(session, JobType.GENERATE, None)
-
-        recover_stale_jobs_by_type(session, {JobType.GENERATE: {JobStatus.RUNNING}})
-
-        failed = session.get(Job, job)
-        session.refresh(failed)
-        assert (failed.error, failed.error_type) == (
-            JOB_ERROR_SERVER_RESTARTED.error, JOB_ERROR_SERVER_RESTARTED.error_type,
-        )
 
 
 def test_claiming_a_cover_job_names_the_claimer_as_its_owner(pg_factory) -> None:

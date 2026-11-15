@@ -77,6 +77,7 @@ def _run_job(
                 redis=MagicMock(),
                 target_model="sft",
                 **task,
+                owner_id="o1",
             )
         )
 

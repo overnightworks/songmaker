@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from songmaker_cli.job_types import JobStatus
 
@@ -23,6 +22,7 @@ async def load_model_on_worker(
     mode: str,
     *,
     db_factory,
+    owner_id: str,
 ) -> None:
     import httpx
 
@@ -34,7 +34,7 @@ async def load_model_on_worker(
     )
 
     factory = db_factory
-    _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
+    _update_job(factory, job_id, JobStatus.RUNNING, owner_id=owner_id)
 
     with factory() as session:
         worker = get_worker_identity(session, worker_id)
@@ -88,6 +88,7 @@ async def download_model_on_worker(
     mode: str,
     *,
     db_factory,
+    owner_id: str,
 ) -> None:
     from songmaker_cli.acestep_state import (
         clear_download_in_progress,
@@ -97,7 +98,7 @@ async def download_model_on_worker(
     from songmaker_cli.constants import MODEL_CONFIG_PATHS
 
     factory = db_factory
-    _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
+    _update_job(factory, job_id, JobStatus.RUNNING, owner_id=owner_id)
 
     if not _valid_download_mode(factory, job_id, mode, MODEL_CONFIG_PATHS):
         return

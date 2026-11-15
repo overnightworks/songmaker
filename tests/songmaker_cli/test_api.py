@@ -4160,7 +4160,7 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
         job.status = "running"
         job.completed_at = None
         session.commit()
-    tracker = GenerationProgressTracker(factory, stored_musician_job, 2)
+    tracker = GenerationProgressTracker(factory, stored_musician_job, 2, owner_id="o1")
     tracker.record_failure(WorkerGpuOutOfMemory("need 18.5 GB"))
     tracker.start_take(1)
     if transition == "report":
@@ -4307,6 +4307,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     data_dir=peer.data_dir,
                     redis=peer.redis,
                     target_model="sft",
+                    owner_id="o1",
                 )
             )
             server = LoopbackServer(client.app)
@@ -4384,6 +4385,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
                     job_id, "s1", "v1", 2, _DEFAULT_USER_ID,
                     db_factory=ctx.db, audio_dir=peer.audio_dir, data_dir=peer.data_dir,
                     redis=peer.redis, target_model="sft",
+                    owner_id="o1",
                 )
         finally:
             await redis_client.drain_lease_releases()

@@ -661,6 +661,7 @@ async def _prepare_and_submit_lora(
     hold_token: str,
     job_id: str,
     lora_id: str,
+    owner_id: str,
     samples: list,
     target_mode: str,
     user_id: str,
@@ -671,7 +672,7 @@ async def _prepare_and_submit_lora(
     handover = _LoraHoldHandover()
     try:
         renew_task = await _start_lora_hold_renewal(worker, hold_token)
-        if not _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid()):
+        if not _update_job(db_factory, job_id, JobStatus.RUNNING, owner_id=owner_id):
             return None
         dataset_dir = await _race_with_renewal(
             asyncio.to_thread(
@@ -1042,6 +1043,7 @@ async def run_lora_training_job(
     *,
     db_factory: sessionmaker[Session],
     audio_dir: Path,
+    owner_id: str,
     redis: Redis,
     target_mode: str = MODEL_DEFAULT_MODE,
     training_config: LoraTrainingJobConfig,
@@ -1069,6 +1071,7 @@ async def run_lora_training_job(
             db_factory=db_factory,
             job_id=job_id,
             lora_id=lora_id,
+            owner_id=owner_id,
             redis=redis,
             target_mode=target_mode,
             training_config=training_config,
@@ -1102,6 +1105,7 @@ async def _run_lora_training(
     db_factory: sessionmaker[Session],
     job_id: str,
     lora_id: str,
+    owner_id: str,
     redis: Redis,
     target_mode: str,
     training_config: LoraTrainingJobConfig,
@@ -1133,6 +1137,7 @@ async def _run_lora_training(
         hold_token,
         job_id,
         lora_id,
+        owner_id,
         samples,
         target_mode,
         training_config,
@@ -1245,6 +1250,7 @@ async def _submit_lora_training_job(
     hold_token: str,
     job_id: str,
     lora_id: str,
+    owner_id: str,
     samples: list,
     target_mode: str,
     training_config: LoraTrainingJobConfig,
@@ -1258,6 +1264,7 @@ async def _submit_lora_training_job(
             hold_token=hold_token,
             job_id=job_id,
             lora_id=lora_id,
+            owner_id=owner_id,
             samples=samples,
             target_mode=target_mode,
             user_id=user_id,
