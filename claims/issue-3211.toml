@@ -3,6 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "f6bd4824d054ce2ad1da77fa4d9a7bb048dab833"
 branch = "claude/issue-3211-two-music-workers-start-and-stop-without"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs", "src/songmaker_cli/worker_base.py", "tests"]
+scope = ["docs/architecture.md", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/scoring_worker.py", "src/songmaker_cli/worker_base.py", "tests"]
 opened_commit = "f67c49e043890e0a72a3d6717ba87ed049d5a82e"
 whole_reason = "R2 moves every worker job writer (generation, lora training, scoring, model lifecycle) from worker_pid to the owner lease and needs the arq launcher in the two-process harness; a split leaves a lease nobody reads."
