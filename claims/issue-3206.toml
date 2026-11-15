@@ -1,7 +1,0 @@
-claim_id = "6d194a86229e4a9c807701d4e645c80f"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "9d7aafd06603e6617989481011a94626d86c5b1c"
-branch = "claude/issue-3206-docs-security-md-names-the-client-secret"
-scope = ["docs/security.md"]
-opened_commit = "a970960c3029e0b223217fd3cf9278d8fba7c44c"
