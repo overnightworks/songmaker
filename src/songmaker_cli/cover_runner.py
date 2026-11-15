@@ -89,7 +89,7 @@ def publish_cover_cancel(redis, job_id: str) -> None:
     try:
         redis.publish(COVER_CANCEL_CHANNEL, job_id)
     except RedisError:
-        log.warning("Cover job %s: its cancel could not reach the process drawing it", job_id)
+        log.warning("A cover job's cancel could not reach the process drawing it")
 
 
 def _subscribe_to_cancellations(redis):

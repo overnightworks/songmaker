@@ -514,6 +514,19 @@ def _redis_pubsub_is(pubsub_class):
     return break_pubsub
 
 
+class _RedisRefusingEveryPublication:
+    def publish(self, *_arguments) -> None:
+        raise RedisError("connection refused")
+
+
+def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(caplog):
+    forged_id = "job\nforged log line"
+
+    cover_runner.publish_cover_cancel(_RedisRefusingEveryPublication(), forged_id)
+
+    assert "forged" not in caplog.text
+
+
 @pytest.mark.parametrize(
     "break_redis",
     [
