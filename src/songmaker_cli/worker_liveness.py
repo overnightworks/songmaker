@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Iterable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -67,23 +68,52 @@ def owner_leases(redis: Client) -> Leases:
 
 
 @asynccontextmanager
-async def keep_owner_lease(leases: Leases, owner_id: str) -> AsyncIterator[Hold]:
+async def keep_owner_lease(
+    leases: Leases,
+    owner_id: str,
+    *,
+    on_new_start: Callable[[], Awaitable[None]] | None = None,
+) -> AsyncIterator[Hold]:
     """Hold the lease of ``owner_id`` for the block, renewed at the one shared interval.
 
     A lease that cannot be started fails the entry. One that cannot be ended because Redis
-    is unreachable is left to lapse by itself, so a process always shuts down.
+    is unreachable is left to lapse by itself, so a process always shuts down. When the lease
+    lapsed and started again, its generation changes: that counts as a start, because another
+    process may have failed the jobs this one still runs. It is logged and ``on_new_start``
+    runs.
     """
     ending = AsyncExitStack()
     hold = await ending.enter_async_context(
         leases.kept(owner_id, every=timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS)),
     )
+    watching = asyncio.create_task(_treat_a_new_generation_as_a_start(hold, owner_id, on_new_start))
     try:
         yield hold
     finally:
+        watching.cancel()
+        await asyncio.gather(watching, return_exceptions=True)
         try:
             await ending.aclose()
         except StoreError:
             log.warning("Could not end the owner lease; it lapses by itself", exc_info=True)
+
+
+async def _treat_a_new_generation_as_a_start(
+    hold: Hold, owner_id: str, on_new_start: Callable[[], Awaitable[None]] | None,
+) -> None:
+    known = hold.generation
+    while True:
+        await asyncio.sleep(OWNER_LEASE_REFRESH_SECONDS)
+        if hold.generation == known:
+            continue
+        known = hold.generation
+        log.warning("The owner lease of %s started anew; its jobs may have been failed", owner_id)
+        if on_new_start is None:
+            continue
+        try:
+            await on_new_start()
+        except Exception:
+            log.exception("Could not reconcile the jobs of %s after a new start", owner_id)
 
 
 def _record_alive(redis: Any, key: str, now: datetime) -> None:

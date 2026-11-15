@@ -12,6 +12,7 @@ from support.loop_ticks import run_ticks_observing_status
 from support.web_app import make_fake_async_redis, settle_owner_leases
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
     JOB_ERROR_SERVER_RESTARTED,
@@ -25,7 +26,11 @@ from songmaker_cli.health_types import (
     BackgroundLoopStatus,
 )
 from songmaker_cli.job_types import JobStatus, JobType
-from songmaker_cli.lifecycle import owner_gone_reaper_loop, owner_lapse_loop
+from songmaker_cli.lifecycle import (
+    owner_gone_reaper_loop,
+    owner_lapse_loop,
+    reconcile_covers_of_this_owner,
+)
 from songmaker_cli.worker_liveness import owner_leases
 
 OWNER = "this-process"
@@ -139,3 +144,20 @@ def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
     assert asyncio.run(end_the_lease_of_another_and_wait_for_its_job()) == (
         JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type,
     )
+
+
+def test_a_cover_another_process_failed_while_this_lease_had_lapsed_leaves_no_staging(
+    pg_factory, tmp_path,
+) -> None:
+    with pg_factory() as session:
+        cover = create_job(session, JobType.COVER, owner_id=OWNER)
+        for status in (JobStatus.RUNNING, JobStatus.FAILED):
+            assert update_job_status(session, cover.id, JobStatusUpdate(status))
+        session.commit()
+        staging = cover_staging_path(tmp_path, cover.id)
+    staging.mkdir(parents=True)
+    ctx = SimpleNamespace(db=pg_factory, audio_dir=tmp_path)
+
+    asyncio.run(reconcile_covers_of_this_owner(ctx))
+
+    assert not staging.exists()

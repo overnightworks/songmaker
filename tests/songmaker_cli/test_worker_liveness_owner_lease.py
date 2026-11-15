@@ -9,6 +9,7 @@ from support.redis_proxy import redis_proxy
 from support.web_app import make_fake_async_redis, settle_owner_leases
 from tandem import Liveness
 
+from songmaker_cli import worker_liveness
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.redis_client import create_async_redis
@@ -16,6 +17,7 @@ from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases
 
 LEASED = "leased-owner"
 ABSENT = "absent-owner"
+DEADLINE_SECONDS = 5
 
 
 def test_a_kept_lease_reads_alive_to_another_process_until_its_block_ends() -> None:
@@ -59,6 +61,29 @@ def test_a_kept_lease_shows_the_old_key_to_an_old_reader_until_its_block_ends() 
         return [bool(during), bool(await server.exists(key))]
 
     assert asyncio.run(read_the_old_key_during_and_after()) == [True, False]
+
+
+def test_a_lease_that_lapsed_and_started_again_counts_as_a_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(worker_liveness, "OWNER_LEASE_REFRESH_SECONDS", 0.01)
+    server = make_fake_async_redis()
+
+    async def lapse_the_lease_and_wait_for_the_start() -> int:
+        starts: list[int] = []
+        started = asyncio.Event()
+
+        async def on_new_start() -> None:
+            starts.append(1)
+            started.set()
+
+        leases = owner_leases(server)
+        async with keep_owner_lease(leases, LEASED, on_new_start=on_new_start) as hold:
+            await leases.end(LEASED, hold.generation)
+            await asyncio.wait_for(started.wait(), timeout=DEADLINE_SECONDS)
+        return len(starts)
+
+    assert asyncio.run(lapse_the_lease_and_wait_for_the_start()) == 1
 
 
 @pytest.mark.parametrize(

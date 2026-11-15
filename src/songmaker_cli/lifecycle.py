@@ -384,6 +384,15 @@ async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
     return await asyncio.to_thread(_fail_jobs_of_gone_owners, ctx, owner_liveness)
 
 
+async def reconcile_covers_of_this_owner(ctx: AppContext) -> None:
+    """Clean what a cover this process still runs left behind after its stored status ended it.
+
+    The stored status is the fence: a job that another process failed while this one's lease had
+    lapsed stays failed, for a write to an ended job changes nothing.
+    """
+    await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
+
+
 def _active_job_owner_ids_but_own(ctx: AppContext) -> set[str]:
     from songmaker_cli.db.queries.jobs import active_job_owner_ids
 

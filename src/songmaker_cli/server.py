@@ -13,6 +13,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -53,6 +54,7 @@ from songmaker_cli.lifecycle import (
     owner_gone_reaper_loop,
     owner_lapse_loop,
     reap_stale_jobs,
+    reconcile_covers_of_this_owner,
     reconcile_crashed_loras,
     resource_event_cleanup_loop,
     score_backfill_loop,
@@ -157,7 +159,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     app.state.startup_time = datetime.now(timezone.utc)
     try:
-        async with keep_owner_lease(ctx.owner_leases, ctx.owner_id):
+        async with keep_owner_lease(
+            ctx.owner_leases, ctx.owner_id,
+            on_new_start=partial(reconcile_covers_of_this_owner, ctx),
+        ):
             loop_tasks = _start_background_loops(app, registry)
             try:
                 async with running_mcp_front(app):

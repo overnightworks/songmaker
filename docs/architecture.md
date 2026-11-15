@@ -1645,7 +1645,14 @@ its own process. A renewal that fails is retried every interval and logged by ta
 in `/health/details` when it does not read `alive` (`owner_lapses` shows the lapse
 pass apart). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
-for any terminal job. A cover's staging directory is named by its job id alone, so it
+for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
+generation of tandem's `Hold`, logs it as a start and, in a web process, removes what the
+covers it still runs left after their stored status ended them
+(`lifecycle.reconcile_covers_of_this_owner`). The stored job status is the only fence: a job
+carries no lease generation, so a lapse cleanup that read the old lease may still fail the
+jobs of the new one. For one release every process also writes `<prefix>:owner:<id>` for the
+previous release's readers and reads an owner whose old key is live as `alive`
+(`owner_lease_old_key`). A cover's staging directory is named by its job id alone, so it
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in
 training until the next stale-job reaper tick reconciles it.
 
