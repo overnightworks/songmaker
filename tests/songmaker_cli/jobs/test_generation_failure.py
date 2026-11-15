@@ -100,7 +100,7 @@ def test_s8_failure_selection(causes, message, error_type, running, caplog):
     assert (pair[0] and pair[0].sentence(), pair[1]) == (
         (message, error_type) if running else (None, None)
     )
-    assert musician_error(message, error_type) == message
+    assert message == musician_error(message, error_type)
 
 
 @pytest.mark.parametrize(
