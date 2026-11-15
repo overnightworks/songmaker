@@ -13,7 +13,7 @@ import {
 	type SeededAccount
 } from './seed';
 
-const UNAVAILABLE = "Generating isn't available right now.";
+const UNAVAILABLE = words['jobFailure.generationUnavailable'];
 const WIDTHS = [390, 1440] as const;
 type Role = 'user' | 'admin';
 

@@ -24,6 +24,8 @@ import { runMarker, seedAccount } from './seed';
 const PREVIEW_PATH = '**/api/admin/generation-retention/preview';
 const RUN_PATH = '**/api/admin/generation-retention/run';
 const ACCOUNT_CONSOLE_PATH = /\/realms\/e2e\/account$/;
+// The route error page's status heading for an address no route answers.
+const NOT_FOUND_STATUS = 404;
 
 function retentionReport(archived: number, deleted: number, dryRun = true) {
 	return {
@@ -105,7 +107,7 @@ test('a member sees Generation and Voices in Settings, an admin also Admin, and 
 		for (const label of shown) {
 			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toBeVisible();
 		}
-		for (const label of [...hidden, 'Account', 'Cleanup']) {
+		for (const label of [...hidden, 'Account', words['adminPage.tabCleanup']]) {
 			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toHaveCount(0);
 		}
 	}
@@ -180,7 +182,7 @@ test('Cleanup with nothing due says so and offers no buttons', async ({ page }) 
 
 test('the old Account and Cleanup addresses behave like any unknown address', async ({ page }) => {
 	await page.goto('/settings/never-existed');
-	const unknownAnswer = page.getByText('Not Found');
+	const unknownAnswer = page.getByRole('heading', { name: String(NOT_FOUND_STATUS), exact: true });
 	await expect(unknownAnswer).toBeVisible();
 
 	for (const oldAddress of ['/settings/account', '/settings/cleanup']) {

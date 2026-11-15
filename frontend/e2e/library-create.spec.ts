@@ -285,7 +285,7 @@ interface CreateCard {
 
 const CREATE_CARDS: CreateCard[] = [
 	{
-		name: 'New album',
+		name: words['newAlbum.cardLabel'],
 		address: () => HOME_PATH,
 		open: (page) => openNewCardFromMenu(page, words['newPlace.album']),
 		form: (page) => workspace(page).getByRole('form', { name: words['newAlbum.cardLabel'] }),
@@ -293,7 +293,7 @@ const CREATE_CARDS: CreateCard[] = [
 		foldsFocusTo: newButton
 	},
 	{
-		name: 'New playlist',
+		name: words['newPlaylist.cardLabel'],
 		address: () => HOME_PATH,
 		open: (page) => openNewCardFromMenu(page, words['newPlace.playlist']),
 		form: (page) => workspace(page).getByRole('form', { name: words['newPlaylist.cardLabel'] }),
@@ -301,7 +301,7 @@ const CREATE_CARDS: CreateCard[] = [
 		foldsFocusTo: newButton
 	},
 	{
-		name: 'New song',
+		name: words['newSong.rowLabel'],
 		address: (library) => `/album/${library.albumId}`,
 		open: (page) => newSongRow(page).click(),
 		form: (page, library) =>
