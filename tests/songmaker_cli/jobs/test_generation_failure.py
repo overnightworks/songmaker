@@ -51,7 +51,7 @@ def test_songmaker_message_stays_with_existing_sanitizer(generation_write_failur
 
 
 @pytest.mark.parametrize(
-    ("causes", "message", "error_type", "running"),
+    ("causes", "expected_message", "error_type", "running"),
     [
         (
             (WorkerGpuOutOfMemory,),
@@ -86,7 +86,7 @@ def test_songmaker_message_stays_with_existing_sanitizer(generation_write_failur
     ],
     ids=["oom", "oom-generic", "generic-oom", "unavailable-generic", "unavailable"],
 )
-def test_s8_failure_selection(causes, message, error_type, running, caplog):
+def test_s8_failure_selection(causes, expected_message, error_type, running, caplog):
     """S8-A/D/E: One owner logs every cause and chooses stored and running pairs."""
     selected = None
     assert running_failure_pair(selected) == (None, None)
@@ -95,11 +95,11 @@ def test_s8_failure_selection(causes, message, error_type, running, caplog):
         selected = select_generation_failure(selected, cause(diagnosis), "s8-job")
         assert diagnosis in caplog.text
     assert "s8-job" in caplog.text
-    assert (selected.message.sentence(), selected.error_type) == (message, error_type)
+    assert (selected.message.sentence(), selected.error_type) == (expected_message, error_type)
     pair = running_failure_pair(selected)
-    expected_pair = (message, error_type) if running else (None, None)
+    expected_pair = (expected_message, error_type) if running else (None, None)
     assert (pair[0] and pair[0].sentence(), pair[1]) == expected_pair
-    assert musician_error(message, error_type) == message
+    assert musician_error(expected_message, error_type) == expected_message
 
 
 @pytest.mark.parametrize(
