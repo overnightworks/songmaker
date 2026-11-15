@@ -3,5 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "713002068c86519ab5875051ba4257b5a0b6087e"
 branch = "claude/issue-2963-a-co-writer-turn-or-cover-suggestion-the"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/jobs.py", "tests/songmaker_cli/test_health_api.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/job_types.py", "tests/songmaker_cli/test_health_api.py"]
 opened_commit = "adcfee8a11d77cc901070322c7f7046171cce05a"
+whole_reason = "AgentProblem moves to job_types.py so the query layer reads its one owner without importing an API model; the rest is the query, its test and one docs paragraph."
