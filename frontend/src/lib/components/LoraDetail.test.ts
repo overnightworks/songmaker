@@ -440,7 +440,7 @@ describe('LoraDetail', () => {
 		);
 
 		const banner = target.querySelector('.banner.error');
-		expect(banner?.textContent).toBe(words['voiceDetail.trainingFailed']);
+		expect(banner?.textContent?.trim()).toBe(words['voiceDetail.trainingFailed']);
 		expect(report).toHaveBeenCalledWith(expect.stringContaining('voiceFailure.retired'));
 		report.mockRestore();
 	});

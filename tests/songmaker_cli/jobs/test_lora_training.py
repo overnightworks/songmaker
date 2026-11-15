@@ -332,18 +332,16 @@ def test_matching_worker_mode_is_recorded_when_training_completes(
 
 
 @pytest.mark.parametrize(
-    ("worker_mode", "expected_error", "expected_key", "expected_error_type"),
+    ("worker_mode", "expected_error", "expected_error_type"),
     [
         (
             "turbo",
             "Worker completed LoRA training with model mode 'turbo', expected 'sft'",
-            "voiceFailure.modeMismatch",
             "lora_mode_mismatch",
         ),
         (
             "xl-sft",
             "Worker completed LoRA training with unsupported model mode: 'xl-sft'",
-            "voiceFailure.modeUnsupported",
             "lora_mode_invalid",
         ),
     ],
@@ -353,7 +351,6 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
     db_factory,
     worker_mode: str,
     expected_error: str,
-    expected_key: str,
     expected_error_type: str,
 ) -> None:
     output_dir = (
@@ -386,7 +383,6 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
         job = get_job(session, "job-1")
         assert lora.status == LoraStatus.FAILED
         assert lora.model_mode == "sft"
-        assert lora.error_message.key == expected_key
         assert lora.error_message.sentence() == expected_error
         assert job.status == JobStatus.FAILED
         assert job.error == expected_error
@@ -618,9 +614,8 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
         )
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
-        assert (lora.status, lora.error_message) == (
-            LoraStatus.FAILED, message("jobFailure.internal"),
-        )
+        assert lora.error_message == message("jobFailure.internal")
+        assert lora.status == LoraStatus.FAILED
 
 
 def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:

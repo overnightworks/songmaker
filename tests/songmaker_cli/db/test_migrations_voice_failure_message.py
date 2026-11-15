@@ -11,6 +11,7 @@ from alembic import command
 from sqlalchemy.exc import IntegrityError
 from support.migration_chain import (
     column_names,
+    frozen_table,
     is_on_the_single_chain,
     seeded_then_upgraded,
     stored_values,
@@ -48,20 +49,13 @@ MODE_TOKENS = {
 }
 UNKNOWN_SENTENCE = "The worker restarted before epoch 31 could finish."
 SENTENCES = list(MIGRATION.STORED_MESSAGE_KEYS)
-
-
-def _user_loras(column: str) -> sa.TableClause:
-    return sa.table(
-        "user_loras", sa.column("id"), sa.column("user_id"), sa.column("name"),
-        sa.column("slug"), sa.column("status"), sa.column("model_mode"),
-        sa.column("created_at"), sa.column(column),
-    )
+USER_LORA_COLUMNS = ("id", "user_id", "name", "slug", "status", "model_mode", "created_at")
 
 
 def _insert_lora(engine, lora_id: str, column: str, value: object) -> None:
     stored = value if column == OLD_COLUMN else sa.cast(json.dumps(value), sa.JSON)
     with engine.begin() as connection:
-        connection.execute(sa.insert(_user_loras(column)).values(
+        connection.execute(sa.insert(frozen_table("user_loras", USER_LORA_COLUMNS, column)).values(
             id=lora_id, user_id="u1", name=lora_id, slug=lora_id, status="failed",
             model_mode="turbo", created_at=sa.func.current_timestamp(), **{column: stored},
         ))
@@ -125,7 +119,7 @@ def test_an_unknown_sentence_is_kept_as_the_recorded_token_with_its_text_as_the_
 
 def test_a_voice_without_a_reason_stays_sql_null(upgraded):
     _, engine = upgraded
-    loras = _user_loras(NEW_COLUMN)
+    loras = frozen_table("user_loras", USER_LORA_COLUMNS, NEW_COLUMN)
     with engine.connect() as connection:
         null_ids = set(connection.execute(
             sa.select(loras.c.id).where(loras.c[NEW_COLUMN].is_(None))

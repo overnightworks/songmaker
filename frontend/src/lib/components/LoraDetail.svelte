@@ -63,7 +63,6 @@
 	const lockedStatus = $derived(isLoraActive(lora.status) ? lora.status : null);
 	const atCapacity = $derived(samples.length >= LORA_MAX_SAMPLES);
 	const canAddSample = $derived(!active && !deleted && !atCapacity);
-
 	const sampleValidationProblems = $derived([
 		...(samples.length < LORA_MIN_SAMPLES_FOR_TRAINING
 			? [
@@ -279,9 +278,9 @@
 	{:else if lockedStatus && !trainingCancelled}
 		<p class="banner info">{pageText(ACTIVE_STATUS_KEYS[lockedStatus].banner)}</p>
 	{:else if lora.status === 'failed' && lora.error_message && !trainingCancelled}
-		{@const reason = messageText(lora.error_message)}
 		<p class="banner error">
-			<strong>{pageText('voiceDetail.trainingFailed')}</strong>{#if reason}<br />{reason}{/if}
+			<strong>{pageText('voiceDetail.trainingFailed')}</strong><br />
+			{messageText(lora.error_message)}
 		</p>
 	{/if}
 

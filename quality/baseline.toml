@@ -55,7 +55,7 @@
 "tests/songmaker_cli/test_api.py" = 4581
 "tests/songmaker_cli/test_db.py" = 2439
 "tests/songmaker_cli/test_db_postgresql.py" = 831
-"tests/songmaker_cli/test_jobs.py" = 3101
+"tests/songmaker_cli/test_jobs.py" = 3097
 "tests/songmaker_cli/test_library_api.py" = 1621
 "tests/songmaker_cli/test_lora_api.py" = 1170
 "tests/songmaker_cli/test_playlist_api.py" = 1100

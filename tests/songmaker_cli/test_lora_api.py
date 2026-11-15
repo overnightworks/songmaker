@@ -34,7 +34,6 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
 from songmaker_cli.job_types import JobStatus
-from songmaker_cli.messages import message
 
 
 @contextmanager
@@ -1133,8 +1132,7 @@ def test_train_enqueue_failure_marks_job_and_lora_failed(
     client, ctx = client_and_ctx
     lora_id = _seed_trainable_lora(ctx)
 
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job.side_effect = ConnectionError("redis down")
+    mock_pool = AsyncMock(enqueue_job=AsyncMock(side_effect=ConnectionError("redis down")))
     with patch("songmaker_cli.lora_api.get_arq_pool", return_value=mock_pool):
         resp = client.post(f"/api/loras/{lora_id}/train")
 
@@ -1142,10 +1140,9 @@ def test_train_enqueue_failure_marks_job_and_lora_failed(
     with ctx.db() as session:
         lora = session.query(UserLora).filter_by(id=lora_id).first()
         assert lora.status == LoraStatus.FAILED
-        assert lora.error_message == message("jobRefusal.queueUnavailable")
+        assert lora.error_message.key == "jobRefusal.queueUnavailable"
         job = session.query(Job).filter_by(id=lora.training_job_id).first()
-        assert job.status == JobStatus.FAILED
-        assert job.error == message("jobRefusal.queueUnavailable").sentence()
+        assert (job.status, job.error) == (JobStatus.FAILED, "Job queue unavailable")
 
 
 def test_train_enqueue_failure_exception_swallowed(

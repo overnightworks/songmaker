@@ -60,8 +60,7 @@ def _sanitize_training_error(exc: Exception, job_id: str) -> Message:
     """Keep a worker failure truthful to the training task the musician started."""
     if isinstance(exc, LoraTrainingModelModeError):
         return exc.failure
-    failure = _failure_message(exc, job_id)
-    return failure if failure is not None else message("voiceFailure.workerTrainingFailed")
+    return _failure_message(exc, job_id) or message("voiceFailure.workerTrainingFailed")
 
 
 WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL: Final = (

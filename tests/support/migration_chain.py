@@ -40,6 +40,11 @@ def column_names(engine: Engine, table: str) -> set[str]:
     return {column["name"] for column in inspect(engine).get_columns(table)}
 
 
+def frozen_table(name: str, column_names_of_row: tuple[str, ...], column: str) -> sa.TableClause:
+    """A table as a migration test writes it: the named columns plus the one under test."""
+    return sa.table(name, *(sa.column(each) for each in (*column_names_of_row, column)))
+
+
 def stored_values(engine: Engine, table: str, column: str) -> dict[str, object]:
     """The value of `column` of every row of `table`, by the row's id."""
     rows = sa.table(table, sa.column("id"), sa.column(column))

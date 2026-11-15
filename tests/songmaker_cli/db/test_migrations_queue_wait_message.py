@@ -12,6 +12,7 @@ from alembic import command
 from sqlalchemy.exc import IntegrityError
 from support.migration_chain import (
     column_names,
+    frozen_table,
     is_on_the_single_chain,
     seeded_then_upgraded,
     stored_values,
@@ -29,18 +30,12 @@ NEW_COLUMN = "queue_reason_message"
 STORED_KEYS_FILE = REPOSITORY_ROOT / "scripts" / "stored_message_keys.txt"
 UNKNOWN_SENTENCE = "Waiting for the next GPU slot."
 SENTENCES = list(MIGRATION.STORED_MESSAGE_KEYS)
-
-
-def _jobs(column: str) -> sa.TableClause:
-    return sa.table(
-        "jobs", sa.column("id"), sa.column("type"), sa.column("status"), sa.column("progress"),
-        sa.column("heartbeat_at"), sa.column("started_at"), sa.column(column),
-    )
+JOB_COLUMNS = ("id", "type", "status", "progress", "heartbeat_at", "started_at")
 
 
 def _insert_job(engine, job_id: str, column: str, value: object) -> None:
     stored = value if column == OLD_COLUMN else sa.cast(json.dumps(value), sa.JSON)
-    jobs = _jobs(column)
+    jobs = frozen_table("jobs", JOB_COLUMNS, column)
     with engine.begin() as connection:
         connection.execute(sa.insert(jobs).values(
             id=job_id, type="generate", status="queued", progress=0.0,
@@ -81,7 +76,7 @@ def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
 
 def test_an_unknown_sentence_becomes_sql_null_and_its_count_is_logged(upgraded, caplog):
     _, engine = upgraded
-    jobs = _jobs(NEW_COLUMN)
+    jobs = frozen_table("jobs", JOB_COLUMNS, NEW_COLUMN)
     with engine.connect() as connection:
         null_ids = set(connection.execute(
             sa.select(jobs.c.id).where(jobs.c[NEW_COLUMN].is_(None))
