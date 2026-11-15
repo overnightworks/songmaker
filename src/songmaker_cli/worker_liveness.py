@@ -55,6 +55,15 @@ def drop_owner_lease(redis: Any, owner_id: str) -> None:
     redis.delete(owner_lease_key(owner_id))
 
 
+async def refresh_owner_lease_async(redis: Any, owner_id: str) -> None:
+    """``refresh_owner_lease`` over an asyncio client, as arq hands one to a worker."""
+    await redis.set(owner_lease_key(owner_id), "1", ex=OWNER_LEASE_TTL_SECONDS)
+
+
+async def drop_owner_lease_async(redis: Any, owner_id: str) -> None:
+    await redis.delete(owner_lease_key(owner_id))
+
+
 def read_owner_liveness(redis: Any, owner_ids: Collection[str]) -> dict[str, WorkerLiveness]:
     """Read which owners hold a lease; a ``RedisError`` reaches the caller.
 

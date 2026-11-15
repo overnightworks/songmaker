@@ -1,10 +1,11 @@
-"""Real songmaker web processes for tests that need more than one.
+"""Real songmaker web and music-worker processes for tests that need more than one.
 
-Each process starts through the CLI `server` command, as a deployment does, with its own
-port, worker id and data directory, one shared audio directory, throwaway secrets, and the
-database and Redis the case owns. Setting and variable names come from the settings classes.
-A case may add `StandIns`: a gateway origin, and an HTTPS issuer whose certificate the
-children trust through `SSL_CERT_FILE`.
+A web process starts through the CLI `server` command and a music worker through the arq
+launcher, as a deployment does, each with its own data directory, one shared audio directory,
+throwaway secrets, and the database and Redis the case owns; a web process also has its own
+port and worker id. Setting and variable names come from the settings classes. A case may add
+`StandIns`: a gateway origin, and an HTTPS issuer whose certificate the children trust through
+`SSL_CERT_FILE`.
 """
 
 from __future__ import annotations
@@ -30,10 +31,12 @@ from unittest.mock import patch
 import httpx
 import pytest
 from pydantic_settings import BaseSettings
+from redis import Redis
 from support.cowriter_gateway import agent_config
 
 from acestep_worker.settings import WorkerSettings
 from songmaker_cli.settings import Settings
+from songmaker_cli.worker_liveness import owner_lease_key
 
 HEALTH_PATH: Final = "/health"
 READY_DEADLINE_SECONDS: Final = 60.0
@@ -48,6 +51,7 @@ INHERITED_VARIABLES: Final = ("PATH", "HOME", "LANG", "VIRTUAL_ENV")
 INHERITED_PREFIX: Final = "COVERAGE_"
 OIDC_CLIENT_ID: Final = "songmaker-test"
 TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
+MUSIC_WORKER_SETTINGS: Final = "songmaker_cli.music_worker.MusicWorkerSettings"
 
 
 def environment_name(settings_class: type[BaseSettings], field_name: str) -> str:
@@ -82,19 +86,13 @@ class StandIns:
 
 
 @dataclass
-class WebProcess:
-    """One running `songmaker server` and the files it writes."""
+class ChildProcess:
+    """One running child and the log it writes."""
 
     name: str
-    port: int
-    worker_id: str
     process: subprocess.Popen[bytes]
     log: IO[bytes]
     log_path: Path
-
-    @property
-    def url(self) -> str:
-        return f"http://{LOOPBACK}:{self.port}"
 
     def log_text(self) -> str:
         self.log.flush()
@@ -120,8 +118,30 @@ class WebProcess:
         self.log.close()
 
 
+@dataclass
+class WebProcess(ChildProcess):
+    """One running `songmaker server`."""
+
+    port: int
+    worker_id: str
+
+    @property
+    def url(self) -> str:
+        return f"http://{LOOPBACK}:{self.port}"
+
+
+@dataclass
+class MusicWorkerProcess(ChildProcess):
+    """One running music worker and the owner id its lease names."""
+
+    owner_id: str
+
+
 class WebProcesses:
-    """The processes of one case; they share a database, a Redis and an audio directory."""
+    """The processes of one case; they share a database, a Redis and an audio directory.
+
+    A web process and a music worker answer to the same case, so a test may run either or both.
+    """
 
     def __init__(
         self, root: Path, *, database_url: str, redis_url: str, stand_ins: StandIns | None = None,
@@ -131,8 +151,9 @@ class WebProcesses:
         self.session_secret = secrets.token_hex(32)
         self.audio_dir = root / "audio"
         self.audio_dir.mkdir()
+        self._redis = Redis.from_url(redis_url, decode_responses=True)
         self._shared_environment = self._settings_environment(database_url, redis_url)
-        self._processes: list[WebProcess] = []
+        self._processes: list[ChildProcess] = []
 
     def _settings_environment(self, database_url: str, redis_url: str) -> dict[str, str]:
         client_secret = self.root / "oidc-client-secret"
@@ -173,8 +194,10 @@ class WebProcesses:
         with patch.dict(os.environ, self._shared_environment):
             return Settings()
 
-    def start(self, name: str) -> WebProcess:
-        """Start one process and return it once `/health` answers."""
+    def _launch(
+        self, name: str, arguments: list[str], *, environment: dict[str, str],
+    ) -> tuple[subprocess.Popen[bytes], IO[bytes], Path]:
+        """Start `python <arguments>` in a directory of its own; it dies with the test process."""
         directory = self.root / name
         directory.mkdir()
         (directory / "pyproject.toml").write_text("[project]\nname = 'test'\n", encoding="utf-8")
@@ -182,33 +205,62 @@ class WebProcesses:
         (directory / "frontend" / "build" / "index.html").write_text(
             "<html></html>", encoding="utf-8",
         )
-        worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
-        port = _free_port()
-        data_dir = directory / "data"
-        environment = {
-            **_inherited_environment(),
-            **self._shared_environment,
-            environment_name(Settings, "data_dir"): str(data_dir),
-            environment_name(WorkerSettings, "worker_id"): worker_id,
-        }
         log_path = directory / "server.log"
         log = log_path.open("wb")
         process = subprocess.Popen(
-            [
-                sys.executable, "-m", "songmaker_cli.main", "server",
-                "--port", str(port), "--root", str(directory),
-            ],
-            cwd=directory, env=environment, stdout=log, stderr=subprocess.STDOUT,
+            [sys.executable, *arguments],
+            cwd=directory,
+            env={
+                **_inherited_environment(),
+                **self._shared_environment,
+                environment_name(Settings, "data_dir"): str(directory / "data"),
+                **environment,
+            },
+            stdout=log, stderr=subprocess.STDOUT,
             preexec_fn=partial(die_with_parent, os.getpid()),  # noqa: PLW1509 - runs in the child
         )
-        web_process = WebProcess(name, port, worker_id, process, log, log_path)
+        return process, log, log_path
+
+    def start(self, name: str) -> WebProcess:
+        """Start one web process and return it once `/health` answers."""
+        worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
+        port = _free_port()
+        process, log, log_path = self._launch(
+            name,
+            [
+                "-m", "songmaker_cli.main", "server",
+                "--port", str(port), "--root", str(self.root / name),
+            ],
+            environment={environment_name(WorkerSettings, "worker_id"): worker_id},
+        )
+        web_process = WebProcess(name, process, log, log_path, port, worker_id)
         self._processes.append(web_process)
-        _wait_until_ready(web_process)
+        _wait_until_ready(
+            web_process,
+            f"answer {HEALTH_PATH}",
+            lambda: httpx.get(f"{web_process.url}{HEALTH_PATH}", timeout=2.0).status_code == 200,
+        )
         return web_process
 
+    def start_music_worker(self, name: str) -> MusicWorkerProcess:
+        """Start one music worker and return it once its lease names its owner id."""
+        known_owner_ids = leased_owner_ids(self._redis)
+        process, log, log_path = self._launch(
+            name, ["-m", "songmaker_cli.arq_worker", MUSIC_WORKER_SETTINGS], environment={},
+        )
+        worker = MusicWorkerProcess(name, process, log, log_path, owner_id="")
+        self._processes.append(worker)
+        _wait_until_ready(
+            worker, "hold an owner lease",
+            lambda: bool(leased_owner_ids(self._redis) - known_owner_ids),
+        )
+        [worker.owner_id] = leased_owner_ids(self._redis) - known_owner_ids
+        return worker
+
     def stop_all(self) -> None:
-        for web_process in self._processes:
-            web_process.stop()
+        for child in self._processes:
+            child.stop()
+        self._redis.close()
 
 
 def _inherited_environment() -> dict[str, str]:
@@ -232,27 +284,33 @@ def poll_until(
     return True
 
 
-def _wait_until_ready(web_process: WebProcess) -> None:
+def leased_owner_ids(redis: Redis) -> set[str]:
+    """The owner ids whose lease Redis holds; the client decodes its replies."""
+    prefix = owner_lease_key("")
+    return {key.removeprefix(prefix) for key in redis.keys(owner_lease_key("*"))}
+
+
+def _wait_until_ready(
+    child: ChildProcess, readiness: str, is_ready: Callable[[], bool],
+) -> None:
     deadline = time.monotonic() + READY_DEADLINE_SECONDS
     pause = threading.Event()
     while time.monotonic() < deadline:
-        exit_code = web_process.process.poll()
+        exit_code = child.process.poll()
         if exit_code is not None:
             pytest.fail(
-                f"{web_process.name} exited with {exit_code} before it was ready:\n"
-                f"{web_process.log_tail()}",
+                f"{child.name} exited with {exit_code} before it was ready:\n{child.log_tail()}",
                 pytrace=False,
             )
         try:
-            if httpx.get(f"{web_process.url}{HEALTH_PATH}", timeout=2.0).status_code == 200:
+            if is_ready():
                 return
         except httpx.TransportError:
             pass
         pause.wait(READY_POLL_SECONDS)
-    web_process.kill()
+    child.kill()
     pytest.fail(
-        f"{web_process.name} did not answer {HEALTH_PATH} within {READY_DEADLINE_SECONDS} s:\n"
-        f"{web_process.log_tail()}",
+        f"{child.name} did not {readiness} within {READY_DEADLINE_SECONDS} s:\n{child.log_tail()}",
         pytrace=False,
     )
 

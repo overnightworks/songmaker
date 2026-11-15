@@ -53,6 +53,7 @@ def _steps_sent_to_worker(seeded_db, tmp_path: Path, *, user_id: str = "u1") -> 
                 data_dir=tmp_path / "data",
                 redis=MagicMock(),
                 target_model="sft",
+                owner_id="o1",
             )
         )
     return received[0]

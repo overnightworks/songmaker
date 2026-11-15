@@ -77,6 +77,7 @@ def _run_job(
                 redis=MagicMock(),
                 target_model="sft",
                 **task,
+                owner_id="o1",
             )
         )
 
@@ -195,7 +196,7 @@ def test_repaint_and_cover_takes_link_the_reference(seeded_db, tmp_path: Path, t
         writer.writeframes(b"\x00\x00" * 8000)
     if task == "repaint":
         options = {
-            "repaint_params": RepaintTaskParams(
+            "task_params": RepaintTaskParams(
                 src_wav_path=str(source_wav),
                 src_generation_id="g0",
                 repainting_start=0.2,
@@ -206,7 +207,7 @@ def test_repaint_and_cover_takes_link_the_reference(seeded_db, tmp_path: Path, t
         }
     else:
         options = {
-            "cover_params": CoverTaskParams(
+            "task_params": CoverTaskParams(
                 src_wav_path=str(source_wav),
                 src_generation_id="g0",
                 audio_cover_strength=0.6,

@@ -340,6 +340,7 @@ def _run_generation_whose_terminal_check_fails_after_the_fetch(
                 data_dir=tmp_path / "data",
                 redis=MagicMock(),
                 target_model="sft",
+                owner_id="o1",
             )
         )
     return fetched_take

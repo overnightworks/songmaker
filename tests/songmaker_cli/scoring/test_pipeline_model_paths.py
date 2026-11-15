@@ -158,7 +158,7 @@ def _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path: Path) -> Pipe
     with patch(
         "songmaker_cli.jobs.get_scorer_process", return_value=MagicMock(score=capture_score),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir, owner_id="o1")
     return captured["config"]
 
 

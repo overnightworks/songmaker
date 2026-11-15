@@ -13,12 +13,13 @@ from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, User
 from songmaker_cli.db.queries.auth import delete_expired_sessions, delete_session
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
-    recover_stale_jobs_by_type,
+    recover_jobs_of_dead_owners,
     update_job_status,
 )
 from songmaker_cli.job_timing import JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import reap_stale_jobs
+from songmaker_cli.worker_liveness import WorkerLiveness
 
 NOW = datetime(2030, 1, 1, tzinfo=timezone.utc)
 SESSION_ID = "s" * 43
@@ -50,7 +51,11 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
 
 
 def _add_job_asked_by_the_session(
-    ctx: AppContext, *, status: str, heartbeat_at: datetime | None = None
+    ctx: AppContext,
+    *,
+    status: str,
+    heartbeat_at: datetime | None = None,
+    owner_id: str | None = None,
 ) -> None:
     with ctx.db() as session:
         kwargs = {} if heartbeat_at is None else {"heartbeat_at": heartbeat_at}
@@ -62,6 +67,7 @@ def _add_job_asked_by_the_session(
                 album_id="alb",
                 user_id="u1",
                 session_id=SESSION_ID,
+                owner_id=owner_id,
                 **kwargs,
             )
         )
@@ -93,10 +99,10 @@ def test_a_job_that_goes_on_running_keeps_its_session(ctx):
     assert _reference(ctx) == SESSION_ID
 
 
-def test_the_bulk_recovery_at_start_clears_the_session(ctx):
-    _add_job_asked_by_the_session(ctx, status=JobStatus.RUNNING)
+def test_the_recovery_of_a_dead_owner_clears_the_session(ctx):
+    _add_job_asked_by_the_session(ctx, status=JobStatus.RUNNING, owner_id="owner")
     with ctx.db() as session:
-        recover_stale_jobs_by_type(session, {JobType.COVER: {JobStatus.RUNNING}})
+        recover_jobs_of_dead_owners(session, {"owner": WorkerLiveness.DEAD})
         session.commit()
     assert _reference(ctx) is None
 

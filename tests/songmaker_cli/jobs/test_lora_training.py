@@ -206,10 +206,7 @@ def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
 
 def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplog) -> None:
     output_dir = (
-        seeded["audio_dir"]
-        / USER_LORAS_DIRNAME
-        / seeded["user_id"]
-        / seeded["lora_id"]
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
         / "training_tmp"
     )
 
@@ -224,14 +221,9 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
     with _patch_worker_calls(adapter_src, submitted_requests=submitted_requests):
         _run(
             run_lora_training_job(
-                {},
-                "job-1",
-                seeded["lora_id"],
-                seeded["user_id"],
-                db_factory=db_factory,
-                audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
-                training_config=TEST_LORA_TRAINING_CONFIG,
+                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+                training_config=TEST_LORA_TRAINING_CONFIG, owner_id="o1",
             )
         )
 
@@ -245,6 +237,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
 
         job = get_job(session, "job-1")
         assert job.status == JobStatus.COMPLETED
+        assert job.owner_id == "o1"
         assert job.current_epoch == 500
         assert job.train_epochs == 500
 
@@ -319,7 +312,7 @@ def test_matching_worker_mode_is_recorded_when_training_completes(
                 audio_dir=seeded["audio_dir"],
                 redis=MagicMock(),
                 target_mode="turbo",
-                training_config=TEST_LORA_TRAINING_CONFIG,
+                training_config=TEST_LORA_TRAINING_CONFIG, owner_id="o1",
             )
         )
 
@@ -373,7 +366,7 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
                 redis=MagicMock(),
-                training_config=TEST_LORA_TRAINING_CONFIG,
+                training_config=TEST_LORA_TRAINING_CONFIG, owner_id="o1",
             )
         )
 
@@ -454,7 +447,7 @@ def test_training_progress_keeps_a_long_running_lora_alive(
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
-            training_config=TEST_LORA_TRAINING_CONFIG,
+            training_config=TEST_LORA_TRAINING_CONFIG, owner_id="o1",
         ))
 
     with db_factory() as session:
@@ -500,7 +493,7 @@ def test_missing_sample_audio_raises_and_marks_failed(
             seeded["user_id"],
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
-            redis=MagicMock(),
+            redis=MagicMock(), owner_id="o1",
         )
     )
     with db_factory() as session:
@@ -524,7 +517,7 @@ def test_worker_training_failure_keeps_a_training_specific_reason(
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
 
@@ -584,7 +577,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
             seeded["user_id"],
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
-            redis=MagicMock(),
+            redis=MagicMock(), owner_id="o1",
         )
         with pytest.raises(asyncio.CancelledError):
             _run(training)
@@ -609,7 +602,7 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
     with db_factory() as session:
@@ -701,7 +694,7 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
-            target_mode="turbo",
+            target_mode="turbo", owner_id="o1",
         )
         with pytest.raises(SystemExit, match="simulated process crash"):
             _run(training)
@@ -811,7 +804,7 @@ def test_adoption_stays_ready_when_previous_cleanup_fails(
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
 
@@ -857,7 +850,7 @@ def test_adoption_restores_the_previous_adapter_when_second_rename_fails(
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
 
@@ -887,7 +880,7 @@ def test_deleted_lora_rejected(seeded, db_factory) -> None:
             seeded["user_id"],
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
-            redis=MagicMock(),
+            redis=MagicMock(), owner_id="o1",
         )
     )
     with db_factory() as session:
@@ -905,7 +898,7 @@ def test_missing_lora_fails_job(seeded, db_factory) -> None:
             seeded["user_id"],
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
-            redis=MagicMock(),
+            redis=MagicMock(), owner_id="o1",
         )
     )
     with db_factory() as session:
@@ -928,7 +921,7 @@ def test_no_capacity_marks_failed(seeded, db_factory) -> None:
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
     with db_factory() as session:
@@ -965,7 +958,7 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=redis,
+                redis=redis, owner_id="o1",
             )
         )
 
@@ -999,7 +992,7 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
                 redis=redis,
-                target_mode="turbo",
+                target_mode="turbo", owner_id="o1",
             )
         )
 
@@ -1055,6 +1048,7 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
             run_lora_training_job(
                 {}, "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=redis,
+                owner_id="o1",
             )
         )
 
@@ -1089,6 +1083,7 @@ def test_lora_defer_passes_do_not_sleep_or_hold_an_arq_slot(seeded, db_factory) 
                 await run_lora_training_job(
                     {}, "job-1", seeded["lora_id"], seeded["user_id"],
                     db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=redis,
+                    owner_id="o1",
                 )
 
         materialize.assert_not_called()
@@ -1130,7 +1125,7 @@ def test_renewal_failure_cancels_materialization_and_releases_the_hold(seeded, d
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
 
@@ -1248,7 +1243,7 @@ def test_lora_starts_hold_renewal_before_marking_the_job_running(seeded, db_fact
     update_job = lora_training._update_job
 
     def checked_update_job(*args, **kwargs) -> None:
-        if kwargs.get("worker_pid") is not None:
+        if kwargs.get("owner_id") is not None:
             assert renewal_started.is_set()
         update_job(*args, **kwargs)
 
@@ -1273,7 +1268,7 @@ def test_lora_starts_hold_renewal_before_marking_the_job_running(seeded, db_fact
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
 
@@ -1292,7 +1287,7 @@ def test_running_update_failure_releases_the_new_lora_hold(seeded, db_factory) -
     update_job = lora_training._update_job
 
     def fail_first_running_update(*args, **kwargs) -> None:
-        if kwargs.get("worker_pid") is not None:
+        if kwargs.get("owner_id") is not None:
             raise RuntimeError("running update failed")
         update_job(*args, **kwargs)
 
@@ -1314,7 +1309,7 @@ def test_running_update_failure_releases_the_new_lora_hold(seeded, db_factory) -
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                redis=MagicMock(), owner_id="o1",
             )
         )
 
@@ -1371,7 +1366,7 @@ def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=redis,
+                redis=redis, owner_id="o1",
             )
 
         assert renew_task.cancelled()
@@ -1425,7 +1420,7 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=redis,
+                redis=redis, owner_id="o1",
             )
             with pytest.raises(asyncio.CancelledError):
                 await training
@@ -1450,7 +1445,7 @@ def test_lora_releases_its_hold_when_running_cannot_be_applied(seeded, db_factor
     update_job = lora_training._update_job
 
     def refuse_running(*args, **kwargs) -> bool:
-        if kwargs.get("worker_pid") is not None:
+        if kwargs.get("owner_id") is not None:
             return False
         return update_job(*args, **kwargs)
 
@@ -1470,6 +1465,7 @@ def test_lora_releases_its_hold_when_running_cannot_be_applied(seeded, db_factor
             run_lora_training_job(
                 {}, "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+                owner_id="o1",
             )
         )
 

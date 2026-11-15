@@ -148,6 +148,7 @@ class GenerationProgressTracker:
     db_factory: sessionmaker[Session]
     job_id: str
     take_count: int
+    owner_id: str
     clock: Callable[[], float] = time.monotonic
     take_index: int = field(default=0, init=False)
     phase: GenerationPhase | None = field(default=None, init=False)
@@ -159,7 +160,7 @@ class GenerationProgressTracker:
         self.failure = select_generation_failure(self.failure, exc, self.job_id)
 
     def mark_running(self) -> None:
-        self._write(worker_pid=os.getpid())
+        self._write(owner_id=self.owner_id)
 
     def start_take(self, index: int) -> None:
         self.take_index = index
@@ -848,12 +849,11 @@ async def run_generation_job(
     db_factory: sessionmaker[Session],
     audio_dir: Path,
     data_dir: Path,
+    owner_id: str,
     redis: ArqRedis,
     seed: int | None = None,
-    repaint_params: RepaintTaskParams | None = None,
-    cover_params: CoverTaskParams | None = None,
+    task_params: RepaintTaskParams | CoverTaskParams | None = None,
 ) -> None:
-
     import structlog
 
     structlog.contextvars.clear_contextvars()
@@ -863,12 +863,9 @@ async def run_generation_job(
         song_id=song_id,
     )
 
-    if cover_params:
-        task_type = "cover"
-    elif repaint_params:
-        task_type = "repaint"
-    else:
-        task_type = "generate"
+    repaint_params = task_params if isinstance(task_params, RepaintTaskParams) else None
+    cover_params = task_params if isinstance(task_params, CoverTaskParams) else None
+    task_type = (cover_params and "cover") or (repaint_params and "repaint") or "generate"
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     admitted_worker = None
@@ -887,22 +884,15 @@ async def run_generation_job(
     )
 
     try:
-        admitted_worker = await _admit_generation_worker_or_requeue(
-            request,
-            redis,
-            db_factory,
-        )
+        admitted_worker = await _admit_generation_worker_or_requeue(request, redis, db_factory)
         if admitted_worker is None:
             return
 
-        ctx = await _build_generation_job_context(
-            request,
-            db_factory,
-        )
+        ctx = await _build_generation_job_context(request, db_factory)
         if ctx is None:
             return
 
-        progress = GenerationProgressTracker(db_factory, job_id, count)
+        progress = GenerationProgressTracker(db_factory, job_id, count, owner_id)
         progress.mark_running()
         if _job_is_terminal(db_factory, job_id):
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)

@@ -1,4 +1,4 @@
-"""Two web processes: a process fails only the jobs of an owner that is gone."""
+"""Web processes and music workers: only the jobs of an owner that is gone fail."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from redis import Redis
-from support.app_processes import WebProcess, WebProcesses, poll_until
+from support.app_processes import MusicWorkerProcess, WebProcess, WebProcesses, poll_until
 from support.web_cluster_world import start_owner
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
@@ -192,3 +192,87 @@ def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     assert poll_until(lambda: _is_reaped(factory, ghost), deadline_seconds=CRASH_DEADLINE_SECONDS)
     assert time.monotonic() - restarted_at >= OWNER_LEASE_TTL_SECONDS - 1
     assert _statuses(factory, jobs.ids) == [JobStatus.RUNNING] * 2
+
+
+WORKER_JOB_TYPES = (
+    JobType.GENERATE,
+    JobType.LORA_TRAINING,
+    JobType.SCORE,
+    JobType.LOAD_MODEL_ON_WORKER,
+    JobType.DOWNLOAD_MODEL_ON_WORKER,
+)
+
+
+def _seed_running_worker_jobs(factory, owner_id: str) -> tuple[str, ...]:
+    """One running job of each type a worker executes, owned by ``owner_id``."""
+    with factory() as session:
+        jobs = [create_job(session, job_type, owner_id=owner_id) for job_type in WORKER_JOB_TYPES]
+        for job in jobs:
+            assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
+        session.commit()
+        return tuple(job.id for job in jobs)
+
+
+@dataclass(frozen=True)
+class MusicWorkers:
+    """Two music workers, a web process that reaps for them, and the jobs each is running."""
+
+    factory: object
+    worker_a: MusicWorkerProcess
+    worker_b: MusicWorkerProcess
+    jobs_of_a: tuple[str, ...]
+    jobs_of_b: tuple[str, ...]
+
+
+@pytest.fixture
+def music_workers(web_cluster) -> MusicWorkers:
+    cluster, factory = web_cluster
+    worker_a = cluster.start_music_worker("worker-a")
+    worker_b = cluster.start_music_worker("worker-b")
+    cluster.start("web")
+    return MusicWorkers(
+        factory,
+        worker_a,
+        worker_b,
+        _seed_running_worker_jobs(factory, worker_a.owner_id),
+        _seed_running_worker_jobs(factory, worker_b.owner_id),
+    )
+
+
+def test_a_music_worker_that_starts_leaves_the_jobs_of_a_running_one_alone(web_cluster) -> None:
+    cluster, factory = web_cluster
+    worker_a = cluster.start_music_worker("worker-a")
+    jobs_of_a = _seed_running_worker_jobs(factory, worker_a.owner_id)
+
+    cluster.start_music_worker("worker-b")
+
+    assert _statuses(factory, jobs_of_a) == [JobStatus.RUNNING] * len(WORKER_JOB_TYPES)
+
+
+def test_a_clean_stop_of_one_music_worker_ends_its_jobs_within_one_tick_and_no_other(
+    music_workers: MusicWorkers, redis_client,
+) -> None:
+    music_workers.worker_a.stop()
+
+    assert redis_client.exists(owner_lease_key(music_workers.worker_a.owner_id)) == 0
+    assert poll_until(
+        lambda: _failed_with_the_restart_verdict(music_workers.factory, music_workers.jobs_of_a),
+        deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
+    )
+    assert _statuses(music_workers.factory, music_workers.jobs_of_b) == (
+        [JobStatus.RUNNING] * len(WORKER_JOB_TYPES)
+    )
+
+
+def test_a_crash_of_one_music_worker_ends_its_jobs_once_the_lease_has_lapsed_and_no_other(
+    music_workers: MusicWorkers,
+) -> None:
+    music_workers.worker_a.kill()
+
+    assert poll_until(
+        lambda: _failed_with_the_restart_verdict(music_workers.factory, music_workers.jobs_of_a),
+        deadline_seconds=CRASH_DEADLINE_SECONDS,
+    )
+    assert _statuses(music_workers.factory, music_workers.jobs_of_b) == (
+        [JobStatus.RUNNING] * len(WORKER_JOB_TYPES)
+    )

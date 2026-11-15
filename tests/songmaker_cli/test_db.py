@@ -68,8 +68,8 @@ from songmaker_cli.db.queries.jobs import (
     count_user_jobs_in_window,
     create_job,
     get_job,
+    recover_jobs_of_dead_owners,
     recover_stale_jobs_by_age_and_type,
-    recover_stale_jobs_by_type,
     update_job_heartbeat,
     update_job_status,
 )
@@ -717,15 +717,15 @@ def _fail_by_lost_heartbeat(session: Session, now: datetime) -> None:
     recover_stale_jobs_by_age_and_type(session, now=now + timedelta(hours=1))
 
 
-def _fail_by_restart(session: Session, _now: datetime) -> None:
-    recover_stale_jobs_by_type(session, {JobType.GENERATE: {JobStatus.RUNNING}})
+def _fail_by_dead_owner(session: Session, _now: datetime) -> None:
+    recover_jobs_of_dead_owners(session, {"owner": WorkerLiveness.DEAD})
 
 
-@pytest.mark.parametrize("recover", [_fail_by_lost_heartbeat, _fail_by_restart])
+@pytest.mark.parametrize("recover", [_fail_by_lost_heartbeat, _fail_by_dead_owner])
 def test_recovery_failing_a_generating_job_clears_its_generation_start(
     seeded_session: Session, recover,
 ) -> None:
-    job = create_job(seeded_session, JobType.GENERATE)
+    job = create_job(seeded_session, JobType.GENERATE, owner_id="owner")
     update_job_status(
         seeded_session, job.id, JobStatusUpdate(JobStatus.RUNNING, phase=GenerationPhase.WRITING)
     )

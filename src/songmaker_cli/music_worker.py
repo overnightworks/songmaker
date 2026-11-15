@@ -15,11 +15,7 @@ from arq import cron, func
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
-    MODEL_DEFAULT_MODE,
-    RECOVERY_LOCK_MUSIC_KEY,
-)
+from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME, MODEL_DEFAULT_MODE
 from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
@@ -31,7 +27,6 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_lora_training_job,
 )
-from songmaker_cli.jobs.lora_training import reconcile_crashed_loras
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.timestamps import utcnow
@@ -47,18 +42,7 @@ class MusicWorker(WorkerBase):
         JobType.LOAD_MODEL_ON_WORKER,
         JobType.DOWNLOAD_MODEL_ON_WORKER,
     )
-    recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
-
-    async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
-        if not recovered.get(JobType.LORA_TRAINING):
-            return
-
-        await asyncio.to_thread(
-            reconcile_crashed_loras,
-            self.get_db_factory(),
-            self.audio_dir(),
-        )
 
     async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
                        requested_model, repaint_params=None, cover_params=None):
@@ -68,23 +52,20 @@ class MusicWorker(WorkerBase):
         import structlog
         structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
 
-        typed_repaint = (
-            RepaintTaskParams.model_validate(repaint_params)
-            if repaint_params is not None else None
-        )
-        typed_cover = (
-            CoverTaskParams.model_validate(cover_params)
-            if cover_params is not None else None
-        )
+        task_params = None
+        if repaint_params is not None:
+            task_params = RepaintTaskParams.model_validate(repaint_params)
+        elif cover_params is not None:
+            task_params = CoverTaskParams.model_validate(cover_params)
 
         await run_generation_job(
             job_id, song_id, version_id, count, user_id,
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
             data_dir=self.data_dir(),
+            owner_id=self.owner_id,
             seed=seed,
-            repaint_params=typed_repaint,
-            cover_params=typed_cover,
+            task_params=task_params,
             target_model=requested_model,
             redis=ctx["redis"],
         )
@@ -109,6 +90,7 @@ class MusicWorker(WorkerBase):
             ctx, job_id, lora_id, user_id,
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
+            owner_id=self.owner_id,
             redis=ctx["redis"],
             target_mode=target_mode,
             training_config=self._settings.lora_training_config,
@@ -118,12 +100,14 @@ class MusicWorker(WorkerBase):
         self, ctx, job_id: str, worker_id: str, mode: str,
     ) -> None:
         await _load_model_on_worker_impl(
-            ctx, job_id, worker_id, mode, db_factory=self.get_db_factory(),
+            ctx, job_id, worker_id, mode,
+            db_factory=self.get_db_factory(), owner_id=self.owner_id,
         )
 
     async def download_model_on_worker(self, ctx, job_id: str, mode: str) -> None:
         await _download_model_on_worker_impl(
-            ctx, job_id, mode, db_factory=self.get_db_factory(),
+            ctx, job_id, mode,
+            db_factory=self.get_db_factory(), owner_id=self.owner_id,
         )
 
     async def cleanup_files_cron(self, _ctx) -> None:

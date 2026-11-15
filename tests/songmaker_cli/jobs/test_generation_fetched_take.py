@@ -30,6 +30,7 @@ def _run_fetch_job(
         run_async(run_generation_job(
             "j1", "s1", "v1", count, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data", redis=MagicMock(), target_model="sft",
+            owner_id="o1",
         ))
 
 
@@ -184,6 +185,7 @@ def test_a_songs_settings_reach_the_worker_through_the_generate_request(
             job_id, song_id, version_id, count, user_id, db_factory=seeded_db,
             audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=MagicMock(),
             seed=seed, target_model=model,
+            owner_id="o1",
         ))
 
     sent = dispatch.call_args.kwargs["ace_config"]
@@ -199,6 +201,7 @@ def test_a_saved_take_records_the_seed_the_worker_reported(seeded_db, tmp_path: 
         run_async(run_generation_job(
             "j1", "s1", "v1", 1, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data", redis=MagicMock(), seed=5, target_model="sft",
+            owner_id="o1",
         ))
 
     with seeded_db() as session:

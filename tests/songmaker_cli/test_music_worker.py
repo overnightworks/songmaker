@@ -11,8 +11,7 @@ from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-from songmaker_cli.constants import AuditAction, LoraStatus
-from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User, UserLora
+from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
@@ -80,6 +79,7 @@ def test_generate_runs_queued_job() -> None:
     mock_run.assert_awaited_once()
     kwargs = mock_run.await_args.kwargs
     assert kwargs["redis"] is ctx["redis"]
+    assert kwargs["owner_id"] == worker.owner_id
 
 
 def test_generate_passes_seed_and_target_model() -> None:
@@ -105,6 +105,7 @@ def test_train_lora_passes_the_explicit_training_configuration_and_target_mode()
 
     assert mock_run.await_args.kwargs["training_config"] == worker._settings.lora_training_config
     assert mock_run.await_args.kwargs["target_mode"] == "turbo"
+    assert mock_run.await_args.kwargs["owner_id"] == worker.owner_id
 
 
 def test_lora_training_uses_its_own_timeout() -> None:
@@ -138,9 +139,9 @@ def test_generate_passes_repaint_params() -> None:
         ))
 
     kwargs = mock_run.await_args.kwargs
-    assert isinstance(kwargs["repaint_params"], RepaintTaskParams)
-    assert kwargs["repaint_params"].src_wav_path == "/x.wav"
-    assert kwargs["repaint_params"].repainting_end == 1.0
+    assert isinstance(kwargs["task_params"], RepaintTaskParams)
+    assert kwargs["task_params"].src_wav_path == "/x.wav"
+    assert kwargs["task_params"].repainting_end == 1.0
 
 
 def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg_factory) -> None:
@@ -178,17 +179,6 @@ def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg
     assert any(str(orphan) in message for message in caplog.messages)
 
 
-def test_on_startup_calls_recover_on_startup() -> None:
-    worker = MusicWorker()
-    worker._recover_on_startup = AsyncMock(return_value=0)
-
-    ctx = _mock_ctx()
-    with patch("songmaker_cli.logging_config.configure_logging"):
-        _run(worker.on_startup(ctx))
-
-    worker._recover_on_startup.assert_called_once_with(ctx)
-
-
 def test_on_shutdown_disposes_db() -> None:
     worker = MusicWorker()
     mock_session = MagicMock()
@@ -198,128 +188,9 @@ def test_on_shutdown_disposes_db() -> None:
     worker.get_db_factory = MagicMock(return_value=mock_factory)
     worker._db_engine = MagicMock()
 
-    with patch(
-        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={},
-    ):
-        _run(worker.on_shutdown(_mock_ctx()))
+    _run(worker.on_shutdown(_mock_ctx()))
 
     worker._db_engine.dispose.assert_called_once()
-
-
-def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path, pg_factory) -> None:
-    factory = pg_factory
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    with factory() as session:
-        session.add(User(id="u1", username="u1"))
-        session.add_all([
-            Job(
-                id="cover-1", type=JobType.COVER,
-                status=JobStatus.RUNNING,
-            ),
-            Job(
-                id="generate-1", type=JobType.GENERATE,
-                status=JobStatus.RUNNING,
-            ),
-            Job(
-                id="lora-job-1", type=JobType.LORA_TRAINING,
-                status=JobStatus.RUNNING,
-            ),
-            Job(
-                id="load-model-1", type=JobType.LOAD_MODEL_ON_WORKER,
-                status=JobStatus.RUNNING,
-            ),
-            Job(
-                id="download-model-1", type=JobType.DOWNLOAD_MODEL_ON_WORKER,
-                status=JobStatus.RUNNING,
-            ),
-            UserLora(
-                id="lora-1", user_id="u1", name="Lora", slug="lora",
-                status=LoraStatus.TRAINING, training_job_id="lora-job-1",
-            ),
-        ])
-        session.commit()
-
-    worker = MusicWorker(_settings())
-    worker.get_db_factory = MagicMock(return_value=factory)
-    worker.audio_dir = MagicMock(return_value=audio_dir)
-    redis = AsyncMock()
-    redis.set = AsyncMock(return_value=True)
-
-    with patch("songmaker_cli.logging_config.configure_logging"):
-        _run(worker.on_startup({"redis": redis}))
-
-    with factory() as session:
-        cover = session.query(Job).filter_by(id="cover-1").one()
-        generate = session.query(Job).filter_by(id="generate-1").one()
-        lora_job = session.query(Job).filter_by(id="lora-job-1").one()
-        load_model = session.query(Job).filter_by(id="load-model-1").one()
-        download_model = session.query(Job).filter_by(id="download-model-1").one()
-        lora = session.query(UserLora).filter_by(id="lora-1").one()
-        audits = session.query(AuditLog).filter_by(
-            action=AuditAction.TRAIN_LORA, resource_id="lora-1",
-        ).all()
-
-    assert worker.job_types == (
-        JobType.GENERATE,
-        JobType.LORA_TRAINING,
-        JobType.LOAD_MODEL_ON_WORKER,
-        JobType.DOWNLOAD_MODEL_ON_WORKER,
-    )
-    assert cover.status == JobStatus.RUNNING
-    for job in (generate, lora_job, load_model, download_model):
-        assert job.status == JobStatus.FAILED
-        assert job.error_type == "server_restart"
-    assert lora.status == LoraStatus.FAILED
-    assert len(audits) == 1
-
-
-def test_queued_music_jobs_survive_worker_restart(tmp_path, pg_factory) -> None:
-    factory = pg_factory
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    with factory() as session:
-        session.add(User(id="u1", username="u1"))
-        session.add_all([
-            Job(id="generate-queued", type=JobType.GENERATE, status=JobStatus.QUEUED),
-            Job(id="lora-queued", type=JobType.LORA_TRAINING, status=JobStatus.QUEUED),
-            Job(
-                id="load-model-queued", type=JobType.LOAD_MODEL_ON_WORKER,
-                status=JobStatus.QUEUED,
-            ),
-            Job(
-                id="download-model-queued", type=JobType.DOWNLOAD_MODEL_ON_WORKER,
-                status=JobStatus.QUEUED,
-            ),
-            UserLora(
-                id="lora-queued", user_id="u1", name="Lora", slug="lora",
-                status=LoraStatus.QUEUED, training_job_id="lora-queued",
-            ),
-        ])
-        session.commit()
-
-    worker = MusicWorker()
-    worker.get_db_factory = MagicMock(return_value=factory)
-    worker.audio_dir = MagicMock(return_value=audio_dir)
-    redis = AsyncMock()
-    redis.set = AsyncMock(return_value=True)
-
-    with patch("songmaker_cli.logging_config.configure_logging"):
-        _run(worker.on_startup({"redis": redis}))
-    _run(worker.on_shutdown({"redis": redis}))
-
-    with factory() as session:
-        generate = session.query(Job).filter_by(id="generate-queued").one()
-        lora_job = session.query(Job).filter_by(id="lora-queued").one()
-        load_model = session.query(Job).filter_by(id="load-model-queued").one()
-        download_model = session.query(Job).filter_by(id="download-model-queued").one()
-        lora = session.query(UserLora).filter_by(id="lora-queued").one()
-
-    assert generate.status == JobStatus.QUEUED
-    assert lora_job.status == JobStatus.QUEUED
-    assert load_model.status == JobStatus.QUEUED
-    assert download_model.status == JobStatus.QUEUED
-    assert lora.status == LoraStatus.QUEUED
 
 
 def test_file_cleanup_cron_leaves_queued_generate_job_untouched(tmp_path, pg_factory) -> None:

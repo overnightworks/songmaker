@@ -92,13 +92,15 @@ def test_scoring_run_writes_no_verdict_key_and_keeps_a_stored_pair(
             )),
         ),
     ):
-        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+        run_scoring_job("j-score", "g1", None,
+            db_factory=factory, audio_dir=audio_dir, owner_id="o1")
 
     with factory() as session:
         job = session.query(Job).filter_by(id="j-score").one()
         stored = session.query(Score).filter_by(generation_id="g1").one()
         assert job.status == "completed"
         assert job.error_type is None
+        assert job.owner_id == "o1"
         assert {key: stored.value[key] for key in stored_pair} == stored_pair
         assert "text_accuracy" in stored.value
 
@@ -112,6 +114,7 @@ def test_scoring_run_asks_the_child_for_exactly_the_requested_scorers(
     with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
         run_scoring_job(
             "j-score", "g1", ["silence"], db_factory=factory, audio_dir=audio_dir,
+            owner_id="o1",
         )
 
     assert scorer.score.call_args.kwargs["scorers"] == ["silence"]
@@ -134,7 +137,8 @@ def test_scoring_run_for_a_take_without_a_score_row_writes_no_verdict_key(
             return_value=_scoring_result_with_transcript(silent=silent),
         )),
     ):
-        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+        run_scoring_job("j-score", "g1", None,
+            db_factory=factory, audio_dir=audio_dir, owner_id="o1")
 
     with factory() as session:
         assert session.query(Job).filter_by(id="j-score").one().status == "completed"
@@ -158,6 +162,7 @@ def test_child_scorer_timeout_leaves_the_job_completed(
     with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
         run_scoring_job(
             "j-score", "g1", ["silence"], db_factory=factory, audio_dir=audio_dir,
+            owner_id="o1",
         )
 
     with factory() as session:

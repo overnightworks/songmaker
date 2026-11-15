@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -43,6 +42,7 @@ def run_scoring_job(
     *,
     db_factory: sessionmaker[Session],
     audio_dir: Path,
+    owner_id: str,
     device: str = "cpu",
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
@@ -50,11 +50,8 @@ def run_scoring_job(
 
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
-        job_id=job_id,
-        job_type=JobType.SCORE,
-        generation_id=gen_id,
+        job_id=job_id, job_type=JobType.SCORE, generation_id=gen_id,
     )
-
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
 
     try:
@@ -62,7 +59,7 @@ def run_scoring_job(
             log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
-        _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
+        _update_job(db_factory, job_id, JobStatus.RUNNING, owner_id=owner_id)
         if _job_is_terminal(db_factory, job_id):
             log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return

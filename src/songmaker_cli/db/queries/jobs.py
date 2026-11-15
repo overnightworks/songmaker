@@ -196,7 +196,7 @@ class JobStatusUpdate:
     error_type: str | None = None
     retry_after_seconds: int | None = None
     queue_reason_message: Message | None = None
-    worker_pid: int | _Unset = UNSET
+    owner_id: str | _Unset = UNSET
     current_epoch: int | _Unset = UNSET
     train_epochs: int | _Unset = UNSET
     training_started_at: datetime | _Unset = UNSET
@@ -450,37 +450,6 @@ def _recover_stale_job_if_unchanged(
         log.debug("Skipped stale-job recovery because job %s changed", job.id)
         return False
     return True
-
-
-def recover_stale_jobs_by_type(
-    session: Session,
-    recoverable_statuses: Mapping[str, Collection[str]],
-) -> dict[str, int]:
-    """Fail restart-interrupted jobs and return recovery counts keyed by type.
-
-    Each job type declares the active statuses a worker may recover at process
-    startup or shutdown.  This keeps a queued job eligible to a new worker
-    unless its owner explicitly says that queueing is unsafe to resume.
-    """
-    now = datetime.now(timezone.utc)
-    recovered: dict[str, int] = {}
-    for job_type, statuses in recoverable_statuses.items():
-        stale = (
-            session.query(Job)
-            .filter(Job.type == job_type, Job.status.in_(statuses))
-            .all()
-        )
-        for job in stale:
-            job.status = JobStatus.FAILED
-            job.error = JOB_ERROR_SERVER_RESTARTED.error
-            job.error_type = JOB_ERROR_SERVER_RESTARTED.error_type
-            _apply_terminal_values(job, now)
-        if stale:
-            recovered[job_type] = len(stale)
-    session.flush()
-    if recovered:
-        log.info("Recovered stale jobs by type: %s", recovered)
-    return recovered
 
 
 def active_job_owner_ids(session: Session) -> set[str]:

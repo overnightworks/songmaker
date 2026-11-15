@@ -60,9 +60,17 @@ def test_score_defaults_to_cpu() -> None:
     assert mock_run.call_args.kwargs["device"] == "cpu"
 
 
+def test_score_names_the_worker_as_the_owner() -> None:
+    worker = _make_worker()
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
+        _run(worker.score(_mock_ctx(), "j1", "g1", None))
+
+    assert mock_run.call_args.kwargs["owner_id"] == worker.owner_id
+
+
 def test_on_startup_initializes_scorer() -> None:
     worker = ScoringWorker()
-    worker._recover_on_startup = AsyncMock(return_value=0)
+    worker.get_db_factory = MagicMock()
 
     mock_scorer = MagicMock()
     ctx = _mock_ctx()
@@ -78,7 +86,6 @@ def test_on_startup_initializes_scorer() -> None:
         _run(worker.on_startup(ctx))
 
     mock_set.assert_called_once_with(mock_scorer)
-    worker._recover_on_startup.assert_called_once_with(ctx)
 
 
 def test_on_shutdown_stops_scorer() -> None:
@@ -96,9 +103,6 @@ def test_on_shutdown_stops_scorer() -> None:
         patch(
             "songmaker_cli.scoring.subprocess_runner.get_scorer_process",
             return_value=mock_scorer,
-        ),
-        patch(
-            "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={},
         ),
     ):
         _run(worker.on_shutdown(ctx))
@@ -120,9 +124,6 @@ def test_on_shutdown_handles_missing_scorer() -> None:
         patch(
             "songmaker_cli.scoring.subprocess_runner.get_scorer_process",
             side_effect=RuntimeError("not initialized"),
-        ),
-        patch(
-            "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={},
         ),
     ):
         _run(worker.on_shutdown(ctx))
