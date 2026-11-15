@@ -1839,6 +1839,8 @@ Access logs and HTTP duration metrics are recorded when the full exchange ends, 
 
 ### Alerting
 
+`songmaker_last_job_failure_timestamp_seconds` counts every FAILED job except a co-writer turn (`chat`) or cover suggestion that ended with a named agent problem (`AgentProblem` as `error_type`): the person reads that reason on the surface, nothing in songmaker is broken, and the gateway's owner, platform, watches and mails about the gateway itself.
+
 The platform's Prometheus is the only alert source. Its rules cover the conditions `/metrics` exposes: no online ACE-Step worker (`NoOnlineAceStepWorker`), a job failure (`SongmakerJobFailure`), an unhealthy background loop (`SongmakerBackgroundLoopUnhealthy`) and the scrape target down (the generic `TargetDown` rule). The rules and their delivery live with the platform, not in this repository.
 
 ## Backup & Restore

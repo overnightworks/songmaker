@@ -33,6 +33,16 @@ class JobType(StrEnum):
     DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
 
 
+class AgentProblem(StrEnum):
+    """Why an agent run (a co-writer turn or a cover picture) did not run; each surface words it."""
+
+    UNAVAILABLE = "unavailable"
+    BUSY = "busy"
+    BUDGET_SPENT = "budget_spent"
+    NOT_ENABLED = "not_enabled"
+    SIGN_IN_AGAIN = "sign_in_again"
+
+
 class GenerationPhase(StrEnum):
     """The stretch of one take a generate job is in."""
 

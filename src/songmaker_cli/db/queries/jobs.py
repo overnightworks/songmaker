@@ -8,7 +8,7 @@ from dataclasses import KW_ONLY, dataclass, fields
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
-from sqlalchemy import func, or_, update
+from sqlalchemy import and_, func, not_, or_, update
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Job
@@ -17,6 +17,7 @@ from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS, JobStaleThresholds
 from songmaker_cli.job_types import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
+    AgentProblem,
     GenerationPhase,
     JobStatus,
     JobType,
@@ -650,15 +651,24 @@ def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]
     return result
 
 
+_AGENT_JOB_TYPES: Final = (JobType.CHAT, JobType.COVER)
+
+
 def last_job_failure_time(session: Session) -> datetime | None:
     """When the most recent failed job finished, or None if none ever did.
 
     Every path that marks a job FAILED also stamps completed_at, so the
-    newest of those is the newest failure.
+    newest of those is the newest failure. A co-writer turn or cover
+    suggestion the gateway did not run (a named AgentProblem) is no failure
+    of songmaker: the gateway's owner watches the gateway.
     """
+    gateway_problem = and_(
+        Job.type.in_(_AGENT_JOB_TYPES),
+        Job.error_type.in_(list(AgentProblem)),
+    )
     newest = (
         session.query(func.max(Job.completed_at))
-        .filter(Job.status == JobStatus.FAILED)
+        .filter(Job.status == JobStatus.FAILED, not_(gateway_problem))
         .scalar()
     )
     if newest is None:
