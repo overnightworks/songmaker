@@ -27,7 +27,7 @@ const test = base.extend<{ albumId: string }>({
 	}
 });
 
-const UNAVAILABLE = "Generating isn't available right now.";
+const UNAVAILABLE = words['jobFailure.generationUnavailable'];
 const WIDTHS = [390, 1440] as const;
 const ROLES = ['user', 'admin'] as const;
 const SOURCES = ['live', 'reload'] as const;

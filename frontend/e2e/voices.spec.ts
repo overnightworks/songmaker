@@ -225,7 +225,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect(voice.getByText(words['voiceDetail.waiting'], { exact: true })).toBeVisible({
 			timeout: 15_000
 		});
-		await expect(voice).toContainText('Waiting for queued generations on this GPU.');
+		await expect(voice).toContainText(words['jobWait.queuedGenerations']);
 		await expect(voice).toContainText('Position 1 in the queue');
 		await expect(
 			voice.getByText(
@@ -392,7 +392,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		).toBeVisible({
 			timeout: 15_000
 		});
-		await expect(failedVoice.card).toContainText('Worker training failed');
+		await expect(failedVoice.card).toContainText(words['voiceFailure.workerTrainingFailed']);
 		const failedState = await readVoice(request, failedVoice.id);
 		expect(failedState.status).toBe('failed');
 		expect(failedState.error).toBe('Worker training failed');

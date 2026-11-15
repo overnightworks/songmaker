@@ -63,7 +63,7 @@ const ELAPSED_TIME_PATTERN = /\d+:\d{2}/;
 const CLOCK_HOLD_LEAD_MS = 1000;
 const CLOCK_RUN_SECONDS = 12;
 const RAW_WORKER_FAILURE = 'ACE-Step worker: CUDA out of memory on device 0';
-const FAILED_GENERATION_SENTENCE = 'Generating failed — try again.';
+const FAILED_GENERATION_SENTENCE = words['jobFailure.generationFailed'];
 const UNSAVED_DRAFT_LINE = 'a line nobody saved';
 
 // The seeded take's version as the app reads it, so a group label names it
