@@ -7,11 +7,12 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import fakeredis
 import pytest
-from redis.exceptions import ConnectionError as RedisConnectionError
+from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
+from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
 
@@ -105,71 +106,64 @@ def test_get_db_factory_independent_per_instance() -> None:
 # ── owner lease ───────────────────────────────────────────────────
 
 
-class _Server(fakeredis.FakeAsyncRedis):
-    """A Redis that answers until it is taken down."""
-
-    down = False
-
-    async def execute_command(self, *args, **options):
-        if self.down:
-            raise RedisConnectionError("down")
-        return await super().execute_command(*args, **options)
-
-
-def _worker(monkeypatch: pytest.MonkeyPatch, server: _Server) -> _DummyWorker:
+def _worker_on(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
     monkeypatch.setattr("songmaker_cli.logging_config.configure_logging", lambda: None)
-    monkeypatch.setattr("songmaker_cli.worker_base.create_async_redis", lambda _url: server)
-    worker = _DummyWorker()
+    worker = _DummyWorker(settings=Settings(
+        database_url="postgresql://example", redis_url=redis_url,
+        session_secret="session-secret", songmaker_internal_token="internal-token",
+    ))
     worker.get_db_factory = MagicMock()
     return worker
 
 
+async def _held_leases(redis_url: str) -> set[str]:
+    reader = create_async_redis(redis_url)
+    try:
+        return set((await owner_leases(reader).live()).holders)
+    finally:
+        await reader.aclose()
+
+
 def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, redis_url: str,
 ) -> None:
-    server = _Server()
-    worker = _worker(monkeypatch, server)
+    worker = _worker_on(redis_url, monkeypatch)
 
     async def start_and_stop() -> tuple[set[str], set[str]]:
         await worker.on_startup({})
-        held_while_running = set((await owner_leases(server).live()).holders)
+        held_while_running = await _held_leases(redis_url)
         await worker.on_shutdown({})
-        return held_while_running, set((await owner_leases(server).live()).holders)
+        return held_while_running, await _held_leases(redis_url)
 
     assert _run(start_and_stop()) == ({worker.owner_id}, set())
 
 
-def test_a_worker_connects_for_its_lease_only_after_its_database_has_opened(
-    monkeypatch: pytest.MonkeyPatch,
+def test_a_worker_whose_database_cannot_open_holds_no_lease(
+    monkeypatch: pytest.MonkeyPatch, redis_url: str,
 ) -> None:
-    server = _Server()
-    worker = _worker(monkeypatch, server)
-    steps: list[str] = []
-    worker.get_db_factory = lambda: steps.append("database")
-    monkeypatch.setattr(
-        "songmaker_cli.worker_base.create_async_redis",
-        lambda _url: steps.append("lease") or server,
-    )
+    worker = _worker_on(redis_url, monkeypatch)
+    worker.get_db_factory = MagicMock(side_effect=OSError("the database is down"))
 
-    async def start_and_stop() -> None:
-        await worker.on_startup({})
-        await worker.on_shutdown({})
+    async def start_and_read_the_leases() -> set[str]:
+        with pytest.raises(OSError, match="the database is down"):
+            await worker.on_startup({})
+        return await _held_leases(redis_url)
 
-    _run(start_and_stop())
-
-    assert steps == ["database", "lease"]
+    assert _run(start_and_read_the_leases()) == set()
 
 
-def test_a_shutdown_that_cannot_end_the_lease_still_ends(monkeypatch: pytest.MonkeyPatch) -> None:
-    server = _Server()
-    worker = _worker(monkeypatch, server)
+def test_a_shutdown_that_cannot_end_the_lease_still_ends(
+    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+) -> None:
+    with redis_proxy(redis_url) as proxy:
+        worker = _worker_on(proxy.url, monkeypatch)
 
-    async def start_and_stop_with_redis_down() -> None:
-        await worker.on_startup({})
-        server.down = True
-        await worker.on_shutdown({})
+        async def start_and_stop_with_redis_cut() -> None:
+            await worker.on_startup({})
+            proxy.cut()
+            await worker.on_shutdown({})
 
-    _run(start_and_stop_with_redis_down())
+        _run(start_and_stop_with_redis_cut())
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:
