@@ -1,0 +1,8 @@
+claim_id = "4a55caecdc224ac99de6b2eb197d57e1"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "396083c30ea4e203213c88cf73cb3c91f739f499"
+branch = "claude/issue-3209-songmaker-s-owner-lease-and-single-fligh"
+scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/health_types.py", "src/songmaker_cli/job_timing.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/server.py", "src/songmaker_cli/worker_base.py", "src/songmaker_cli/worker_liveness.py", "tests/songmaker_cli/test_api_helpers_lock_guard_postgres.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_lifecycle_owner_loops.py", "tests/songmaker_cli/test_server_owner_recovery.py", "tests/songmaker_cli/test_worker_base.py", "tests/songmaker_cli/test_worker_liveness.py", "tests/songmaker_cli/test_worker_liveness_owner_lease.py", "tests/support/app_processes.py", "uv.lock"]
+opened_commit = "45c1b8cc841764322212a84868277f6feb0f02db"
+whole_reason = "Owner lease readers span web, worker, health and admission; async admission adds its callers."
