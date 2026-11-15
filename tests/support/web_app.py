@@ -105,6 +105,16 @@ def install_app_context(app, ctx) -> None:
     install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
 
 
+def make_app_context(
+    *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis,
+) -> AppContext:
+    """A context on fakes for the asyncio side, over the caller's database and sync Redis."""
+    return AppContext(
+        db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
+    )
+
+
 def make_router_ctx(
     tmp_path: Path,
     *,
@@ -119,8 +129,7 @@ def make_router_ctx(
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-        async_redis=make_fake_async_redis(),
+        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
     if seed_db is not None:
         with ctx.db() as session:
@@ -201,8 +210,7 @@ def make_test_app(
     redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis,
-        async_redis=make_fake_async_redis(),
+        signing_key=TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})

@@ -1975,8 +1975,7 @@ def _shared_app_with_small_budget(
             data_dir=data_dir,
             signing_key=TEST_SECRET,
             redis=make_fake_redis(),
-            trusted_proxies=trusted_proxies,
-            async_redis=make_fake_async_redis(),
+            trusted_proxies=trusted_proxies, async_redis=make_fake_async_redis(),
         )
         yield create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     finally:
@@ -2056,12 +2055,9 @@ def test_share_album_ownership_enforced(tmp_path: Path, pg_factory) -> None:
         session.commit()
 
     ctx = AppContext(
-        db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-        async_redis=make_fake_async_redis(),
+        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
     from songmaker_cli.server import create_app
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)

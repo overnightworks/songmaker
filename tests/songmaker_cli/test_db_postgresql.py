@@ -434,8 +434,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=b"test",
-        redis=None,  # type: ignore[arg-type]
-        async_redis=make_fake_async_redis(),
+        redis=None, async_redis=make_fake_async_redis(),  # type: ignore[arg-type]
     )
     ctx.audio_dir.mkdir()
     from songmaker_cli.jobs import lora_training

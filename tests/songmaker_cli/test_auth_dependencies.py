@@ -42,8 +42,7 @@ def _build_auth_app(_db, tmp_path: Path, redis=None):
         redis = make_fake_redis()
     ctx = AppContext(
         db=_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=_TEST_SECRET, redis=redis,
-        async_redis=make_fake_async_redis(),
+        signing_key=_TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
     )
     app = FastAPI()
     install_app_context(app, ctx)

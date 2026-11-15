@@ -182,8 +182,7 @@ def test_lifecycle_cleanup_enforces_retention(db_factory, tmp_path: Path) -> Non
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=b"a" * 64,
-        redis=MagicMock(),
-        async_redis=make_fake_async_redis(),
+        redis=MagicMock(), async_redis=make_fake_async_redis(),
     )
     assert cleanup_expired_resource_events(ctx) == 1
     with db_factory() as session:

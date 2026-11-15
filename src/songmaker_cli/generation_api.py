@@ -411,7 +411,6 @@ async def api_repaint_generation(
     _check_version_lora_ready(session, version, user)
 
     wav_path, wav_name = _resolve_source_wav(ctx.audio_dir, gen)
-
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 

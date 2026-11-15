@@ -27,8 +27,7 @@ def cleanup_context(tmp_path, pg_factory):
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
-        redis=None,
-        async_redis=make_fake_async_redis(),
+        redis=None, async_redis=make_fake_async_redis(),
     )
 
 

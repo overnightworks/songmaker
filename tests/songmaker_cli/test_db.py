@@ -304,9 +304,7 @@ def test_update_song_force_new_version_keeps_a_generation_free_draft_immutable(
 ) -> None:
     db_session.add(Album(id="album", title="Album", artist="Artist"))
     db_session.add(Song(id="song", title="Song", album_id="album", slug="song"))
-    db_session.add(Version(
-        id="v1", song_id="song", version_number=1, lyrics="draft lyrics",
-    ))
+    db_session.add(Version(id="v1", song_id="song", version_number=1, lyrics="draft lyrics"))
     db_session.commit()
 
     version = update_song(

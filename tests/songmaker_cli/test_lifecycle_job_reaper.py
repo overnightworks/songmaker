@@ -53,8 +53,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir.mkdir()
     return AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-        async_redis=make_fake_async_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
 
 
