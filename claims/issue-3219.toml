@@ -1,0 +1,8 @@
+claim_id = "dafac9bf1824404aa5f41dbebe9c4b3a"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "b3ad92a46f8aa06d423030b13e7d00243174b06e"
+branch = "claude/issue-3219-every-songmaker-process-logs-through-log"
+scope = ["pyproject.toml", "src/acestep_worker/__main__.py", "src/songmaker_cli/logging_config.py", "src/songmaker_cli/server.py", "tests/songmaker_cli", "uv.lock"]
+opened_commit = "52ec8a010d272da97f9dfc7c7a1bb1da33205f5d"
+whole_reason = "Switching to logline touches every entry point, the dependency pin, the lock file and the tests that read log lines."
