@@ -330,5 +330,3 @@ ctx = [["tests/songmaker_cli/test_lifecycle_reconciliation.py", "ctx"]]
 [clones."tests/songmaker_cli/test_music_worker.py"]
 _make_worker = [["tests/songmaker_cli/test_scoring_worker.py", "_make_worker"]]
 "test_music_worker_functions_registered_under_job_function_names._build_and_inspect" = [["tests/songmaker_cli/test_scoring_worker.py", "test_scoring_worker_functions_registered_under_job_function_names._build_and_inspect"]]
-
-[literal_text]
