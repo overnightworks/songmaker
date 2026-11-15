@@ -3,6 +3,8 @@
 Each process starts through the CLI `server` command, as a deployment does, with its own
 port, worker id and data directory, one shared audio directory, throwaway secrets, and the
 database and Redis the case owns. Setting and variable names come from the settings classes.
+A case may add `StandIns`: a gateway origin, and an HTTPS issuer whose certificate the
+children trust through `SSL_CERT_FILE`.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from pydantic_settings import BaseSettings
+from support.cowriter_gateway import agent_config
 
 from acestep_worker.settings import WorkerSettings
 from songmaker_cli.settings import Settings
@@ -43,6 +46,8 @@ LOG_TAIL_BYTES: Final = 4000
 # search path and coverage's hook (`patch = subprocess` reads COVERAGE_*). Nothing else leaks in.
 INHERITED_VARIABLES: Final = ("PATH", "HOME", "LANG", "VIRTUAL_ENV")
 INHERITED_PREFIX: Final = "COVERAGE_"
+OIDC_CLIENT_ID: Final = "songmaker-test"
+TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
 
 
 def environment_name(settings_class: type[BaseSettings], field_name: str) -> str:
@@ -65,6 +70,15 @@ def _free_port() -> int:
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
         probe.bind((LOOPBACK, 0))
         return probe.getsockname()[1]
+
+
+@dataclass(frozen=True)
+class StandIns:
+    """What the children reach instead of a deployment's gateway and realm."""
+
+    gateway_origin: str
+    issuer_url: str
+    issuer_certificate: Path
 
 
 @dataclass
@@ -109,8 +123,11 @@ class WebProcess:
 class WebProcesses:
     """The processes of one case; they share a database, a Redis and an audio directory."""
 
-    def __init__(self, root: Path, *, database_url: str, redis_url: str) -> None:
+    def __init__(
+        self, root: Path, *, database_url: str, redis_url: str, stand_ins: StandIns | None = None,
+    ) -> None:
         self.root = root
+        self._stand_ins = stand_ins
         self.session_secret = secrets.token_hex(32)
         self.audio_dir = root / "audio"
         self.audio_dir.mkdir()
@@ -126,14 +143,30 @@ class WebProcesses:
             "session_secret": self.session_secret,
             "songmaker_internal_token": secrets.token_hex(16),
             "oidc_issuer": "https://issuer.invalid/realms/test",
-            "oidc_client_id": "songmaker-test",
+            "oidc_client_id": OIDC_CLIENT_ID,
             "oidc_client_secret_file": str(client_secret),
             "public_base_url": "https://songmaker.invalid",
             "allowed_hosts": LOOPBACK,
             "cookie_secure": "false",
             "audio_dir": str(self.audio_dir),
         }
-        return {environment_name(Settings, field): value for field, value in values.items()}
+        environment = {environment_name(Settings, field): value for field, value in values.items()}
+        if self._stand_ins is not None:
+            environment.update(self._stand_in_environment(self._stand_ins))
+        return environment
+
+    def _stand_in_environment(self, stand_ins: StandIns) -> dict[str, str]:
+        agent = agent_config(self.root, origin=stand_ins.gateway_origin)
+        assert agent.gateway is not None
+        prefix = environment_name(Settings, "agent")
+        return {
+            environment_name(Settings, "oidc_issuer"): stand_ins.issuer_url,
+            f"{prefix}__BACKEND": agent.backend.value,
+            f"{prefix}__GATEWAY__ORIGIN": agent.gateway.origin,
+            f"{prefix}__GATEWAY__KEY_FILE": str(agent.gateway.key_file),
+            f"{prefix}__API_GROUP": agent.api_group,
+            TRUSTED_CERTIFICATES_VARIABLE: str(stand_ins.issuer_certificate),
+        }
 
     def settings(self) -> Settings:
         """The settings every process shares, read the way a process reads them."""
@@ -226,10 +259,12 @@ def _wait_until_ready(web_process: WebProcess) -> None:
 
 @contextmanager
 def web_processes(
-    root: Path, *, database_url: str, redis_url: str,
+    root: Path, *, database_url: str, redis_url: str, stand_ins: StandIns | None = None,
 ) -> Iterator[WebProcesses]:
     """The processes of one case; every one is ended when the case ends, however it ends."""
-    cluster = WebProcesses(root, database_url=database_url, redis_url=redis_url)
+    cluster = WebProcesses(
+        root, database_url=database_url, redis_url=redis_url, stand_ins=stand_ins,
+    )
     try:
         yield cluster
     finally:

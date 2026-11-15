@@ -7,25 +7,19 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
 
 import httpx
 import pytest
-from redis import Redis
 from support.app_processes import (
     HEALTH_PATH,
     WebProcess,
-    WebProcesses,
     die_with_parent,
     web_processes,
 )
-from support.session_ids import a_session_id
-from support.web_app import issued_cookies, seed_user
+from support.web_cluster_world import sign_in_person
 
-from songmaker_cli.app_context import AppContext, build_web_auth_config
-from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.request_policies import build_rate_limit_policy
 
 SIGNED_IN_PATH = "/api/auth/me"
@@ -41,33 +35,6 @@ with web_processes(Path(root), database_url=database_url, redis_url=redis_url) a
     print(cluster.start("a").process.pid, flush=True)
     time.sleep(600)
 """
-
-
-def _signed_in_cookies(cluster: WebProcesses, factory, redis_url: str) -> dict[str, str]:
-    """Open a session through the production session store and issue its cookie."""
-    now = datetime.now(timezone.utc)
-    settings = cluster.settings()
-    with factory() as session:
-        person = seed_user(session, PERSON_NAME)
-        record = DatabaseSessionRecordStore(session).create(
-            person.id,
-            session_id=a_session_id(),
-            now=now,
-            expires_at=now + timedelta(seconds=settings.session_idle_seconds),
-            refresh_token=None,
-            id_token=None,
-            account_language=None,
-        )
-        session.commit()
-        session_id = record.id
-    context = AppContext(
-        db=factory,
-        audio_dir=cluster.audio_dir,
-        data_dir=cluster.root,
-        signing_key=cluster.session_secret.encode(),
-        redis=Redis.from_url(redis_url),
-    )
-    return issued_cookies(session_id, build_web_auth_config(context, settings))
 
 
 def _is_alive(pid: int) -> bool:
@@ -87,7 +54,7 @@ def test_a_session_seeded_in_the_database_answers_on_both_processes(
     two_processes, redis_url: str,
 ) -> None:
     cluster, factory, process_a, process_b = two_processes
-    cookies = _signed_in_cookies(cluster, factory, redis_url)
+    cookies = sign_in_person(cluster, factory, redis_url, PERSON_NAME).cookies
 
     answers = [_get(each, SIGNED_IN_PATH, cookies=cookies) for each in (process_a, process_b)]
 
