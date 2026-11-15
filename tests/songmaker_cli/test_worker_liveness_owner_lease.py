@@ -6,15 +6,15 @@ import asyncio
 from datetime import timedelta
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 from support.redis_proxy import redis_proxy
 from support.web_app import make_fake_async_redis, settle_owner_leases
-from redis.exceptions import ConnectionError as RedisConnectionError
 from tandem import Liveness, StoreError
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.redis_client import create_async_redis
-from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases, owner_lease_liveness
+from songmaker_cli.worker_liveness import keep_owner_lease, owner_lease_liveness, owner_leases
 
 LEASED = "leased-owner"
 ABSENT = "absent-owner"
