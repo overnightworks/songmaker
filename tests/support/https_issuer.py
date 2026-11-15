@@ -125,6 +125,7 @@ def serve_issuer(directory: Path, *, client_id: str) -> Iterator[HttpsIssuer]:
     """Serve a realm over HTTPS on a free loopback port; stop it on exit."""
     certificate_file, key_file = _write_self_signed_certificate(directory)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(certificate_file, key_file)
     server = _RealmServer(_realm_handler())
     server.socket = context.wrap_socket(server.socket, server_side=True)
