@@ -47,7 +47,7 @@ services:
       - DAC_READ_SEARCH
 
   redis:
-    image: redis:7.4.12-alpine@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2
+    image: redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     volumes:
       - redisdata:/data
     healthcheck:
