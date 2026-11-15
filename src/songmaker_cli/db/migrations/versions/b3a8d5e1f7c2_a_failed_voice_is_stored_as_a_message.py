@@ -5,10 +5,12 @@ Revises: a9d3f1b7c5e2
 Create Date: 2026-11-15 09:00:00.000000
 
 user_loras.error (Text) becomes user_loras.error_message (JSON, a catalog key and the values of
-its gaps). Each sentence a writer ever stored maps to its key through the frozen table below, the
-two mode errors map through their templates with the quoted modes as gap values, and any other
-text is kept as `voiceFailure.recorded` with the text as its cause, so nothing is lost. NULL stays
-NULL. The downgrade writes each token's sentence back; `recorded` writes its cause.
+its gaps). Each sentence the current writers store maps to its key through the frozen table
+below, the two mode errors map through their templates with the quoted modes as gap values, and
+any other text, the historic ARQ_JOB_TIMEOUT cancellation included, is kept as
+`voiceFailure.recorded` with the text as its cause, so nothing is lost and every sentence
+round-trips byte for byte. NULL stays NULL.
+The downgrade writes each token's sentence back; `recorded` writes its cause.
 """
 from __future__ import annotations
 
@@ -24,8 +26,9 @@ down_revision: str | Sequence[str] | None = "a9d3f1b7c5e2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# why: frozen on purpose, so the migration never reads the catalog a later revision changes. The
-# first sentence of a key is the one the downgrade writes back.
+# why: frozen on purpose, so the migration never reads the catalog a later revision changes. One
+# sentence per key, so the downgrade writes back exactly what the upgrade read; a sentence an older
+# writer stored under the same reason (the ARQ_JOB_TIMEOUT cancellation) is kept as `recorded`.
 STORED_MESSAGE_KEYS: dict[str, str] = {
     "Failed to download generated audio": "jobFailure.audioDownloadFailed",
     "ACE-Step server not reachable": "jobFailure.serverUnreachable",
@@ -44,7 +47,6 @@ STORED_MESSAGE_KEYS: dict[str, str] = {
     "Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown": (
         "voiceFailure.cancelled"
     ),
-    "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown": "voiceFailure.cancelled",
     "Job queue unavailable": "jobRefusal.queueUnavailable",
 }
 # why: the two sentences that quote the worker's and the requested mode, with the quotes kept.
@@ -64,9 +66,9 @@ SHAPE_CHECK = (
     "AND COALESCE(json_typeof(error_message->'values'), '') = 'object')"
 )
 
-_SENTENCE_OF_KEY: dict[str, str] = {}
-for _sentence, _key in STORED_MESSAGE_KEYS.items():
-    _SENTENCE_OF_KEY.setdefault(_key, _sentence)
+_SENTENCE_OF_KEY: dict[str, str] = {
+    key: sentence for sentence, key in STORED_MESSAGE_KEYS.items()
+}
 _MODE_PATTERNS: dict[str, re.Pattern[str]] = {
     key: re.compile(re.sub(r"\\\{(\w+)\\\}", r"(?P<\1>.+)", re.escape(template)), re.DOTALL)
     for key, template in MODE_TEMPLATES.items()

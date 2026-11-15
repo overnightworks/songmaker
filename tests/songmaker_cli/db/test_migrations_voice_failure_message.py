@@ -29,7 +29,6 @@ OLD_COLUMN = "error"
 NEW_COLUMN = "error_message"
 STORED_KEYS_FILE = REPOSITORY_ROOT / "scripts" / "stored_message_keys.txt"
 RECORDED_KEY = "voiceFailure.recorded"
-CANCELLED_KEY = "voiceFailure.cancelled"
 HISTORIC_CANCEL_SENTENCE = "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
 UNSUPPORTED_SENTENCE = (
     "Worker completed LoRA training with unsupported model mode: 'bogus'"
@@ -68,6 +67,7 @@ def _seed_voices(engine) -> None:
     for number, sentence in enumerate(MODE_TOKENS):
         _insert_lora(engine, f"mode-{number}", OLD_COLUMN, sentence)
     _insert_lora(engine, "unknown", OLD_COLUMN, UNKNOWN_SENTENCE)
+    _insert_lora(engine, "historic-cancel", OLD_COLUMN, HISTORIC_CANCEL_SENTENCE)
     _insert_lora(engine, "none", OLD_COLUMN, None)
 
 
@@ -90,15 +90,14 @@ def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
     for number, sentence in enumerate(SENTENCES):
         token = stored[f"known-{number}"]
         assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
-        if sentence != HISTORIC_CANCEL_SENTENCE:
-            assert text(SOURCE_LANGUAGE, token["key"]) == sentence
+        assert text(SOURCE_LANGUAGE, token["key"]) == sentence
 
 
-def test_the_historic_cancel_sentence_becomes_the_cancelled_token(upgraded):
+def test_the_historic_cancel_sentence_is_kept_as_the_recorded_token(upgraded):
     _, engine = upgraded
-    stored = stored_values(engine, "user_loras", NEW_COLUMN)
-    token = stored[f"known-{SENTENCES.index(HISTORIC_CANCEL_SENTENCE)}"]
-    assert token == {"key": CANCELLED_KEY, "values": {}}
+    token = stored_values(engine, "user_loras", NEW_COLUMN)["historic-cancel"]
+    assert token == {"key": RECORDED_KEY, "values": {"cause": HISTORIC_CANCEL_SENTENCE}}
+    assert text(SOURCE_LANGUAGE, token["key"], **token["values"]) == HISTORIC_CANCEL_SENTENCE
 
 
 @pytest.mark.parametrize("number", range(len(MODE_TOKENS)))
@@ -155,11 +154,8 @@ def test_downgrade_restores_every_sentence_and_keeps_the_voices_without_a_reason
     assert NEW_COLUMN not in column_names(engine, "user_loras")
     stored = stored_values(engine, "user_loras", OLD_COLUMN)
     for number, sentence in enumerate(SENTENCES):
-        expected = (
-            text(SOURCE_LANGUAGE, MIGRATION.STORED_MESSAGE_KEYS[sentence])
-            if sentence == HISTORIC_CANCEL_SENTENCE else sentence
-        )
-        assert stored[f"known-{number}"] == expected
+        assert stored[f"known-{number}"] == sentence
+    assert stored["historic-cancel"] == HISTORIC_CANCEL_SENTENCE
     for number, sentence in enumerate(MODE_TOKENS):
         assert stored[f"mode-{number}"] == sentence
     assert stored["unknown"] == UNKNOWN_SENTENCE
