@@ -92,11 +92,12 @@ async def keep_owner_lease(
         yield hold
     finally:
         watching.cancel()
-        await asyncio.gather(watching, return_exceptions=True)
         try:
             await ending.aclose()
         except StoreError:
             log.warning("Could not end the owner lease; it lapses by itself", exc_info=True)
+        finally:
+            await asyncio.gather(watching, return_exceptions=True)
 
 
 async def _treat_a_new_generation_as_a_start(

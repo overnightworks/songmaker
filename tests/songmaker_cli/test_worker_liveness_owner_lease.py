@@ -87,6 +87,42 @@ def test_a_lease_that_lapsed_and_started_again_counts_as_a_start() -> None:
     assert asyncio.run(lapse_the_lease_and_wait_for_the_start()) == 1
 
 
+def test_an_exit_cancelled_during_a_renewal_still_ends_the_lease_and_its_old_key() -> None:
+    server = make_fake_async_redis()
+    plain_set = server.set
+    block_entered = False
+    renewal_in_flight = asyncio.Event()
+
+    async def set_slowly_inside_the_block(*arguments, **options):
+        if block_entered:
+            renewal_in_flight.set()
+            await asyncio.sleep(SLOW_OLD_KEY_RENEWAL_SECONDS)
+        return await plain_set(*arguments, **options)
+
+    server.set = set_slowly_inside_the_block
+
+    async def block() -> None:
+        nonlocal block_entered
+        async with keep_owner_lease(owner_leases(server), LEASED, every=FAST_RENEWAL):
+            block_entered = True
+            await asyncio.sleep(DEADLINE_SECONDS)
+
+    async def cancel_the_block_twice_while_a_renewal_is_in_flight() -> tuple[Liveness, bool]:
+        await settle_owner_leases(server)
+        running = asyncio.create_task(block())
+        await asyncio.wait_for(renewal_in_flight.wait(), timeout=DEADLINE_SECONDS)
+        running.cancel()
+        await asyncio.sleep(0)
+        running.cancel()
+        await asyncio.gather(running, return_exceptions=True)
+        reading = (await owner_leases(server).liveness([LEASED]))[LEASED]
+        return reading, bool(await server.exists(old_owner_key(REDIS_KEY_PREFIX, LEASED)))
+
+    assert asyncio.run(cancel_the_block_twice_while_a_renewal_is_in_flight()) == (
+        Liveness.GONE, False,
+    )
+
+
 @pytest.mark.parametrize(
     ("settled", "expected"), [(False, Liveness.UNKNOWN), (True, Liveness.GONE)],
     ids=["a server that may have restarted empty", "a server that has run for the lease span"],
