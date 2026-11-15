@@ -2188,11 +2188,6 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path, monkeypatch
         "run_ffmpeg_concat",
         lambda *_args, **_kwargs: concat_calls.append("concat"),
     )
-    monkeypatch.setattr(
-        qs,
-        "build_queue_stream_snapshot",
-        lambda *_args, **_kwargs: concat_calls.append("snapshot"),
-    )
     client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
