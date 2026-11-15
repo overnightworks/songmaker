@@ -13,8 +13,9 @@ import logging
 import threading
 import uuid
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
+from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
@@ -100,11 +101,11 @@ class WorkerBase:
             self._db_engine.dispose()
             log.info("Database connection pool disposed")
 
-    async def _start_owner_lease(self, redis: Any) -> None:
+    async def _start_owner_lease(self, redis: Redis) -> None:
         await refresh_owner_lease_async(redis, self.owner_id)
         self._lease_task = asyncio.create_task(self._renew_owner_lease(redis))
 
-    async def _renew_owner_lease(self, redis: Any) -> None:
+    async def _renew_owner_lease(self, redis: Redis) -> None:
         """Renew the lease until cancelled, outliving a Redis that fails for a while."""
         while True:
             await asyncio.sleep(self.owner_lease_refresh_seconds)
@@ -113,7 +114,7 @@ class WorkerBase:
             except Exception:
                 log.exception("Owner lease renewal failed")
 
-    async def _release_owner_lease(self, lease_task: asyncio.Task[None], redis: Any) -> None:
+    async def _release_owner_lease(self, lease_task: asyncio.Task[None], redis: Redis) -> None:
         """End the lease so a web process fails this worker's jobs within one tick."""
         lease_task.cancel()
         await asyncio.gather(lease_task, return_exceptions=True)

@@ -1553,9 +1553,8 @@ SIGKILLed and even the values the run did produce would be lost.
   (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed. The
-  `generate` and `lora_training` job types are recovered on MusicWorker
-  startup and shutdown.
+  has passed. A web process fails a stopped worker's running jobs through the
+  owner lease; see "Owner liveness".
 - Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
