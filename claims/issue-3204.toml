@@ -1,7 +1,0 @@
-claim_id = "e884a80cc73240aaad578ecdee46cb65"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "4a0a3c4fe8ec9aeb23dbcc9a5f673e643e5a9ead"
-branch = "claude/issue-3204-songmaker-runs-on-webauth-v0-40-1"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "c4a68ead592da57a9f0118e17650fbf9619305bf"
