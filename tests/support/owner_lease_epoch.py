@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+# tandem offers no public helper that settles the epoch yet, so the test names its key itself.
 from tandem.keys import lease_keys
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX

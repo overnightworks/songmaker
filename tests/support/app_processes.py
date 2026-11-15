@@ -293,8 +293,11 @@ def poll_until(
 
 
 def age_the_owner_lease_epoch(redis: Redis) -> None:
-    """Date the owner leases' epoch one lease span back, so an absent lease reads gone."""
-    redis.set(*aged_owner_lease_epoch(), nx=True)
+    """Date the owner leases' epoch one lease span back, so an absent lease reads gone.
+
+    An epoch an earlier test created on the shared Redis is dated back too.
+    """
+    redis.set(*aged_owner_lease_epoch())
 
 
 def leased_owner_ids(redis: Redis) -> set[str]:
