@@ -15,6 +15,7 @@ class BackgroundLoopName(StrEnum):
     RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
     SCORE_BACKFILL = "score_backfill"
     STALE_JOB_REAPER = "stale_job_reaper"
+    OWNER_LEASE = "owner_lease"
     OWNER_LAPSES = "owner_lapses"
     OWNER_GONE_REAPER = "owner_gone_reaper"
 

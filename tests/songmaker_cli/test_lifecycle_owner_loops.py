@@ -75,6 +75,46 @@ def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
     assert statuses[-1] is BackgroundLoopStatus.FAILING
 
 
+def _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path):
+    app = _loop_app(server, pg_factory, tmp_path)
+    return run_ticks_observing_status(
+        monkeypatch, owner_gone_reaper_loop(app), app.state.background_loop_registry,
+        BackgroundLoopName.OWNER_LEASE, BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    )[-1]
+
+
+def test_the_owner_lease_shows_ok_while_this_process_holds_its_lease(
+    monkeypatch, pg_factory, tmp_path,
+) -> None:
+    server = make_fake_async_redis()
+    asyncio.run(owner_leases(server).renew(OWNER))
+
+    status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
+
+    assert status is BackgroundLoopStatus.OK
+
+
+def test_the_owner_lease_shows_failing_while_this_process_holds_none(
+    monkeypatch, pg_factory, tmp_path,
+) -> None:
+    server = make_fake_async_redis()
+    asyncio.run(settle_owner_leases(server))
+
+    status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
+
+    assert status is BackgroundLoopStatus.FAILING
+
+
+def test_the_owner_lease_shows_failing_while_redis_is_down(
+    monkeypatch, pg_factory, tmp_path,
+) -> None:
+    status = _own_lease_status_after_the_ticks(
+        monkeypatch, _UnreachableRedis(), pg_factory, tmp_path,
+    )
+
+    assert status is BackgroundLoopStatus.FAILING
+
+
 def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
     pg_factory, tmp_path,
 ) -> None:

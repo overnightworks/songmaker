@@ -1639,9 +1639,11 @@ panel shows "Try again" at once; after a crash within 20 s.
 `owner_gone_reaper` loop health shows in `/health/details`, and fails nothing. A
 Redis that lost its data reads an absent lease `unknown` until the lease span has passed
 since the first command after the loss (tandem's epoch), by when the pods have renewed
-their leases; an owner id the reading lacks is `unknown`, and a pass never asks about
-its own process. A renewal that fails is retried every interval and logged by tandem; it shows
-in no health loop. A pod that lost its lease while alive (a Redis outage longer than the
+their leases; an owner id the reading lacks is `unknown`, and the job pass never asks about
+its own process. A renewal that fails is retried every interval and logged by tandem; the
+`owner_gone_reaper` tick reads this process's own lease and the `owner_lease` loop health shows
+in `/health/details` when it does not read `alive` (`owner_lapses` shows the lapse
+pass apart). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
 for any terminal job. A cover's staging directory is named by its job id alone, so it
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in

@@ -12,7 +12,7 @@ from typing import Final
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
-from tandem import Lapse, Liveness
+from tandem import Lapse, Liveness, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text
 from songmaker_cli.app_context import AppContext
@@ -428,16 +428,35 @@ async def owner_lapse_loop(app: FastAPI) -> None:
     )
 
 
+class OwnerLeaseNotAliveError(Exception):
+    """The lease this process keeps is not alive in Redis: its renewals do not land."""
+
+
+async def record_own_owner_lease_health(ctx: AppContext, registry: BackgroundLoopRegistry) -> None:
+    """Show whether the lease this process keeps reads ALIVE; tandem only logs a failed renewal."""
+    try:
+        liveness = (await ctx.owner_leases.liveness([ctx.owner_id]))[ctx.owner_id]
+        if liveness is not Liveness.ALIVE:
+            raise OwnerLeaseNotAliveError(liveness)
+    except (StoreError, OwnerLeaseNotAliveError) as exc:
+        registry.record_failure(BackgroundLoopName.OWNER_LEASE, exc)
+        log.warning("The owner lease of this process is not alive", exc_info=True)
+    else:
+        registry.record_success(BackgroundLoopName.OWNER_LEASE)
+
+
 async def owner_gone_reaper_loop(app: FastAPI) -> None:
     """Fail the jobs of processes that are gone, on every web process.
 
     No lock orders the processes: each failing update is conditional on the row
-    it read, so the second one to reach a job changes nothing.
+    it read, so the second one to reach a job changes nothing. Each tick also reads
+    this process's own lease into the ``owner_lease`` health.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
     while True:
         await asyncio.sleep(OWNER_GONE_CHECK_INTERVAL_SECONDS)
+        await record_own_owner_lease_health(ctx, registry)
         try:
             await fail_jobs_of_dead_owners(ctx)
         except Exception as exc:
