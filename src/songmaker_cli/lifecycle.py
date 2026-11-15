@@ -442,11 +442,14 @@ class OwnerLeaseNotAliveError(Exception):
 
 
 async def record_own_owner_lease_health(ctx: AppContext, registry: BackgroundLoopRegistry) -> None:
-    """Show whether the lease this process keeps reads ALIVE; tandem only logs a failed renewal."""
+    """Show whether tandem's lease of this process is live; tandem only logs a failed renewal.
+
+    The roster is read from the lease alone, for a live old key must not hide a lease whose
+    renewals fail.
+    """
     try:
-        liveness = (await ctx.owner_leases.liveness([ctx.owner_id]))[ctx.owner_id]
-        if liveness is not Liveness.ALIVE:
-            raise OwnerLeaseNotAliveError(liveness)
+        if ctx.owner_id not in (await ctx.owner_leases.live()).holders:
+            raise OwnerLeaseNotAliveError(ctx.owner_id)
     except (StoreError, OwnerLeaseNotAliveError) as exc:
         registry.record_failure(BackgroundLoopName.OWNER_LEASE, exc)
         log.warning("The owner lease of this process is not alive", exc_info=True)

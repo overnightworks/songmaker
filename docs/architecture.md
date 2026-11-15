@@ -1641,8 +1641,8 @@ Redis that lost its data reads an absent lease `unknown` until the lease span ha
 since the first command after the loss (tandem's epoch), by when the pods have renewed
 their leases; an owner id the reading lacks is `unknown`, and the job pass never asks about
 its own process. A renewal that fails is retried every interval and logged by tandem; the
-`owner_gone_reaper` tick reads this process's own lease and the `owner_lease` loop health shows
-in `/health/details` when it does not read `alive` (`owner_lapses` shows the lapse
+`owner_gone_reaper` tick reads this process's own lease, not its old key, and the `owner_lease`
+loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
 pass apart). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
 for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
