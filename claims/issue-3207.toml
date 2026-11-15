@@ -1,8 +1,0 @@
-claim_id = "b1adaab157d344309316f257a1a8a601"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "f6bd4824d054ce2ad1da77fa4d9a7bb048dab833"
-branch = "claude/issue-3207-the-end-to-end-tests-find-interface-text"
-scope = ["frontend/e2e", "tests/songmaker_cli/test_queue_streams.py"]
-opened_commit = "5b00084219d11e570b1fc7c4ea0304849b2a2b38"
-whole_reason = "the rule's ~40 sites spread over 21 e2e spec files; one mechanical pattern across the suite, split by file would only multiply reviews"
