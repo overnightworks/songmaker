@@ -39,6 +39,7 @@ from songmaker_cli.lifecycle import OWNER_REAPER_FAILURE_MESSAGE
 MARGIN_SECONDS = 5.0
 CRASH_DEADLINE_SECONDS = 30.0
 LOOP_FAILING_DEADLINE_SECONDS = 40.0
+APPLICATION_SHUTDOWN_FAILED = "Application shutdown failed"
 
 
 @dataclass(frozen=True)
@@ -173,6 +174,18 @@ def test_a_crash_with_redis_unreachable_ends_nothing_until_redis_answers_again(
         lambda: _is_reaped(factory, jobs),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
     )
+
+
+def test_a_stop_with_redis_unreachable_still_shuts_the_process_down(
+    proxied_cluster, redis_client,
+) -> None:
+    cluster, _, proxy = proxied_cluster
+    process, _ = start_owner(cluster, redis_client, "a")
+
+    proxy.cut()
+    process.stop()
+
+    assert APPLICATION_SHUTDOWN_FAILED not in process.log_path.read_text(errors="replace")
 
 
 def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(

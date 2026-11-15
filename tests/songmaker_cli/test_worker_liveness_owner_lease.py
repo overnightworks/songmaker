@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from support.redis_proxy import redis_proxy
 from support.web_app import make_fake_async_redis, settle_owner_leases
 from tandem import Liveness
 
+from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases
 
 LEASED = "leased-owner"
@@ -43,3 +45,17 @@ def test_an_absent_lease_reads_gone_only_once_the_lease_span_has_passed_on_the_s
         return (await owner_leases(server).liveness([ABSENT]))[ABSENT]
 
     assert asyncio.run(read_the_absent_owner()) is expected
+
+
+def test_a_block_that_ends_while_redis_is_unreachable_still_ends(redis_url: str) -> None:
+    with redis_proxy(redis_url) as proxy:
+
+        async def cut_redis_inside_the_block() -> None:
+            client = create_async_redis(proxy.url)
+            try:
+                async with keep_owner_lease(owner_leases(client), LEASED):
+                    proxy.cut()
+            finally:
+                await client.aclose()
+
+        asyncio.run(cut_redis_inside_the_block())

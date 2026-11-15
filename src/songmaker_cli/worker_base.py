@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import ClassVar
 
 from redis.asyncio import Redis as AsyncRedis
-from tandem import StoreError
 
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
@@ -115,10 +114,7 @@ class WorkerBase:
 
     async def _release_owner_lease(self) -> None:
         """End the lease so a web process fails this worker's jobs within one tick."""
-        try:
-            await self._lease_stack.aclose()
-        except StoreError:
-            log.warning("Could not end the owner lease; it lapses by itself", exc_info=True)
+        await self._lease_stack.aclose()
         await self._owner_redis.aclose()
 
     def audit_orphaned_files(self) -> None:

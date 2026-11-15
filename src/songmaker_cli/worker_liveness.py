@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable, Mapping
-from contextlib import AbstractAsyncContextManager
+from collections.abc import AsyncIterator, Iterable, Mapping
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
 
 from redis.exceptions import RedisError
-from tandem import Client, Hold, Leases
+from tandem import Client, Hold, Leases, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text, worker_is_online, worker_state_key
 from songmaker_cli.constants import (
@@ -65,9 +65,24 @@ def owner_leases(redis: Client) -> Leases:
     )
 
 
-def keep_owner_lease(leases: Leases, owner_id: str) -> AbstractAsyncContextManager[Hold]:
-    """Hold the lease of ``owner_id`` for the block, renewed at the one shared interval."""
-    return leases.kept(owner_id, every=timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS))
+@asynccontextmanager
+async def keep_owner_lease(leases: Leases, owner_id: str) -> AsyncIterator[Hold]:
+    """Hold the lease of ``owner_id`` for the block, renewed at the one shared interval.
+
+    A lease that cannot be started fails the entry. One that cannot be ended because Redis
+    is unreachable is left to lapse by itself, so a process always shuts down.
+    """
+    ending = AsyncExitStack()
+    hold = await ending.enter_async_context(
+        leases.kept(owner_id, every=timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS)),
+    )
+    try:
+        yield hold
+    finally:
+        try:
+            await ending.aclose()
+        except StoreError:
+            log.warning("Could not end the owner lease; it lapses by itself", exc_info=True)
 
 
 def _record_alive(redis: Any, key: str, now: datetime) -> None:
