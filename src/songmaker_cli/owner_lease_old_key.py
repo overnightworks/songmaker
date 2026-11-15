@@ -84,7 +84,8 @@ class OwnerLeasesWithOldKey(Leases):
 
     async def end(self, holder: str, generation: str) -> bool:
         """End the lease and drop its old key."""
-        ended = await super().end(holder, generation)
-        with suppress(RedisError):
-            await self._old_key_client.delete(old_owner_key(self._old_key_prefix, holder))
-        return ended
+        try:
+            return await super().end(holder, generation)
+        finally:
+            with suppress(RedisError):
+                await self._old_key_client.delete(old_owner_key(self._old_key_prefix, holder))
