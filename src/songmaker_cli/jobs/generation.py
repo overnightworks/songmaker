@@ -865,7 +865,7 @@ async def run_generation_job(
 
     repaint_params = task_params if isinstance(task_params, RepaintTaskParams) else None
     cover_params = task_params if isinstance(task_params, CoverTaskParams) else None
-    task_type = "cover" if cover_params else "repaint" if repaint_params else "generate"
+    task_type = (cover_params and "cover") or (repaint_params and "repaint") or "generate"
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     admitted_worker = None
