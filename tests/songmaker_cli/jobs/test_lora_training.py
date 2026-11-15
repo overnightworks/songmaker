@@ -595,7 +595,10 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
-        assert get_job(session, "job-1").queue_reason_message is None
+        assert lora.error_message == message("voiceFailure.cancelled")
+        job = get_job(session, "job-1")
+        assert job.error == message("voiceFailure.cancelled").sentence()
+        assert job.queue_reason_message is None
 
 
 def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
@@ -648,7 +651,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
             )
             .all()
         )
-        assert any("failed" in (a.detail or "") for a in audit)
+        assert [a.detail for a in audit if "failed" in (a.detail or "")] == ["failed: testing"]
 
 
 @pytest.mark.parametrize(
@@ -982,6 +985,7 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
         assert job.error == "Generation queue did not drain before LoRA training could start"
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
+        assert lora.error_message == message("voiceFailure.drainTimeout")
 
 
 def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_factory) -> None:

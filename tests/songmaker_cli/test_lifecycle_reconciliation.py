@@ -15,6 +15,7 @@ from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
+from songmaker_cli.messages import message
 
 
 @pytest.fixture
@@ -63,6 +64,7 @@ def test_reconciles_when_job_terminal(ctx) -> None:
     with ctx.db() as s:
         lora = get_user_lora(s, "L1", include_deleted_rows=True)
         assert lora.status == LoraStatus.FAILED
+        assert lora.error_message == message("voiceFailure.crashed")
 
 
 def test_reconciliation_is_idempotent_and_records_one_audit(ctx) -> None:
