@@ -27,6 +27,7 @@ from songmaker_cli.job_timing import (
     worker_restart_grace_seconds,
 )
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
+from songmaker_cli.owner_lease_old_key import OwnerLeasesWithOldKey
 from songmaker_cli.timestamps import aware_timestamp, utcnow
 
 log = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def owner_leases(redis: Client) -> Leases:
     Every process builds them from the same spans: a lease and a claim are measured by the
     process that reads them.
     """
-    return Leases(
+    return OwnerLeasesWithOldKey(
         redis,
         key_prefix=REDIS_KEY_PREFIX,
         family=OWNER_LEASE_FAMILY,

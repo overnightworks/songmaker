@@ -9,6 +9,8 @@ from support.redis_proxy import redis_proxy
 from support.web_app import make_fake_async_redis, settle_owner_leases
 from tandem import Liveness
 
+from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases
 
@@ -28,6 +30,35 @@ def test_a_kept_lease_reads_alive_to_another_process_until_its_block_ends() -> N
         return readings
 
     assert asyncio.run(read_before_during_and_after()) == [Liveness.ALIVE, Liveness.GONE]
+
+
+def test_an_owner_that_renews_only_the_old_key_reads_alive_until_that_key_lapses() -> None:
+    server = make_fake_async_redis()
+
+    async def read_while_the_old_key_is_live_and_after() -> list[Liveness]:
+        await settle_owner_leases(server)
+        key = old_owner_key(REDIS_KEY_PREFIX, ABSENT)
+        await server.set(key, "1")
+        readings = [(await owner_leases(server).liveness([ABSENT]))[ABSENT]]
+        await server.delete(key)
+        readings.append((await owner_leases(server).liveness([ABSENT]))[ABSENT])
+        return readings
+
+    assert asyncio.run(read_while_the_old_key_is_live_and_after()) == [
+        Liveness.ALIVE, Liveness.GONE,
+    ]
+
+
+def test_a_kept_lease_shows_the_old_key_to_an_old_reader_until_its_block_ends() -> None:
+    server = make_fake_async_redis()
+
+    async def read_the_old_key_during_and_after() -> list[bool]:
+        key = old_owner_key(REDIS_KEY_PREFIX, LEASED)
+        async with keep_owner_lease(owner_leases(server), LEASED):
+            during = await server.exists(key)
+        return [bool(during), bool(await server.exists(key))]
+
+    assert asyncio.run(read_the_old_key_during_and_after()) == [True, False]
 
 
 @pytest.mark.parametrize(
