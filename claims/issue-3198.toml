@@ -1,8 +1,0 @@
-claim_id = "6b11b71b1b5d49a0b93dcd6ca5ca1d84"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "51c4147b5162629e7bf814ad904909249e7e58ee"
-branch = "claude/issue-3198-a-failed-voice-stores-its-reason-as-a-me"
-scope = ["docs/architecture.md", "docs/library.md", "docs/testing.md", "frontend/e2e/voices.spec.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/LoraDetail.svelte", "frontend/src/lib/components/LoraDetail.test.ts", "frontend/src/lib/words", "quality/baseline.toml", "scripts/stored_message_keys.txt", "src/songmaker_cli/api_models/loras.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/jobs/_runtime.py", "src/songmaker_cli/jobs/generation_failure.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/jobs/model_lifecycle.py", "src/songmaker_cli/lora_api.py", "src/songmaker_cli/words.py", "tests/scripts", "tests/songmaker_cli", "tests/support"]
-opened_commit = "4e164a79ee52e52b472cc8d5b7c5025b787db8ae"
-whole_reason = "The column, its writers, the shared failure owner, the migration, the API field and the page renderer are true only together."
