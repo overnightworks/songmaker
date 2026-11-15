@@ -640,7 +640,7 @@ async function pauseATakeToRestore(
 // a later one first under Last played, and names the rail rows that follow.
 const LAST_PLAYED_PAGES = [
 	{
-		name: 'Library',
+		name: words['places.library'],
 		path: LIBRARY_PATH,
 		railRows: '.album-label .row-title',
 		async arrange(page: Page) {
@@ -654,7 +654,7 @@ const LAST_PLAYED_PAGES = [
 		}
 	},
 	{
-		name: 'Playlists',
+		name: words['places.playlists'],
 		path: '/playlists',
 		railRows: '.playlist-label .row-title',
 		async arrange(page: Page) {
