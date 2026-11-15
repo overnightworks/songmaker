@@ -35,11 +35,6 @@ from songmaker_cli.config import (
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
-    JOB_ERROR_GENERATION_CANCELLED,
-    JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
-    JOB_ERROR_SONG_NOT_FOUND,
-    JOB_ERROR_USER_LORA_UNAVAILABLE,
-    JOB_ERROR_VERSION_NOT_FOUND,
     WORKER_SHARED_TMP_DIRNAME,
 )
 from songmaker_cli.db.models import GenerationPreset
@@ -71,11 +66,15 @@ from songmaker_cli.scheduler import (
 )
 
 from ._runtime import (
-    JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
+    REFERENCE_AUDIO_NOT_FOUND,
+    REFERENCE_DELETED_DURING_TAKE,
+    SONG_NOT_FOUND,
+    USER_LORA_UNAVAILABLE,
+    VERSION_NOT_FOUND,
     GenerationSetupError,
     ReferenceDeletedDuringTake,
-    _failure_sentence,
     _job_is_terminal,
+    _sanitize_error,
     _touch_heartbeat,
     _update_job,
 )
@@ -282,11 +281,11 @@ def _load_song_meta(
     with db_factory() as session:
         song = get_song(session, song_id)
         if not song:
-            raise GenerationSetupError(JOB_ERROR_SONG_NOT_FOUND)
+            raise GenerationSetupError(SONG_NOT_FOUND)
 
         version = get_version(session, version_id, song_id)
         if not version:
-            raise GenerationSetupError(JOB_ERROR_VERSION_NOT_FOUND)
+            raise GenerationSetupError(VERSION_NOT_FOUND)
 
         album = song.album
         album_name = album.title.lower().replace(" ", "_") if album else "unknown"
@@ -375,7 +374,7 @@ def _apply_user_lora_path(
             or not lora.storage_path
             or lora.model_mode != target_model_mode
         ):
-            raise GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
+            raise GenerationSetupError(USER_LORA_UNAVAILABLE)
         lora_path = str((audio_dir / lora.storage_path).resolve())
     return cast(AceStepConfig, replace(ace_config, lora_path=lora_path))
 
@@ -414,7 +413,7 @@ def _build_generation_context(
             db_factory, audio_dir, user_id, reference_recording_id,
         )
     except ReferenceAudioRejected as exc:
-        raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc
+        raise GenerationSetupError(REFERENCE_AUDIO_NOT_FOUND) from exc
     ace_config = replace(ace_config, reference_audio_path=reference_audio_path)
 
     ace_config = _apply_user_lora_path(
@@ -579,7 +578,7 @@ def _lock_reference_or_fail(session: Session, ctx: GenerationContext) -> None:
     if reference_id is None:
         return
     if lock_and_mark_reference_used(session, ctx.user_id, reference_id) is None:
-        raise ReferenceDeletedDuringTake(JOB_ERROR_REFERENCE_DELETED_DURING_TAKE)
+        raise ReferenceDeletedDuringTake(REFERENCE_DELETED_DURING_TAKE)
 
 
 def _stored_generation_params(
@@ -691,7 +690,7 @@ async def _dispatch_auto_score(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error="Scoring worker not running",
+                error=message("jobFailure.scoringWorkerDown"),
                 error_type="setup_error",
             )
             return
@@ -708,7 +707,7 @@ async def _dispatch_auto_score(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error="Failed to enqueue auto-score job",
+            error=message("jobFailure.scoringEnqueueFailed"),
             error_type="setup_error",
         )
 
@@ -919,7 +918,7 @@ async def run_generation_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=JOB_ERROR_GENERATION_CANCELLED,
+            error=message("jobFailure.generationCancelled"),
             error_type="timeout",
         )
         raise
@@ -994,7 +993,7 @@ async def _build_generation_job_context(
             db_factory,
             request.job_id,
             JobStatus.FAILED,
-            error=_failure_sentence(exc, request.job_id),
+            error=_sanitize_error(exc, request.job_id),
             error_type="setup_error",
         )
         return None

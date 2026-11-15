@@ -10,12 +10,6 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from acestep_engine.errors import AudioDownloadError
-from songmaker_cli.constants import (
-    JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
-    JOB_ERROR_SONG_NOT_FOUND,
-    JOB_ERROR_USER_LORA_UNAVAILABLE,
-    JOB_ERROR_VERSION_NOT_FOUND,
-)
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     get_job,
@@ -42,30 +36,39 @@ _USER_FACING_ERRORS: tuple[tuple[type[Exception], Message], ...] = (
     (RuntimeError, message("jobFailure.internal")),
 )
 
-JOB_ERROR_REFERENCE_DELETED_DURING_TAKE: Final[str] = (
-    "The reference track was deleted while this take was generating."
-)
+SONG_NOT_FOUND: Final = message("jobFailure.songNotFound")
+VERSION_NOT_FOUND: Final = message("jobFailure.versionNotFound")
+REFERENCE_AUDIO_NOT_FOUND: Final = message("jobFailure.referenceAudioNotFound")
+REFERENCE_DELETED_DURING_TAKE: Final = message("jobFailure.referenceDeletedDuringTake")
+USER_LORA_UNAVAILABLE: Final = message("jobFailure.voiceUnavailable")
 
-_GENERATION_SETUP_MESSAGES: frozenset[str] = frozenset({
-    JOB_ERROR_SONG_NOT_FOUND,
-    JOB_ERROR_VERSION_NOT_FOUND,
-    JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
-    JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
-    JOB_ERROR_USER_LORA_UNAVAILABLE,
-})
+_GENERATION_SETUP_MESSAGES: tuple[Message, ...] = (
+    SONG_NOT_FOUND,
+    VERSION_NOT_FOUND,
+    REFERENCE_AUDIO_NOT_FOUND,
+    REFERENCE_DELETED_DURING_TAKE,
+    USER_LORA_UNAVAILABLE,
+)
 
 
 def generation_error_messages() -> frozenset[str]:
     """Expose the runtime-owned messages allowed on Generate reads."""
-    return (
-        _GENERATION_SETUP_MESSAGES
-        | {_UNEXPECTED_FAILURE.sentence()}
-        | {failure.sentence() for _, failure in _USER_FACING_ERRORS}
+    return frozenset(
+        failure.sentence()
+        for failure in (
+            *_GENERATION_SETUP_MESSAGES,
+            _UNEXPECTED_FAILURE,
+            *(failure for _, failure in _USER_FACING_ERRORS),
+        )
     )
 
 
 class GenerationSetupError(Exception):
-    pass
+    """A setup failure the runtime words itself: it carries the catalog message of its reason."""
+
+    def __init__(self, reason: Message) -> None:
+        super().__init__(reason.sentence())
+        self.reason = reason
 
 
 class ReferenceDeletedDuringTake(GenerationSetupError):
@@ -77,25 +80,20 @@ def _sanitize_error(
 ) -> Message:
     """Log the raw failure in full; return the catalog message that words it for the musician.
 
-    A worker's account of its task and a setup message the runtime vetted already are the
-    musician's line: they come back as `reported`, by default `jobFailure.reported` with that
-    text as its cause.
+    A worker's account of its task is the musician's line: it comes back as `reported`, by
+    default `jobFailure.reported` with that text as its cause. A setup error comes back as the
+    message it carries.
     """
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
     reported = reported or message("jobFailure.reported", cause=str(exc))
     if isinstance(exc, WorkerTaskFailed):
         return reported
     if isinstance(exc, GenerationSetupError):
-        return reported if str(exc) in _GENERATION_SETUP_MESSAGES else _UNEXPECTED_FAILURE
+        return exc.reason
     for exc_type, failure in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
             return failure
     return _UNEXPECTED_FAILURE
-
-
-def _failure_sentence(exc: Exception, job_id: str) -> str:
-    """The sentence a Text column (`jobs.error`) stores for a failure."""
-    return _sanitize_error(exc, job_id).sentence()
 
 
 def _job_is_terminal(factory, job_id: str) -> bool:
@@ -173,7 +171,7 @@ async def _cancel_chat_job(
         _fail_chat_job(
             session,
             job_id,
-            "Turn cancelled by the client.",
+            message("chatFailure.clientCancelled"),
             "cancelled",
         )
     finally:
@@ -181,7 +179,7 @@ async def _cancel_chat_job(
 
 
 def _fail_chat_job(
-    session: Session, job_id: str, error: str, error_type: str,
+    session: Session, job_id: str, error: Message, error_type: str,
 ) -> None:
     session.rollback()
     update_job_status(

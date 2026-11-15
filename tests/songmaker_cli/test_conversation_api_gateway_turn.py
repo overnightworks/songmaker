@@ -51,6 +51,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import message
 
 USER_ID = "u-test"
 OTHER_SONG = "s-other"
@@ -260,7 +261,10 @@ def test_a_turn_whose_job_ended_while_the_reply_was_held_adds_no_answer(world):
             update_job_status(
                 session,
                 job.id,
-                JobStatusUpdate(JobStatus.FAILED, error="heartbeat stopped"),
+                JobStatusUpdate(
+                    JobStatus.FAILED,
+                    error=message("jobFailure.reported", cause="heartbeat stopped"),
+                ),
             )
             session.commit()
         yield FinalEvent(text="late answer")

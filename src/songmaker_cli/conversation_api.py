@@ -71,6 +71,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import Message, message
 from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
@@ -188,8 +189,6 @@ _PROBLEM_STATUS: Final = {
     AgentProblem.SIGN_IN_AGAIN: 401,
 }
 _TURN_FAILED_STATUS: Final = 500
-_CHAT_REQUEST_FAILED: Final = "Chat request failed"
-_CHAT_COMPLETION_FAILED: Final = "Chat completion failed"
 
 
 def _sse_format(event: BaseModel) -> str:
@@ -294,11 +293,11 @@ def _prepare_chat_messages(
         )
         session.commit()
     except asyncio.CancelledError:
-        _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
+        _fail_chat_job(session, job_id, message("chatFailure.requestCancelled"), "cancelled")
         raise
     except Exception:
         log.exception("Co-writer chat setup failed")
-        _fail_chat_job(session, job_id, "Chat setup failed", "setup_error")
+        _fail_chat_job(session, job_id, message("chatFailure.setupFailed"), "setup_error")
         raise
     return PreparedChatTurn(
         messages,
@@ -384,7 +383,10 @@ async def _chat_event_generator(
                 terminal = True
                 log.exception("Co-writer chat completion failed")
                 yield _fail_turn_event(
-                    session, prepared.job_id, _CHAT_COMPLETION_FAILED, "completion_error",
+                    session,
+                    prepared.job_id,
+                    message("chatFailure.completionFailed"),
+                    "completion_error",
                 )
                 return
             terminal = True
@@ -409,7 +411,12 @@ def _turn_problem_event(session: Session, job_id: str, turn_problem: TurnProblem
 
     problem = turn_problem.problem
     log.warning("Co-writer turn did not run (%s): %s", problem.value, turn_problem.detail)
-    _fail_chat_job(session, job_id, f"{problem.value}: {turn_problem.detail}", problem.value)
+    _fail_chat_job(
+        session,
+        job_id,
+        message("chatFailure.problem", problem=problem.value, detail=turn_problem.detail),
+        problem.value,
+    )
     return _sse_format(
         ChatTurnProblemFrame(
             status=_PROBLEM_STATUS[problem],
@@ -421,14 +428,16 @@ def _turn_problem_event(session: Session, job_id: str, turn_problem: TurnProblem
 
 def _chat_failure_event(session: Session, job_id: str, exc: Exception) -> str:
     log.error("Co-writer chat failed (%s)", type(exc).__name__)
-    return _fail_turn_event(session, job_id, _CHAT_REQUEST_FAILED, "chat_error")
+    return _fail_turn_event(session, job_id, message("chatFailure.requestFailed"), "chat_error")
 
 
-def _fail_turn_event(session: Session, job_id: str, message: str, error_type: str) -> str:
+def _fail_turn_event(session: Session, job_id: str, failure: Message, error_type: str) -> str:
     from songmaker_cli.jobs._runtime import _fail_chat_job
 
-    _fail_chat_job(session, job_id, message, error_type)
-    return _sse_format(ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=message))
+    _fail_chat_job(session, job_id, failure, error_type)
+    return _sse_format(
+        ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=failure.sentence()),
+    )
 
 
 def _complete_chat_turn(

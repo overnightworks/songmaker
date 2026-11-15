@@ -201,6 +201,26 @@ def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_
     assert get_queue_position(session, job) == 2
 
 
+def test_failed_command_stores_the_given_worker_sentence_on_the_job(seeded_job):
+    import argparse
+
+    from songmaker_cli.db.queries.jobs import get_job
+    from songmaker_cli.job_types import JobStatus
+
+    session, _, running = seeded_job
+    seed_e2e_job_states.cmd_set_failed(
+        session,
+        argparse.Namespace(
+            job_id=running.id, error="CUDA out of memory", error_type=None,
+            retry_after_seconds=None,
+        ),
+    )
+    job = get_job(session, running.id)
+
+    assert job is not None
+    assert (job.status, job.error) == (JobStatus.FAILED, "CUDA out of memory")
+
+
 @pytest.fixture
 def cover_album(tmp_path, pg_factory):
     factory = pg_factory

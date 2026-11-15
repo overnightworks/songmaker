@@ -100,6 +100,7 @@ from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, get_job, 
 from songmaker_cli.db.queries.resource_events import create_generation_created_event
 from songmaker_cli.db.queries.songs import create_song, get_song, update_song
 from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.settings import get_settings
 
 
@@ -297,7 +298,7 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
         args.job_id,
         JobStatusUpdate(
             JobStatus.FAILED,
-            error=args.error,
+            error=message("jobFailure.reported", cause=args.error),
             error_type=args.error_type,
             retry_after_seconds=args.retry_after_seconds,
         ),

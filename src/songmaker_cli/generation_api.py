@@ -83,6 +83,7 @@ from songmaker_cli.jobs.generation_failure import (
     is_visible_generation_failure,
     musician_job_response,
 )
+from songmaker_cli.messages import Message, message
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
@@ -93,7 +94,6 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 WORKER_NOT_RUNNING_DETAIL: Final = "Worker not running"
-JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 _GENERATE_DESCRIPTION: Final = (
     "Queue music generation for one of the person's own songs, using the song's latest "
     "version, or the version named by version_id. The version needs lyrics and a style "
@@ -635,7 +635,7 @@ async def _generation_capacity_error(
         failure = generation_failure(exc, job_id)
         _fail_job(ctx, job_id, error=failure.message, error_type=failure.error_type)
         response = GenerationUnavailableResponse(
-            detail=failure.message, error_type=failure.error_type, job_id=job_id,
+            detail=failure.message.sentence(), error_type=failure.error_type, job_id=job_id,
         )
         return JSONResponse(status_code=503, content=response.model_dump())
     return None
@@ -649,9 +649,10 @@ def _queue_unavailable_refusal(ctx: AppContext, job_id: str) -> Refusal:
 def _fail_job(
     ctx: AppContext,
     job_id: str,
-    error: str = JOB_QUEUE_UNAVAILABLE_DETAIL,
+    error: Message | None = None,
     error_type: str | None = None,
 ) -> None:
+    error = error or message("jobRefusal.queueUnavailable")
     try:
         with ctx.db() as session:
             update_job_status(

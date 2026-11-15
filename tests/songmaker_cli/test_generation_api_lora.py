@@ -6,14 +6,18 @@ import pytest
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
-from songmaker_cli.constants import JOB_ERROR_USER_LORA_UNAVAILABLE, LoraStatus
+from songmaker_cli.constants import LoraStatus
 from songmaker_cli.db.models import Album, Song, User, UserLora, Version
 from songmaker_cli.db.queries.loras import create_user_lora, update_user_lora
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
-from songmaker_cli.jobs._runtime import GenerationSetupError, _sanitize_error
+from songmaker_cli.jobs._runtime import (
+    USER_LORA_UNAVAILABLE,
+    GenerationSetupError,
+    _sanitize_error,
+)
 from songmaker_cli.jobs.generation import (
     _apply_user_lora_path,
     _extract_user_lora_id,
@@ -199,7 +203,7 @@ def test_apply_user_lora_path_rejects_unavailable_voice(
 
     params = BaseGenerationParams(user_lora_id=lora_id)
     config = AceStepConfig(prompt="p", lyrics="L")
-    with pytest.raises(GenerationSetupError, match=JOB_ERROR_USER_LORA_UNAVAILABLE):
+    with pytest.raises(GenerationSetupError, match=USER_LORA_UNAVAILABLE.sentence()):
         _apply_user_lora_path(
             config, params, db_factory, tmp_path / "audio", USER_A, "sft",
         )
@@ -212,16 +216,16 @@ def test_apply_user_lora_path_rejects_another_users_voice(db_factory, tmp_path) 
     params = BaseGenerationParams(user_lora_id=lora_id)
     config = AceStepConfig(prompt="p", lyrics="L")
 
-    with pytest.raises(GenerationSetupError, match=JOB_ERROR_USER_LORA_UNAVAILABLE):
+    with pytest.raises(GenerationSetupError, match=USER_LORA_UNAVAILABLE.sentence()):
         _apply_user_lora_path(
             config, params, db_factory, tmp_path / "audio", USER_A, "sft",
         )
 
 
 def test_unavailable_voice_setup_error_is_exposed_to_the_job() -> None:
-    error = GenerationSetupError(JOB_ERROR_USER_LORA_UNAVAILABLE)
+    error = GenerationSetupError(USER_LORA_UNAVAILABLE)
 
-    assert _sanitize_error(error, "job-1").sentence() == JOB_ERROR_USER_LORA_UNAVAILABLE
+    assert _sanitize_error(error, "job-1").sentence() == USER_LORA_UNAVAILABLE.sentence()
 
 
 def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:

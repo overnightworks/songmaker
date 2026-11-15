@@ -22,7 +22,7 @@ from songmaker_cli.job_types import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.messages import Message
+from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
@@ -192,7 +192,7 @@ class JobStatusUpdate:
     status: JobStatus
     _: KW_ONLY
     progress: float = 0.0
-    error: str | None = None
+    error: Message | None = None
     error_type: str | None = None
     retry_after_seconds: int | None = None
     queue_reason_message: Message | None = None
@@ -226,13 +226,18 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
     for column in fields(update):
         value = getattr(update, column.name)
         if value is not UNSET:
-            setattr(job, column.name, value)
+            setattr(job, column.name, _error_text(value) if column.name == "error" else value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
     if status in JOB_TERMINAL_STATUSES:
         _apply_terminal_values(job, now)
     session.flush()
     return True
+
+
+def _error_text(error: Message | None) -> str | None:
+    """The sentence the Text column `jobs.error` stores for a failure's message."""
+    return None if error is None else error.sentence()
 
 
 def _terminal_values(now: datetime) -> dict[str, object]:
@@ -368,12 +373,12 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
 
 @dataclass(frozen=True)
 class JobVerdict:
-    error: str
+    error: Message
     error_type: str
 
 
 JOB_ERROR_SERVER_RESTARTED: Final = JobVerdict(
-    error="Server restarted while job was in progress", error_type="server_restart",
+    error=message("jobFailure.serverRestarted"), error_type="server_restart",
 )
 
 
@@ -388,7 +393,7 @@ def _queued_verdict(
         liveness = WorkerLiveness.UNKNOWN
     if liveness is WorkerLiveness.DEAD:
         return JobVerdict(
-            error="No worker alive for this job type — please retry.",
+            error=message("jobFailure.noWorkerAlive"),
             error_type="no_worker_alive",
         )
     if liveness is WorkerLiveness.ALIVE:
@@ -399,14 +404,14 @@ def _queued_verdict(
         )
         if _is_started_stale(job, full_queue_cutoff):
             return JobVerdict(
-                error="Queued longer than a full queue could take — please retry.",
+                error=message("jobFailure.queuedFullQueueBound"),
                 error_type="queued_full_queue_bound",
             )
         return None
     age_cutoff = now - timedelta(seconds=thresholds.queued_seconds)
     if _is_started_stale(job, age_cutoff):
         return JobVerdict(
-            error="Queued too long — please retry.",
+            error=message("jobFailure.queuedTooLong"),
             error_type="queued_too_long",
         )
     return None
@@ -426,7 +431,7 @@ def _recover_stale_job_if_unchanged(
     *,
     status: str,
     heartbeat_at: datetime | None,
-    error: str,
+    error: Message,
     error_type: str,
     completed_at: datetime,
 ) -> bool:
@@ -439,7 +444,7 @@ def _recover_stale_job_if_unchanged(
         )
         .values(
             status=JobStatus.FAILED,
-            error=error,
+            error=_error_text(error),
             error_type=error_type,
             **_terminal_values(completed_at),
         )
@@ -604,7 +609,7 @@ def _stale_job_verdict(
     cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
     if not _is_heartbeat_stale(job, cutoff):
         return None
-    return JobVerdict("Took too long to finish — please retry.", "heartbeat_lost")
+    return JobVerdict(message("jobFailure.tookTooLong"), "heartbeat_lost")
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:

@@ -13,9 +13,7 @@ from support.web_app import make_test_app, refusal_body, seed_session
 from songmaker_cli import reference_api
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Generation, ReferenceRecording
-from songmaker_cli.jobs._runtime import (
-    JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
-)
+from songmaker_cli.jobs._runtime import REFERENCE_DELETED_DURING_TAKE
 from songmaker_cli.reference_audio import RemovalOutcome
 
 OWNER = "u1"
@@ -85,7 +83,7 @@ def test_a_take_waits_for_a_delete_of_the_row_and_then_fails_with_the_deleted_me
     answers = race(pg_factory, world.delete_reference, world.persist_take, delete_pause)
 
     assert answers["first"].status_code == 204
-    assert answers["second"] == JOB_ERROR_REFERENCE_DELETED_DURING_TAKE
+    assert answers["second"] == REFERENCE_DELETED_DURING_TAKE.sentence()
     assert world.reference_rows() == 0
     assert world.take_rows() == 0
 

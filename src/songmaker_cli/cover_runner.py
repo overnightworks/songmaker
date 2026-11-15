@@ -44,20 +44,19 @@ from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistr
 from songmaker_cli.job_timing import JOB_HEARTBEAT_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs._runtime import _touch_heartbeat, _update_job
+from songmaker_cli.messages import Message, message
 
 log = logging.getLogger(__name__)
 
 COVER_RUNNER_POLL_INTERVAL_SECONDS = 1.0
 COVER_PICTURE_CANCELLED_LOG: Final = "Cover job %s was cancelled during its picture"
-# The job's ``error`` is a closed sentence per problem; the editor words ``error_type`` itself.
-_PROBLEM_SENTENCES: Final[dict[AgentProblem, str]] = {
-    AgentProblem.UNAVAILABLE: "Cover suggestions are unavailable right now. Try again later.",
-    AgentProblem.BUSY: "Cover suggestions are busy. Try again when Suggest opens.",
-    AgentProblem.BUDGET_SPENT: "The budget for cover suggestions is used up. Try again later.",
-    AgentProblem.NOT_ENABLED: (
-        "Cover suggestions are not enabled for your account. Ask an admin to enable them."
-    ),
-    AgentProblem.SIGN_IN_AGAIN: "Log in again to get cover suggestions.",
+# The job's ``error`` is a closed message per problem; the editor words ``error_type`` itself.
+_PROBLEM_MESSAGES: Final[dict[AgentProblem, Message]] = {
+    AgentProblem.UNAVAILABLE: message("coverProblem.unavailable"),
+    AgentProblem.BUSY: message("coverProblem.busy"),
+    AgentProblem.BUDGET_SPENT: message("coverProblem.budgetSpent"),
+    AgentProblem.NOT_ENABLED: message("coverProblem.notEnabled"),
+    AgentProblem.SIGN_IN_AGAIN: message("coverProblem.signInAgain"),
 }
 _PICTURE_REJECTED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "picture_rejected")
 _RUN_FAILED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "cover run failed")
@@ -320,7 +319,7 @@ def _end_with_problem(db_factory, job_id: str, problem: TurnProblem) -> None:
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=_PROBLEM_SENTENCES[problem.problem],
+        error=_PROBLEM_MESSAGES[problem.problem],
         error_type=problem.problem.value,
         retry_after_seconds=problem.retry_after_seconds,
     )

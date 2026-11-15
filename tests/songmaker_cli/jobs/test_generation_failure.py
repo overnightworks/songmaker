@@ -1,7 +1,11 @@
 """Generate failure ownership without worker or database dependencies."""
 
 import pytest
-from support.generation_failures import GENERATION_SETUP_MESSAGES, OTHER_GENERATION_ERROR_TYPES
+from support.generation_failures import (
+    GENERATION_SETUP_MESSAGES,
+    GENERATION_SETUP_REASONS,
+    OTHER_GENERATION_ERROR_TYPES,
+)
 
 from songmaker_cli.jobs._runtime import GenerationSetupError
 from songmaker_cli.jobs.generation_failure import (
@@ -30,7 +34,7 @@ from songmaker_cli.scheduler import (
 def test_worker_family_gets_generic_message_and_type(error_class, cause, caplog):
     """defect:#1569: Worker identity, never its wording, decides the message."""
     failure = generation_failure(error_class(cause), "worker-job")
-    assert failure.message == "Generating failed — try again."
+    assert failure.message.sentence() == "Generating failed — try again."
     assert failure.error_type == "generation_error"
     assert "worker-job" in caplog.text
     assert cause in caplog.text
@@ -40,14 +44,14 @@ def test_songmaker_message_stays_with_existing_sanitizer(generation_write_failur
     """S8-A; S5-B/D, L6/L10: Availability changes while other sanitization and logging survive."""
     cause, expected, error_type = generation_write_failure_case
     failure = generation_failure(cause, "own-job")
-    assert failure.message == expected
+    assert failure.message.sentence() == expected
     assert failure.error_type == error_type
     assert "own-job" in caplog.text
     assert str(cause) in caplog.text
 
 
 @pytest.mark.parametrize(
-    ("causes", "message", "error_type", "running"),
+    ("causes", "expected_message", "error_type", "running"),
     [
         (
             (WorkerGpuOutOfMemory,),
@@ -82,7 +86,7 @@ def test_songmaker_message_stays_with_existing_sanitizer(generation_write_failur
     ],
     ids=["oom", "oom-generic", "generic-oom", "unavailable-generic", "unavailable"],
 )
-def test_s8_failure_selection(causes, message, error_type, running, caplog):
+def test_s8_failure_selection(causes, expected_message, error_type, running, caplog):
     """S8-A/D/E: One owner logs every cause and chooses stored and running pairs."""
     selected = None
     assert running_failure_pair(selected) == (None, None)
@@ -91,21 +95,25 @@ def test_s8_failure_selection(causes, message, error_type, running, caplog):
         selected = select_generation_failure(selected, cause(diagnosis), "s8-job")
         assert diagnosis in caplog.text
     assert "s8-job" in caplog.text
-    assert (selected.message, selected.error_type) == (message, error_type)
-    assert running_failure_pair(selected) == ((message, error_type) if running else (None, None))
-    assert musician_error(message, error_type) == message
+    assert (selected.message.sentence(), selected.error_type) == (expected_message, error_type)
+    pair = running_failure_pair(selected)
+    expected_pair = (expected_message, error_type) if running else (None, None)
+    actual_pair = (pair[0] and pair[0].sentence(), pair[1])
+    assert actual_pair == expected_pair
+    assert musician_error(expected_message, error_type) == expected_message
 
 
 @pytest.mark.parametrize(
-    ("completed", "count", "message", "expected"),
+    ("completed", "count", "cause", "expected"),
     [
         (1, 2, "Generation timed out", "1/2 completed, 1 failed: Generation timed out"),
         (12, 15, "raw worker cause", "12/15 completed, 3 failed: raw worker cause"),
     ],
 )
-def test_partial_failure_formats_completed_and_failed_counts(completed, count, message, expected):
+def test_partial_failure_formats_completed_and_failed_counts(completed, count, cause, expected):
     """L11: Persisted partial failures retain their counts and selected cause."""
-    assert partial_failure_error(completed, count, message) == expected
+    failure = partial_failure_error(completed, count, message("jobFailure.reported", cause=cause))
+    assert failure.sentence() == expected
 
 
 @pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
@@ -115,22 +123,12 @@ def test_read_preserves_songmaker_counterexamples(generation_failure_case, prefi
     assert musician_error(prefix + expected, "generation_error") == prefix + expected
 
 
-@pytest.mark.parametrize(
-    "message",
-    GENERATION_SETUP_MESSAGES,
-)
-def test_setup_message_stays_with_existing_sanitizer(message):
+@pytest.mark.parametrize("reason", GENERATION_SETUP_REASONS)
+def test_setup_message_stays_with_existing_sanitizer(reason):
     """L11: Setup messages retain their existing write classification."""
-    failure = generation_failure(GenerationSetupError(message), "setup-job")
-    assert failure.message == message
+    failure = generation_failure(GenerationSetupError(reason), "setup-job")
+    assert failure.message == reason
     assert failure.error_type == "generation_error"
-
-
-def test_unknown_setup_message_stays_sanitized():
-    """L11: Unknown setup details are still sanitized on write."""
-    assert generation_failure(GenerationSetupError("private"), "setup-job").message == (
-        "An unexpected error occurred"
-    )
 
 
 @pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])

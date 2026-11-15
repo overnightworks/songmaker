@@ -23,9 +23,7 @@ from support.web_app import make_test_app, refusal_body, seed_session
 
 from songmaker_cli.cleanup import run_cleanup_expired, run_generation_retention
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
-from songmaker_cli.jobs._runtime import (
-    JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
-)
+from songmaker_cli.jobs._runtime import REFERENCE_DELETED_DURING_TAKE
 from songmaker_cli.reference_audio import (
     AnnouncedDeletionReport,
     delete_announced_references,
@@ -160,7 +158,7 @@ def test_a_take_waiting_for_the_run_fails_with_the_deleted_message(world) -> Non
     )
 
     assert answers["first"] == AnnouncedDeletionReport(deleted=1)
-    assert answers["second"] == JOB_ERROR_REFERENCE_DELETED_DURING_TAKE
+    assert answers["second"] == REFERENCE_DELETED_DURING_TAKE.sentence()
     assert world.reference_rows() == 0
     assert world.take_rows() == 0
     assert not world.stored_file.exists()
