@@ -97,10 +97,9 @@ def test_s8_failure_selection(causes, message, error_type, running, caplog):
     assert "s8-job" in caplog.text
     assert (selected.message.sentence(), selected.error_type) == (message, error_type)
     pair = running_failure_pair(selected)
-    assert (pair[0] and pair[0].sentence(), pair[1]) == (
-        (message, error_type) if running else (None, None)
-    )
-    assert message == musician_error(message, error_type)
+    expected_pair = (message, error_type) if running else (None, None)
+    assert (pair[0] and pair[0].sentence(), pair[1]) == expected_pair
+    assert musician_error(message, error_type) == message
 
 
 @pytest.mark.parametrize(
