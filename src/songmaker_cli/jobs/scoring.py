@@ -50,11 +50,8 @@ def run_scoring_job(
 
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
-        job_id=job_id,
-        job_type=JobType.SCORE,
-        generation_id=gen_id,
+        job_id=job_id, job_type=JobType.SCORE, generation_id=gen_id,
     )
-
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
 
     try:

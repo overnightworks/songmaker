@@ -43,10 +43,7 @@ async def load_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_failure_sentence(
-                RuntimeError(f"Worker '{worker_id}' not registered"),
-                job_id,
-            ),
+            error=_failure_sentence(RuntimeError(f"Worker '{worker_id}' not registered"), job_id),
             error_type="worker_missing",
         )
         return
@@ -125,12 +122,7 @@ async def download_model_on_worker(
         last_error: Exception | None = None
         for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
             outcome = await _run_download_attempt(
-                factory,
-                redis,
-                job_id,
-                mode,
-                _on_progress,
-                _on_heartbeat,
+                factory, redis, job_id, mode, _on_progress, _on_heartbeat,
             )
             if outcome is None:
                 return

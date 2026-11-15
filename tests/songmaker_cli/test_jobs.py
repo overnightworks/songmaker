@@ -150,9 +150,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> Non
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -209,8 +207,7 @@ def test_generation_hold_defers_before_building_temporary_context(
                 data_dir=tmp_path / "data",
                 redis=redis,
                 target_model="sft",
-                seed=17,
-                owner_id="o1",
+                seed=17, owner_id="o1",
             )
         )
 
@@ -334,8 +331,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
             run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                target_model="sft", owner_id="o1",
             )
         )
         with seeded_db() as session:
@@ -344,8 +340,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
             run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                target_model="sft", owner_id="o1",
             )
         )
 
@@ -378,8 +373,7 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
             await run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                target_model="sft", owner_id="o1",
             )
             with seeded_db() as session:
                 queued = get_job(session, "j1")
@@ -390,8 +384,7 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
             await run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                target_model="sft", owner_id="o1",
             )
 
         dispatch.assert_awaited_once()
@@ -425,8 +418,7 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
             await run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                target_model="sft", owner_id="o1",
             )
 
         build_context.assert_not_called()
@@ -467,9 +459,7 @@ def test_generation_job_persists_the_takes_own_measured_duration(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -500,9 +490,7 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -545,9 +533,7 @@ def test_generation_series_keeps_its_admission_until_the_third_take(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -586,8 +572,7 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
             await run_generation_job(
                 "j1", "s1", "v1", 3, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                target_model="sft", owner_id="o1",
             )
 
         assert take_count == 3
@@ -627,15 +612,13 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
                     await run_generation_job(
                         "j1", "s1", "v1", 3, "u1", db_factory=seeded_db,
                         audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                        target_model="sft",
-                        owner_id="o1",
+                        target_model="sft", owner_id="o1",
                     )
             else:
                 await run_generation_job(
                     "j1", "s1", "v1", 3, "u1", db_factory=seeded_db,
                     audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
-                    target_model="sft",
-                    owner_id="o1",
+                    target_model="sft", owner_id="o1",
                 )
         assert await read_queue_depth(redis, "w1") == 0
         assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
@@ -657,9 +640,7 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -693,9 +674,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -724,9 +703,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -740,8 +717,7 @@ async def _run_peer_generation(factory, peer, count):
     await run_generation_job(
         "j1", "s1", "v1", count, "u1", db_factory=factory,
         audio_dir=peer.audio_dir, data_dir=peer.data_dir, redis=peer.redis,
-        target_model="sft",
-        owner_id="o1",
+        target_model="sft", owner_id="o1",
     )
 
 
@@ -1029,9 +1005,7 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1084,9 +1058,7 @@ def test_generation_event_failure_rolls_back_generation(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1121,9 +1093,7 @@ def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                redis=redis, target_model="sft", owner_id="o1",
             )
         )
 
@@ -1159,9 +1129,7 @@ def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=_healthy_scoring_redis(),
-                target_model="sft",
-                owner_id="o1",
+                redis=_healthy_scoring_redis(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1192,9 +1160,7 @@ def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=redis,
-                target_model="sft",
-                owner_id="o1",
+                redis=redis, target_model="sft", owner_id="o1",
             )
         )
 
@@ -1227,9 +1193,7 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1263,9 +1227,7 @@ def test_generation_job_persists_requested_batch_size(seeded_db, tmp_path: Path)
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1302,9 +1264,7 @@ def test_generation_job_persists_vram_guard_batch_reduction(seeded_db, tmp_path:
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1344,9 +1304,7 @@ def test_generation_job_omits_delivered_batch_size_when_it_matches_requested(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1375,9 +1333,7 @@ def test_generation_job_omits_default_batch_size(seeded_db, tmp_path: Path) -> N
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1411,9 +1367,7 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1441,9 +1395,7 @@ def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Pat
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="xl-sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="xl-sft", owner_id="o1",
             )
         )
 
@@ -1475,9 +1427,7 @@ def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Pa
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1524,9 +1474,7 @@ def test_generation_job_cancelled_after_setup_does_not_dispatch_or_persist(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1578,9 +1526,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1627,9 +1573,7 @@ def test_generation_job_cancel_after_worker_skips_persist(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1705,9 +1649,7 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
 
@@ -1751,9 +1693,7 @@ def _observe_job_while_acestep_reports(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-                owner_id="o1",
+                redis=MagicMock(), target_model="sft", owner_id="o1",
             )
         )
     return observed
@@ -2701,8 +2641,7 @@ def test_download_model_on_worker_no_online_workers(seeded_db) -> None:
     _seed_download_job(seeded_db, "dl2")
     redis = _FakeRedis()
     run_async(download_model_on_worker(
-        {"redis": redis}, "dl2", "sft", db_factory=seeded_db,
-        owner_id="o1",
+        {"redis": redis}, "dl2", "sft", db_factory=seeded_db, owner_id="o1",
     ))
 
     with seeded_db() as session:
@@ -2731,8 +2670,7 @@ def test_download_model_on_worker_unreachable(seeded_db) -> None:
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl3", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl3", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -2759,8 +2697,7 @@ def test_download_model_on_worker_returns_5xx(seeded_db, response_format: str) -
 
     with patch("httpx.AsyncClient", return_value=fake_client):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl4", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl4", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -2801,8 +2738,7 @@ def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> 
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl5", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl5", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -2853,8 +2789,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl6", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl6", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -2894,8 +2829,7 @@ def test_download_model_on_worker_sse_transport_error(seeded_db) -> None:
         ),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl7", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl7", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -2930,8 +2864,7 @@ def test_download_model_on_worker_clears_redis_flag_on_success(seeded_db) -> Non
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl8", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl8", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     assert download_key("sft") not in redis.store
@@ -2946,8 +2879,7 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
 
     run_async(download_model_on_worker(
 
-        {"redis": redis}, "dl9", "sft", db_factory=seeded_db,
-        owner_id="o1",
+        {"redis": redis}, "dl9", "sft", db_factory=seeded_db, owner_id="o1",
 
     ))
 
@@ -2964,8 +2896,7 @@ def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> Non
 
     run_async(download_model_on_worker(
 
-        {"redis": redis}, "dl10", "sft", db_factory=seeded_db,
-        owner_id="o1",
+        {"redis": redis}, "dl10", "sft", db_factory=seeded_db, owner_id="o1",
 
     ))
 
@@ -3014,8 +2945,7 @@ def test_download_retries_on_worker_task_failed_then_succeeds(seeded_db) -> None
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-retry-1", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl-retry-1", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -3061,8 +2991,7 @@ def test_download_retries_on_sse_drop_then_succeeds(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-retry-2", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl-retry-2", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -3104,8 +3033,7 @@ def test_download_does_not_retry_on_connect_error(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-noretry", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl-noretry", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     with seeded_db() as session:
@@ -3149,8 +3077,7 @@ def test_download_redis_flag_held_across_retries(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-flag", "sft", db_factory=seeded_db,
-            owner_id="o1",
+            {"redis": redis}, "dl-flag", "sft", db_factory=seeded_db, owner_id="o1",
         ))
 
     assert seen_during_retries == [True, True, True]

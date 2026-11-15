@@ -4306,8 +4306,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     audio_dir=peer.audio_dir,
                     data_dir=peer.data_dir,
                     redis=peer.redis,
-                    target_model="sft",
-                    owner_id="o1",
+                    target_model="sft", owner_id="o1",
                 )
             )
             server = LoopbackServer(client.app)
@@ -4384,8 +4383,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
                 await run_generation_job(
                     job_id, "s1", "v1", 2, _DEFAULT_USER_ID,
                     db_factory=ctx.db, audio_dir=peer.audio_dir, data_dir=peer.data_dir,
-                    redis=peer.redis, target_model="sft",
-                    owner_id="o1",
+                    redis=peer.redis, target_model="sft", owner_id="o1",
                 )
         finally:
             await redis_client.drain_lease_releases()

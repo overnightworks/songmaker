@@ -855,7 +855,6 @@ async def run_generation_job(
     repaint_params: RepaintTaskParams | None = None,
     cover_params: CoverTaskParams | None = None,
 ) -> None:
-
     import structlog
 
     structlog.contextvars.clear_contextvars()
@@ -889,18 +888,11 @@ async def run_generation_job(
     )
 
     try:
-        admitted_worker = await _admit_generation_worker_or_requeue(
-            request,
-            redis,
-            db_factory,
-        )
+        admitted_worker = await _admit_generation_worker_or_requeue(request, redis, db_factory)
         if admitted_worker is None:
             return
 
-        ctx = await _build_generation_job_context(
-            request,
-            db_factory,
-        )
+        ctx = await _build_generation_job_context(request, db_factory)
         if ctx is None:
             return
 

@@ -686,10 +686,7 @@ async def _prepare_and_submit_lora(
         )
         with db_factory() as session:
             update_user_lora(
-                session,
-                lora_id,
-                status=LoraStatus.PREPROCESSING,
-                clear_error=True,
+                session, lora_id, status=LoraStatus.PREPROCESSING, clear_error=True,
             )
             session.commit()
         _update_job(db_factory, job_id, JobStatus.RUNNING, progress=0.05)
@@ -1077,7 +1074,6 @@ async def run_lora_training_job(
             training_config=training_config,
             user_id=user_id,
         )
-
     except asyncio.CancelledError:
         _handle_cancelled_lora_training(db_factory, audio_dir, job_id, lora_id, user_id)
         raise
@@ -1089,13 +1085,7 @@ async def run_lora_training_job(
     except Exception as exc:
         log.exception("LoRA training job %s failed: %s", job_id, exc)
         _fail_lora_training(
-            db_factory,
-            audio_dir,
-            exc,
-            "lora_training_error",
-            job_id,
-            lora_id,
-            user_id,
+            db_factory, audio_dir, exc, "lora_training_error", job_id, lora_id, user_id,
         )
 
 
