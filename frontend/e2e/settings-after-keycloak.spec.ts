@@ -107,7 +107,7 @@ test('a member sees Generation and Voices in Settings, an admin also Admin, and 
 		for (const label of shown) {
 			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toBeVisible();
 		}
-		for (const label of [...hidden, 'Account', 'Cleanup']) {
+		for (const label of [...hidden, 'Account', words['adminPage.tabCleanup']]) {
 			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toHaveCount(0);
 		}
 	}
