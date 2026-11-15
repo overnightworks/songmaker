@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from redis.exceptions import RedisError
 
-import songmaker_cli.worker_base as wb_mod
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_lease_key
@@ -24,6 +23,7 @@ class _DummyWorker(WorkerBase):
     job_types = ("dummy",)
     queue_name = "dummy_queue"
     max_jobs = 1
+    owner_lease_refresh_seconds = 0
 
 
 def _make_worker_with_db(mock_session: MagicMock) -> _DummyWorker:
@@ -116,27 +116,21 @@ class _LeaseRedis:
         self.successful_sets = 0
         self._failing_sets = failing_sets
         self._drop_fails = drop_fails
-        self.closed = False
 
-    def set(self, key: str, value: str, ex: int) -> None:
+    async def set(self, key: str, value: str, ex: int) -> None:
         self.sets += 1
         if self.sets in self._failing_sets:
             raise RedisError("unreachable")
         self.successful_sets += 1
         self.leases[key] = value
 
-    def delete(self, key: str) -> None:
+    async def delete(self, key: str) -> None:
         if self._drop_fails:
             raise RedisError("unreachable")
         self.leases.pop(key, None)
 
-    def close(self) -> None:
-        self.closed = True
 
-
-def _worker_on(redis: _LeaseRedis, monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
-    monkeypatch.setattr(wb_mod, "create_redis", lambda _url: redis)
-    monkeypatch.setattr(wb_mod, "OWNER_LEASE_REFRESH_SECONDS", 0)
+def _worker(monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
     monkeypatch.setattr("songmaker_cli.logging_config.configure_logging", lambda: None)
     worker = _DummyWorker()
     worker.get_db_factory = MagicMock()
@@ -153,16 +147,16 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     redis = _LeaseRedis()
-    worker = _worker_on(redis, monkeypatch)
+    worker = _worker(monkeypatch)
     lease = owner_lease_key(worker.owner_id)
 
-    async def start_and_stop() -> tuple[bool, bool, bool]:
-        await worker.on_startup({})
+    async def start_and_stop() -> tuple[bool, bool]:
+        await worker.on_startup({"redis": redis})
         held_while_running = lease in redis.leases
-        await worker.on_shutdown({})
-        return held_while_running, lease in redis.leases, redis.closed
+        await worker.on_shutdown({"redis": redis})
+        return held_while_running, lease in redis.leases
 
-    assert _run(start_and_stop()) == (True, False, True)
+    assert _run(start_and_stop()) == (True, False)
 
 
 def test_two_workers_hold_leases_of_their_own() -> None:
@@ -173,13 +167,13 @@ def test_a_worker_leases_only_after_its_database_has_opened(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     redis = _LeaseRedis()
-    worker = _worker_on(redis, monkeypatch)
+    worker = _worker(monkeypatch)
     leases_while_opening: list[dict[str, str]] = []
     worker.get_db_factory = lambda: leases_while_opening.append(dict(redis.leases))
 
     async def start_and_stop() -> None:
-        await worker.on_startup({})
-        await worker.on_shutdown({})
+        await worker.on_startup({"redis": redis})
+        await worker.on_shutdown({"redis": redis})
 
     _run(start_and_stop())
 
@@ -188,12 +182,12 @@ def test_a_worker_leases_only_after_its_database_has_opened(
 
 def test_a_lease_renewal_that_fails_is_tried_again(monkeypatch: pytest.MonkeyPatch) -> None:
     redis = _LeaseRedis(failing_sets=frozenset({2, 3}))
-    worker = _worker_on(redis, monkeypatch)
+    worker = _worker(monkeypatch)
 
     async def renewed_after_the_failures() -> int:
-        await worker.on_startup({})
+        await worker.on_startup({"redis": redis})
         await _until(lambda: redis.successful_sets >= 2)
-        await worker.on_shutdown({})
+        await worker.on_shutdown({"redis": redis})
         return redis.successful_sets
 
     assert _run(renewed_after_the_failures()) >= 2
@@ -201,15 +195,15 @@ def test_a_lease_renewal_that_fails_is_tried_again(monkeypatch: pytest.MonkeyPat
 
 def test_a_shutdown_that_cannot_drop_the_lease_still_ends(monkeypatch: pytest.MonkeyPatch) -> None:
     redis = _LeaseRedis(drop_fails=True)
-    worker = _worker_on(redis, monkeypatch)
+    worker = _worker(monkeypatch)
 
     async def start_and_stop() -> None:
-        await worker.on_startup({})
-        await worker.on_shutdown({})
+        await worker.on_startup({"redis": redis})
+        await worker.on_shutdown({"redis": redis})
 
     _run(start_and_stop())
 
-    assert redis.closed
+    assert redis.leases
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:

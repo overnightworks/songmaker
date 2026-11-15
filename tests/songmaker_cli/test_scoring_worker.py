@@ -82,7 +82,6 @@ def test_on_startup_initializes_scorer() -> None:
             return_value=mock_scorer,
         ),
         patch("songmaker_cli.scoring.subprocess_runner.set_scorer_process") as mock_set,
-        patch("songmaker_cli.worker_base.create_redis"),
     ):
         _run(worker.on_startup(ctx))
 

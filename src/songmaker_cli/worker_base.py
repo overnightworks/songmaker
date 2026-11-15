@@ -13,9 +13,8 @@ import logging
 import threading
 import uuid
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from redis import Redis
 from redis.exceptions import RedisError
 
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
@@ -24,9 +23,8 @@ from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
-from songmaker_cli.redis_client import create_redis
 from songmaker_cli.settings import Settings, get_settings
-from songmaker_cli.worker_liveness import drop_owner_lease, refresh_owner_lease
+from songmaker_cli.worker_liveness import drop_owner_lease_async, refresh_owner_lease_async
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +47,7 @@ class WorkerBase:
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
     health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS
+    owner_lease_refresh_seconds: ClassVar[float] = OWNER_LEASE_REFRESH_SECONDS
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -56,7 +55,6 @@ class WorkerBase:
         self._db_factory = None
         self._db_lock = threading.Lock()
         self.owner_id = str(uuid.uuid4())
-        self._lease_redis: Redis | None = None
         self._lease_task: asyncio.Task[None] | None = None
 
     def worker_name(self) -> str:
@@ -91,52 +89,38 @@ class WorkerBase:
         log.info("%s worker starting up...", self.worker_name())
         # Opening the database may wait for it to start; the lease says "alive" only after.
         self.get_db_factory()
-        await self._start_owner_lease()
+        await self._start_owner_lease(ctx["redis"])
         log.info("%s worker ready", self.worker_name())
 
     async def on_shutdown(self, ctx) -> None:
-        await self._release_owner_lease()
+        if self._lease_task is not None:
+            await self._release_owner_lease(self._lease_task, ctx["redis"])
 
         if self._db_engine is not None:
             self._db_engine.dispose()
             log.info("Database connection pool disposed")
 
-    async def _start_owner_lease(self) -> None:
-        self._lease_redis = create_redis(self._settings.redis_url)
-        await asyncio.to_thread(refresh_owner_lease, self._lease_redis, self.owner_id)
-        self._lease_task = asyncio.create_task(self._renew_owner_lease(self._lease_redis))
+    async def _start_owner_lease(self, redis: Any) -> None:
+        await refresh_owner_lease_async(redis, self.owner_id)
+        self._lease_task = asyncio.create_task(self._renew_owner_lease(redis))
 
-    async def _renew_owner_lease(self, redis: Redis) -> None:
-        """Renew the lease until cancelled, outliving a Redis that fails for a while.
-
-        A cancel waits for the renewal in flight: a running thread cannot be cancelled,
-        and its SET must not land after the shutdown's DELETE of the lease.
-        """
+    async def _renew_owner_lease(self, redis: Any) -> None:
+        """Renew the lease until cancelled, outliving a Redis that fails for a while."""
         while True:
-            await asyncio.sleep(OWNER_LEASE_REFRESH_SECONDS)
-            renewal = asyncio.ensure_future(
-                asyncio.to_thread(refresh_owner_lease, redis, self.owner_id),
-            )
+            await asyncio.sleep(self.owner_lease_refresh_seconds)
             try:
-                await asyncio.shield(renewal)
-            except asyncio.CancelledError:
-                await asyncio.gather(renewal, return_exceptions=True)
-                raise
+                await refresh_owner_lease_async(redis, self.owner_id)
             except Exception:
                 log.exception("Owner lease renewal failed")
 
-    async def _release_owner_lease(self) -> None:
+    async def _release_owner_lease(self, lease_task: asyncio.Task[None], redis: Any) -> None:
         """End the lease so a web process fails this worker's jobs within one tick."""
-        if self._lease_task is not None:
-            self._lease_task.cancel()
-            await asyncio.gather(self._lease_task, return_exceptions=True)
-        if self._lease_redis is None:
-            return
+        lease_task.cancel()
+        await asyncio.gather(lease_task, return_exceptions=True)
         try:
-            await asyncio.to_thread(drop_owner_lease, self._lease_redis, self.owner_id)
+            await drop_owner_lease_async(redis, self.owner_id)
         except RedisError:
             log.warning("Could not drop the owner lease; it lapses by itself", exc_info=True)
-        self._lease_redis.close()
 
     def audit_orphaned_files(self) -> None:
         """Log audio files on disk that have no matching DB record."""
