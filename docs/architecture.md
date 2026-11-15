@@ -1565,13 +1565,17 @@ SIGKILLed and even the values the run did produce would be lost.
 - DB singleton with thread-safe initialization
 - Path helpers (`audio_dir()`, `data_dir()`)
 - Timeout constants, terminal status set
-- Common startup, shutdown, and restart recovery for every named worker job
-  type. MusicWorker executes the model jobs `generate`, `lora_training`,
+- Common startup and shutdown for every named worker job type, and the
+  worker's owner id and lease. MusicWorker executes the model jobs `generate`, `lora_training`,
   `load_model_on_worker`, and `download_model_on_worker`; the ACE-Step worker
   performs their HTTP model-serving portion. The scoring worker owns `score`.
-- A worker restart terminalizes only `RUNNING` jobs for every type. Queued
-  work remains in arq for a replacement worker to claim after a deploy.
-- Shutdown recovery uses a Redis advisory lock, then disposes the DB pool.
+- A worker writes its owner id on every job it runs and holds an owner lease
+  on the Redis connection arq hands it: set at startup after the database has
+  opened, renewed every `OWNER_LEASE_REFRESH_SECONDS`, deleted at shutdown
+  before the DB pool is disposed. A worker fails no job at start or stop; a web
+  process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
+  recovery below). Queued work remains in arq for a replacement worker to claim
+  after a deploy.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
 **Stale-job recovery** (web process — #446, #456): The lifecycle loop is the
