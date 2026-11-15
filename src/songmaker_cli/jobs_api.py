@@ -23,7 +23,7 @@ from songmaker_cli.api_helpers import (
     job_not_found,
 )
 from songmaker_cli.api_models import JobResponse
-from songmaker_cli.app_context import AppContext, get_db_session
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import authenticate_request, get_current_user
 from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
@@ -33,6 +33,7 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
+from songmaker_cli.cover_runner import publish_cover_cancel
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
@@ -287,6 +288,7 @@ def api_cancel_job(
     job_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
     if job.status not in JOB_ACTIVE_STATUSES:
@@ -295,9 +297,8 @@ def api_cancel_job(
         raise Refusal(409, "jobRefusal.notCancellable")
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
-    from songmaker_cli.cover_runner import abort_web_cover_job
-
-    abort_web_cover_job(job_id)
+    if job.type == JobType.COVER:
+        publish_cover_cancel(ctx.redis, job_id)
     job = get_job(session, job_id)
     return musician_job_response(job)
 
