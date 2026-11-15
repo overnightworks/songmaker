@@ -19,7 +19,6 @@ LEASED = "leased-owner"
 ABSENT = "absent-owner"
 DEADLINE_SECONDS = 5
 FAST_RENEWAL = timedelta(seconds=0.01)
-SLOW_OLD_KEY_RENEWAL_SECONDS = 0.05
 
 
 def test_a_kept_lease_reads_alive_to_another_process_until_its_block_ends() -> None:
@@ -92,14 +91,15 @@ def test_an_exit_cancelled_during_a_renewal_still_ends_the_lease_and_its_old_key
     plain_set = server.set
     block_entered = False
     renewal_in_flight = asyncio.Event()
+    cancellation_delivered = asyncio.Event()
 
-    async def set_slowly_inside_the_block(*arguments, **options):
+    async def set_once_the_cancellation_is_delivered(*arguments, **options):
         if block_entered:
             renewal_in_flight.set()
-            await asyncio.sleep(SLOW_OLD_KEY_RENEWAL_SECONDS)
+            await cancellation_delivered.wait()
         return await plain_set(*arguments, **options)
 
-    server.set = set_slowly_inside_the_block
+    server.set = set_once_the_cancellation_is_delivered
 
     async def block() -> None:
         nonlocal block_entered
@@ -114,6 +114,7 @@ def test_an_exit_cancelled_during_a_renewal_still_ends_the_lease_and_its_old_key
         running.cancel()
         await asyncio.sleep(0)
         running.cancel()
+        cancellation_delivered.set()
         await asyncio.gather(running, return_exceptions=True)
         reading = (await owner_leases(server).liveness([LEASED]))[LEASED]
         return reading, bool(await server.exists(old_owner_key(REDIS_KEY_PREFIX, LEASED)))
