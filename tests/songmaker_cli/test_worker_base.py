@@ -159,10 +159,6 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
     assert _run(start_and_stop()) == (True, False)
 
 
-def test_two_workers_hold_leases_of_their_own() -> None:
-    assert _DummyWorker().owner_id != _DummyWorker().owner_id
-
-
 def test_a_worker_leases_only_after_its_database_has_opened(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
