@@ -56,7 +56,7 @@ server = [
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
     "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.44.0",
     # Cross-pod coordination in Redis (owner lease). A git pin by tag like the other two.
-    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.4.0",
+    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.5.2",
 ]
 # Pillow normalizes a generated cover; a container installs it only when its entrypoint reaches it.
 image = [
@@ -121,8 +121,6 @@ include = [
 [tool.uv]
 override-dependencies = [
     "numpy>=1.26",
-    # why: tandem needs redis-py 8.1 and arq caps it below 6; the arq tests run on 8.1.
-    "redis[hiredis]>=8.1,<9",
 ]
 
 [[tool.uv.index]]

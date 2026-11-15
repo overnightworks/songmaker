@@ -7,10 +7,7 @@ resolution-markers = [
 ]
 
 [manifest]
-overrides = [
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "redis", extras = ["hiredis"], specifier = ">=8.1,<9" },
-]
+overrides = [{ name = "numpy", specifier = ">=1.26" }]
 
 [[package]]
 name = "alembic"
@@ -380,7 +377,7 @@ name = "fakeredis"
 version = "2.34.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "redis", extra = ["hiredis"] },
+    { name = "redis" },
     { name = "sortedcontainers" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/11/40/fd09efa66205eb32253d2b2ebc63537281384d2040f0a88bcd2289e120e4/fakeredis-2.34.1.tar.gz", hash = "sha256:4ff55606982972eecce3ab410e03d746c11fe5deda6381d913641fbd8865ea9b", size = 177315, upload-time = "2026-02-25T13:17:51.315Z" }
@@ -1236,10 +1233,10 @@ provides-extras = ["catalogs"]
 
 [[package]]
 name = "overnightworks-tandem"
-version = "0.4.0"
-source = { git = "https://github.com/overnightworks/tandem?rev=v0.4.0#e211cc24d1fed7f81788811a14ba4eba3a219ffd" }
+version = "0.5.2"
+source = { git = "https://github.com/overnightworks/tandem?rev=v0.5.2#b1e8aabfc8c534a44b17a2bd7dff8f8d58e8b9ab" }
 dependencies = [
-    { name = "redis", extra = ["hiredis"] },
+    { name = "redis" },
 ]
 
 [[package]]
@@ -1258,7 +1255,7 @@ dependencies = [
 
 [package.optional-dependencies]
 redis = [
-    { name = "redis", extra = ["hiredis"] },
+    { name = "redis" },
 ]
 
 [[package]]
@@ -1658,11 +1655,14 @@ wheels = [
 
 [[package]]
 name = "redis"
-version = "8.1.0"
+version = "5.3.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a8/99/604f0b666d4c616d891cf77ebb9db6bb21601344c051aebf1b72b9ff915f/redis-8.1.0.tar.gz", hash = "sha256:6e1a19beef9225c83efd689c7e6b7da2d5215b1f42cd13b7fc3714d0a09c7b25", size = 5254356, upload-time = "2026-07-30T08:51:00.269Z" }
+dependencies = [
+    { name = "pyjwt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/cf/128b1b6d7086200c9f387bd4be9b2572a30b90745ef078bd8b235042dc9f/redis-5.3.1.tar.gz", hash = "sha256:ca49577a531ea64039b5a36db3d6cd1a0c7a60c34124d46924a45b956e8cf14c", size = 4626200, upload-time = "2025-07-25T08:06:27.778Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/9d/c5731f6e3608663d4d3656fd8d3aecee8b509c3082818f5a13eae925baea/redis-8.1.0-py3-none-any.whl", hash = "sha256:a4fe1aac3d3b3cc791d4b3d5931c5a956045dc951ee74d1c913ee3ac4d2ee9fb", size = 560618, upload-time = "2026-07-30T08:50:58.497Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/26/5c5fa0e83c3621db835cfc1f1d789b37e7fa99ed54423b5f519beb931aa7/redis-5.3.1-py3-none-any.whl", hash = "sha256:dc1909bd24669cc31b5f67a039700b16ec30571096c5f1f0d9d2324bff31af97", size = 272833, upload-time = "2025-07-25T08:06:26.317Z" },
 ]
 
 [package.optional-dependencies]
@@ -2036,7 +2036,7 @@ requires-dist = [
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" },
-    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.4.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.5.2" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
