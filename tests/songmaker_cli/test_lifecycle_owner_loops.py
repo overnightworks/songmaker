@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import fakeredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from support.loop_ticks import run_ticks_observing_status
-from support.web_app import fake_redis_clock, make_fake_async_redis, settle_owner_leases
+from support.web_app import make_fake_async_redis, settle_owner_leases
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import Job
@@ -76,15 +76,14 @@ def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
 
 
 def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
-    monkeypatch, pg_factory, tmp_path,
+    pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
-    clock = fake_redis_clock(monkeypatch)
     job_id = _running_job_of(pg_factory, ANOTHER)
     app = _loop_app(server, pg_factory, tmp_path)
 
     async def end_the_lease_of_another_and_wait_for_its_job() -> tuple[str, str | None]:
-        await settle_owner_leases(server, clock)
+        await settle_owner_leases(server)
         leases = owner_leases(server)
         await leases.end(ANOTHER, (await leases.renew(ANOTHER)).generation)
         loop_task = asyncio.ensure_future(owner_lapse_loop(app))

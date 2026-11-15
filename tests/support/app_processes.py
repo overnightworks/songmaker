@@ -35,13 +35,11 @@ from pydantic_settings import BaseSettings
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
-from tandem.keys import lease_keys
+from support.owner_lease_epoch import aged_owner_lease_epoch
 
 from acestep_worker.settings import WorkerSettings
-from songmaker_cli.constants import REDIS_KEY_PREFIX
-from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.settings import Settings
-from songmaker_cli.worker_liveness import OWNER_LEASE_FAMILY, owner_leases
+from songmaker_cli.worker_liveness import owner_leases
 
 HEALTH_PATH: Final = "/health"
 READY_DEADLINE_SECONDS: Final = 60.0
@@ -290,17 +288,8 @@ def poll_until(
 
 
 def age_the_owner_lease_epoch(redis: Redis) -> None:
-    """Date the owner leases' epoch one lease span back, as on a Redis that has run that long.
-
-    An absent lease reads gone only then; before it, UNKNOWN, as after a restart.
-    """
-    seconds, microseconds = redis.time()
-    now_ms = seconds * 1000 + microseconds // 1000
-    redis.set(
-        lease_keys(REDIS_KEY_PREFIX, OWNER_LEASE_FAMILY).epoch,
-        now_ms - (OWNER_LEASE_TTL_SECONDS + 1) * 1000,
-        nx=True,
-    )
+    """Date the owner leases' epoch one lease span back, so an absent lease reads gone."""
+    redis.set(*aged_owner_lease_epoch(), nx=True)
 
 
 def leased_owner_ids(redis: Redis) -> set[str]:

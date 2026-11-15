@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import fakeredis
 import httpx
-import pytest
-from fakeredis.commands_mixins import server_mixin as fakeredis_server_mixin
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.owner_lease_epoch import aged_owner_lease_epoch
 from support.session_ids import a_session_id
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
-from songmaker_cli.worker_liveness import owner_leases
 
 if TYPE_CHECKING:
     from songmaker_cli.oidc_client import OidcSignIn
@@ -38,30 +34,9 @@ def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:
     return fakeredis.FakeAsyncRedis()
 
 
-class FakeRedisClock:
-    """The time a fake Redis answers to `TIME`, and so to a lease's expiry; it moves when told."""
-
-    def __init__(self) -> None:
-        self._offset_seconds = 0.0
-
-    def time(self) -> float:
-        return time.time() + self._offset_seconds
-
-    def pass_seconds(self, seconds: float) -> None:
-        self._offset_seconds += seconds
-
-
-def fake_redis_clock(monkeypatch: pytest.MonkeyPatch) -> FakeRedisClock:
-    """Put every fake Redis of the test on a clock the test moves."""
-    clock = FakeRedisClock()
-    monkeypatch.setattr(fakeredis_server_mixin, "time", clock)
-    return clock
-
-
-async def settle_owner_leases(async_redis: fakeredis.FakeAsyncRedis, clock: FakeRedisClock) -> None:
-    """Let the epoch of the owner leases settle, so an absent lease reads GONE, not UNKNOWN."""
-    await owner_leases(async_redis).live()
-    clock.pass_seconds(OWNER_LEASE_TTL_SECONDS)
+async def settle_owner_leases(async_redis: fakeredis.FakeAsyncRedis) -> None:
+    """Date the epoch of the owner leases a lease span back, so an absent lease reads GONE."""
+    await async_redis.set(*aged_owner_lease_epoch())
 
 
 def refusal_body(key: Key, **values: str) -> dict[str, object]:
