@@ -8,7 +8,8 @@ from datetime import timedelta
 import pytest
 from support.redis_proxy import redis_proxy
 from support.web_app import make_fake_async_redis, settle_owner_leases
-from tandem import Liveness
+from redis.exceptions import ConnectionError as RedisConnectionError
+from tandem import Liveness, StoreError
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.owner_lease_old_key import old_owner_key
@@ -122,6 +123,25 @@ def test_an_exit_cancelled_during_a_renewal_still_ends_the_lease_and_its_old_key
     assert asyncio.run(cancel_the_block_twice_while_a_renewal_is_in_flight()) == (
         Liveness.GONE, False,
     )
+
+
+def test_the_old_key_is_dropped_and_the_error_propagates_when_the_lease_end_raises() -> None:
+    server = make_fake_async_redis()
+    key = old_owner_key(REDIS_KEY_PREFIX, LEASED)
+
+    async def fail_every_script(*arguments, **options):
+        raise RedisConnectionError("the lease script cannot run")
+
+    async def end_the_lease_while_only_scripts_fail() -> tuple[bool, bool]:
+        leases = owner_leases(server)
+        renewal = await leases.renew(LEASED)
+        old_key_before_end = bool(await server.exists(key))
+        server.evalsha = fail_every_script
+        with pytest.raises(StoreError):
+            await leases.end(LEASED, renewal.generation)
+        return old_key_before_end, bool(await server.exists(key))
+
+    assert asyncio.run(end_the_lease_while_only_scripts_fail()) == (True, False)
 
 
 @pytest.mark.parametrize(
