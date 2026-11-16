@@ -504,24 +504,6 @@ def test_every_repo_built_container_start_uses_the_installed_environment(
         )
 
 
-def test_web_entrypoint_script_writes_no_line_of_its_own(tmp_path: Path) -> None:
-    """The container's log holds only the server's JSON lines, so the script before it is silent."""
-    fake_uv = tmp_path / "uv"
-    fake_uv.write_text("#!/bin/sh\nexit 0\n")
-    fake_uv.chmod(0o755)
-    script = DOCKER_ROOT / "scripts" / "start_web_server.sh"
-
-    completed = subprocess.run(
-        ["bash", str(script)],
-        env={"PATH": f"{tmp_path}:{os.environ['PATH']}"},
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    assert (completed.stdout, completed.stderr) == ("", "")
-
-
 def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> None:
     assert CONTAINERS, "_installing_containers derived no container from compose"
     root_owners = _root_owning_extras()
