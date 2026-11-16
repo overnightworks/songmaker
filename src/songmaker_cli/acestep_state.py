@@ -239,8 +239,9 @@ return redis.call('DEL', KEYS[1])
 async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> AsyncIterator[None]:
     """Hold the download lock of ``mode`` for the block, or raise ``DownloadAlreadyRunning``.
 
-    A block whose lock is lost is cancelled and raises ``DownloadLockLost``, so no second download
-    of the mode runs beside the job that holds the lock now.
+    A block whose lock is lost is cancelled and raises ``DownloadLockLost``, leaving the lock and
+    the label to the job that holds them now. The transfer already running on the ACE-Step worker
+    is not cancelled; the worker joins the next download of the mode to it.
     """
     locks = download_locks(pool)
     generation = await _acquire_download_lock(pool, locks, mode)

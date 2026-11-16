@@ -23,6 +23,8 @@ from acestep_worker import lm_failure
 from acestep_worker.child_tasks import settle_child_task
 from acestep_worker.clock import utcnow
 from acestep_worker.downloads import (
+    DownloadFn,
+    hf_snapshot_download,
     list_available_modes,
     spawn_background,
     start_download,
@@ -114,6 +116,7 @@ class WorkerDeps:
     # need not know about GPU health; __main__.py wires the real
     # gpu_util.check_gpu_health in production.
     gpu_health_checker: Callable[[], GpuHealth] = lambda: GpuHealth(GpuHealthStatus.OK)
+    download_fn: DownloadFn = hf_snapshot_download
 
 
 def _format_sse(event: WorkerTaskEvent) -> bytes:
@@ -346,6 +349,7 @@ class _WorkerRoutes:
             self._deps.task_store,
             mode=req.mode,
             checkpoint_dir=self._deps.checkpoint_dir,
+            download_fn=self._deps.download_fn,
         )
         return TaskCreatedResponse(task_id=task_id)
 

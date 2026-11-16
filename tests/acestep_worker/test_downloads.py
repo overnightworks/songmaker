@@ -135,6 +135,46 @@ def test_start_download_creates_task(tmp_path: Path) -> None:
     assert snap.result.size_bytes >= 200
 
 
+def test_a_download_requested_while_one_runs_joins_it_and_a_later_one_starts_anew(
+    tmp_path: Path,
+) -> None:
+    async def go():
+        store = TaskStore()
+        transfers = 0
+        may_end = asyncio.Event()
+
+        async def controllable_transfer(repo_id: str, local_dir: Path) -> None:
+            nonlocal transfers
+            transfers += 1
+            await may_end.wait()
+
+        requests = [
+            start_download(
+                store, mode="sft", checkpoint_dir=tmp_path, download_fn=controllable_transfer,
+            )
+            for _ in range(3)
+        ]
+        joined = await asyncio.gather(*requests)
+        may_end.set()
+        while (await store.get(joined[0])).state != "done":
+            await asyncio.sleep(0)
+        while True:
+            later = await start_download(
+                store, mode="sft", checkpoint_dir=tmp_path, download_fn=controllable_transfer,
+            )
+            if later != joined[0]:
+                break
+            await asyncio.sleep(0)
+        while (await store.get(later)).state != "done":
+            await asyncio.sleep(0)
+        return joined, later, transfers
+
+    joined, later, transfers = _run(go())
+    assert len(set(joined)) == 1
+    assert later != joined[0]
+    assert transfers == 2
+
+
 def test_run_download_unknown_mode(tmp_path: Path) -> None:
     async def go():
         store = TaskStore()
