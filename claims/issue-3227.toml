@@ -1,0 +1,8 @@
+claim_id = "9c796036f3e9480c9e12431047fe1e9b"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "5453c479eb841611674f407247cc2ba44bdca449"
+branch = "claude/issue-3227-a-job-s-owner-carries-its-lease-generati"
+scope = ["src/songmaker_cli/db", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/lifecycle.py"]
+opened_commit = "6a87ddc236734d5dc006b1adf9007b8c150d7e47"
+whole_reason = "Every writer of a job's owner passes the generation once, and the migration adds the column."
