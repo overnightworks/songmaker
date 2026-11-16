@@ -263,7 +263,7 @@ def test_a_turn_whose_job_ended_while_the_reply_was_held_adds_no_answer(world):
                 job.id,
                 JobStatusUpdate(
                     JobStatus.FAILED,
-                    error=message("jobFailure.workerReported", cause="heartbeat stopped"),
+                    error_message=message("jobFailure.workerReported", cause="heartbeat stopped"),
                 ),
             )
             session.commit()
