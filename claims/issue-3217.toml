@@ -3,5 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "36bcc521286a544104594ff9caa2e04b0fe3865f"
 branch = "claude/issue-3217-a-cancelled-co-writer-turn-stops-its-gat"
-scope = ["docs/architecture.md", "src/songmaker_cli/conversation_api.py", "tests/songmaker_cli/test_server_chat_cancel_across_processes.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/jobs_api.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "tests/songmaker_cli/test_server_chat_cancel_across_processes.py", "tests/support/cowriter_gateway.py", "tests/support/gateway_server.py", "tests/support/web_cluster_world.py"]
 opened_commit = "9088039e3b8150028026e5071845822daa1badc9"
+whole_reason = "The cancel fix extracts the cover picture's runner into one owner for both cancel paths, so its runner, the job API and the gateway test support change together with the turn."
