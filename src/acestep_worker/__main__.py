@@ -12,6 +12,10 @@ from pathlib import Path
 
 import uvicorn
 from redis.asyncio import Redis
+from redis.asyncio.retry import Retry
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.gpu_util import check_gpu_health, read_gpu_vram_stats
@@ -34,6 +38,11 @@ GRACEFUL_SHUTDOWN_SECONDS = 10
 # A running take's polling thread outlives its cancelled coroutine and holds the interpreter
 # open for the poll timeout, so a requested exit is forced after this long.
 FORCED_EXIT_SECONDS = GRACEFUL_SHUTDOWN_SECONDS + 20.0
+# tandem's GPU holds need a client that rides out a Redis restart and replays a command whose
+# reply a lost connection took (redis-py 5.x retries only the errors named in retry_on_error),
+# and whose timeouts bound a silent Redis.
+REDIS_RETRY_ATTEMPTS = 3
+REDIS_SOCKET_TIMEOUT_SECONDS = 2.0
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "turbo": 6.0,
@@ -108,7 +117,14 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     shared_audio_root = Path(settings.shared_audio_root)
     audio_dir = prepare_output_root(Path(settings.audio_output_dir), shared_audio_root)
 
-    redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)
+    redis_client: Redis = Redis.from_url(
+        settings.redis_url,
+        decode_responses=False,
+        retry=Retry(ExponentialBackoff(), REDIS_RETRY_ATTEMPTS),
+        retry_on_error=[RedisConnectionError, RedisTimeoutError],
+        socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+    )
 
     def log_sink(line: str) -> None:
         cache.set_loading_log_line(line)

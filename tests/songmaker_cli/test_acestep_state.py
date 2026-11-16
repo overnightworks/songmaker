@@ -8,13 +8,12 @@ import json
 import fakeredis.aioredis
 import pytest
 from support.owner_lease_epoch import settled_epoch
+from support.wrapper_deps import settled_fake_redis
 
 from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
-    ADMIT_GENERATION_SCRIPT,
     DOWNLOAD_KEY_PREFIX,
     DOWNLOAD_LOCK_LASTS,
-    GPU_HOLD_KEY_PREFIX,
     LM_FAILURE_KEY_PREFIX,
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
@@ -22,7 +21,8 @@ from songmaker_cli.acestep_state import (
     admit_generation,
     decr_queue_depth,
     download_key,
-    gpu_hold_key,
+    gpu_hold_is_free,
+    gpu_hold_locks,
     lm_failure_key,
     queue_depth_key,
     read_download_in_progress,
@@ -64,24 +64,19 @@ def another_process(server):
     return fakeredis.aioredis.FakeRedis(server=server)
 
 
-def test_key_prefixes_match_worker_heartbeat() -> None:
-    from acestep_worker.heartbeat import (
-        ADMIT_GENERATION_SCRIPT as WORKER_ADMIT_GENERATION_SCRIPT,
-    )
-    from acestep_worker.heartbeat import (
-        GPU_HOLD_KEY_PREFIX as WORKER_GPU_HOLD_PREFIX,
-    )
+def test_key_prefixes_match_worker_heartbeat(redis) -> None:
     from acestep_worker.heartbeat import (
         QUEUE_KEY_PREFIX as WORKER_QUEUE_PREFIX,
     )
     from acestep_worker.heartbeat import (
         WORKER_KEY_PREFIX as WORKER_WORKER_PREFIX,
     )
+    from acestep_worker.heartbeat import gpu_hold_locks as worker_gpu_hold_locks
 
     assert WORKER_KEY_PREFIX == WORKER_WORKER_PREFIX
     assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
-    assert GPU_HOLD_KEY_PREFIX == WORKER_GPU_HOLD_PREFIX
-    assert ADMIT_GENERATION_SCRIPT == WORKER_ADMIT_GENERATION_SCRIPT
+    assert gpu_hold_locks(redis).keys == worker_gpu_hold_locks(redis).keys
+    assert gpu_hold_locks(redis).lasts == worker_gpu_hold_locks(redis).lasts
 
 
 def test_lm_failure_key_matches_the_workers_key() -> None:
@@ -118,22 +113,12 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
     asyncio.run(cache.load("sft"))
     asyncio.run(cache.pin("sft"))
 
-    fake_redis = MagicMock()
-
-    async def _zero_queue(*_args, **_kwargs):
-        return 0
-
-    async def _no_hold(*_args, **_kwargs):
-        return -2
-
-    fake_redis.get = _zero_queue
-    fake_redis.ttl = _no_hold
     deps = WorkerDeps(
         worker_id="acestep-worker-0",
         cache=cache,
         task_store=MagicMock(),
         heartbeat=MagicMock(),
-        redis=fake_redis,
+        redis=settled_fake_redis(),
         registry_client=None,
         registration=None,
         checkpoint_dir=Path("/nonexistent"),
@@ -203,33 +188,82 @@ def test_queue_depth_key_format() -> None:
     assert queue_depth_key("acestep-worker-0") == "songmaker:acestep:queue:acestep-worker-0"
 
 
-def test_gpu_hold_key_format() -> None:
-    assert gpu_hold_key("acestep-worker-0") == "songmaker:acestep:hold:acestep-worker-0"
-    assert GPU_HOLD_KEY_PREFIX == "songmaker:acestep:hold"
+def test_reserve_wins_against_a_later_generation_admit(settled_redis, event_loop) -> None:
+    assert event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+
+    assert not event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 0
 
 
-def test_reserve_wins_against_a_later_generation_admit(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(reserve_gpu_hold(redis, "w1", "token", 15))
+def test_generation_admit_wins_against_a_later_hold_reserve(settled_redis, event_loop) -> None:
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
 
-    assert not event_loop.run_until_complete(admit_generation(redis, "w1"))
-    assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 0
-
-
-def test_generation_admit_wins_against_a_later_hold_reserve(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(admit_generation(redis, "w1"))
-
-    assert not event_loop.run_until_complete(reserve_gpu_hold(redis, "w1", "token", 15))
-    assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 1
+    assert not event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
 
 
-def test_hold_token_controls_renew_and_release(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(reserve_gpu_hold(redis, "w1", "token", 15))
-    assert event_loop.run_until_complete(redis.ttl(gpu_hold_key("w1"))) == 15
-    assert not event_loop.run_until_complete(renew_gpu_hold(redis, "w1", "wrong", 15))
-    assert not event_loop.run_until_complete(release_gpu_hold(redis, "w1", "wrong"))
-    assert event_loop.run_until_complete(renew_gpu_hold(redis, "w1", "token", 15))
-    assert event_loop.run_until_complete(release_gpu_hold(redis, "w1", "token"))
-    assert event_loop.run_until_complete(admit_generation(redis, "w1"))
+def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold(
+    settled_redis, event_loop, monkeypatch,
+) -> None:
+    """The admission read the lock free, then the reserve took it: the depth read after
+    ``acquire`` shows the admission, so the reserve gives the hold back."""
+    from acestep_worker import heartbeat
+
+    depth_reads = 0
+    read_depth = heartbeat.read_queue_depth
+
+    async def admit_between_the_reads(redis, worker_id: str) -> int:
+        nonlocal depth_reads
+        depth_reads += 1
+        if depth_reads == 2:
+            await redis.incr(queue_depth_key(worker_id))
+        return await read_depth(redis, worker_id)
+
+    monkeypatch.setattr(heartbeat, "read_queue_depth", admit_between_the_reads)
+
+    async def scenario() -> tuple[str | None, bool]:
+        generation = await reserve_gpu_hold(settled_redis, "w1")
+        return generation, await gpu_hold_is_free(settled_redis, "w1")
+
+    assert event_loop.run_until_complete(scenario()) == (None, True)
+
+
+def test_the_generation_controls_renew_and_release(settled_redis, event_loop) -> None:
+    generation = event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+    assert generation
+    assert not event_loop.run_until_complete(renew_gpu_hold(settled_redis, "w1", "wrong"))
+    assert not event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", "wrong"))
+    assert event_loop.run_until_complete(renew_gpu_hold(settled_redis, "w1", generation))
+    assert event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", generation))
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+
+
+def test_a_hold_is_free_only_while_none_is_live(settled_redis, event_loop) -> None:
+    assert event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+    generation = event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+    assert not event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+    event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", generation))
+    assert event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+
+
+def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(
+    settled_redis, event_loop,
+) -> None:
+    """After a restart the hold may have been lost: nothing is admitted or reserved until a
+    span passed, and every refusal is the ordinary busy answer."""
+
+    async def scenario() -> tuple[bool, bool, str | None, int]:
+        await settled_redis.flushall()
+        free = await gpu_hold_is_free(settled_redis, "w1")
+        admitted = await admit_generation(settled_redis, "w1")
+        reserved = await reserve_gpu_hold(settled_redis, "w1")
+        return free, admitted, reserved, await read_queue_depth(settled_redis, "w1")
+
+    assert event_loop.run_until_complete(scenario()) == (False, False, None, 0)
+
+    event_loop.run_until_complete(settled_redis.set(*settled_epoch()))
+
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
 
 
 def test_read_worker_state_missing(redis, event_loop) -> None:

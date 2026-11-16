@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from support.wrapper_deps import gpu_hold_generation
 
-from acestep_worker.heartbeat import gpu_hold_key, reserve_gpu_hold
+from acestep_worker.heartbeat import reserve_gpu_hold
 from acestep_worker.models import GpuHoldTokenRequest, TrainLoraRequest, TrainLoraTaskResult
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
@@ -255,7 +256,8 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -266,7 +268,7 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
-                hold_token="hold-token",
+                hold_token=hold_token,
                 **train_body(),
             )
         )
@@ -275,7 +277,7 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
         assert await deps.task_store.get(response.task_id) is not None
         assert len(spawned) == 1
         await spawned[0]
-        assert await deps.redis.get(gpu_hold_key(deps.worker_id)) is None
+        assert await gpu_hold_generation(deps.redis, deps.worker_id) is None
         assert not deps.gpu_hold_handover_tokens
 
     monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", renew_before_task)
@@ -289,19 +291,20 @@ def test_release_rejects_a_hold_claimed_by_a_training_task(tmp_path: Path, train
     deps = train_lora_deps(tmp_path)
 
     async def scenario() -> None:
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         async with deps.gpu_hold_handover_lock:
-            deps.gpu_hold_handover_tokens.add("hold-token")
+            deps.gpu_hold_handover_tokens.add(hold_token)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
             if route.path == "/gpu_hold/release"
         )
-        request = GpuHoldTokenRequest(token="hold-token")
+        request = GpuHoldTokenRequest(token=hold_token)
         with pytest.raises(HTTPException, match="owned by a training task") as exc_info:
             await endpoint(request)
         assert exc_info.value.status_code == 409
-        assert await deps.redis.get(gpu_hold_key(deps.worker_id)) == b"hold-token"
+        assert await gpu_hold_generation(deps.redis, deps.worker_id) == hold_token
 
     _run(scenario())
 
@@ -324,17 +327,18 @@ def test_handover_claim_cannot_race_a_coordinator_release(
         return True
 
     async def scenario() -> None:
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         release = next(
             route.endpoint
             for route in build_router(deps).routes
             if route.path == "/gpu_hold/release"
         )
         claim_task = asyncio.create_task(
-            _create_gpu_hold_handover_task(deps, "hold-token", train_epochs=500),
+            _create_gpu_hold_handover_task(deps, hold_token, train_epochs=500),
         )
         await claim_entered.wait()
-        release_task = asyncio.create_task(release(GpuHoldTokenRequest(token="hold-token")))
+        release_task = asyncio.create_task(release(GpuHoldTokenRequest(token=hold_token)))
         await asyncio.sleep(0)
         assert not release_task.done()
         allow_claim.set()
@@ -342,9 +346,9 @@ def test_handover_claim_cannot_race_a_coordinator_release(
         with pytest.raises(HTTPException, match="owned by a training task") as exc_info:
             await release_task
         assert exc_info.value.status_code == 409
-        assert await deps.redis.get(gpu_hold_key(deps.worker_id)) == b"hold-token"
-        await _release_gpu_hold_handover(deps, "hold-token")
-        assert await release_gpu_hold(deps.redis, deps.worker_id, "hold-token")
+        assert await gpu_hold_generation(deps.redis, deps.worker_id) == hold_token
+        await _release_gpu_hold_handover(deps, hold_token)
+        assert await release_gpu_hold(deps.redis, deps.worker_id, hold_token)
 
     monkeypatch.setattr("acestep_worker.wrapper.gpu_hold_matches", delayed_match)
     _run(scenario())
@@ -380,7 +384,8 @@ def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -390,7 +395,7 @@ def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
             mode="sft",
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
-            hold_token="hold-token",
+            hold_token=hold_token,
             **train_body(),
         )
         responses = await asyncio.gather(
@@ -425,7 +430,8 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -435,7 +441,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
             mode="sft",
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
-            hold_token="hold-token",
+            hold_token=hold_token,
             **train_body(),
         )
         original_create = deps.task_store.create
@@ -453,7 +459,8 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
         await spawned[0]
         assert not deps.gpu_hold_handover_tokens
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "renew-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         renewal_attempts = 0
 
         async def fail_then_renew(*args, **kwargs) -> bool:
@@ -462,7 +469,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
             return renewal_attempts > 1
 
         monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", fail_then_renew)
-        failed_renewal_request = request.model_copy(update={"hold_token": "renew-token"})
+        failed_renewal_request = request.model_copy(update={"hold_token": hold_token})
         with pytest.raises(HTTPException) as exc_info:
             await endpoint(failed_renewal_request)
         assert exc_info.value.status_code == 409
@@ -489,7 +496,8 @@ def test_train_lora_releases_handover_claim_after_connection_error(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -499,7 +507,7 @@ def test_train_lora_releases_handover_claim_after_connection_error(
             mode="sft",
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
-            hold_token="hold-token",
+            hold_token=hold_token,
             **train_body(),
         )
         with pytest.raises(ConnectionError, match="Redis unavailable"):
@@ -533,7 +541,8 @@ def test_train_lora_releases_handover_claim_when_setup_is_cancelled(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -543,7 +552,7 @@ def test_train_lora_releases_handover_claim_when_setup_is_cancelled(
             mode="sft",
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
-            hold_token="hold-token",
+            hold_token=hold_token,
             **train_body(),
         )
         handover = asyncio.create_task(endpoint(request))
@@ -576,7 +585,8 @@ def test_train_lora_releases_the_hold_when_the_runner_fails(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         deps.train_lora_runner = failing_runner
         endpoint = next(
             route.endpoint
@@ -588,13 +598,13 @@ def test_train_lora_releases_the_hold_when_the_runner_fails(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
-                hold_token="hold-token",
+                hold_token=hold_token,
                 **train_body(),
             )
         )
         with pytest.raises(RuntimeError, match="training failed"):
             await spawned[0]
-        assert await deps.redis.get(gpu_hold_key(deps.worker_id)) is None
+        assert await gpu_hold_generation(deps.redis, deps.worker_id) is None
         assert not deps.gpu_hold_handover_tokens
 
     monkeypatch.setattr("acestep_worker.wrapper.spawn_background", spawned.append)
@@ -617,7 +627,8 @@ def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         deps.train_lora_runner = blocking_runner
         endpoint = next(
             route.endpoint
@@ -629,7 +640,7 @@ def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
-                hold_token="hold-token",
+                hold_token=hold_token,
                 **train_body(),
             )
         )
@@ -638,7 +649,7 @@ def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
         background_task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await background_task
-        assert await deps.redis.get(gpu_hold_key(deps.worker_id)) is None
+        assert await gpu_hold_generation(deps.redis, deps.worker_id) is None
         assert not deps.gpu_hold_handover_tokens
 
     monkeypatch.setattr("acestep_worker.wrapper.spawn_background", spawned.append)
@@ -675,7 +686,8 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         deps.train_lora_runner = blocking_runner
         endpoint = next(
             route.endpoint
@@ -687,7 +699,7 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
-                hold_token="hold-token",
+                hold_token=hold_token,
                 **train_body(),
             )
         )
@@ -698,7 +710,7 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
         assert renewal_started.is_set()
         assert training_started.is_set()
         assert training_cancelled.is_set()
-        assert await deps.redis.get(gpu_hold_key(deps.worker_id)) is None
+        assert await gpu_hold_generation(deps.redis, deps.worker_id) is None
         assert deps.cache._in_use.get("sft", 0) == 0
         assert not deps.gpu_hold_handover_tokens
         assert not deps.gpu_hold_handover_tasks
@@ -723,7 +735,8 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        assert await reserve_gpu_hold(deps.redis, deps.worker_id, "hold-token", 15)
+        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
+        assert hold_token
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -733,7 +746,7 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
             mode="sft",
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
-            hold_token="hold-token",
+            hold_token=hold_token,
             **train_body(),
         )
         with pytest.raises(HTTPException) as exc_info:

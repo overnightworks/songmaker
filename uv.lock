@@ -1954,6 +1954,7 @@ acestep-worker = [
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "nvidia-ml-py3" },
+    { name = "overnightworks-tandem" },
     { name = "redis", extra = ["hiredis"] },
     { name = "uvicorn" },
 ]
@@ -2036,6 +2037,7 @@ requires-dist = [
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" },
+    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.5.2" },
     { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.5.2" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },

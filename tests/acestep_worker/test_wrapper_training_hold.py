@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Any
 
 import pytest
 
-from acestep_worker.heartbeat import DEFAULT_TTL_SECONDS, gpu_hold_key
+from acestep_worker.heartbeat import GPU_HOLD_LASTS, gpu_hold_locks
 
 _LOWERED_TTL_SECONDS = 3
 _BOUND_SECONDS = 5
@@ -33,20 +35,23 @@ def test_a_training_renews_its_hold_after_each_interval(
 
     monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", renew_and_signal)
 
-    async def scenario() -> tuple[str, bytes | None, int]:
+    async def scenario() -> tuple[str, str | None, timedelta]:
         nonlocal hold_lowered
         async with train_lora_worker() as worker:
             token = await worker.reserve_hold()
-            key = gpu_hold_key(worker.deps.worker_id)
-            observed: list[tuple[bytes | None, int]] = []
+            locks = gpu_hold_locks(worker.deps.redis)
+            worker_id = worker.deps.worker_id
+            observed: list[tuple[str | None, timedelta]] = []
 
             async def runner(store: Any, task_id: str, **_kwargs: Any) -> None:
                 nonlocal hold_lowered
-                redis = worker.deps.redis
-                await redis.expire(key, _LOWERED_TTL_SECONDS)
+                lowered_expiry_ms = (time.time() + _LOWERED_TTL_SECONDS) * 1000
+                await worker.deps.redis.zadd(locks.keys.expiry, {worker_id: lowered_expiry_ms})
                 hold_lowered = True
                 await asyncio.wait_for(renewed_after_lowering.wait(), _BOUND_SECONDS)
-                observed.append((await redis.get(key), await redis.ttl(key)))
+                state = await locks.state(worker_id)
+                assert state.remaining is not None
+                observed.append((state.generation, state.remaining))
                 await store.fail(task_id, "stopped")
 
             worker.deps.train_lora_runner = runner
@@ -55,10 +60,10 @@ def test_a_training_renews_its_hold_after_each_interval(
             await worker.spawned[0]
             return token, *observed[0]
 
-    token, holder, ttl_seconds = asyncio.run(scenario())
+    token, holder, remaining = asyncio.run(scenario())
 
-    assert holder == token.encode()
-    assert ttl_seconds == DEFAULT_TTL_SECONDS
+    assert holder == token
+    assert timedelta(seconds=_LOWERED_TTL_SECONDS) < remaining <= GPU_HOLD_LASTS
 
 
 def test_a_training_whose_hold_is_lost_at_handover_is_refused_and_its_renewal_is_cancelled(

@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 
-import fakeredis.aioredis
 import pytest
+from support.wrapper_deps import settled_fake_redis
+from tandem import Liveness
 
 from acestep_worker.heartbeat import (
-    DEFAULT_TTL_SECONDS,
+    GPU_HOLD_LASTS,
     HeartbeatLoop,
-    gpu_hold_key,
+    gpu_hold_locks,
     queue_depth_key,
+    reserve_gpu_hold,
     worker_state_key,
 )
 
@@ -20,7 +23,7 @@ def _run(coro):
 
 
 def _make_loop(provider=None, interval=0.05, ttl=2):
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    redis = settled_fake_redis()
 
     async def default_provider() -> dict[str, object]:
         return {"loaded": [{"mode": "sft", "size_gb": 0}], "queue_depth": 3}
@@ -56,28 +59,40 @@ def test_publish_once_writes_to_redis() -> None:
 
 
 def test_publish_once_does_not_renew_a_gpu_hold() -> None:
-    async def go() -> tuple[bytes | None, int]:
+    async def go() -> tuple[str | None, timedelta | None]:
         loop, redis = _make_loop()
-        hold_key = gpu_hold_key("acestep-worker-0")
-        await redis.set(hold_key, "hold-token", ex=DEFAULT_TTL_SECONDS)
+        await reserve_gpu_hold(redis, "acestep-worker-0")
+        before = await gpu_hold_locks(redis).state("acestep-worker-0")
         await loop.publish_once()
-        return await redis.get(hold_key), await redis.ttl(hold_key)
+        after = await gpu_hold_locks(redis).state("acestep-worker-0")
+        assert before.remaining is not None
+        assert after.remaining is not None
+        return after.generation, before.remaining - after.remaining
 
-    assert _run(go()) == (b"hold-token", DEFAULT_TTL_SECONDS)
+    generation, renewed_by = _run(go())
+
+    assert generation is not None
+    assert renewed_by >= timedelta(0)
+    assert renewed_by < GPU_HOLD_LASTS
 
 
-def test_clear_orphaned_queue() -> None:
+def test_clear_orphaned_queue_ends_the_hold_of_a_previous_process() -> None:
     async def go():
         loop, redis = _make_loop()
         await redis.set(queue_depth_key("acestep-worker-0"), 7)
-        await redis.set(gpu_hold_key("acestep-worker-0"), "hold-token")
+        previous_hold = await gpu_hold_locks(redis).acquire("acestep-worker-0")
         await loop.clear_orphaned_queue()
         return (
+            previous_hold,
             await redis.get(queue_depth_key("acestep-worker-0")),
-            await redis.get(gpu_hold_key("acestep-worker-0")),
+            await gpu_hold_locks(redis).state("acestep-worker-0"),
         )
 
-    assert _run(go()) == (None, None)
+    previous_hold, depth, hold = _run(go())
+
+    assert previous_hold is not None
+    assert depth is None
+    assert hold.liveness is Liveness.GONE
 
 
 def test_start_stop_cycles() -> None:

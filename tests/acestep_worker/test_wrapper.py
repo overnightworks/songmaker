@@ -11,15 +11,18 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+import fakeredis
 import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
+from support.owner_lease_epoch import settled_epoch
 from support.wrapper_deps import (
     INTERNAL_HEADERS,
     INTERNAL_TOKEN,
     INTERNAL_TOKEN_HEADER,
+    gpu_hold_generation,
     make_deps,
     run,
 )
@@ -30,8 +33,8 @@ from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.clock import utcnow
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import (
-    DEFAULT_TTL_SECONDS,
-    gpu_hold_key,
+    GPU_HOLD_LASTS,
+    gpu_hold_locks,
     queue_depth_key,
     reserve_gpu_hold,
 )
@@ -541,7 +544,7 @@ def test_generate_acquisition_serializes_with_hold_reservation(
         )
         with pytest.raises(HTTPException, match="GPU is held for LoRA training"):
             await held_generation
-        await deps.redis.delete(gpu_hold_key(deps.worker_id))
+        await deps.redis.zrem(gpu_hold_locks(deps.redis).keys.expiry, deps.worker_id)
 
     run(scenario())
 
@@ -561,6 +564,32 @@ def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> Non
         )
     assert resp.status_code == 409
     assert resp.json()["detail"] == "GPU is held for LoRA training"
+
+
+def test_a_worker_answers_busy_until_a_redis_restart_is_settled_and_fails_nothing(
+    tmp_path: Path,
+) -> None:
+    """After a restart a hold may have been lost: reserve and generate get the ordinary 409
+    for one span, then the worker serves both again."""
+    deps, redis = make_deps(tmp_path)
+    server = redis.connection_pool.connection_kwargs["server"]
+    restarted_redis = fakeredis.FakeRedis(server=server)
+    app = create_app(deps)
+    generation = {"mode": "sft", "config": {"prompt": "test", "lyrics": ""}}
+    with _worker_client(app) as client:
+        assert client.post("/load_model", json={"mode": "sft"}).status_code == 200
+        restarted_redis.flushall()
+
+        reserved = client.post("/gpu_hold/reserve")
+        generated = client.post("/generate", json=generation)
+        restarted_redis.set(*settled_epoch())
+        reserved_when_settled = client.post("/gpu_hold/reserve")
+
+    assert reserved.status_code == 409
+    assert reserved.json()["detail"] == "GPU is busy or held"
+    assert generated.status_code == 409
+    assert generated.json()["detail"] == "GPU is held for LoRA training"
+    assert reserved_when_settled.status_code == 200
 
 
 def test_generate_returns_a_task_that_starts_loading_its_model(tmp_path: Path) -> None:
@@ -989,12 +1018,12 @@ def test_build_state_payload_projects_the_remaining_training_hold(tmp_path: Path
     deps, redis = make_deps(tmp_path)
 
     async def go():
-        assert await reserve_gpu_hold(redis, deps.worker_id, "hold-token", 15)
+        assert await reserve_gpu_hold(redis, deps.worker_id)
         return await build_state_payload(deps)
 
     payload = run(go())
     assert payload["training_hold_seconds"] is not None
-    assert 0 < payload["training_hold_seconds"] <= 15
+    assert 0 < payload["training_hold_seconds"] <= GPU_HOLD_LASTS.total_seconds()
 
 
 def test_build_state_payload_after_load_uses_detail_shape(tmp_path: Path) -> None:
@@ -1369,7 +1398,6 @@ def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
         assert "in use" in resp.json()["detail"]
 
 
-_TRAINING_HOLD_TOKEN = "training-hold-token"
 _HANG_GUARD_SECONDS = 5
 
 
@@ -1414,29 +1442,32 @@ async def _training_finished_at_once(*_args: object, **_kwargs: object) -> None:
 
 
 async def _renewing_the_training_hold(deps: WorkerDeps) -> None:
-    await _renew_gpu_hold_until_done(deps.redis, deps.worker_id, _TRAINING_HOLD_TOKEN)
+    hold_token = await gpu_hold_generation(deps.redis, deps.worker_id)
+    assert hold_token
+    await _renew_gpu_hold_until_done(deps.redis, deps.worker_id, hold_token)
 
 
 @dataclass
 class _TrainingOwner:
     deps: WorkerDeps
+    hold_token: str
     renew_task: asyncio.Task[None]
     task: asyncio.Task[None]
 
     async def still_holds_everything(self) -> None:
         assert not self.task.done()
-        assert await self.deps.redis.get(gpu_hold_key(self.deps.worker_id)) is not None
+        assert await gpu_hold_generation(self.deps.redis, self.deps.worker_id) == self.hold_token
         assert self.deps.cache.in_use_count("sft") == 1
-        assert _TRAINING_HOLD_TOKEN in self.deps.gpu_hold_handover_tokens
+        assert self.hold_token in self.deps.gpu_hold_handover_tokens
         assert not self.renew_task.done()
 
     async def ends_cancelled_with_everything_released(self) -> None:
         with pytest.raises(asyncio.CancelledError):
             await self.task
         assert self.task.cancelled()
-        assert await self.deps.redis.get(gpu_hold_key(self.deps.worker_id)) is None
+        assert await gpu_hold_generation(self.deps.redis, self.deps.worker_id) is None
         assert self.deps.cache.in_use_count("sft") == 0
-        assert _TRAINING_HOLD_TOKEN not in self.deps.gpu_hold_handover_tokens
+        assert self.hold_token not in self.deps.gpu_hold_handover_tokens
         assert self.renew_task.done()
 
 
@@ -1448,16 +1479,17 @@ async def _start_training_owner(
     deps, redis = make_deps(tmp_path)
     await deps.cache.load("sft")
     loaded = await deps.cache.acquire_for_use("sft")
-    assert await reserve_gpu_hold(redis, deps.worker_id, _TRAINING_HOLD_TOKEN, DEFAULT_TTL_SECONDS)
-    task_id = await _create_gpu_hold_handover_task(deps, _TRAINING_HOLD_TOKEN, train_epochs=1)
+    hold_token = await reserve_gpu_hold(redis, deps.worker_id)
+    assert hold_token
+    task_id = await _create_gpu_hold_handover_task(deps, hold_token, train_epochs=1)
     assert task_id is not None
     renew_task = asyncio.create_task(renewal(deps))
-    request = TrainLoraRequest.model_construct(mode="sft", hold_token=_TRAINING_HOLD_TOKEN)
+    request = TrainLoraRequest.model_construct(mode="sft", hold_token=hold_token)
     resources = _TrainLoraResources(loaded=loaded, renew_task=renew_task, task_id=task_id)
     owner = asyncio.create_task(
         _run_train_lora_with_cleanup(deps, request, request, runner, resources)
     )
-    return _TrainingOwner(deps, renew_task, owner)
+    return _TrainingOwner(deps, hold_token, renew_task, owner)
 
 
 def test_training_owner_cancelled_again_while_training_stops_releases_everything(

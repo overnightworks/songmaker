@@ -6,10 +6,12 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+import fakeredis
 import fakeredis.aioredis
+from support.owner_lease_epoch import settled_epoch
 
 from acestep_engine.models import AceStepConfig
-from acestep_worker.heartbeat import HeartbeatLoop
+from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader
 from acestep_worker.models import GenerationTaskResult
 from acestep_worker.task_store import TaskStore
@@ -24,6 +26,13 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def settled_fake_redis() -> fakeredis.aioredis.FakeRedis:
+    """A worker's Redis that has run longer than a GPU hold lasts, as it finds it in operation."""
+    server = fakeredis.FakeServer()
+    fakeredis.FakeRedis(server=server).set(*settled_epoch())
+    return fakeredis.aioredis.FakeRedis(server=server, decode_responses=False)
+
+
 def make_deps(
     tmp_path: Path,
     *,
@@ -31,7 +40,7 @@ def make_deps(
     model_sizes: dict[str, float] | None = None,
     model_loader: Callable[[str], Awaitable[LoadedModel]] | None = None,
 ) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis]:
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    redis = settled_fake_redis()
     loaded_log: list[str] = []
 
     async def loader(mode: str) -> LoadedModel:
@@ -81,3 +90,8 @@ def make_deps(
         state_provider=lambda: build_state_payload(deps),
     )
     return deps, redis
+
+
+async def gpu_hold_generation(redis: fakeredis.aioredis.FakeRedis, worker_id: str) -> str | None:
+    """The generation of the worker's live GPU hold, or None when none is held."""
+    return (await gpu_hold_locks(redis).state(worker_id)).generation

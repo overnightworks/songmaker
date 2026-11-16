@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-import fakeredis.aioredis
 import httpx
 import pytest
 import uvicorn
@@ -23,6 +22,7 @@ from support.fake_training_worker import (
     FakeTrainingWorkerSettings,
     build_fake_worker_deps,
 )
+from support.wrapper_deps import settled_fake_redis
 
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.wrapper import create_app
@@ -166,7 +166,7 @@ async def unload_peer_model(model: LoadedModel) -> None:
 class GenerationWorkerPeer:
     def __init__(self, tmp_path: Path, scenario: WorkerScenario) -> None:
         self.phase = "startup"
-        self.redis = fakeredis.aioredis.FakeRedis()
+        self.redis = settled_fake_redis()
         self.audio_dir = tmp_path / "audio"
         self.data_dir = tmp_path / "data"
         self.data_dir.mkdir(exist_ok=True)

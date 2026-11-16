@@ -12,7 +12,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.owner_lease_epoch import aged_owner_lease_epoch
+from support.owner_lease_epoch import aged_owner_lease_epoch, settled_epoch
 from support.session_ids import a_session_id
 from webauth.ports import AuthenticatedUser
 
@@ -28,6 +28,40 @@ TEST_ORIGIN: Final = "https://testserver"
 
 def make_fake_redis() -> fakeredis.FakeRedis:
     return fakeredis.FakeRedis(decode_responses=True)
+
+
+class _KeyView:
+    """The keys of a fake Redis server, read and written from the test's own thread."""
+
+    def __init__(self, server: fakeredis.FakeServer) -> None:
+        self._view = fakeredis.FakeRedis(server=server, decode_responses=True)
+
+    def __contains__(self, key: str) -> bool:
+        return bool(self._view.exists(key))
+
+    def __getitem__(self, key: str) -> str:
+        return self._view.get(key)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        self._view.set(key, value)
+
+
+class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
+    """A process's asyncio client on a server that has run longer than any lock or lease lasts.
+
+    ``store`` reads and writes the server's keys from the test's thread; ``another_process`` is a
+    second client on the same server.
+    """
+
+    def __init__(self) -> None:
+        self.server = fakeredis.FakeServer()
+        super().__init__(server=self.server)
+        self.store = _KeyView(self.server)
+        epoch_key, epoch_ms = settled_epoch()
+        self.store[epoch_key] = str(epoch_ms)
+
+    def another_process(self) -> fakeredis.FakeAsyncRedis:
+        return fakeredis.FakeAsyncRedis(server=self.server)
 
 
 def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:

@@ -21,7 +21,7 @@ from typing import Any
 
 from arq.connections import ArqRedis
 from redis.exceptions import RedisError
-from tandem import Liveness, Locks, StoreError
+from tandem import Liveness, Locks, Script, StoreError
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 
@@ -29,9 +29,10 @@ log = logging.getLogger(__name__)
 
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
-GPU_HOLD_KEY_PREFIX = "songmaker:acestep:hold"
 DOWNLOAD_KEY_PREFIX = "songmaker:acestep:download"
 LM_FAILURE_KEY_PREFIX = "songmaker:acestep:lm-failure"
+GPU_HOLD_FAMILY = "gpu"
+GPU_HOLD_LASTS = timedelta(seconds=15)
 DOWNLOAD_LOCK_FAMILY = "download"
 # The holder extends the lock while it downloads, so a crashed holder frees the mode after one
 # span; the same span bounds how long a download waits after a Redis restart.
@@ -39,8 +40,11 @@ DOWNLOAD_LOCK_LASTS = timedelta(seconds=15)
 DOWNLOAD_LOCK_EXTEND_EVERY = timedelta(seconds=5)
 DOWNLOAD_LOCK_POLL_SECONDS = 1.0
 
+# KEYS: the queue depth, then the GPU holds' epoch, expiry and generation keys; ARGV: the lock span
+# in ms and the worker id. A hold, or a restart that may have lost one, refuses the admission.
 ADMIT_GENERATION_SCRIPT = """
-if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+local keys = {epoch = KEYS[2], expiry = KEYS[3], generation = KEYS[4]}
+if tandem.lock_state(keys, ARGV[2], ARGV[1]) then return 0 end
 redis.call('INCR', KEYS[1])
 return 1
 """
@@ -54,8 +58,19 @@ def queue_depth_key(worker_id: str) -> str:
     return f"{QUEUE_KEY_PREFIX}:{worker_id}"
 
 
-def gpu_hold_key(worker_id: str) -> str:
-    return f"{GPU_HOLD_KEY_PREFIX}:{worker_id}"
+def gpu_hold_locks(pool: ArqRedis) -> Locks:
+    """The GPU holds of the workers, one lock per worker id; the worker takes and renews them.
+
+    ``acestep_worker.heartbeat`` builds the same family.
+    """
+    return Locks(
+        pool, key_prefix=REDIS_KEY_PREFIX, family=GPU_HOLD_FAMILY, lasts=GPU_HOLD_LASTS,
+    )
+
+
+async def gpu_hold_is_free(pool: ArqRedis, worker_id: str) -> bool:
+    """Whether no hold is live and none can have been lost to a Redis restart."""
+    return (await gpu_hold_locks(pool).state(worker_id)).liveness is Liveness.GONE
 
 
 def download_key(mode: str) -> str:
@@ -121,11 +136,15 @@ async def decr_queue_depth(pool: ArqRedis, worker_id: str) -> int:
 
 
 async def admit_generation(pool: ArqRedis, worker_id: str) -> bool:
-    result = await pool.eval(
-        ADMIT_GENERATION_SCRIPT,
-        2,
-        queue_depth_key(worker_id),
-        gpu_hold_key(worker_id),
+    locks = gpu_hold_locks(pool)
+    result = await Script(pool, ADMIT_GENERATION_SCRIPT).run(
+        [
+            queue_depth_key(worker_id),
+            locks.keys.epoch,
+            locks.keys.expiry,
+            locks.keys.generation,
+        ],
+        [int(locks.lasts.total_seconds() * 1000), worker_id],
     )
     return bool(result)
 

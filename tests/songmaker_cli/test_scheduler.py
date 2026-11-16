@@ -9,16 +9,17 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import fakeredis.aioredis
 import httpx
 import pytest
+from support.owner_lease_epoch import settled_epoch
+from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
-    gpu_hold_key,
+    gpu_hold_locks,
     queue_depth_key,
     read_queue_depth,
     worker_state_key,
@@ -72,36 +73,7 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-class _InMemoryRedis:
-    def __init__(self) -> None:
-        self.store: dict[str, str] = {}
-
-    async def get(self, key):
-        return self.store.get(key)
-
-    async def set(self, key, value, ex=None):
-        self.store[key] = value
-
-    async def incr(self, key):
-        cur = int(self.store.get(key, 0)) + 1
-        self.store[key] = str(cur)
-        return cur
-
-    async def decr(self, key):
-        cur = int(self.store.get(key, 0)) - 1
-        self.store[key] = str(cur)
-        return cur
-
-    async def exists(self, key):
-        return int(key in self.store)
-
-    async def eval(self, script, key_count, *args):
-        keys = args[:key_count]
-        if "INCR" in script and "EXISTS" in script:
-            if keys[1] in self.store:
-                return 0
-            return await self.incr(keys[0])
-        raise AssertionError(f"Unexpected Redis script: {script}")
+_InMemoryRedis = SettledFakeAsyncRedis
 
 
 @pytest.fixture
@@ -145,6 +117,11 @@ def _set_state(
     if gpu_healthy is not None:
         payload.setdefault("gpu_healthy", gpu_healthy)
     redis.store[worker_state_key(worker_id)] = json.dumps(payload)
+
+
+def _hold_the_gpu(redis, worker_id: str) -> None:
+    """Another process holds the worker's GPU, as the worker does while it trains."""
+    _run(gpu_hold_locks(redis.another_process()).acquire(worker_id))
 
 
 def _set_queue(redis, worker_id: str, depth: int) -> None:
@@ -208,21 +185,36 @@ def test_pick_worker_no_online_raises(db_session) -> None:
 
 
 def test_pick_worker_defers_when_every_online_worker_is_held(db_session) -> None:
-    from songmaker_cli.acestep_state import gpu_hold_key
-
     _seed(db_session, "w1")
     redis = _InMemoryRedis()
     _set_state(redis, "w1", {"loaded": [{"mode": "sft", "size_gb": 0}]})
-    redis.store[gpu_hold_key("w1")] = "hold-token"
+    _hold_the_gpu(redis, "w1")
     operation = pick_worker(db_session, redis, "sft")
 
     with pytest.raises(AllWorkersHeld):
         _run(operation)
 
 
+def test_pick_worker_defers_instead_of_failing_while_a_redis_restart_may_have_lost_a_hold(
+    db_session,
+) -> None:
+    _seed(db_session, "w1")
+    redis = _InMemoryRedis()
+    redis.store._view.flushall()
+    _set_state(redis, "w1", {"loaded": [{"mode": "sft", "size_gb": 0}]})
+
+    async def pick_before_and_after_the_span() -> str:
+        with pytest.raises(AllWorkersHeld):
+            await pick_worker(db_session, redis, "sft")
+        redis.store[settled_epoch()[0]] = str(settled_epoch()[1])
+        return (await pick_worker(db_session, redis, "sft")).id
+
+    assert _run(pick_before_and_after_the_span()) == "w1"
+
+
 def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_session) -> None:
     async def exercise() -> None:
-        redis = fakeredis.aioredis.FakeRedis()
+        redis = SettledFakeAsyncRedis()
         _seed(db_session, "w1")
         await redis.set(
             worker_state_key("w1"),
@@ -230,7 +222,7 @@ def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_s
         )
 
         async def pick_then_hold(*_args, **_kwargs):
-            await redis.set(gpu_hold_key("w1"), "hold-token")
+            await gpu_hold_locks(redis.another_process()).acquire("w1")
             return _make_picked("w1")
 
         with (
@@ -274,13 +266,19 @@ def test_admit_generation_closes_its_session_before_the_occupancy_call(db_factor
         def __getattr__(self, name):
             return getattr(self._inner, name)
 
-        async def eval(self, *args):
-            assert sessions_entered >= 1, "pick_worker must have opened a session"
-            assert sessions_exited == sessions_entered, "session still open at the occupancy call"
-            return await self._inner.eval(*args)
+        def register_script(self, source):
+            script = self._inner.register_script(source)
+
+            async def run_when_no_session_is_open(*, keys, args):
+                if "INCR" in source:
+                    assert sessions_entered >= 1, "pick_worker must have opened a session"
+                    assert sessions_exited == sessions_entered, "session still open at the call"
+                return await script(keys=keys, args=args)
+
+            return run_when_no_session_is_open
 
     async def exercise() -> None:
-        fake = fakeredis.aioredis.FakeRedis()
+        fake = SettledFakeAsyncRedis()
         loaded = [{"mode": "sft", "size_gb": 1.0}]
         await fake.set(worker_state_key("w1"), json.dumps({"gpu_healthy": True, "loaded": loaded}))
         await admit_generation_worker(
@@ -295,8 +293,6 @@ def test_admit_generation_closes_its_session_before_the_occupancy_call(db_factor
 
 
 def test_pick_worker_skips_a_held_worker_for_a_free_online_worker(db_session) -> None:
-    from songmaker_cli.acestep_state import gpu_hold_key
-
     _seed(db_session, "held", host="h1")
     _seed(db_session, "free", host="h2")
     redis = _InMemoryRedis()
@@ -304,7 +300,7 @@ def test_pick_worker_skips_a_held_worker_for_a_free_online_worker(db_session) ->
     _set_state(redis, "free", {"loaded": []})
     _set_queue(redis, "held", 0)
     _set_queue(redis, "free", 9)
-    redis.store[gpu_hold_key("held")] = "hold-token"
+    _hold_the_gpu(redis, "held")
 
     picked = _run(pick_worker(db_session, redis, "sft"))
 

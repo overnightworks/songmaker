@@ -44,7 +44,7 @@ from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )
 from songmaker_cli.acestep_state import (
-    gpu_hold_key,
+    gpu_hold_is_free,
     read_queue_depth,
     read_worker_state,
     worker_is_online,
@@ -217,7 +217,7 @@ async def pick_worker(
     workers = await _list_online_workers(db, redis)
     if not workers:
         raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
-    available = [worker for worker in workers if not await redis.exists(gpu_hold_key(worker.id))]
+    available = [worker for worker in workers if await gpu_hold_is_free(redis, worker.id)]
     if not available:
         raise AllWorkersHeld("All online ACE-Step workers are held for LoRA training")
     return _pick_from(available, target_mode)
