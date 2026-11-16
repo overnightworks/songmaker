@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Lock
@@ -11,7 +12,9 @@ from types import SimpleNamespace
 
 import anyio
 import pytest
+from anyio import from_thread
 from anyio.from_thread import start_blocking_portal
+from redis import exceptions as redis_errors
 from support.web_app import SettledFakeAsyncRedis
 
 from songmaker_cli.queue_stream_build_lock import (
@@ -51,30 +54,53 @@ def test_a_build_longer_than_the_lock_lasts_stays_exclusive() -> None:
     assert builders_inside == [1, 1]
 
 
-async def _lock_lost(self, name: str, generation: str) -> bool:
-    return False
+class _UnreachableWhenArmedRedis(SettledFakeAsyncRedis):
+    """A client whose server stops answering while ``unreachable`` is set."""
+
+    unreachable = False
+
+    async def execute_command(self, *args, **options):
+        if self.unreachable:
+            raise redis_errors.ConnectionError
+        return await super().execute_command(*args, **options)
 
 
-async def _redis_unreachable(self, name: str, generation: str) -> bool:
-    raise ConnectionError
-
-
-@pytest.mark.parametrize(
-    ("extension", "warning"),
-    [(_lock_lost, LOST_LOCK_WARNING), (_redis_unreachable, FAILED_RENEWAL_WARNING)],
-    ids=["lock-lost", "redis-error"],
-)
-def test_a_lock_that_cannot_be_renewed_is_logged_and_the_build_finishes(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, extension, warning: str,
-) -> None:
-    monkeypatch.setattr("tandem.Locks.extend", extension)
-    ctx = SimpleNamespace(async_redis=SettledFakeAsyncRedis())
-
+def _build_while(ctx, during_build: Callable[[], None]) -> None:
     def build() -> None:
         with build_lock(ctx, KEY, lasts=SHORT_LOCK_LASTS):
+            during_build()
             time.sleep(SHORT_LOCK_LASTS.total_seconds())
 
-    with caplog.at_level(logging.WARNING), start_blocking_portal() as portal:
+    with start_blocking_portal() as portal:
         portal.call(anyio.to_thread.run_sync, build)
 
-    assert warning in caplog.text
+
+def test_a_lock_another_process_took_away_is_logged_and_the_build_finishes(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ctx = SimpleNamespace(async_redis=SettledFakeAsyncRedis())
+    other_process = ctx.async_redis.another_process()
+
+    async def delete_the_generations() -> None:
+        await other_process.delete(*await other_process.keys("*:generation"))
+
+    with caplog.at_level(logging.WARNING):
+        _build_while(ctx, lambda: from_thread.run(delete_the_generations))
+
+    assert LOST_LOCK_WARNING in caplog.text
+
+
+def test_a_lock_whose_renewal_fails_is_logged_and_the_build_finishes(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ctx = SimpleNamespace(async_redis=_UnreachableWhenArmedRedis())
+
+    def lose_the_server_for_the_renewal() -> None:
+        ctx.async_redis.unreachable = True
+        time.sleep(SHORT_LOCK_LASTS.total_seconds())
+        ctx.async_redis.unreachable = False
+
+    with caplog.at_level(logging.WARNING):
+        _build_while(ctx, lose_the_server_for_the_renewal)
+
+    assert FAILED_RENEWAL_WARNING in caplog.text
