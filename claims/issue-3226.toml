@@ -3,6 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "6393a1e4a7a6f9f5f8a146e85fb2fd1ac81d99c5"
 branch = "claude/issue-3226-songmaker-s-single-flight-locks-and-gpu"
-scope = ["src/acestep_worker/heartbeat.py", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/queue_streams.py"]
+scope = [".importlinter", "docs/acestep.md", "docs/architecture.md", "src/acestep_worker/heartbeat.py", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/queue_streams.py", "tests/acestep_worker/test_heartbeat.py", "tests/songmaker_cli/test_acestep_state.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_lifecycle_scoring_backfill.py", "tests/support/app_processes.py", "tests/support/lock_owners.py"]
 opened_commit = "728594f0f882f72e81814b67339e5b0db9827fc4"
 whole_reason = "The locks live in lifecycle, the ACE-Step state and the worker's GPU hold; each moves once."
