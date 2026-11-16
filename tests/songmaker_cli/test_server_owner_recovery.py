@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 from redis import Redis
-from sqlalchemy import text
 from support.app_processes import (
     MusicWorkerProcess,
     WebProcess,
@@ -20,6 +19,7 @@ from support.app_processes import (
     leased_owner_ids,
     owner_lease_generation,
     poll_until,
+    start_the_owner_lease,
 )
 from support.job_owner import an_owner, create_job_of_owner
 from support.web_cluster_world import start_owner
@@ -210,26 +210,25 @@ def test_a_job_written_after_the_cleanup_read_its_owner_gone_keeps_running_while
         )
         session.commit()
 
-    line_of_b.hold_next_reply_to(old_owner_key(REDIS_KEY_PREFIX, owner_a).encode())
+    # Both passes of B (its lapse loop and its reaper loop) have read the stamps of the old
+    # generation when their reply is held, so every pass that can fail it is held here. The
+    # process's Redis client gives up on a reply after its socket timeout, so the new generation
+    # follows within moments.
+    line_of_b.hold_replies_to(old_owner_key(REDIS_KEY_PREFIX, owner_a).encode())
     line_of_a.cut()
     end_the_owner_lease(redis_client, owner_a, lapsed_generation)
-    assert line_of_b.wait_until_a_reply_is_held(
-        deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
+    assert line_of_b.wait_until_replies_are_held(
+        2, deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
     )
     with factory() as session:
-        # B has read A's lease gone; its pass now waits on the jobs table until A has started again.
-        session.execute(text(f"LOCK TABLE {Job.__tablename__} IN ACCESS EXCLUSIVE MODE"))
-        line_of_b.release_held_reply()
-        line_of_a.restore()
-        assert poll_until(
-            lambda: owner_lease_generation(redis_client, owner_a) not in (None, lapsed_generation),
-            deadline_seconds=CRASH_DEADLINE_SECONDS,
-        )
         job_of_the_new_generation = _running_job_of_generation(
-            session, owner_a, owner_lease_generation(redis_client, owner_a),
+            session, owner_a, start_the_owner_lease(redis_client, owner_a),
         )
         session.commit()
+    line_of_b.release_held_replies()
 
+    # Only the held passes can fail the old job, and each judges the new one in the same
+    # transaction, so its end is the end of the old job's wait.
     assert poll_until(
         lambda: _failed_with_the_restart_verdict(factory, [job_of_the_lapsed_generation]),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,

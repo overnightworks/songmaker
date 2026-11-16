@@ -340,6 +340,15 @@ def owner_lease_generation(redis: Redis, owner_id: str) -> str | None:
     return _on_the_owner_leases(redis, read_state)
 
 
+def start_the_owner_lease(redis: Redis, owner_id: str) -> str:
+    """Start ``owner_id``'s lease anew and return its generation, as a renewal after a lapse."""
+
+    async def start(leases: Leases) -> str:
+        return (await leases.renew(owner_id)).generation
+
+    return _on_the_owner_leases(redis, start)
+
+
 def end_the_owner_lease(redis: Redis, owner_id: str, generation: str) -> None:
     """End ``owner_id``'s lease of ``generation``, as a lapse of it does; the process renews."""
 

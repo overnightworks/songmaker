@@ -1,8 +1,9 @@
 """A TCP hop between web processes and the case's Redis that can cut the line or lose every key.
 
 The processes connect to the proxy; the proxy forwards bytes to the real server, so every
-command is the real server's answer. It can also hold one reply back after the server has run
-the command, so a test acts between a process's read and what the process does with it.
+command is the real server's answer. It can also hold the replies to one kind of request back
+after the server has run the command, so a test acts between a process's read and what the
+process does with it.
 """
 
 from __future__ import annotations
@@ -33,7 +34,8 @@ class RedisProxy:
         self._cut = False
         self._reply_lost = False
         self._holding_for: bytes | None = None
-        self._reply_held = threading.Event()
+        self._replies_held = 0
+        self._reply_was_held = threading.Condition(self._lock)
         self._reply_released = threading.Event()
         self._closing = threading.Event()
         self._acceptor = threading.Thread(target=self._accept_until_closed, daemon=True)
@@ -58,20 +60,25 @@ class RedisProxy:
         with self._lock:
             self._reply_lost = True
 
-    def hold_next_reply_to(self, request_part: bytes) -> None:
-        """Run the next command that contains ``request_part`` but hold its reply back.
+    def hold_replies_to(self, request_part: bytes) -> None:
+        """Run every command that contains ``request_part`` but hold its reply back.
 
-        The reply goes out when ``release_held_reply`` is called. Only one reply is held.
+        The replies go out when ``release_held_replies`` is called, which also stops holding.
         """
         with self._lock:
             self._holding_for = request_part
-        self._reply_held.clear()
+            self._replies_held = 0
         self._reply_released.clear()
 
-    def wait_until_a_reply_is_held(self, *, deadline_seconds: float) -> bool:
-        return self._reply_held.wait(deadline_seconds)
+    def wait_until_replies_are_held(self, count: int, *, deadline_seconds: float) -> bool:
+        with self._reply_was_held:
+            return self._reply_was_held.wait_for(
+                lambda: self._replies_held >= count, deadline_seconds,
+            )
 
-    def release_held_reply(self) -> None:
+    def release_held_replies(self) -> None:
+        with self._lock:
+            self._holding_for = None
         self._reply_released.set()
 
     def refuse(self) -> None:
@@ -149,7 +156,6 @@ class RedisProxy:
             while data := client.recv(CHUNK_BYTES):
                 with self._lock:
                     if self._holding_for is not None and self._holding_for in data:
-                        self._holding_for = None
                         reply_is_to_hold.set()
                 server.sendall(data)
         except OSError:
@@ -169,7 +175,9 @@ class RedisProxy:
                     return
                 if reply_is_to_hold.is_set():
                     reply_is_to_hold.clear()
-                    self._reply_held.set()
+                    with self._reply_was_held:
+                        self._replies_held += 1
+                        self._reply_was_held.notify_all()
                     self._reply_released.wait(HELD_REPLY_LIMIT_SECONDS)
                 client.sendall(data)
         except OSError:
