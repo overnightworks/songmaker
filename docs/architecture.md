@@ -1793,9 +1793,16 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   the 960-second HTTP request timeout with margin.
 
 - `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
-  minutes), behind the same
-  single-flight Redis lock idiom as `score_backfill_loop`
-  so only one web replica reaps a given tick.
+  minutes), behind the same tandem lock as `score_backfill_loop` (`Locks`, family `tick`,
+  one name per loop, lasting 60 s) so only one web replica reaps a given tick. A tick takes
+  its lock and never releases it: the span is the throttle. After a Redis restart `acquire`
+  returns None for one span and every process skips its ticks without a failure; the loop
+  health reads ok. The loops run only in the web process, so the keys of the previous
+  release (`songmaker:job_reaper_lock`, `songmaker:score_backfill_lock`) are not staged: with
+  one web process and `Recreate` no process of either release runs a tick beside the other.
+- The ACE-Step GPU hold and the model-download single-flight are tandem locks too
+  ([docs/acestep.md](acestep.md), "Locks in Redis"). `queue_streams._build_locks` stays a
+  thread lock: it guards one process's cache build, not a share across pods.
 - A queued job reports `No worker alive for this job type — please retry.`
   when its known-dead execution worker exceeded its grace, or `Queued too long — please retry.`
   when it exceeded the age guard. A running one reports `Took too long to finish — please retry.`
