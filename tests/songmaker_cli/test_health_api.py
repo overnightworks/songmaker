@@ -20,11 +20,15 @@ from pathlib import Path
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import psycopg2
 import pytest
 import redis
 import redis.asyncio
 from redis.backoff import NoBackoff
 from redis.retry import Retry
+from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import sessionmaker
 from support.web_app import make_test_app
 
 from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
@@ -239,36 +243,43 @@ def test_health_preserves_response_bytes(
     assert response.content == expected
 
 
-def _begin_shutdown(client, monkeypatch) -> None:
-    client.app.state.background_loop_registry.begin_shutdown()
-
-
-def _lose_the_database(client, monkeypatch) -> None:
-    monkeypatch.setattr("songmaker_cli.health_api._check_db", lambda ctx: False)
-
-
-def _lose_the_acestep_worker(client, monkeypatch) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-
-    arq_mod._pool.get = AsyncMock(return_value=None)
-
-
 @pytest.mark.parametrize(
-    ("arrange", "expected_status_code"),
-    [
-        (_begin_shutdown, 503),
-        (_lose_the_database, 503),
-        (_lose_the_acestep_worker, 200),
-        (lambda client, monkeypatch: None, 200),
-    ],
-    ids=["shutting-down", "database-lost", "acestep-worker-lost", "serving"],
+    ("begin_shutdown", "expected_status_code"),
+    [(True, 503), (False, 200)],
+    ids=["shutting-down", "serving-without-an-acestep-worker"],
 )
 def test_health_answers_ready_exactly_while_the_process_can_serve(
-    health_client, monkeypatch, arrange, expected_status_code,
+    health_client, begin_shutdown, expected_status_code,
 ) -> None:
-    arrange(health_client, monkeypatch)
+    if begin_shutdown:
+        health_client.app.state.background_loop_registry.begin_shutdown()
 
     assert health_client.get("/health").status_code == expected_status_code
+
+
+def test_health_answers_unavailable_while_the_database_refuses_connections(
+    tmp_path, mock_arq_pool, postgresql_url, refused_redis_port,
+) -> None:
+    served_url = make_url(postgresql_url).set(drivername="postgresql")
+    refused_url = served_url.set(host="127.0.0.1", port=refused_redis_port)
+    database_lost = False
+    opened = []
+
+    def connect():
+        url = refused_url if database_lost else served_url
+        opened.append(psycopg2.connect(url.render_as_string(hide_password=False)))
+        return opened[-1]
+
+    engine = create_engine("postgresql+psycopg2://", creator=connect)
+    client, _ = make_test_app(tmp_path, factory=sessionmaker(bind=engine))
+    with client:
+        database_lost = True
+        engine.dispose()
+        response = client.get("/health")
+    for connection in opened:
+        connection.close()
+
+    assert response.status_code == 503
 
 
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(

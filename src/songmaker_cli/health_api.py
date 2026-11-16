@@ -383,9 +383,13 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
     scoring_queue_depth = await arq_pool.get_scoring_queue_depth()
 
     config = settings.get_settings()
-    with ctx.db() as session:
-        acestep_workers = list_worker_identities(session)
-        active_jobs_count = count_total_queued_jobs(session)
+    acestep_workers = []
+    active_jobs_count = 0
+    if db_ok:
+        # With the database down nothing is readable, and `db_ok` names the outage.
+        with ctx.db() as session:
+            acestep_workers = list_worker_identities(session)
+            active_jobs_count = count_total_queued_jobs(session)
     queue_depth_cap_reached = active_jobs_count >= config.max_queue_depth
     workers_total = len(acestep_workers)
     workers_online = 0
