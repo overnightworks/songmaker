@@ -178,7 +178,7 @@ class MusicWorkerSettings:
     on_shutdown = _music_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)
     job_deserializer = staticmethod(deserialize_arq)
-    redis_settings = build_arq_redis_settings(_settings.redis_url)
+    redis_settings = build_arq_redis_settings(_settings.redis_url, ride_out_outage=True)
     queue_name = MusicWorker.queue_name
     max_jobs = _settings.music_max_jobs
     job_timeout = _settings.arq_job_timeout

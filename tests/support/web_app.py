@@ -22,6 +22,8 @@ from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 if TYPE_CHECKING:
+    from redis import Redis
+
     from songmaker_cli.oidc_client import OidcSignIn
 
 TEST_SECRET = b"a" * 64
@@ -211,10 +213,12 @@ def make_test_app(
     *,
     factory: sessionmaker[Session],
     oidc_sign_in: OidcSignIn | None = None,
+    redis: Redis | None = None,
 ) -> tuple:
     """Create a full test app with real middleware on the required ``factory``.
 
-    The caller passes its database; no default builds one.
+    The caller passes its database; no default builds one. ``redis`` replaces the
+    fake sync client, for a test that needs a Redis that fails.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
     ``seed_db`` receives a Session to add models before the app starts;
@@ -237,10 +241,10 @@ def make_test_app(
             seed_db(session)
         session.commit()
 
-    redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis() if redis is None else redis,
+        async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})

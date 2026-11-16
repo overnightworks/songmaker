@@ -75,7 +75,7 @@ class ScoringWorkerSettings:
     on_shutdown = _scoring_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)
     job_deserializer = staticmethod(deserialize_arq)
-    redis_settings = build_arq_redis_settings(_settings.redis_url)
+    redis_settings = build_arq_redis_settings(_settings.redis_url, ride_out_outage=True)
     queue_name = ScoringWorker.queue_name
     max_jobs = _settings.scoring_max_jobs
     job_timeout = _settings.arq_job_timeout
