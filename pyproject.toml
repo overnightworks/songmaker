@@ -77,7 +77,6 @@ acestep-worker = [
     # like the server extra's, from the same tags.
     "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.8.0",
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v0.4.0",
-    "structlog>=24.0,<27",  # logline's renderer; the wrapper imports logline in a venv of its own
     "huggingface_hub>=0.20,<3",
     "nvidia-ml-py3>=7.352,<8",
 ]

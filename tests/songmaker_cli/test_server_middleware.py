@@ -316,10 +316,11 @@ def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_
 _STREAM_ERROR = RuntimeError("stream failed")
 
 
-async def _metered_exchange(app, outcome: str, started: bool) -> list[dict]:
-    """Drive one GET through `HttpMetricsMiddleware` over a stream that ends as `outcome`."""
-    messages: list[dict] = []
+async def _metered_exchange(app, outcome: str, started: bool, messages: list[dict]) -> None:
+    """Drive one GET through `HttpMetricsMiddleware` over a stream that ends as `outcome`.
 
+    Every message the stream sends reaches `messages`, a stream that raises included.
+    """
     async def receive():
         return {"type": "http.request", "body": b""}
 
@@ -340,7 +341,6 @@ async def _metered_exchange(app, outcome: str, started: bool) -> list[dict]:
 
     scope = {"type": "http", "method": "GET", "path": "/stream", "headers": [], "app": app}
     await asyncio.create_task(HttpMetricsMiddleware(stream)(scope, receive, send))
-    return messages
 
 
 @pytest.mark.parametrize(("outcome", "started"), [
@@ -367,13 +367,14 @@ def test_http_metrics_record_each_http_outcome(
     if metrics_fail:
         client.app.state.http_metrics = FailingMetrics()
     raised = {"error": RuntimeError, "cancel": asyncio.CancelledError}.get(outcome)
+    messages: list[dict] = []
 
     with caplog.at_level("ERROR"):
         if raised is None:
-            asyncio.run(_metered_exchange(client.app, outcome, started))
+            asyncio.run(_metered_exchange(client.app, outcome, started, messages))
         else:
             with pytest.raises(raised):
-                asyncio.run(_metered_exchange(client.app, outcome, started))
+                asyncio.run(_metered_exchange(client.app, outcome, started, messages))
 
     status = 206 if started or outcome == "success" else 500
     failures = [r for r in caplog.records if r.name == "songmaker_cli.middleware.http_metrics"]
@@ -381,6 +382,12 @@ def test_http_metrics_record_each_http_outcome(
     snapshot = metrics.snapshot()
     assert snapshot["http_requests_total"] == ({} if metrics_fail else {f"GET {status}": 1})
     assert snapshot["http_requests_count"] == (0 if metrics_fail else 1)
+    if outcome == "success":
+        assert messages[-1] == {"type": "http.response.body", "body": b"", "more_body": False}
+    elif started:
+        assert messages[-1] == {"type": "http.response.body", "body": b"second", "more_body": True}
+    else:
+        assert messages == []
 
 
 @pytest.mark.parametrize("scope_type", ["lifespan", "websocket"])
