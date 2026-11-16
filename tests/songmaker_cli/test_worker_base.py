@@ -3,22 +3,38 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib
 import logging
+import time
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from arq.connections import create_pool
+from arq.worker import Worker, func
 from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
-from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS, OWNER_LEASE_TTL_SECONDS
+from songmaker_cli.redis_client import build_arq_redis_settings, create_async_redis
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
 
+WORKER_SETTINGS_PATHS = (
+    "songmaker_cli.music_worker.MusicWorkerSettings",
+    "songmaker_cli.scoring_worker.ScoringWorkerSettings",
+)
+WORKER_STOP_BOUND_SECONDS = 10
+
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+_ARQ_CTX = {"redis": MagicMock()}
 
 
 class _DummyWorker(WorkerBase):
@@ -130,7 +146,7 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
     worker = _worker_on(redis_url, monkeypatch)
 
     async def start_and_stop() -> tuple[set[str], set[str]]:
-        await worker.on_startup({})
+        await worker.on_startup(_ARQ_CTX)
         held_while_running = await _held_leases(redis_url)
         await worker.on_shutdown({})
         return held_while_running, await _held_leases(redis_url)
@@ -167,7 +183,7 @@ def test_a_worker_whose_database_cannot_open_holds_no_lease(
 
     async def start_and_read_the_leases() -> set[str]:
         with pytest.raises(OSError, match="the database is down"):
-            await worker.on_startup({})
+            await worker.on_startup(_ARQ_CTX)
         return await _held_leases(redis_url)
 
     assert _run(start_and_read_the_leases()) == set()
@@ -180,11 +196,106 @@ def test_a_shutdown_that_cannot_end_the_lease_still_ends(
         worker = _worker_on(proxy.url, monkeypatch)
 
         async def start_and_stop_with_redis_cut() -> None:
-            await worker.on_startup({})
+            await worker.on_startup(_ARQ_CTX)
             proxy.cut()
             await worker.on_shutdown({})
 
         _run(start_and_stop_with_redis_cut())
+
+
+def _arq_worker_of(settings_path: str, worker: _DummyWorker, redis_url: str) -> Worker:
+    """An arq worker with the real settings class's Redis connection, aimed at ``redis_url``."""
+    module_path, _, class_name = settings_path.rpartition(".")
+    settings_class = getattr(importlib.import_module(module_path), class_name)
+    server = build_arq_redis_settings(redis_url)
+    return Worker(
+        functions=[func(_answer, name="answer")],
+        on_startup=worker.on_startup,
+        redis_settings=replace(
+            settings_class.redis_settings,
+            host=server.host, port=server.port, database=server.database,
+            username=server.username, password=server.password,
+        ),
+        queue_name=settings_class.queue_name,
+        handle_signals=False,
+        poll_delay=0.1,
+    )
+
+
+async def _answer(_ctx) -> str:
+    return "answered"
+
+
+async def _lease_generation(redis_url: str, owner_id: str) -> str | None:
+    reader = create_async_redis(redis_url)
+    try:
+        return (await owner_leases(reader).state([owner_id]))[owner_id].generation
+    finally:
+        await reader.aclose()
+
+
+@pytest.mark.parametrize("settings_path", WORKER_SETTINGS_PATHS)
+def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
+    monkeypatch: pytest.MonkeyPatch, redis_url: str, settings_path: str,
+) -> None:
+    with redis_proxy(redis_url) as proxy:
+        worker = _worker_on(proxy.url, monkeypatch)
+
+        async def cut_restore_and_enqueue() -> tuple[str, bool, str | None, str | None]:
+            arq_worker = _arq_worker_of(settings_path, worker, proxy.url)
+            serving = asyncio.create_task(arq_worker.main())
+            while (before := await _lease_generation(redis_url, worker.owner_id)) is None:
+                await asyncio.sleep(0.1)
+            proxy.refuse()
+            await asyncio.sleep(OWNER_LEASE_TTL_SECONDS + 2)
+            proxy.restore()
+            client = await create_pool(
+                build_arq_redis_settings(redis_url), default_queue_name=arq_worker.queue_name,
+            )
+            try:
+                result = await (await client.enqueue_job("answer")).result(timeout=20)
+                still_serving = not serving.done()
+                async with asyncio.timeout(OWNER_LEASE_REFRESH_SECONDS * 2):
+                    while (after := await _lease_generation(redis_url, worker.owner_id)) in (
+                        None, before,
+                    ):
+                        await asyncio.sleep(0.2)
+            finally:
+                await client.aclose()
+                serving.cancel()
+                await asyncio.gather(serving, return_exceptions=True)
+                await worker.on_shutdown({})
+            return result, still_serving, before, after
+
+        result, still_serving, before, after = _run(cut_restore_and_enqueue())
+
+    assert (result, still_serving) == ("answered", True)
+    assert after != before
+
+
+@pytest.mark.parametrize("settings_path", WORKER_SETTINGS_PATHS)
+def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
+    monkeypatch: pytest.MonkeyPatch, redis_url: str, settings_path: str,
+) -> None:
+    with redis_proxy(redis_url) as proxy:
+        worker = _worker_on(proxy.url, monkeypatch)
+
+        async def stop_during_the_outage() -> float:
+            arq_worker = _arq_worker_of(settings_path, worker, proxy.url)
+            arq_worker.main_task = asyncio.create_task(arq_worker.main())
+            while await _lease_generation(redis_url, worker.owner_id) is None:
+                await asyncio.sleep(0.1)
+            proxy.refuse()
+            await asyncio.sleep(1)
+            started = time.monotonic()
+            arq_worker.main_task.cancel()
+            await asyncio.gather(arq_worker.main_task, return_exceptions=True)
+            async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
+                with contextlib.suppress(Exception):
+                    await arq_worker.close()
+            return time.monotonic() - started
+
+        assert _run(stop_during_the_outage()) < WORKER_STOP_BOUND_SECONDS
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:
