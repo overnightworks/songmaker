@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 
 DOWNLOAD_MAX_ATTEMPTS = 3
 DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 5.0
+DOWNLOAD_LOCK_LOST_MESSAGE = "The download of '{mode}' lost its lock and stopped"
 
 
 async def load_model_on_worker(
@@ -87,7 +88,11 @@ async def download_model_on_worker(
     db_factory,
     owner_id: str,
 ) -> None:
-    from songmaker_cli.acestep_state import DownloadAlreadyRunning, single_flight_download
+    from songmaker_cli.acestep_state import (
+        DownloadAlreadyRunning,
+        DownloadLockLost,
+        single_flight_download,
+    )
     from songmaker_cli.constants import MODEL_CONFIG_PATHS
 
     factory = db_factory
@@ -112,6 +117,16 @@ async def download_model_on_worker(
                 job_id,
             ),
             error_type="duplicate_download",
+        )
+    except DownloadLockLost:
+        _update_job(
+            factory,
+            job_id,
+            JobStatus.FAILED,
+            error=_sanitize_error(
+                RuntimeError(DOWNLOAD_LOCK_LOST_MESSAGE.format(mode=mode)), job_id,
+            ),
+            error_type="download_lock_lost",
         )
 
 

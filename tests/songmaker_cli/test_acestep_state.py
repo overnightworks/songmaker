@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 
 import fakeredis.aioredis
 import pytest
@@ -18,9 +19,11 @@ from songmaker_cli.acestep_state import (
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
     DownloadAlreadyRunning,
+    DownloadLockLost,
     admit_generation,
     decr_queue_depth,
     download_key,
+    download_locks,
     gpu_hold_is_free,
     gpu_hold_locks,
     gpu_hold_old_key,
@@ -465,3 +468,24 @@ def test_a_download_waits_out_a_redis_restart_instead_of_failing(
 
     assert event_loop.run_until_complete(scenario()) == "job-1"
     assert waits >= 1
+
+
+def test_a_download_whose_lock_was_taken_over_stops_and_leaves_the_new_holders_label(
+    settled_redis, another_process, event_loop, monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
+    )
+
+    async def scenario() -> str | None:
+        new_holder_locks = download_locks(another_process)
+        with pytest.raises(DownloadLockLost) as lost:
+            async with single_flight_download(settled_redis, "sft", "job-1"):
+                await another_process.zrem(new_holder_locks.keys.expiry, "sft")
+                assert await new_holder_locks.acquire("sft") is not None
+                await another_process.set(download_key("sft"), "job-2", ex=15)
+                await asyncio.sleep(30)
+        assert lost.value.mode == "sft"
+        return await read_download_in_progress(another_process, "sft")
+
+    assert event_loop.run_until_complete(scenario()) == "job-2"

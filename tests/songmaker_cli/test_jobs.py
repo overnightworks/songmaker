@@ -2930,6 +2930,57 @@ def test_download_model_on_worker_aborts_when_another_job_holds_the_download(see
     assert redis.store[download_key("sft")] == "previous-job"
 
 
+def test_a_download_that_lost_its_lock_stops_and_fails_its_job(seeded_db, monkeypatch) -> None:
+    from datetime import timedelta
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.acestep_state import download_key, download_locks
+    from songmaker_cli.jobs import download_model_on_worker
+
+    monkeypatch.setattr(
+        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
+    )
+    _seed_download_job(seeded_db, "dl-lost")
+    redis = _FakeRedis()
+    _seed_online_worker(seeded_db, redis)
+    new_holder = redis.another_process()
+    new_holder_locks = download_locks(new_holder)
+
+    fake_submit_response = MagicMock(status_code=200)
+    fake_submit_response.json = MagicMock(return_value={"task_id": "t"})
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_submit_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+    downloads_started = 0
+
+    async def a_download_another_job_takes_over(*args, **kwargs):
+        nonlocal downloads_started
+        downloads_started += 1
+        await new_holder.zrem(new_holder_locks.keys.expiry, "sft")
+        assert await new_holder_locks.acquire("sft") is not None
+        await new_holder.set(download_key("sft"), "job-2", ex=15)
+        await asyncio.sleep(30)
+
+    with (
+        patch("httpx.AsyncClient", return_value=fake_client),
+        patch(
+            "songmaker_cli.scheduler.consume_download_task_stream",
+            new=a_download_another_job_takes_over,
+        ),
+    ):
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl-lost", "sft", db_factory=seeded_db, owner_id="o1",
+        ))
+
+    with seeded_db() as session:
+        job = get_job(session, "dl-lost")
+        assert job.status == "failed"
+        assert job.error_type == "download_lock_lost"
+    assert downloads_started == 1
+    assert redis.store[download_key("sft")] == "job-2"
+
+
 # ── D9: download retry tests ────────────────────────────────────────
 
 

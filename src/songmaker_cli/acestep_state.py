@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any
@@ -202,35 +202,70 @@ async def _acquire_download_lock(pool: ArqRedis, locks: Locks, mode: str) -> str
     raise RuntimeError(f"The download lock of {mode} stayed unsettled after a Redis restart")
 
 
+class DownloadLockLost(Exception):
+    """The download lock of ``mode`` ended under its holder, so another job may download it now."""
+
+    def __init__(self, mode: str) -> None:
+        super().__init__(mode)
+        self.mode = mode
+
+
 async def _keep_download_lock(
     pool: ArqRedis, locks: Locks, mode: str, job_id: str, generation: str,
+    on_lost: Callable[[], None],
 ) -> None:
-    """Extend the lock and its label until cancelled; stop when the lock is lost."""
+    """Extend the lock and its label until cancelled; call ``on_lost`` when the lock is lost."""
     label_seconds = int(DOWNLOAD_LOCK_LASTS.total_seconds())
     while True:
         await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
         try:
             if not await locks.extend(mode, generation):
                 log.warning("The download lock of %s was lost during its download", mode)
+                on_lost()
                 return
             await pool.set(download_key(mode), job_id, ex=label_seconds)
         except (StoreError, RedisError):
             log.warning("Could not extend the download lock of %s", mode, exc_info=True)
 
 
+# Deletes the label only while it still names the job that wrote it.
+DELETE_DOWNLOAD_LABEL_SCRIPT = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+return redis.call('DEL', KEYS[1])
+"""
+
+
 @asynccontextmanager
 async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> AsyncIterator[None]:
-    """Hold the download lock of ``mode`` for the block, or raise ``DownloadAlreadyRunning``."""
+    """Hold the download lock of ``mode`` for the block, or raise ``DownloadAlreadyRunning``.
+
+    A block whose lock is lost is cancelled and raises ``DownloadLockLost``, so no second download
+    of the mode runs beside the job that holds the lock now.
+    """
     locks = download_locks(pool)
     generation = await _acquire_download_lock(pool, locks, mode)
-    keeper = asyncio.create_task(_keep_download_lock(pool, locks, mode, job_id, generation))
+    holder = asyncio.current_task()
+    lost = False
+
+    def stop_the_download() -> None:
+        nonlocal lost
+        lost = True
+        holder.cancel()
+
+    keeper = asyncio.create_task(
+        _keep_download_lock(pool, locks, mode, job_id, generation, stop_the_download),
+    )
     try:
         await pool.set(
             download_key(mode), job_id, ex=int(DOWNLOAD_LOCK_LASTS.total_seconds()),
         )
         yield
+    except asyncio.CancelledError:
+        if lost and holder.uncancel() == 0:
+            raise DownloadLockLost(mode) from None
+        raise
     finally:
         keeper.cancel()
         await asyncio.gather(keeper, return_exceptions=True)
-        await pool.delete(download_key(mode))
+        await pool.eval(DELETE_DOWNLOAD_LABEL_SCRIPT, 1, download_key(mode), job_id)
         await locks.release(mode, generation)
