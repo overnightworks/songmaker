@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -18,6 +19,14 @@ from songmaker_cli.app_context import AppContext
 QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
 QUEUE_STREAM_BUILD_LOCK_LASTS: Final = timedelta(seconds=15)
 RENEWALS_PER_LOCK_SPAN: Final = 3
+LOST_LOCK_WARNING: Final = (
+    "Queue stream build lock lost while building; another process may build the same stream"
+)
+FAILED_RENEWAL_WARNING: Final = (
+    "Queue stream build lock renewal failed; the lock lapses unless a later renewal succeeds"
+)
+
+log = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -50,7 +59,12 @@ async def _start_renewing(
     async def renew() -> None:
         while True:
             await asyncio.sleep(lasts.total_seconds() / RENEWALS_PER_LOCK_SPAN)
-            await locks.extend(key, generation)
+            try:
+                if not await locks.extend(key, generation):
+                    log.warning(LOST_LOCK_WARNING)
+                    return
+            except Exception:
+                log.warning(FAILED_RENEWAL_WARNING, exc_info=True)
 
     return asyncio.create_task(renew())
 
