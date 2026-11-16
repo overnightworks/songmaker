@@ -35,6 +35,8 @@ class RedisProxy:
         self._reply_lost = False
         self._holding_for: bytes | None = None
         self._replies_held = 0
+        self._replies_delivered = 0
+        self._replies_expired = 0
         self._reply_was_held = threading.Condition(self._lock)
         self._reply_released = threading.Event()
         self._closing = threading.Event()
@@ -63,11 +65,14 @@ class RedisProxy:
     def hold_replies_to(self, request_part: bytes) -> None:
         """Run every command that contains ``request_part`` but hold its reply back.
 
-        The replies go out when ``release_held_replies`` is called, which also stops holding.
+        The replies go out when ``release_held_replies`` is called, which also stops holding. A
+        reply whose client gave up on it before then is counted by ``expired_held_replies``.
         """
         with self._lock:
             self._holding_for = request_part
             self._replies_held = 0
+            self._replies_delivered = 0
+            self._replies_expired = 0
         self._reply_released.clear()
 
     def wait_until_replies_are_held(self, count: int, *, deadline_seconds: float) -> bool:
@@ -75,6 +80,19 @@ class RedisProxy:
             return self._reply_was_held.wait_for(
                 lambda: self._replies_held >= count, deadline_seconds,
             )
+
+    def wait_until_held_replies_are_delivered(self, count: int, *, deadline_seconds: float) -> bool:
+        """Whether ``count`` held replies reached the client that was waiting for them."""
+        with self._reply_was_held:
+            return self._reply_was_held.wait_for(
+                lambda: self._replies_delivered >= count, deadline_seconds,
+            )
+
+    @property
+    def expired_held_replies(self) -> int:
+        """The held replies whose client had hung up when they were released."""
+        with self._lock:
+            return self._replies_expired
 
     def release_held_replies(self) -> None:
         with self._lock:
@@ -142,15 +160,24 @@ class RedisProxy:
             with self._lock:
                 self._connections.extend((client, server))
             reply_is_to_hold = threading.Event()
+            client_hung_up = threading.Event()
             threading.Thread(
-                target=self._pump_requests, args=(client, server, reply_is_to_hold), daemon=True,
+                target=self._pump_requests,
+                args=(client, server, reply_is_to_hold, client_hung_up),
+                daemon=True,
             ).start()
             threading.Thread(
-                target=self._pump_replies, args=(server, client, reply_is_to_hold), daemon=True,
+                target=self._pump_replies,
+                args=(server, client, reply_is_to_hold, client_hung_up),
+                daemon=True,
             ).start()
 
     def _pump_requests(
-        self, client: socket.socket, server: socket.socket, reply_is_to_hold: threading.Event,
+        self,
+        client: socket.socket,
+        server: socket.socket,
+        reply_is_to_hold: threading.Event,
+        client_hung_up: threading.Event,
     ) -> None:
         try:
             while data := client.recv(CHUNK_BYTES):
@@ -161,11 +188,16 @@ class RedisProxy:
         except OSError:
             pass
         finally:
+            client_hung_up.set()
             _shut(client)
             _shut(server)
 
     def _pump_replies(
-        self, server: socket.socket, client: socket.socket, reply_is_to_hold: threading.Event,
+        self,
+        server: socket.socket,
+        client: socket.socket,
+        reply_is_to_hold: threading.Event,
+        client_hung_up: threading.Event,
     ) -> None:
         try:
             while data := server.recv(CHUNK_BYTES):
@@ -173,13 +205,22 @@ class RedisProxy:
                     lost, self._reply_lost = self._reply_lost, False
                 if lost:
                     return
-                if reply_is_to_hold.is_set():
+                held = reply_is_to_hold.is_set()
+                if held:
                     reply_is_to_hold.clear()
                     with self._reply_was_held:
                         self._replies_held += 1
                         self._reply_was_held.notify_all()
                     self._reply_released.wait(HELD_REPLY_LIMIT_SECONDS)
+                    if client_hung_up.is_set():
+                        with self._reply_was_held:
+                            self._replies_expired += 1
+                        return
                 client.sendall(data)
+                if held:
+                    with self._reply_was_held:
+                        self._replies_delivered += 1
+                        self._reply_was_held.notify_all()
         except OSError:
             pass
         finally:

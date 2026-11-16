@@ -213,7 +213,7 @@ def test_a_job_written_after_the_cleanup_read_its_owner_gone_keeps_running_while
     # Both passes of B (its lapse loop and its reaper loop) have read the stamps of the old
     # generation when their reply is held, so every pass that can fail it is held here. The
     # process's Redis client gives up on a reply after its socket timeout, so the new generation
-    # follows within moments.
+    # follows at once and the replies are released before that.
     line_of_b.hold_replies_to(old_owner_key(REDIS_KEY_PREFIX, owner_a).encode())
     line_of_a.cut()
     end_the_owner_lease(redis_client, owner_a, lapsed_generation)
@@ -228,7 +228,12 @@ def test_a_job_written_after_the_cleanup_read_its_owner_gone_keeps_running_while
     line_of_b.release_held_replies()
 
     # Only the held passes can fail the old job, and each judges the new one in the same
-    # transaction, so its end is the end of the old job's wait.
+    # transaction. Both held reads must reach their passes: a read that expired is retried, and
+    # a later pass reading the new generation would fail the old job without the held one.
+    assert line_of_b.wait_until_held_replies_are_delivered(
+        2, deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
+    )
+    assert line_of_b.expired_held_replies == 0
     assert poll_until(
         lambda: _failed_with_the_restart_verdict(factory, [job_of_the_lapsed_generation]),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
