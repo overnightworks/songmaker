@@ -1904,7 +1904,7 @@ Album covers live as files on that same audio volume (`covers/{album_id}/` for o
 
 ## Connection budget
 
-Every process opens `database_pool_size` plus `database_max_overflow` pooled connections and holds one more outside the pool. `settings.py` declares the pod count per process kind (two web pods, one music worker, one scoring worker) and PostgreSQL's limit (the postgres image's default of 100, which platform leaves unset, less 3 kept for superusers); `Settings` refuses to load when the sum of all pods' connections exceeds it. With the defaults that is 4 pods x 16 = 64 of 97.
+`settings.py` owns the connection budget: `PROCESS_KINDS` declares the pod count of each process kind that opens a pooled engine, and `Settings` refuses to load when those pods' pool, overflow and one extra connection each exceed what `postgres_max_connections` less `postgres_reserved_connections` admit. The two limits are configuration that must match the running PostgreSQL.
 
 ## Deploy
 
