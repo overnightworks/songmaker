@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from agents.backend.fake_gateway import completion
+from agents.backend.fake_gateway import Reply, completion
 from pydantic import SecretStr
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
@@ -133,9 +133,18 @@ class StandInCluster:
 
 
 @pytest.fixture
-def stand_in_cluster(tmp_path: Path, case_factory, database_url: str, redis_url: str):
+def gateway_replies() -> tuple[Reply, ...]:
+    """What the held gateway answers once released; a module overrides it to script more."""
+    return (completion(SCRIPTED_REPLY),)
+
+
+@pytest.fixture
+def stand_in_cluster(
+    tmp_path: Path, case_factory, database_url: str, redis_url: str,
+    gateway_replies: tuple[Reply, ...],
+):
     """The processes of one case reach a held gateway over HTTP and a realm over HTTPS."""
-    gateway = HeldGateway(completion(SCRIPTED_REPLY))
+    gateway = HeldGateway(*gateway_replies)
     with (
         serve_gateway(gateway) as gateway_origin,
         serve_issuer(tmp_path, client_id=OIDC_CLIENT_ID) as issuer,
