@@ -7,8 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import fakeredis
+import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
-from support.job_owner import create_job_of_unstamped_owner
+from support.job_owner import an_owner, create_job_of_owner
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import arrange_fake_async_redis, make_fake_async_redis, settle_owner_leases
 
@@ -27,12 +28,13 @@ from songmaker_cli.health_types import (
 )
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import (
+    fail_jobs_of_dead_owners,
     owner_gone_reaper_loop,
     owner_lapse_loop,
     reconcile_ended_covers,
 )
 from songmaker_cli.owner_lease_old_key import old_owner_key
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 OWNER = "this-process"
 ANOTHER = "another-process"
@@ -53,9 +55,10 @@ def _loop_app(async_redis, db, audio_dir: Path) -> SimpleNamespace:
     ))
 
 
-def _running_job_of(factory, owner_id: str) -> str:
+def _running_job_of(factory, owner: JobOwner | str) -> str:
+    """A running chat job; an owner given as a bare id is one a job names without a generation."""
     with factory() as session:
-        job = create_job_of_unstamped_owner(session, JobType.CHAT, owner_id)
+        job = create_job_of_owner(session, JobType.CHAT, owner)
         assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
         return job.id
@@ -70,7 +73,7 @@ def _status_and_error(factory, job_id: str) -> tuple[str, str | None]:
 def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
     monkeypatch, pg_factory, tmp_path,
 ) -> None:
-    _running_job_of(pg_factory, ANOTHER)
+    _running_job_of(pg_factory, an_owner(ANOTHER))
     app = _loop_app(_UnreachableRedis(), pg_factory, tmp_path)
 
     statuses = run_ticks_observing_status(
@@ -135,17 +138,21 @@ def test_the_owner_lease_shows_failing_while_redis_is_down(
     assert status is BackgroundLoopStatus.FAILING
 
 
+@pytest.mark.parametrize("job_names_its_generation", [True, False])
 def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
-    pg_factory, tmp_path,
+    job_names_its_generation, pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
-    job_id = _running_job_of(pg_factory, ANOTHER)
     app = _loop_app(server, pg_factory, tmp_path)
 
     async def end_the_lease_of_another_and_wait_for_its_job() -> tuple[str, str | None]:
         await settle_owner_leases(server)
         leases = owner_leases(server)
-        await leases.end(ANOTHER, (await leases.renew(ANOTHER)).generation)
+        generation = (await leases.renew(ANOTHER)).generation
+        job_id = _running_job_of(
+            pg_factory, an_owner(ANOTHER, generation) if job_names_its_generation else ANOTHER,
+        )
+        await leases.end(ANOTHER, generation)
         loop_task = asyncio.ensure_future(owner_lapse_loop(app))
         try:
             async with asyncio.timeout(DEADLINE_SECONDS):
@@ -161,11 +168,60 @@ def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
     )
 
 
+class _LeasesThatRunBeforeAnswering:
+    """The owner leases, whose ``state`` runs ``between`` after reading and before answering."""
+
+    def __init__(self, leases, between) -> None:
+        self._leases = leases
+        self._between = between
+
+    async def state(self, holders):
+        states = await self._leases.state(holders)
+        await self._between()
+        return states
+
+
+def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while_the_old_one_fails(
+    pg_factory, tmp_path,
+) -> None:
+    server = make_fake_async_redis()
+
+    async def fail_the_jobs_while_the_owner_starts_again() -> tuple[tuple, tuple, bool]:
+        await settle_owner_leases(server)
+        leases = owner_leases(server)
+        lapsed = (await leases.renew(ANOTHER)).generation
+        job_of_the_lapsed_generation = _running_job_of(pg_factory, an_owner(ANOTHER, lapsed))
+        await leases.end(ANOTHER, lapsed)
+        new_jobs: list[str] = []
+        new_generations: list[str] = []
+
+        async def start_again_and_write_a_job() -> None:
+            new_generations.append((await leases.renew(ANOTHER)).generation)
+            new_jobs.append(_running_job_of(pg_factory, an_owner(ANOTHER, new_generations[0])))
+
+        ctx = SimpleNamespace(
+            owner_leases=_LeasesThatRunBeforeAnswering(leases, start_again_and_write_a_job),
+            owner_id=OWNER, db=pg_factory, audio_dir=tmp_path,
+        )
+        await fail_jobs_of_dead_owners(ctx)
+        return (
+            _status_and_error(pg_factory, job_of_the_lapsed_generation),
+            _status_and_error(pg_factory, new_jobs[0]),
+            new_generations[0] != lapsed,
+        )
+
+    assert asyncio.run(fail_the_jobs_while_the_owner_starts_again()) == (
+        (JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type),
+        (JobStatus.RUNNING, None),
+        True,
+    )
+
+
 def test_a_cover_another_process_failed_while_this_lease_had_lapsed_leaves_no_staging(
     pg_factory, tmp_path,
 ) -> None:
     with pg_factory() as session:
-        cover = create_job_of_unstamped_owner(session, JobType.COVER, OWNER)
+        cover = create_job_of_owner(session, JobType.COVER, OWNER)
         for status in (JobStatus.RUNNING, JobStatus.FAILED):
             assert update_job_status(session, cover.id, JobStatusUpdate(status))
         session.commit()

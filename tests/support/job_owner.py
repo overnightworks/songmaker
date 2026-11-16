@@ -18,3 +18,10 @@ def create_job_of_unstamped_owner(session, job_type: str, owner_id: str, **field
     job.owner_id = owner_id
     session.flush()
     return job
+
+
+def create_job_of_owner(session, job_type: str, owner: JobOwner | str, **fields):
+    """A job of ``owner``; one given as a bare id names no generation, as a legacy row does."""
+    if isinstance(owner, str):
+        return create_job_of_unstamped_owner(session, job_type, owner, **fields)
+    return create_job(session, job_type, owner=owner, **fields)
