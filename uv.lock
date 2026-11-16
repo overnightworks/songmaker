@@ -1967,6 +1967,7 @@ acestep-worker = [
     { name = "overnightworks-logline" },
     { name = "overnightworks-tandem" },
     { name = "redis", extra = ["hiredis"] },
+    { name = "structlog" },
     { name = "uvicorn" },
 ]
 agent = [
@@ -2074,6 +2075,7 @@ requires-dist = [
     { name = "songmaker", extras = ["signal"], marker = "extra == 'whisper'" },
     { name = "soundfile", marker = "extra == 'signal'" },
     { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0,<3" },
+    { name = "structlog", marker = "extra == 'acestep-worker'", specifier = ">=24.0,<27" },
     { name = "structlog", marker = "extra == 'server'", specifier = ">=24.0,<27" },
     { name = "torch", marker = "extra == 'scoring'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "extra == 'whisper'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
