@@ -125,7 +125,7 @@ LM models (text planner):
 
 The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it enqueues a `download_model_on_worker` arq job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds. With no worker online, a row's download state is `unknown_no_worker`, not `not_downloaded` — nobody is available to answer the question, so there is no Download button either.
 
-Concurrency guard: a Redis flag (`songmaker:acestep:download:{mode}`, 30-minute TTL) prevents two concurrent downloads of the same mode. The flag is set in the arq job's `try` block and cleared in `finally`; the TTL is the safety net for crashed workers.
+Concurrency guard: the mode's download lock (family `download`, see [Locks in Redis](#locks-in-redis)) prevents two concurrent download jobs of the same mode. The job takes it before it calls the worker and releases it when it ends, with its label `songmaker:acestep:download:{mode}`; both run out 15 seconds after a crashed job. The ACE-Step worker also runs one transfer per mode: a request for a mode already downloading returns the running task.
 
 For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hatch instead: `bash scripts/download_models.sh` calls `huggingface_hub.snapshot_download` directly into `vendor/acestep/checkpoints/`. Requires `HF_TOKEN` exported in the host shell.
 
