@@ -199,6 +199,7 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 |---|---|---|---|---|
 | `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, the health routes, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `training_hold_seconds`, `last_heartbeat_at` |
 | `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
+| `songmaker:acestep:hold:{worker_id}` | Worker `/gpu_hold/*` endpoints, beside the GPU lock | Scheduler admission, `pick_worker` and worker `/generate` | 15 s, renewed with the lock | The previous release's GPU hold, kept for one release: its value is the lock's generation, and a live key counts as a hold |
 | `songmaker:acestep:lm-failure:{worker_id}` | `acestep-worker` when a load comes up without its LM | `acestep-worker` at start, the health routes (existence only) | none | The mode whose LM failed to initialise; the restarted worker loads it before registering, then clears the key |
 | `songmaker:acestep:download:{mode}` | `download_model_on_worker` arq job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | 15 s, renewed every 5 s | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does |
 
@@ -216,9 +217,9 @@ Three single-flights are [tandem](https://github.com/overnightworks/tandem) `Loc
 
 The generation of a lock is its token. A reserve reads the queue depth, takes the lock, reads the depth again and gives the lock back when a generation was admitted in between; the reserve's generation is the token that `renew`, `release` and `handover` carry. The scheduler admits a generation with a script that reads the lock (`tandem.lock_state`) and raises the depth in one step, and `pick_worker` reads the lock with `Locks.state`. There is no forced release: a worker that starts ends the hold it finds, with the generation it reads, and a crashed holder's lock runs out after its span.
 
-After a Redis restart, and on the very first use, `acquire` returns None and a lock reads unknown until the span has passed since tandem's epoch, so two holders are never live together. No job fails in that window: a reserve answers 409 as for a busy GPU, a generation the scheduler may not admit waits in the queue as for a hold, a worker refuses `/generate` with the same 409, and a download waits for the span; only a live holder fails a download as a duplicate. The worker's Redis client, like the web's, retries and replays a lost reply (`retry_on_error`) and times out, as tandem requires.
+After a Redis restart, and on the very first use, `acquire` returns None and a lock reads unknown until the span has passed since tandem's epoch, so two holders are never live together. No job fails in that window: a reserve answers 409 as for a busy GPU, a generation the scheduler may not admit waits in the queue as for a hold, a worker refuses `/generate` with the same 409, which the music worker answers by queueing the takes still missing again as for a hold, and a download waits for the span; only a live holder fails a download as a duplicate. The worker's Redis client, like the web's, retries and replays a lost reply (`retry_on_error`) and times out, as tandem requires.
 
-A previous release's keys are not staged for these locks. The hold exists only while a LoRA training runs, which the recreate of the worker kills, and the web and music workers read the old key only during the minutes between the two recreates. A download writes the label key as the previous release wrote it, so old and new readers agree on it.
+The GPU hold is staged for one release: web, music worker and ACE-Step worker restart one after another, so the worker writes the previous release's key `songmaker:acestep:hold:{worker_id}` beside its lock (renewed with it, deleted with it only while it still carries the released generation), and the admit script, `pick_worker` and `/generate` count a live old key as a hold. Deleting the old key's writes and reads ends the stage. The tick locks are not staged: only the web process runs the ticks and it restarts as one. A download writes the label key as the previous release wrote it, so old and new readers agree on it; a download whose lock is lost (it lapsed, or Redis restarted) is cancelled and its job fails as `download_lock_lost`, so a second download of the mode never runs beside it.
 
 **Useful debug commands** (the test stack; on the platform run the same `redis-cli` calls in the Redis pod):
 
@@ -229,13 +230,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml exec redi
 docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:download:xl-base'
 ```
 
-If a download appears stuck, check the `download:{mode}` key. If it exists but no arq job is running with that ID, it's a stale flag — delete it manually and the next click will re-acquire:
-
-```bash
-docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli DEL 'songmaker:acestep:download:xl-base'
-```
-
-The flag's 30-minute TTL is the automatic safety net for crashed arq workers.
+If a download appears stuck, check the `download:{mode}` key. It is only the label of the download lock (the job_id of the holder); deleting it releases nothing. A lock and its label run out within 15 seconds of a holder that stopped extending them, so a download whose holder crashed can be started again after that.
 
 ### Worker startup procedure
 
