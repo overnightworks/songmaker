@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from logline import REQUEST_EVENT
 
 from songmaker_cli.request_policies import (
     BACKCHANNEL_LOGOUT_PATH,
@@ -29,16 +30,18 @@ def policy():
     return build_rate_limit_policy(Settings())
 
 
-def access_line(path: str, seconds: float, ip: str = RUNNER_IP) -> str:
+def request_line(route: str | None, seconds: float, ip: str = RUNNER_IP) -> str:
     at = RUN_START + timedelta(seconds=seconds)
     return json.dumps({
-        "ip": ip,
-        "method": "GET",
-        "path": path,
-        "event": f"ACCESS {ip} GET {path} 200 (3ms)",
+        "ts": at.isoformat().replace("+00:00", "Z"),
         "level": "info",
-        "logger": "songmaker_cli.middleware.access_log",
-        "timestamp": at.isoformat().replace("+00:00", "Z"),
+        "service": "songmaker-web",
+        "event": REQUEST_EVENT,
+        "outcome": "ok",
+        "method": "GET",
+        "route": route,
+        "status": 200,
+        "ip": ip,
     })
 
 
@@ -46,22 +49,23 @@ def access_line(path: str, seconds: float, ip: str = RUNNER_IP) -> str:
     "line",
     [
         "Running migrations...",
-        json.dumps({"event": "Application startup complete.", "timestamp": "x"}),
+        json.dumps({"event": "Application startup complete.", "ts": "x"}),
         "",
+        request_line(None, 0),
     ],
-    ids=["entrypoint text", "other structured event", "blank line"],
+    ids=["entrypoint text", "other structured event", "blank line", "request no route answered"],
 )
-def test_a_line_without_an_access_record_is_skipped(line: str) -> None:
-    """defect:#1555 -- only the access middleware's records are counted."""
-    assert rate_window.parse_access_record(line) is None
+def test_a_line_without_a_routed_request_is_skipped(line: str) -> None:
+    """defect:#1555 -- only the request lines that name a route are counted."""
+    assert rate_window.parse_request_record(line) is None
 
 
-def test_an_access_line_yields_its_client_path_and_time() -> None:
+def test_a_request_line_yields_its_client_route_and_time() -> None:
     """defect:#1555 -- the record keeps the fields the limiter keys on."""
-    record = rate_window.parse_access_record(access_line("/api/albums", 1.5))
+    record = rate_window.parse_request_record(request_line("/api/albums", 1.5))
 
-    assert record == rate_window.AccessRecord(
-        at=RUN_START + timedelta(seconds=1.5), client_ip=RUNNER_IP, path="/api/albums",
+    assert record == rate_window.RequestRecord(
+        at=RUN_START + timedelta(seconds=1.5), client_ip=RUNNER_IP, route="/api/albums",
     )
 
 
@@ -77,7 +81,7 @@ def test_the_busiest_window_counts_only_requests_inside_one_budget_window(
     policy, seconds: tuple[float, ...], request_count: int, starts_at: float,
 ) -> None:
     """defect:#1555 -- a burst is judged inside the limiter's 60 s, not across the run."""
-    lines = [access_line("/api/albums", second) for second in seconds]
+    lines = [request_line("/api/albums", second) for second in seconds]
 
     peak = rate_window.busiest_window(lines, policy, policy.default)
 
@@ -89,9 +93,9 @@ def test_the_busiest_window_counts_only_requests_inside_one_budget_window(
 def test_each_client_address_has_its_own_window(policy) -> None:
     """defect:#1555 -- the limiter buckets per address, so the peak does too."""
     lines = [
-        access_line("/api/albums", 0, ip="10.0.0.1"),
-        access_line("/api/albums", 1, ip="10.0.0.2"),
-        access_line("/api/albums", 2, ip="10.0.0.2"),
+        request_line("/api/albums", 0, ip="10.0.0.1"),
+        request_line("/api/albums", 1, ip="10.0.0.2"),
+        request_line("/api/albums", 2, ip="10.0.0.2"),
     ]
 
     peak = rate_window.busiest_window(lines, policy, policy.default)
@@ -103,7 +107,6 @@ def test_each_client_address_has_its_own_window(policy) -> None:
     ("path", "spends_api_budget"),
     [
         ("/api/albums", True),
-        ("/library", True),
         ("/health", True),
         ("/favicon.svg", False),
         ("/_app/immutable/entry.js", False),
@@ -117,8 +120,8 @@ def test_each_client_address_has_its_own_window(policy) -> None:
 def test_the_rate_limit_policy_decides_which_requests_spend_the_api_budget(
     policy, path: str, spends_api_budget: bool,
 ) -> None:
-    """defect:#1555 -- exempt, media and stream paths stay out; documents count."""
-    peak = rate_window.busiest_window([access_line(path, 0)], policy, policy.default)
+    """defect:#1555 -- exempt, media and stream routes stay out."""
+    peak = rate_window.busiest_window([request_line(path, 0)], policy, policy.default)
 
     assert (peak is not None) is spends_api_budget
 
@@ -141,7 +144,7 @@ def test_a_log_without_api_requests_has_no_peak(policy) -> None:
 def test_start_callback_and_logout_spend_the_sign_in_budget(
     policy, path: str, spends_sign_in_budget: bool,
 ) -> None:
-    peak = rate_window.busiest_window([access_line(path, 0)], policy, policy.sign_in)
+    peak = rate_window.busiest_window([request_line(path, 0)], policy, policy.sign_in)
 
     assert (peak is not None) is spends_sign_in_budget
 
@@ -155,8 +158,8 @@ def test_start_callback_and_logout_spend_the_sign_in_budget(
 )
 def test_each_budget_is_measured_over_its_own_window(policy, path: str, budget_of) -> None:
     budget = budget_of(policy)
-    lines = [access_line(path, 0), access_line(path, budget.window_seconds - 1)]
-    beyond = [access_line(path, 0), access_line(path, budget.window_seconds)]
+    lines = [request_line(path, 0), request_line(path, budget.window_seconds - 1)]
+    beyond = [request_line(path, 0), request_line(path, budget.window_seconds)]
 
     assert rate_window.busiest_window(lines, policy, budget).request_count == 2
     assert rate_window.busiest_window(beyond, policy, budget).request_count == 1

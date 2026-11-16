@@ -62,7 +62,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 2305
 "tests/songmaker_cli/test_resource_event_api.py" = 1155
 "tests/songmaker_cli/test_scheduler.py" = 1279
-"tests/songmaker_cli/test_server.py" = 1914
+"tests/songmaker_cli/test_server.py" = 1870
 "tests/songmaker_cli/test_sharing_api.py" = 2484
 
 [function_lines."src/acestep_worker/__main__.py"]
@@ -170,10 +170,6 @@
 
 [function_lines."tests/songmaker_cli/test_server.py"]
 "test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 74
-"test_real_access_record_is_readable_by_rate_window_parser" = 66
-
-[function_lines."tests/songmaker_cli/test_server_middleware.py"]
-"test_access_log_restores_context_and_records_each_http_outcome" = 109
 
 [function_lines."tests/songmaker_cli/test_sharing_api.py"]
 "test_shared_audio_authorization_matches_presented_share_selection" = 61

@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import json
-import logging
 import os
 import shutil
 import sys
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
+from logline import RequestLineMiddleware, configure
 from redis.asyncio import Redis
 from redis.asyncio.retry import Retry
 from redis.backoff import ExponentialBackoff
@@ -33,6 +31,7 @@ from acestep_worker.wrapper import (
     default_train_lora_runner,
 )
 
+SERVICE_NAME = "songmaker-acestep-worker"
 # Bounds the wait for open responses once the server was asked to stop.
 GRACEFUL_SHUTDOWN_SECONDS = 10
 # A running take's polling thread outlives its cancelled coroutine and holds the interpreter
@@ -58,35 +57,6 @@ def declared_model_sizes(settings: WorkerSettings) -> dict[str, float]:
     return {
         mode: DEFAULT_MODEL_SIZES_GB.get(mode, 6.0) + lm_size_gb for mode in MODEL_CONFIG_PATHS
     }
-
-
-class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        payload = {
-            "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(),
-            "level": record.levelname.lower(),
-            "logger": record.name,
-            "event": record.getMessage(),
-        }
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
-        return json.dumps(payload)
-
-
-class _AcestepWorkerLogHandler(logging.StreamHandler):
-    pass
-
-
-def configure_logging(log_level: str) -> None:
-    handler = _AcestepWorkerLogHandler()
-    handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    for existing_handler in root.handlers[:]:
-        if isinstance(existing_handler, _AcestepWorkerLogHandler):
-            root.removeHandler(existing_handler)
-            existing_handler.close()
-    root.addHandler(handler)
-    root.setLevel(log_level)
 
 
 def prepare_output_root(output_root: Path, shared_audio_root: Path) -> Path:
@@ -203,9 +173,11 @@ def serve(
     A requested exit that the shutdown does not finish within `forced_exit_seconds` ends the
     process through `force_exit`, so a running take cannot delay the restart.
     """
+    app = create_app(deps)
+    app.add_middleware(RequestLineMiddleware)
     server = uvicorn.Server(
         uvicorn.Config(
-            create_app(deps),
+            app,
             host=host,
             port=port,
             log_config=None,
@@ -236,7 +208,7 @@ def serve(
 
 def main(serve_deps: Callable[[WorkerDeps, str, int], int] = serve) -> None:
     settings = get_worker_settings()
-    configure_logging(settings.log_level)
+    configure(SERVICE_NAME)
     exit_code = serve_deps(build_deps(settings), settings.worker_bind_host, settings.worker_port)
     if exit_code:
         sys.exit(exit_code)

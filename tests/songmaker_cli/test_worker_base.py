@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from logline.testing import configured
 from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
+from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
@@ -22,6 +26,7 @@ def _run(coro):
 
 
 class _DummyWorker(WorkerBase):
+    service_name = "dummy-worker"
     job_types = ("dummy",)
     queue_name = "dummy_queue"
     max_jobs = 1
@@ -103,11 +108,41 @@ def test_get_db_factory_independent_per_instance() -> None:
     assert mock_init.call_count == 2
 
 
+# ── logging ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("worker_class", "service"),
+    [
+        (MusicWorker, "songmaker-music-worker"),
+        (ScoringWorker, "songmaker-scoring-worker"),
+    ],
+)
+def test_a_worker_writes_its_lines_under_its_own_service_name(
+    worker_class: type[WorkerBase], service: str, capsys: pytest.CaptureFixture[str],
+) -> None:
+    worker = worker_class()
+    worker.get_db_factory = MagicMock()
+    worker._start_owner_lease = AsyncMock()
+
+    with (
+        configured("restored-after-the-test"),
+        patch("songmaker_cli.scoring.subprocess_runner.ScorerProcess"),
+        patch("songmaker_cli.scoring.subprocess_runner.set_scorer_process"),
+    ):
+        _run(worker.on_startup({}))
+        logging.getLogger("songmaker_cli.probe").info("probe.ended")
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert {line["service"] for line in lines} == {service}
+    assert "probe.ended" in {line["event"] for line in lines}
+
+
 # ── owner lease ───────────────────────────────────────────────────
 
 
 def _worker_on(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
-    monkeypatch.setattr("songmaker_cli.logging_config.configure_logging", lambda: None)
+    monkeypatch.setattr("songmaker_cli.worker_base.configure", lambda service: None)
     worker = _DummyWorker(settings=Settings(
         database_url="postgresql://example", redis_url=redis_url,
         session_secret="session-secret", songmaker_internal_token="internal-token",

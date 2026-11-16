@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 
 
 class MusicWorker(WorkerBase):
+    service_name = "songmaker-music-worker"
     job_types = (
         JobType.GENERATE,
         JobType.LORA_TRAINING,

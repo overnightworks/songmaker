@@ -3,17 +3,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from logline.testing import configured
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.__main__ import (
-    _AcestepWorkerLogHandler,
     build_deps,
-    configure_logging,
     declared_model_sizes,
     main,
 )
@@ -90,9 +88,8 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert deps.registration.vram_total_gb == 16.0
 
 
-def test_main_serves_on_the_configured_host_and_port(
-    monkeypatch: pytest.MonkeyPatch, isolated_logging
-) -> None:
+def test_main_serves_on_the_configured_host_and_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("acestep_worker.__main__.configure", lambda service: None)
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("WORKER_BIND_HOST", "127.0.0.1")
@@ -115,9 +112,8 @@ def test_main_serves_on_the_configured_host_and_port(
     assert served == [("127.0.0.1", 8765)]
 
 
-def test_main_exits_with_the_code_serve_owes(
-    monkeypatch: pytest.MonkeyPatch, isolated_logging
-) -> None:
+def test_main_exits_with_the_code_serve_owes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("acestep_worker.__main__.configure", lambda service: None)
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
@@ -131,42 +127,32 @@ def test_main_exits_with_the_code_serve_owes(
     assert exit_info.value.code == LM_FAILURE_EXIT_CODE
 
 
-def test_configure_logging_emits_common_json_fields(
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-    isolated_logging,
+def test_main_writes_the_workers_lines_under_the_acestep_worker_service_name(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    configure_logging("INFO")
-    configure_logging("INFO")
+    monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
+    monkeypatch.setenv("REDIS_URL", "redis://fake")
+    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
+    from acestep_worker.settings import get_worker_settings
 
-    logging.getLogger("acestep.worker").info("worker ready")
+    get_worker_settings.cache_clear()
 
-    root = logging.getLogger()
-    assert caplog.handler in root.handlers
-    assert sum(isinstance(handler, _AcestepWorkerLogHandler) for handler in root.handlers) == 1
-    payload = json.loads(capsys.readouterr().err)
-    assert payload == {
-        "event": "worker ready",
-        "level": "info",
-        "logger": "acestep.worker",
-        "timestamp": payload["timestamp"],
-    }
-    assert datetime.fromisoformat(payload["timestamp"])
+    def serve_and_log(*_) -> int:
+        logging.getLogger("acestep_worker.probe").info("probe.ended")
+        return 0
 
+    with (
+        configured("restored-after-the-test"),
+        patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
+        patch(
+            "acestep_worker.__main__.make_acestep_runner",
+            return_value=(MagicMock(), MagicMock()),
+        ),
+    ):
+        main(serve_deps=serve_and_log)
 
-def test_configure_logging_includes_exception_traceback(
-    capsys: pytest.CaptureFixture[str],
-    isolated_logging,
-) -> None:
-    configure_logging("INFO")
-
-    try:
-        raise ValueError("generation failed")
-    except ValueError:
-        logging.getLogger("acestep.worker").exception("generation failed")
-
-    payload = json.loads(capsys.readouterr().err)
-    assert "ValueError: generation failed" in payload["exception"]
+    (line,) = [json.loads(text) for text in capsys.readouterr().out.splitlines()]
+    assert (line["service"], line["event"]) == ("songmaker-acestep-worker", "probe.ended")
 
 
 def _settings(*, init_llm: bool = True, budget_gb: float = 24.0) -> WorkerSettings:
