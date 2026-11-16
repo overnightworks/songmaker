@@ -223,7 +223,7 @@ class GenerationJobRequest:
     cover_params: CoverTaskParams | None
 
     def with_takes_left(self, count: int) -> GenerationJobRequest:
-        return replace(self, count=count)
+        return cast(GenerationJobRequest, replace(self, count=count))
 
     def queue_args(
         self,
