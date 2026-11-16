@@ -142,6 +142,15 @@ def _split_token_clients(value: str) -> list[str]:
     return [entry.strip() for entry in value.split(",")]
 
 
+# PostgreSQL's connection limit is the postgres image's default, which platform's
+# infrastructure/postgres leaves unset; the last three are kept for superusers.
+POSTGRES_MAX_CONNECTIONS = 100
+POSTGRES_SUPERUSER_RESERVED_CONNECTIONS = 3
+# Pods per process kind the budget covers: two web pods (platform's rolling-update
+# surge), one pod each for the music and scoring workers.
+POD_COUNT_BY_PROCESS_KIND: dict[str, int] = {"web": 2, "music-worker": 1, "scoring-worker": 1}
+
+
 class Settings(BaseSettings):
     """Validated application settings, loaded from env, .env and the secret files.
 
@@ -230,6 +239,24 @@ class Settings(BaseSettings):
         if not self.token_clients:
             return frozenset()
         return frozenset(_split_token_clients(self.token_clients))
+
+    @property
+    def connections_per_process(self) -> int:
+        """Pool, overflow and the one connection a process holds outside its pool."""
+        return self.database_pool_size + self.database_max_overflow + 1
+
+    @model_validator(mode="after")
+    def validate_connection_budget(self) -> Settings:
+        """Refuse a pool that lets all pods together exceed PostgreSQL's connection limit."""
+        budget = self.connections_per_process * sum(POD_COUNT_BY_PROCESS_KIND.values())
+        limit = POSTGRES_MAX_CONNECTIONS - POSTGRES_SUPERUSER_RESERVED_CONNECTIONS
+        if budget > limit:
+            raise ValueError(
+                f"Connection budget {budget} (pods {POD_COUNT_BY_PROCESS_KIND} x "
+                f"{self.connections_per_process} connections each) exceeds the "
+                f"{limit} PostgreSQL admits",
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_job_timeout_orders(self) -> Settings:

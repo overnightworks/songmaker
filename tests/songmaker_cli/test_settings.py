@@ -520,3 +520,20 @@ def test_a_process_finds_the_dotenv_by_walking_up_to_its_project_root(
         monkeypatch.chdir(tmp_path / start)
 
     assert _find_env_file() == (tmp_path / found if found else None)
+
+
+def test_defaults_keep_every_pod_within_postgres_connection_limit() -> None:
+    Settings(**_required_settings())
+
+
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [("DATABASE_POOL_SIZE", "20"), ("DATABASE_MAX_OVERFLOW", "40")],
+)
+def test_rejects_a_pool_that_exceeds_postgres_connection_limit(
+    monkeypatch: pytest.MonkeyPatch, setting: str, value: str,
+) -> None:
+    monkeypatch.setenv(setting, value)
+
+    with pytest.raises(ValidationError, match="Connection budget"):
+        Settings(**_required_settings())
