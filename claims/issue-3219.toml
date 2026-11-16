@@ -1,0 +1,8 @@
+claim_id = "a1624de062754e908a9b5af122e3b206"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "b3ad92a46f8aa06d423030b13e7d00243174b06e"
+branch = "claude/issue-3219-every-songmaker-process-logs-through-log"
+scope = ["docker/docker-compose.test.yml", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "pyproject.toml", "src/acestep_worker", "src/songmaker_cli/health_api.py", "src/songmaker_cli/logging_config.py", "src/songmaker_cli/middleware", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/scheduler.py", "src/songmaker_cli/scoring_worker.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "src/songmaker_cli/worker_base.py", "tests/conftest.py", "tests/scripts", "tests/songmaker_cli", "tests/support", "uv.lock"]
+opened_commit = "5a9c291babac52dee387db4db614c37c07965921"
+whole_reason = "Switching to logline touches every entry point, the pins, the lock file, the request middleware and the log-reading tests."
