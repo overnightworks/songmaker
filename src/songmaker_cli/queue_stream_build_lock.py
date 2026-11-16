@@ -17,11 +17,13 @@ from songmaker_cli.app_context import AppContext
 
 QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
 QUEUE_STREAM_BUILD_LOCK_LASTS: Final = timedelta(seconds=15)
-QUEUE_STREAM_BUILD_LOCK_RENEW_SECONDS: Final = QUEUE_STREAM_BUILD_LOCK_LASTS.total_seconds() / 3
+RENEWALS_PER_LOCK_SPAN: Final = 3
 
 
 @contextmanager
-def build_lock(ctx: AppContext, key: str) -> Iterator[None]:
+def build_lock(
+    ctx: AppContext, key: str, *, lasts: timedelta = QUEUE_STREAM_BUILD_LOCK_LASTS,
+) -> Iterator[None]:
     """Serialize builds of one content hash or snapshot id across every web process.
 
     Runs in a request's worker thread and takes the lock on the app's event loop, which renews it
@@ -30,11 +32,11 @@ def build_lock(ctx: AppContext, key: str) -> Iterator[None]:
     """
     locks = Locks(
         ctx.async_redis, key_prefix=_consts.REDIS_KEY_PREFIX, family="queue-stream-build",
-        lasts=QUEUE_STREAM_BUILD_LOCK_LASTS,
+        lasts=lasts,
     )
     while (generation := from_thread.run(locks.acquire, key)) is None:
         time.sleep(QUEUE_STREAM_BUILD_POLL_SECONDS)
-    renewal = from_thread.run(_start_renewing, locks, key, generation)
+    renewal = from_thread.run(_start_renewing, locks, key, generation, lasts)
     try:
         yield
     finally:
@@ -42,10 +44,12 @@ def build_lock(ctx: AppContext, key: str) -> Iterator[None]:
         from_thread.run(locks.release, key, generation)
 
 
-async def _start_renewing(locks: Locks, key: str, generation: str) -> asyncio.Task[None]:
+async def _start_renewing(
+    locks: Locks, key: str, generation: str, lasts: timedelta,
+) -> asyncio.Task[None]:
     async def renew() -> None:
         while True:
-            await asyncio.sleep(QUEUE_STREAM_BUILD_LOCK_RENEW_SECONDS)
+            await asyncio.sleep(lasts.total_seconds() / RENEWALS_PER_LOCK_SPAN)
             await locks.extend(key, generation)
 
     return asyncio.create_task(renew())
