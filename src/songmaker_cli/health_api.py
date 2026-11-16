@@ -12,9 +12,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Annotated, Final
 
+from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis.exceptions import RedisError
 from sqlalchemy import text
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
@@ -22,6 +24,7 @@ from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_models.health import HealthResponse, HealthSignals, HealthStatusResponse
 from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.db.queries.auth import count_active_sessions
 from songmaker_cli.db.queries.jobs import (
     count_total_queued_jobs,
@@ -30,6 +33,7 @@ from songmaker_cli.db.queries.jobs import (
     last_job_failure_time,
 )
 from songmaker_cli.db.queries.workers import list_worker_identities
+from songmaker_cli.request_policies import HEALTH_DETAILS_PATH
 
 PROM_HTTP_REQUESTS_TOTAL: Final[str] = "songmaker_http_requests_total"
 PROM_HTTP_REQUEST_DURATION_MS: Final[str] = "songmaker_http_request_duration_milliseconds_total"
@@ -363,7 +367,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
 
-async def _read_health_signals(request: Request) -> HealthSignals:
+async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignals:
     ctx: AppContext = request.app.state.ctx
     startup_time: datetime = getattr(
         request.app.state, "startup_time", datetime.now(timezone.utc),
@@ -377,7 +381,6 @@ async def _read_health_signals(request: Request) -> HealthSignals:
     music_queue_depth = await arq_pool.get_music_queue_depth()
     scoring_queue_depth = await arq_pool.get_scoring_queue_depth()
 
-    pool = arq_pool.get_arq_pool()
     config = settings.get_settings()
     with ctx.db() as session:
         acestep_workers = list_worker_identities(session)
@@ -386,11 +389,16 @@ async def _read_health_signals(request: Request) -> HealthSignals:
     workers_total = len(acestep_workers)
     workers_online = 0
     workers_lm_failed = False
-    for w in acestep_workers:
-        state = await acestep_state.read_worker_state(pool, w.id)
-        if acestep_state.worker_is_online(state):
-            workers_online += 1
-        workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
+    try:
+        for w in acestep_workers:
+            state = await acestep_state.read_worker_state(pool, w.id)
+            if acestep_state.worker_is_online(state):
+                workers_online += 1
+            workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
+    except (RedisError, OSError):
+        # Redis is down: no worker state is readable, and `redis_ok` below names the outage.
+        workers_online = 0
+        workers_lm_failed = False
 
     redis_ok = redis_client.redis_health(ctx.redis)
     return HealthSignals(
@@ -411,14 +419,18 @@ async def _read_health_signals(request: Request) -> HealthSignals:
 
 
 @router.get("/health", openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION))
-async def health_check(request: Request) -> HealthStatusResponse:
-    return HealthStatusResponse.from_signals(await _read_health_signals(request))
+async def health_check(
+    request: Request, pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
+) -> HealthStatusResponse:
+    return HealthStatusResponse.from_signals(await _read_health_signals(request, pool))
 
 
 @router.get(
-    "/health/details",
+    HEALTH_DETAILS_PATH,
     dependencies=[Depends(require_monitoring_token)],
     openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION),
 )
-async def health_details(request: Request) -> HealthResponse:
-    return HealthResponse.from_signals(await _read_health_signals(request))
+async def health_details(
+    request: Request, pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
+) -> HealthResponse:
+    return HealthResponse.from_signals(await _read_health_signals(request, pool))
