@@ -232,17 +232,23 @@ class WebProcesses:
         )
         return process, log, log_path
 
-    def start(self, name: str) -> WebProcess:
-        """Start one web process and return it once `/health` answers."""
+    def start(self, name: str, *, redis_url: str | None = None) -> WebProcess:
+        """Start one web process and return it once `/health` answers.
+
+        ``redis_url`` gives it a Redis address of its own instead of the case's.
+        """
         worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
         port = _free_port()
+        environment = {environment_name(WorkerSettings, "worker_id"): worker_id}
+        if redis_url is not None:
+            environment[environment_name(Settings, "redis_url")] = redis_url
         process, log, log_path = self._launch(
             name,
             [
                 "-m", "songmaker_cli.main", "server",
                 "--port", str(port), "--root", str(self.root / name),
             ],
-            environment={environment_name(WorkerSettings, "worker_id"): worker_id},
+            environment=environment,
         )
         web_process = WebProcess(name, process, log, log_path, port, worker_id)
         self._processes.append(web_process)

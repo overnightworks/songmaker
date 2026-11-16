@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from redis import Redis
+from sqlalchemy import text
 from support.app_processes import (
     MusicWorkerProcess,
     WebProcess,
@@ -187,40 +188,48 @@ def test_a_clean_stop_of_one_process_ends_its_jobs_on_the_other_within_one_tick(
     )
 
 
-def _seed_running_job_of_generation(factory, owner_id: str, generation: str) -> str:
-    with factory() as session:
-        job = create_job(session, JobType.CHAT, owner=an_owner(owner_id, generation))
-        assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
-        session.commit()
-        return job.id
+def _running_job_of_generation(session, owner_id: str, generation: str) -> str:
+    job = create_job(session, JobType.CHAT, owner=an_owner(owner_id, generation))
+    assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
+    return job.id
 
 
-def test_a_lease_that_lapsed_and_started_again_ends_the_jobs_of_its_old_generation_only(
-    a_and_b, redis_client,
+def test_a_job_written_after_the_cleanup_read_its_owner_gone_keeps_running_while_the_old_one_fails(
+    cluster_with_a_redis_line_each, redis_client,
 ) -> None:
-    cluster, factory, _, owner_a, _, _ = a_and_b
+    cluster, factory, line_of_a, line_of_b = cluster_with_a_redis_line_each
+    _, owner_a = start_owner(cluster, redis_client, "a", redis_url=line_of_a.url)
+    start_owner(cluster, redis_client, "b", redis_url=line_of_b.url)
     lapsed_generation = owner_lease_generation(redis_client, owner_a)
-    job_of_the_lapsed_generation = _seed_running_job_of_generation(
-        factory, owner_a, lapsed_generation,
-    )
+    assert lapsed_generation is not None
+    with factory() as session:
+        job_of_the_lapsed_generation = _running_job_of_generation(
+            session, owner_a, lapsed_generation,
+        )
+        session.commit()
 
+    line_of_b.hold_next_reply_to(old_owner_key(REDIS_KEY_PREFIX, owner_a).encode())
+    line_of_a.cut()
     end_the_owner_lease(redis_client, owner_a, lapsed_generation)
-    assert poll_until(
-        lambda: _failed_with_the_restart_verdict(factory, [job_of_the_lapsed_generation]),
+    assert line_of_b.wait_until_a_reply_is_held(
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
     )
-    assert poll_until(
-        lambda: owner_lease_generation(redis_client, owner_a) not in (None, lapsed_generation),
-        deadline_seconds=OWNER_LEASE_REFRESH_SECONDS + MARGIN_SECONDS,
-    )
-    job_of_the_new_generation = _seed_running_job_of_generation(
-        factory, owner_a, owner_lease_generation(redis_client, owner_a),
-    )
+    with factory() as session:
+        # B has read A's lease gone; its pass now waits on the jobs table until A has started again.
+        session.execute(text(f"LOCK TABLE {Job.__tablename__} IN ACCESS EXCLUSIVE MODE"))
+        line_of_b.release_held_reply()
+        line_of_a.restore()
+        assert poll_until(
+            lambda: owner_lease_generation(redis_client, owner_a) not in (None, lapsed_generation),
+            deadline_seconds=CRASH_DEADLINE_SECONDS,
+        )
+        job_of_the_new_generation = _running_job_of_generation(
+            session, owner_a, owner_lease_generation(redis_client, owner_a),
+        )
+        session.commit()
 
-    ghost = _seed_running_jobs(factory, cluster, _a_ghost())
-
     assert poll_until(
-        lambda: _is_reaped(factory, ghost),
+        lambda: _failed_with_the_restart_verdict(factory, [job_of_the_lapsed_generation]),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
     )
     assert _statuses(factory, [job_of_the_new_generation]) == [JobStatus.RUNNING]

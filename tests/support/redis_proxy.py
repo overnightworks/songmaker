@@ -1,7 +1,8 @@
 """A TCP hop between web processes and the case's Redis that can cut the line or lose every key.
 
 The processes connect to the proxy; the proxy forwards bytes to the real server, so every
-command is the real server's answer.
+command is the real server's answer. It can also hold one reply back after the server has run
+the command, so a test acts between a process's read and what the process does with it.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from redis import Redis
 LOOPBACK = "127.0.0.1"
 CHUNK_BYTES = 65536
 ACCEPT_POLL_SECONDS = 0.2
+HELD_REPLY_LIMIT_SECONDS = 10.0
 
 
 class RedisProxy:
@@ -30,6 +32,9 @@ class RedisProxy:
         self._connections: list[socket.socket] = []
         self._cut = False
         self._reply_lost = False
+        self._holding_for: bytes | None = None
+        self._reply_held = threading.Event()
+        self._reply_released = threading.Event()
         self._closing = threading.Event()
         self._acceptor = threading.Thread(target=self._accept_until_closed, daemon=True)
 
@@ -52,6 +57,22 @@ class RedisProxy:
         """Run the next command on the server but drop its reply and the line, as a reset does."""
         with self._lock:
             self._reply_lost = True
+
+    def hold_next_reply_to(self, request_part: bytes) -> None:
+        """Run the next command that contains ``request_part`` but hold its reply back.
+
+        The reply goes out when ``release_held_reply`` is called. Only one reply is held.
+        """
+        with self._lock:
+            self._holding_for = request_part
+        self._reply_held.clear()
+        self._reply_released.clear()
+
+    def wait_until_a_reply_is_held(self, *, deadline_seconds: float) -> bool:
+        return self._reply_held.wait(deadline_seconds)
+
+    def release_held_reply(self) -> None:
+        self._reply_released.set()
 
     def refuse(self) -> None:
         """Drop every connection and stop listening, as a stopped server's address does."""
@@ -76,6 +97,7 @@ class RedisProxy:
         self._drop_connections()
 
     def close(self) -> None:
+        self._reply_released.set()
         self._closing.set()
         self._acceptor.join()
         self._listener.close()
@@ -112,33 +134,49 @@ class RedisProxy:
             server = socket.create_connection(self._server_address)
             with self._lock:
                 self._connections.extend((client, server))
-            threading.Thread(target=_pump, args=(client, server), daemon=True).start()
-            threading.Thread(target=self._pump_replies, args=(server, client), daemon=True).start()
+            reply_is_to_hold = threading.Event()
+            threading.Thread(
+                target=self._pump_requests, args=(client, server, reply_is_to_hold), daemon=True,
+            ).start()
+            threading.Thread(
+                target=self._pump_replies, args=(server, client, reply_is_to_hold), daemon=True,
+            ).start()
 
-    def _pump_replies(self, server: socket.socket, client: socket.socket) -> None:
+    def _pump_requests(
+        self, client: socket.socket, server: socket.socket, reply_is_to_hold: threading.Event,
+    ) -> None:
+        try:
+            while data := client.recv(CHUNK_BYTES):
+                with self._lock:
+                    if self._holding_for is not None and self._holding_for in data:
+                        self._holding_for = None
+                        reply_is_to_hold.set()
+                server.sendall(data)
+        except OSError:
+            pass
+        finally:
+            _shut(client)
+            _shut(server)
+
+    def _pump_replies(
+        self, server: socket.socket, client: socket.socket, reply_is_to_hold: threading.Event,
+    ) -> None:
         try:
             while data := server.recv(CHUNK_BYTES):
                 with self._lock:
                     lost, self._reply_lost = self._reply_lost, False
                 if lost:
                     return
+                if reply_is_to_hold.is_set():
+                    reply_is_to_hold.clear()
+                    self._reply_held.set()
+                    self._reply_released.wait(HELD_REPLY_LIMIT_SECONDS)
                 client.sendall(data)
         except OSError:
             pass
         finally:
             _shut(server)
             _shut(client)
-
-
-def _pump(source: socket.socket, sink: socket.socket) -> None:
-    try:
-        while data := source.recv(CHUNK_BYTES):
-            sink.sendall(data)
-    except OSError:
-        pass
-    finally:
-        _shut(source)
-        _shut(sink)
 
 
 def _shut(connection: socket.socket) -> None:
