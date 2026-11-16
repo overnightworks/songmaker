@@ -7,8 +7,10 @@ import time
 # tandem offers no public helper that settles the epoch yet, so the test names its key itself.
 from tandem.keys import lease_keys
 
+from songmaker_cli.acestep_state import DOWNLOAD_LOCK_LASTS
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
+from songmaker_cli.lifecycle import TICK_LOCK_LASTS
 from songmaker_cli.worker_liveness import OWNER_LEASE_FAMILY
 
 MILLISECONDS_PER_SECOND = 1000
@@ -29,3 +31,13 @@ def aged_epoch(span_seconds: float) -> tuple[str, int]:
 def aged_owner_lease_epoch() -> tuple[str, int]:
     """The epoch dated one lease span back."""
     return aged_epoch(OWNER_LEASE_TTL_SECONDS)
+
+
+def settled_epoch() -> tuple[str, int]:
+    """The epoch dated older than every lease and lock span, as on a Redis that has run a while."""
+    longest_span = max(
+        OWNER_LEASE_TTL_SECONDS,
+        TICK_LOCK_LASTS.total_seconds(),
+        DOWNLOAD_LOCK_LASTS.total_seconds(),
+    )
+    return aged_epoch(longest_span)

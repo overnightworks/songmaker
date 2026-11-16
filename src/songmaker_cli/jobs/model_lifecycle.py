@@ -87,11 +87,7 @@ async def download_model_on_worker(
     db_factory,
     owner_id: str,
 ) -> None:
-    from songmaker_cli.acestep_state import (
-        clear_download_in_progress,
-        read_download_in_progress,
-        set_download_in_progress,
-    )
+    from songmaker_cli.acestep_state import DownloadAlreadyRunning, single_flight_download
     from songmaker_cli.constants import MODEL_CONFIG_PATHS
 
     factory = db_factory
@@ -101,16 +97,25 @@ async def download_model_on_worker(
         return
 
     redis = ctx["redis"]
-    if not await _acquire_download_slot(
-        redis,
-        factory,
-        job_id,
-        mode,
-        set_download_in_progress,
-        read_download_in_progress,
-    ):
-        return
+    try:
+        async with single_flight_download(redis, mode, job_id):
+            await _download_with_retries(factory, redis, job_id, mode)
+    except DownloadAlreadyRunning as running:
+        _update_job(
+            factory,
+            job_id,
+            JobStatus.FAILED,
+            error=_sanitize_error(
+                RuntimeError(
+                    f"Another download for '{mode}' is already in progress (job {running.job_id})",
+                ),
+                job_id,
+            ),
+            error_type="duplicate_download",
+        )
 
+
+async def _download_with_retries(factory, redis, job_id: str, mode: str) -> None:
     def _on_progress(fraction: float) -> None:
         _update_job(factory, job_id, JobStatus.RUNNING, progress=fraction)
         _touch_heartbeat(factory, job_id)
@@ -118,39 +123,36 @@ async def download_model_on_worker(
     def _on_heartbeat() -> None:
         _touch_heartbeat(factory, job_id)
 
-    try:
-        last_error: Exception | None = None
-        for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
-            outcome = await _run_download_attempt(
-                factory, redis, job_id, mode, _on_progress, _on_heartbeat,
-            )
-            if outcome is None:
-                return
-            last_error = outcome
-            log.warning(
-                "Download job %s attempt %d/%d for %s failed: %s",
-                job_id,
-                attempt,
-                DOWNLOAD_MAX_ATTEMPTS,
-                mode,
-                outcome,
-            )
-
-            if attempt < DOWNLOAD_MAX_ATTEMPTS:
-                await asyncio.sleep(DOWNLOAD_RETRY_BASE_DELAY_SECONDS * attempt)
-
-        _update_job(
-            factory,
-            job_id,
-            JobStatus.FAILED,
-            error=_sanitize_error(
-                last_error or RuntimeError("All download attempts exhausted"),
-                job_id,
-            ),
-            error_type="download_error",
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+        outcome = await _run_download_attempt(
+            factory, redis, job_id, mode, _on_progress, _on_heartbeat,
         )
-    finally:
-        await clear_download_in_progress(redis, mode)
+        if outcome is None:
+            return
+        last_error = outcome
+        log.warning(
+            "Download job %s attempt %d/%d for %s failed: %s",
+            job_id,
+            attempt,
+            DOWNLOAD_MAX_ATTEMPTS,
+            mode,
+            outcome,
+        )
+
+        if attempt < DOWNLOAD_MAX_ATTEMPTS:
+            await asyncio.sleep(DOWNLOAD_RETRY_BASE_DELAY_SECONDS * attempt)
+
+    _update_job(
+        factory,
+        job_id,
+        JobStatus.FAILED,
+        error=_sanitize_error(
+            last_error or RuntimeError("All download attempts exhausted"),
+            job_id,
+        ),
+        error_type="download_error",
+    )
 
 
 def _valid_download_mode(factory, job_id: str, mode: str, model_config_paths) -> bool:
@@ -162,30 +164,6 @@ def _valid_download_mode(factory, job_id: str, mode: str, model_config_paths) ->
         JobStatus.FAILED,
         error=_sanitize_error(ValueError(f"Unknown model mode '{mode}'"), job_id),
         error_type="invalid_mode",
-    )
-    return False
-
-
-async def _acquire_download_slot(
-    redis,
-    factory,
-    job_id: str,
-    mode: str,
-    set_download_in_progress,
-    read_download_in_progress,
-) -> bool:
-    if await set_download_in_progress(redis, mode, job_id):
-        return True
-    existing = await read_download_in_progress(redis, mode)
-    _update_job(
-        factory,
-        job_id,
-        JobStatus.FAILED,
-        error=_sanitize_error(
-            RuntimeError(f"Another download for '{mode}' is already in progress (job {existing})"),
-            job_id,
-        ),
-        error_type="duplicate_download",
     )
     return False
 

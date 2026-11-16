@@ -7,17 +7,19 @@ import json
 
 import fakeredis.aioredis
 import pytest
+from support.owner_lease_epoch import settled_epoch
 
 from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
     ADMIT_GENERATION_SCRIPT,
     DOWNLOAD_KEY_PREFIX,
+    DOWNLOAD_LOCK_LASTS,
     GPU_HOLD_KEY_PREFIX,
     LM_FAILURE_KEY_PREFIX,
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
+    DownloadAlreadyRunning,
     admit_generation,
-    clear_download_in_progress,
     decr_queue_depth,
     download_key,
     gpu_hold_key,
@@ -26,7 +28,7 @@ from songmaker_cli.acestep_state import (
     read_download_in_progress,
     read_queue_depth,
     read_worker_state,
-    set_download_in_progress,
+    single_flight_download,
     worker_is_online,
     worker_state_key,
 )
@@ -40,8 +42,26 @@ def event_loop():
 
 
 @pytest.fixture
-def redis():
-    return fakeredis.aioredis.FakeRedis()
+def server():
+    return fakeredis.FakeServer()
+
+
+@pytest.fixture
+def redis(server):
+    return fakeredis.aioredis.FakeRedis(server=server)
+
+
+@pytest.fixture
+def settled_redis(redis, event_loop):
+    """A Redis that has run longer than any lock lasts, as a process finds it in operation."""
+    event_loop.run_until_complete(redis.set(*settled_epoch()))
+    return redis
+
+
+@pytest.fixture
+def another_process(server):
+    """A second process's client on the same server."""
+    return fakeredis.aioredis.FakeRedis(server=server)
 
 
 def test_key_prefixes_match_worker_heartbeat() -> None:
@@ -293,44 +313,72 @@ def test_read_download_in_progress_missing(redis, event_loop) -> None:
     assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) is None
 
 
-def test_set_then_read_download_in_progress(redis, event_loop) -> None:
-    event_loop.run_until_complete(set_download_in_progress(redis, "xl-sft", "job-abc"))
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "xl-sft")) == "job-abc"
-
-
-def test_clear_download_in_progress(redis, event_loop) -> None:
-    event_loop.run_until_complete(set_download_in_progress(redis, "sft", "job-1"))
-    event_loop.run_until_complete(clear_download_in_progress(redis, "sft"))
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) is None
-
-
-def test_clear_download_in_progress_idempotent(redis, event_loop) -> None:
-    event_loop.run_until_complete(clear_download_in_progress(redis, "never-set"))
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "never-set")) is None
-
-
-def test_set_download_in_progress_has_ttl(redis, event_loop) -> None:
-    from songmaker_cli.acestep_state import DOWNLOAD_TTL_SECONDS
-
-    event_loop.run_until_complete(set_download_in_progress(redis, "turbo", "job-x"))
-    ttl = event_loop.run_until_complete(redis.ttl(download_key("turbo")))
-    assert 0 < ttl <= DOWNLOAD_TTL_SECONDS
-
-
-def test_set_download_in_progress_returns_true_on_acquire(redis, event_loop) -> None:
-    acquired = event_loop.run_until_complete(
-        set_download_in_progress(redis, "sft", "job-1"),
-    )
-    assert acquired is True
-
-
-def test_set_download_in_progress_returns_false_when_already_set(
-    redis,
-    event_loop,
+def test_a_download_is_labelled_with_its_job_while_it_holds_the_lock(
+    settled_redis, event_loop,
 ) -> None:
-    event_loop.run_until_complete(set_download_in_progress(redis, "sft", "job-1"))
-    again = event_loop.run_until_complete(
-        set_download_in_progress(redis, "sft", "job-2"),
-    )
-    assert again is False
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) == "job-1"
+    async def scenario() -> tuple[str | None, int, str | None]:
+        async with single_flight_download(settled_redis, "turbo", "job-x"):
+            during = await read_download_in_progress(settled_redis, "turbo")
+            label_seconds = await settled_redis.ttl(download_key("turbo"))
+        return during, label_seconds, await read_download_in_progress(settled_redis, "turbo")
+
+    during, label_seconds, after = event_loop.run_until_complete(scenario())
+
+    assert (during, after) == ("job-x", None)
+    assert 0 < label_seconds <= DOWNLOAD_LOCK_LASTS.total_seconds()
+
+
+def test_a_second_download_of_a_mode_is_refused_with_the_holders_job(
+    settled_redis, another_process, event_loop,
+) -> None:
+    async def scenario() -> str | None:
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            with pytest.raises(DownloadAlreadyRunning) as refused:
+                async with single_flight_download(another_process, "sft", "job-2"):
+                    pytest.fail("the second download must not run")
+        return refused.value.job_id
+
+    assert event_loop.run_until_complete(scenario()) == "job-1"
+
+
+def test_two_modes_download_side_by_side(settled_redis, another_process, event_loop) -> None:
+    async def scenario() -> None:
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            async with single_flight_download(another_process, "turbo", "job-2"):
+                pass
+
+    event_loop.run_until_complete(scenario())
+
+
+def test_a_mode_downloads_again_once_its_download_ended(
+    settled_redis, another_process, event_loop,
+) -> None:
+    async def scenario() -> None:
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            pass
+        async with single_flight_download(another_process, "sft", "job-2"):
+            pass
+
+    event_loop.run_until_complete(scenario())
+
+
+def test_a_download_waits_out_a_redis_restart_instead_of_failing(
+    settled_redis, event_loop, monkeypatch,
+) -> None:
+    real_sleep = asyncio.sleep
+    waits = 0
+
+    async def settle_while_waiting(_seconds: float) -> None:
+        nonlocal waits
+        waits += 1
+        await settled_redis.set(*settled_epoch())
+        await real_sleep(0)
+
+    async def scenario() -> str | None:
+        await settled_redis.flushall()
+        monkeypatch.setattr("songmaker_cli.acestep_state.asyncio.sleep", settle_while_waiting)
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            return await read_download_in_progress(settled_redis, "sft")
+
+    assert event_loop.run_until_complete(scenario()) == "job-1"
+    assert waits >= 1

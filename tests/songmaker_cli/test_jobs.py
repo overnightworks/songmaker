@@ -18,6 +18,7 @@ from support.generation_job_world import (
     persist_via_post_process,
     run_async,
 )
+from support.owner_lease_epoch import settled_epoch
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 
 from acestep_engine.models import TaskQueryEntry
@@ -2582,21 +2583,33 @@ def _seed_download_job(factory, job_id: str = "dl-job") -> None:
         session.commit()
 
 
-class _FakeRedis:
+class _KeyView:
+    """The keys of a fake Redis server, read and written from the test's own thread."""
+
+    def __init__(self, server: fakeredis.FakeServer) -> None:
+        self._view = fakeredis.FakeRedis(server=server, decode_responses=True)
+
+    def __contains__(self, key: str) -> bool:
+        return bool(self._view.exists(key))
+
+    def __getitem__(self, key: str) -> str:
+        return self._view.get(key)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        self._view.set(key, value)
+
+
+class _FakeRedis(fakeredis.FakeAsyncRedis):
+    """The music worker's Redis on a server that has run longer than any lock lasts."""
+
     def __init__(self) -> None:
-        self.store: dict[str, str] = {}
+        self.server = fakeredis.FakeServer()
+        super().__init__(server=self.server)
+        self.store = _KeyView(self.server)
+        self.store[settled_epoch()[0]] = str(settled_epoch()[1])
 
-    async def set(self, key, value, ex=None, nx=False):
-        if nx and key in self.store:
-            return None
-        self.store[key] = value if isinstance(value, str) else str(value)
-        return True
-
-    async def get(self, key):
-        return self.store.get(key)
-
-    async def delete(self, key):
-        self.store.pop(key, None)
+    def another_process(self) -> fakeredis.FakeAsyncRedis:
+        return fakeredis.FakeAsyncRedis(server=self.server)
 
 
 def _seed_online_worker(factory, redis: _FakeRedis, worker_id: str = "w1") -> None:
@@ -2886,12 +2899,13 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
     assert download_key("sft") not in redis.store
 
 
-def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> None:
-    from songmaker_cli.acestep_state import download_key
+def test_download_model_on_worker_aborts_when_another_job_holds_the_download(seeded_db) -> None:
+    from songmaker_cli.acestep_state import download_key, download_locks
     from songmaker_cli.jobs import download_model_on_worker
 
     _seed_download_job(seeded_db, "dl10")
     redis = _FakeRedis()
+    run_async(download_locks(redis.another_process()).acquire("sft"))
     redis.store[download_key("sft")] = "previous-job"
 
     run_async(download_model_on_worker(
