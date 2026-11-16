@@ -677,8 +677,8 @@ Built snapshots live in `queue-streams/` under the data directory as
 `<id>.json` and `<id>.mp3`, a cache of the process that built them. Every build
 also publishes the manifest to Redis (`songmaker:queue-stream:manifest:<id>` and
 `songmaker:queue-stream:content:<hash>`, eight hours), and builds of one content
-hash are serialised across web processes by a tandem lock that lasts as long as ffmpeg may
-run and whose waiters poll; neither the builder nor a waiter holds a database connection. A build reuses the unexpired snapshot Redis names for
+hash are serialised across web processes by a tandem lock that the building process renews while ffmpeg runs, so a dead
+builder frees it within seconds, and whose waiters poll; neither the builder nor a waiter holds a database connection. A build reuses the unexpired snapshot Redis names for
 its content hash, whichever process built it; a process that serves the audio of a
 snapshot it has no file for rebuilds the file from the manifest's tracks under the
 same lock. The audio stays on each process's disk until audio moves to the object

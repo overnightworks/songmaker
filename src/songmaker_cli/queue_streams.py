@@ -15,10 +15,8 @@ import logging
 import random
 import shutil
 import subprocess
-import time
 import uuid
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from math import ceil
@@ -26,11 +24,9 @@ from pathlib import Path
 from stat import S_ISREG
 from typing import Final, Literal
 
-from anyio import from_thread
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
-from tandem import Locks
 from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
@@ -61,6 +57,7 @@ from songmaker_cli.audio_paths import (
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
+from songmaker_cli.queue_stream_build_lock import build_lock as _build_lock
 from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
@@ -85,8 +82,6 @@ def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
 FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
 QUEUE_STREAM_DURATION_LIMIT_DETAIL = "Queue duration exceeds the maximum stream duration"
 QUEUE_STREAM_REDIS_PREFIX: Final = f"{_consts.REDIS_KEY_PREFIX}:queue-stream"
-QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
-QUEUE_STREAM_BUILD_LOCK_LASTS: Final = timedelta(seconds=FFMPEG_TIMEOUT_SECONDS)
 QUEUE_STREAM_MANIFEST_GLOB: Final = "*.json"
 QUEUE_STREAM_MANIFEST_SUFFIX: Final = ".json"
 QUEUE_STREAM_TEMP_AUDIO_SUFFIX: Final = ".tmp.mp3"
@@ -363,25 +358,6 @@ def _render_snapshot_audio(stream_dir: Path, snapshot_id: str, audio_paths: list
     finally:
         concat_path.unlink(missing_ok=True)
         output_tmp_path.unlink(missing_ok=True)
-
-
-@contextmanager
-def _build_lock(ctx: AppContext, key: str) -> Iterator[None]:
-    """Serialize builds of one content hash or snapshot id across every web process.
-
-    Runs in a request's worker thread and takes the lock on the app's event loop. It lasts as long
-    as ffmpeg may run, so a dead builder frees it, and a Redis restart holds builds for that span.
-    """
-    locks = Locks(
-        ctx.async_redis, key_prefix=_consts.REDIS_KEY_PREFIX, family="queue-stream-build",
-        lasts=QUEUE_STREAM_BUILD_LOCK_LASTS,
-    )
-    while (generation := from_thread.run(locks.acquire, key)) is None:
-        time.sleep(QUEUE_STREAM_BUILD_POLL_SECONDS)
-    try:
-        yield
-    finally:
-        from_thread.run(locks.release, key, generation)
 
 
 def queue_stream_manifest_key(snapshot_id: str) -> str:

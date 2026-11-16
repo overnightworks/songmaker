@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 from redis import Redis
-from support.owner_lease_epoch import settled_epoch
+from support.owner_lease_epoch import aged_epoch, settled_epoch
 from support.web_cluster_world import WebProcess
 
 from songmaker_cli.db.models import Album, Generation, Song, User, Version
@@ -20,6 +20,7 @@ OWNER_ID = "owner-of-open-windows"
 TAKE_PATH = f"{OWNER_ID}/take.mp3"
 SLOW_BUILD_SECONDS = 2
 REQUEST_TIMEOUT_SECONDS = 30.0
+MINUTE_OLD_REDIS_SECONDS = 60
 
 
 def _slow_counting_ffmpeg(locked_ffmpeg: Path, builds: Path) -> Path:
@@ -75,12 +76,16 @@ def _ask_for_the_stream(process: WebProcess) -> httpx.Response:
     )
 
 
+@pytest.mark.parametrize(
+    "epoch", [settled_epoch, lambda: aged_epoch(MINUTE_OLD_REDIS_SECONDS)],
+    ids=["settled-redis", "redis-a-minute-old"],
+)
 def test_a_queue_stream_asked_for_at_once_is_built_once_and_both_processes_serve_it(
     web_cluster, redis_url: str, locked_ffmpeg: Path, tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, epoch,
 ) -> None:
     cluster, factory = web_cluster
-    Redis.from_url(redis_url).set(*settled_epoch())
+    Redis.from_url(redis_url).set(*epoch())
     builds = tmp_path / "builds.txt"
     builds.touch()
     monkeypatch.setenv(
