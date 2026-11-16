@@ -92,7 +92,8 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 
 # Static PWA root assets are fetched by the browser and the service worker
 # outside of user-driven navigation, so they must not compete with `/api/*`
-# calls for any class's budget. The set holds static assets only.
+# calls for any class's budget. The set holds those static assets plus `/health/details`,
+# justified below.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB check and two DB queries, plus Redis reads that grow with
