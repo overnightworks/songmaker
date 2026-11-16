@@ -697,7 +697,7 @@ class _ContextWhoseCancelsAreLost:
             return None
 
 
-def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
+def test_a_cancelled_turn_that_asks_late_creates_no_cover_for_any_session(world):
     """Turn A (S1) is held and cancelled, the cancel lost; its reply arrives during turn B (S2)."""
     import asyncio
 
@@ -744,5 +744,4 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
 
     asyncio.run(_exercise())
 
-    [job] = _cover_jobs(world)
-    assert job.session_id == first_session
+    assert _cover_jobs(world) == []

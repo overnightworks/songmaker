@@ -1051,7 +1051,7 @@ delivery is at-most-once; a missed signal leaves the picture to end alone, and i
 publication refuses the cancelled job. A cancel of a co-writer turn travels the
 same way: the web process running the turn, which `POST /api/chat/turn` started, hears the
 chat job's id, reads the job and cancels the turn's task, which closes the gateway request
-before any further tool edit; edits the turn already committed stay. `covers.decode_cover_image` checks the
+before any further tool edit. A tool edit locks the turn's chat job before it commits and is refused once the job is no longer active, so none lands after the cancel. `covers.decode_cover_image` checks the
 bytes, and the runner writes the decoded picture as PNG. A run that cannot draw
 ends FAILED with the problem as `error_type`, a closed `coverProblem.*` message as `error_message`, and,
 when busy, the wait the gateway named as `retry_after_seconds`; the editor words the problem
