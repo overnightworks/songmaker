@@ -24,7 +24,6 @@ from songmaker_cli.acestep_state import (
     read_queue_depth,
     worker_state_key,
 )
-from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.job_timing import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
@@ -54,7 +53,6 @@ from songmaker_cli.scheduler import (
     dispatch_generation_on_worker,
     pick_any_online_worker,
     pick_worker,
-    worker_request_headers,
 )
 
 # Beyond any scheduling delay: only a hung peer times out. Timeout outcomes are
@@ -1256,12 +1254,6 @@ def test_consume_download_task_stream_empty_stream_raises() -> None:
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="ended without"):
             _run(operation)
-
-
-def test_worker_request_headers_outside_a_request_carry_only_the_internal_token(
-    internal_token: str,
-) -> None:
-    assert worker_request_headers() == {INTERNAL_TOKEN_HEADER: internal_token}
 
 
 def test_generation_worker_peer_rejects_socket_transport_failures(

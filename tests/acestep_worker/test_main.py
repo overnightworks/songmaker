@@ -7,10 +7,20 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+from logline import RequestLineMiddleware
 from logline.testing import configured
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from support.request_lines import request_lines
+from support.wrapper_deps import make_deps
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.__main__ import (
+    SERVICE_NAME,
+    build_app,
     build_deps,
     declared_model_sizes,
     main,
@@ -19,6 +29,7 @@ from acestep_worker.gpu_util import GpuHealth
 from acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE
 from acestep_worker.model_cache import CapacityError, LoadedModel, VramStats
 from acestep_worker.settings import DEFAULT_CONTAINER_BIND_HOST, WorkerSettings
+from songmaker_cli.scheduler import worker_request_headers
 
 
 @pytest.fixture(autouse=True)
@@ -152,6 +163,58 @@ def test_main_writes_the_workers_lines_under_the_acestep_worker_service_name(
 
     (line,) = [json.loads(text) for text in capsys.readouterr().out.splitlines()]
     assert (line["service"], line["event"]) == ("songmaker-acestep-worker", "probe.ended")
+
+
+_INCOMING_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
+_INCOMING_TRACEPARENT = f"00-{_INCOMING_TRACE_ID}-00f067aa0ba902b7-01"
+
+
+def _served_worker_client(tmp_path: Path) -> TestClient:
+    deps, _ = make_deps(tmp_path)
+    return TestClient(build_app(deps))
+
+
+def _web_app_sending_to_the_worker() -> Starlette:
+    async def headers_for_the_worker(_: Request) -> JSONResponse:
+        return JSONResponse(worker_request_headers())
+
+    app = Starlette(routes=[Route("/headers", headers_for_the_worker)])
+    app.add_middleware(RequestLineMiddleware)
+    return app
+
+
+def test_a_request_to_the_worker_writes_its_request_line_in_the_callers_trace(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    with configured(SERVICE_NAME):
+        response = _served_worker_client(tmp_path).get(
+            "/health", headers={"traceparent": _INCOMING_TRACEPARENT},
+        )
+
+    (request_line,) = request_lines(capsys.readouterr().out)
+    assert request_line["service"] == SERVICE_NAME
+    assert request_line["status"] == response.status_code
+    assert request_line["duration_ms"] is not None
+    assert request_line["trace_id"] == _INCOMING_TRACE_ID
+
+
+def test_a_trace_the_web_process_started_continues_in_the_worker(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    with configured("songmaker-web"):
+        web_response = TestClient(_web_app_sending_to_the_worker()).get("/headers")
+    (web_line,) = request_lines(capsys.readouterr().out)
+
+    with configured(SERVICE_NAME):
+        worker_response = _served_worker_client(tmp_path).get(
+            "/health", headers=web_response.json(),
+        )
+    (worker_line,) = request_lines(capsys.readouterr().out)
+
+    sent_trace_id = web_response.json()["traceparent"].split("-")[1]
+    assert web_line["trace_id"] == sent_trace_id
+    assert worker_line["trace_id"] == sent_trace_id
+    assert worker_line["status"] == worker_response.status_code
 
 
 def _settings(*, init_llm: bool = True, budget_gb: float = 24.0) -> WorkerSettings:
