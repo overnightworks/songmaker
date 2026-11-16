@@ -903,9 +903,7 @@ async def run_generation_job(
 
         tmp_copies = _temporary_generation_audio_paths(ctx)
         try:
-            await _generate_variants(
-                admitted_worker, redis, db_factory, request, ctx, progress,
-            )
+            await _generate_variants(admitted_worker, redis, db_factory, request, ctx, progress)
         finally:
             _remove_temporary_generation_audio(tmp_copies)
 
@@ -1044,9 +1042,7 @@ async def _generate_variants(
                 index, count, ctx, progress,
             )
         except WorkerHeld:
-            await _requeue_generation(
-                request.with_takes_left(count - completed), redis, db_factory,
-            )
+            await _requeue_generation(request.with_takes_left(count - completed), redis, db_factory)
             return
         if error is not None:
             progress.record_failure(error)
