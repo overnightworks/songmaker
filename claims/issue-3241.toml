@@ -1,0 +1,8 @@
+claim_id = "ec4d225cddd8498e9a61d18c95b30ca4"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "8bf13ce6bd8f051ebe9ee4f915810961ed3e4658"
+branch = "claude/issue-3241-readiness-means-the-pod-can-serve"
+scope = ["docs/architecture.md", "src/songmaker_cli/health_api.py", "src/songmaker_cli/request_policies.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_health_readiness_across_processes.py"]
+opened_commit = "0b64f87c3e9e261a2f0f3b164fbead86cb6c32c6"
+whole_reason = "Readiness spans the health route, the limiter exemption it may need, its architecture note and its tests."
