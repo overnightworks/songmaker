@@ -1556,7 +1556,7 @@ def test_last_failed_generation_recoverable_after_repaint(client: TestClient) ->
     assert resp.status_code == 200
     body = resp.json()["job"]
     assert body["id"] == job_id
-    assert body["error"] == "The worker reported: repaint failed"
+    assert body["error"] == "repaint failed"
 
 
 def test_last_failed_generation_recoverable_after_cover(client: TestClient) -> None:
@@ -1587,7 +1587,7 @@ def test_last_failed_generation_recoverable_after_cover(client: TestClient) -> N
     assert resp.status_code == 200
     body = resp.json()["job"]
     assert body["id"] == job_id
-    assert body["error"] == "The worker reported: cover failed"
+    assert body["error"] == "cover failed"
 
 
 @pytest.mark.parametrize(

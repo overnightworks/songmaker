@@ -16,6 +16,7 @@ from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]
+WORKER_REPORTED_KEY: Final = "jobFailure.workerReported"
 
 
 def _remaining_time_estimate(
@@ -59,9 +60,18 @@ def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
     return ceil(seconds_per_epoch * (train_epochs - current_epoch))
 
 
+def _failure_cause(job) -> str | None:
+    """The agent's sentence of a failure: a worker's account is its own words, without the
+    framing the page puts around it."""
+    stored = job.error_message
+    if stored is not None and stored.key == WORKER_REPORTED_KEY:
+        return stored.values["cause"]
+    return stored_sentence(stored, f"Job {job.id} failure")
+
+
 def _failure_sentence(job) -> str | None:
     """The agent's sentence of a job's failure: its cause, led by a partial Generate's takes."""
-    cause = stored_sentence(job.error_message, f"Job {job.id} failure")
+    cause = _failure_cause(job)
     if cause is None or job.completed_takes is None:
         return cause
     count = expect_present(job.take_count, f"Job {job.id} completed takes without a take count")
