@@ -239,7 +239,7 @@ def test_health_preserves_response_bytes(
 
 
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
-    tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers, monkeypatch,
+    tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers,
 ) -> None:
     import songmaker_cli.arq_pool as arq_mod
 
@@ -249,8 +249,7 @@ def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
         tmp_path, factory=pg_factory, seed_db=_seed_one_worker, redis=redis.Redis(**refused),
     )
 
-    with client:
-        monkeypatch.setattr(arq_mod, "_pool", redis.asyncio.Redis(**refused))
+    with client, patch.object(arq_mod, "get_arq_pool", return_value=redis.asyncio.Redis(**refused)):
         response = client.get("/health/details", headers=monitoring_headers)
 
     assert response.status_code == 200
