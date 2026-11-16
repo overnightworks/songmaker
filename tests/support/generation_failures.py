@@ -18,19 +18,6 @@ GENERATION_SETUP_REASONS = [
         "jobFailure.voiceUnavailable",
     )
 ]
-GENERATION_SETUP_MESSAGES = [reason.sentence() for reason in GENERATION_SETUP_REASONS]
-
-
-
-OTHER_GENERATION_ERROR_TYPES = [
-    None,
-    "server_restart",
-    "no_worker_alive",
-    "queued_full_queue_bound",
-    "queued_too_long",
-    "setup_error",
-    "unknown",
-]
 
 
 SONGMAKER_FAILURE_CASES = [
