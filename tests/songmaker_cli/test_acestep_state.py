@@ -9,6 +9,7 @@ from datetime import timedelta
 import fakeredis.aioredis
 import pytest
 from support.owner_lease_epoch import settled_epoch
+from support.refused_download import attempt_download_that_must_not_run
 from support.wrapper_deps import settled_fake_redis
 
 from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
@@ -454,8 +455,7 @@ def test_a_second_download_of_a_mode_is_refused_with_the_holders_job(
     async def scenario() -> str | None:
         async with single_flight_download(settled_redis, "sft", "job-1"):
             with pytest.raises(DownloadAlreadyRunning) as refused:
-                async with single_flight_download(another_process, "sft", "job-2"):
-                    pytest.fail("the second download must not run")
+                await attempt_download_that_must_not_run(another_process, "sft", "job-2")
         return refused.value.job_id
 
     assert event_loop.run_until_complete(scenario()) == "job-1"
@@ -511,14 +511,17 @@ def test_a_download_whose_lock_was_taken_over_stops_and_leaves_the_new_holders_l
         "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
     )
 
-    async def scenario() -> str | None:
+    async def download_while_another_process_takes_the_lock() -> None:
         new_holder_locks = download_locks(another_process)
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            await another_process.zrem(new_holder_locks.keys.expiry, "sft")
+            assert await new_holder_locks.acquire("sft") is not None
+            await another_process.set(download_key("sft"), "job-2", ex=15)
+            await asyncio.sleep(30)
+
+    async def scenario() -> str | None:
         with pytest.raises(DownloadLockLost) as lost:
-            async with single_flight_download(settled_redis, "sft", "job-1"):
-                await another_process.zrem(new_holder_locks.keys.expiry, "sft")
-                assert await new_holder_locks.acquire("sft") is not None
-                await another_process.set(download_key("sft"), "job-2", ex=15)
-                await asyncio.sleep(30)
+            await download_while_another_process_takes_the_lock()
         assert lost.value.mode == "sft"
         return await read_download_in_progress(another_process, "sft")
 

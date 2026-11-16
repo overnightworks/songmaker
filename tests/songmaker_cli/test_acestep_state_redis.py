@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 import pytest
 from redis import Redis
 from support.owner_lease_epoch import settled_epoch
+from support.refused_download import attempt_download_that_must_not_run
 
 from acestep_worker.heartbeat import reserve_gpu_hold
 from songmaker_cli.acestep_state import (
@@ -71,8 +72,7 @@ def test_a_download_of_a_mode_runs_in_one_of_two_processes(redis_url: str) -> No
     async def scenario(first, second) -> str | None:
         async with single_flight_download(first, "sft", "job-1"):
             with pytest.raises(DownloadAlreadyRunning) as refused:
-                async with single_flight_download(second, "sft", "job-2"):
-                    pytest.fail("a second download of the mode must not start")
+                await attempt_download_that_must_not_run(second, "sft", "job-2")
         return refused.value.job_id
 
     assert _in_two_processes(redis_url, scenario) == "job-1"
