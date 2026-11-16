@@ -472,6 +472,8 @@ def _recover_stale_job_if_unchanged(
 def active_job_owner_stamps(session: Session) -> set[JobOwnerStamp]:
     """The owners of the queued and running jobs, each with the generation the job names.
 
+    The one reader of the stamps the rate-limit recovery and the owner reaper judge, this
+    process's own included: a job of a generation its owner's lease lost fails whoever runs it.
     A job without an owner names none. Read this before the liveness of the leases it names: a
     job written after the read names a stamp the verdict does not know and is left alone.
     """

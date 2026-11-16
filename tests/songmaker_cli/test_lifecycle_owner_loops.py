@@ -217,6 +217,34 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
     )
 
 
+def test_a_job_of_a_generation_this_process_lost_fails_and_its_current_ones_keep_running(
+    pg_factory, tmp_path,
+) -> None:
+    server = make_fake_async_redis()
+
+    async def fail_the_jobs_of_this_process() -> tuple[tuple, tuple]:
+        await settle_owner_leases(server)
+        leases = owner_leases(server)
+        lost = (await leases.renew(OWNER)).generation
+        job_of_the_lost_generation = _running_job_of(pg_factory, an_owner(OWNER, lost))
+        await leases.end(OWNER, lost)
+        current = (await leases.renew(OWNER)).generation
+        current_job = _running_job_of(pg_factory, an_owner(OWNER, current))
+        ctx = SimpleNamespace(
+            owner_leases=leases, owner_id=OWNER, db=pg_factory, audio_dir=tmp_path,
+        )
+        await fail_jobs_of_dead_owners(ctx)
+        return (
+            _status_and_error(pg_factory, job_of_the_lost_generation),
+            _status_and_error(pg_factory, current_job),
+        )
+
+    assert asyncio.run(fail_the_jobs_of_this_process()) == (
+        (JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type),
+        (JobStatus.RUNNING, None),
+    )
+
+
 def test_a_cover_another_process_failed_while_this_lease_had_lapsed_leaves_no_staging(
     pg_factory, tmp_path,
 ) -> None:

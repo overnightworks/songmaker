@@ -375,14 +375,15 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
 
 
 async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
-    """Fail the active jobs of every other process whose lease is gone, then clean its covers.
+    """Fail the active jobs whose lease generation is gone, then clean their covers.
 
     A job fails only when the lease generation it names is gone: its owner's lease ended, or
     started anew under another generation. A job that names no generation fails with its owner.
-    A Redis that cannot be read, or that may have restarted empty, reads UNKNOWN. A job that
-    another process wrote after the stamps were read is left alone, and so are this process's own.
+    This process's own jobs are judged like any other's: those of a generation its lease lost
+    fail although the process lives on. A Redis that cannot be read, or that may have restarted
+    empty, reads UNKNOWN. A job written after the stamps were read is left alone.
     """
-    stamps = await asyncio.to_thread(_active_job_owner_stamps_but_own, ctx)
+    stamps = await asyncio.to_thread(_active_job_owner_stamps, ctx)
     owner_liveness = await owner_lease_liveness(ctx.owner_leases, stamps)
     return await asyncio.to_thread(_fail_jobs_of_gone_owners, ctx, owner_liveness)
 
@@ -396,13 +397,11 @@ async def reconcile_ended_covers(ctx: AppContext) -> None:
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
 
 
-def _active_job_owner_stamps_but_own(ctx: AppContext) -> set[JobOwnerStamp]:
+def _active_job_owner_stamps(ctx: AppContext) -> set[JobOwnerStamp]:
     from songmaker_cli.db.queries.jobs import active_job_owner_stamps
 
     with ctx.db() as session:
-        return {
-            stamp for stamp in active_job_owner_stamps(session) if stamp.owner_id != ctx.owner_id
-        }
+        return active_job_owner_stamps(session)
 
 
 def _fail_jobs_of_gone_owners(
