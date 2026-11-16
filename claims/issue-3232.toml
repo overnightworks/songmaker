@@ -1,0 +1,7 @@
+claim_id = "5cd68a1597ac406ebc23ff6ecbc3427c"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "36bcc521286a544104594ff9caa2e04b0fe3865f"
+branch = "claude/issue-3232-the-music-worker-survives-a-redis-outage"
+scope = ["docs/architecture.md", "src/songmaker_cli/worker_base.py", "tests/songmaker_cli/test_worker_base.py"]
+opened_commit = "ad4858a26ef0399a613ff6bb7ea6476a7393889d"
