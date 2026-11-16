@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
-from support.web_app import TEST_SECRET, web_client
+from support.redis_proxy import redis_proxy
+from support.web_app import TEST_SECRET, make_fake_async_redis, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import (
     RedisHttpMetrics,
     build_arq_redis_settings,
+    create_async_redis,
     create_redis,
     redis_health,
 )
@@ -26,6 +29,21 @@ def fake_redis():
 
 
 # ── create_redis / redis_health ─────────────────────────────────
+
+
+def test_the_async_client_replays_a_command_whose_reply_the_line_lost(redis_url: str) -> None:
+    with redis_proxy(redis_url) as proxy:
+
+        async def read_after_a_lost_reply() -> bytes | None:
+            client = create_async_redis(proxy.url)
+            try:
+                await client.set("replayed", "value")
+                proxy.lose_next_reply()
+                return await client.get("replayed")
+            finally:
+                await client.aclose()
+
+        assert asyncio.run(read_after_a_lost_reply()) == b"value"
 
 
 def test_the_sync_client_and_arq_settings_connect_to_the_same_url() -> None:
@@ -106,7 +124,7 @@ def _make_redis_ctx(tmp_path: Path, factory, fake_redis) -> tuple[AppContext, Pa
         session.commit()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=fake_redis,
+        signing_key=TEST_SECRET, redis=fake_redis, async_redis=make_fake_async_redis(),
     )
     return ctx, audio_dir, data_dir, project_root
 
@@ -170,7 +188,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory)
         session.commit()
     ctx = AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=broken_redis,
+        signing_key=TEST_SECRET, redis=broken_redis, async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={}, raise_server_exceptions=False)

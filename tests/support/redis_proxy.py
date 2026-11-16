@@ -1,16 +1,13 @@
-"""A TCP hop between web processes and the case's Redis that can cut the line or pose as a
-Redis server that has just restarted empty.
+"""A TCP hop between web processes and the case's Redis that can cut the line or lose every key.
 
 The processes connect to the proxy; the proxy forwards bytes to the real server, so every
-command is the real server's answer except the uptime a restarted server reports.
+command is the real server's answer.
 """
 
 from __future__ import annotations
 
-import re
 import socket
 import threading
-import time
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from urllib.parse import urlsplit, urlunsplit
@@ -19,7 +16,6 @@ from redis import Redis
 
 LOOPBACK = "127.0.0.1"
 CHUNK_BYTES = 65536
-UPTIME_FIELD = re.compile(rb"uptime_in_seconds:(\d+)")
 ACCEPT_POLL_SECONDS = 0.2
 
 
@@ -35,7 +31,7 @@ class RedisProxy:
         self._lock = threading.Lock()
         self._connections: list[socket.socket] = []
         self._cut = False
-        self._restarted_at: float | None = None
+        self._reply_lost = False
         self._closing = threading.Event()
         self._acceptor = threading.Thread(target=self._accept_until_closed, daemon=True)
 
@@ -54,18 +50,17 @@ class RedisProxy:
             self._cut = True
         self._drop_connections()
 
+    def lose_next_reply(self) -> None:
+        """Run the next command on the server but drop its reply and the line, as a reset does."""
+        with self._lock:
+            self._reply_lost = True
+
     def restore(self) -> None:
         with self._lock:
             self._cut = False
 
     def restart_empty(self) -> None:
-        """Lose every key and report an uptime counted from now, as a restarted server does.
-
-        The young uptime is reported before the keys go, so no reader sees the empty
-        server with its old age.
-        """
-        with self._lock:
-            self._restarted_at = time.monotonic()
+        """Lose every key and every connection, as a server that restarted empty does."""
         with Redis.from_url(self._server_url) as server:
             server.flushdb()
         self._drop_connections()
@@ -75,12 +70,6 @@ class RedisProxy:
         self._acceptor.join()
         self._listener.close()
         self._drop_connections()
-
-    def _uptime_seconds(self) -> int | None:
-        with self._lock:
-            if self._restarted_at is None:
-                return None
-            return int(time.monotonic() - self._restarted_at)
 
     def _drop_connections(self) -> None:
         with self._lock:
@@ -104,30 +93,33 @@ class RedisProxy:
             server = socket.create_connection(self._server_address)
             with self._lock:
                 self._connections.extend((client, server))
-            threading.Thread(target=self._pump, args=(client, server, False), daemon=True).start()
-            threading.Thread(target=self._pump, args=(server, client, True), daemon=True).start()
+            threading.Thread(target=_pump, args=(client, server), daemon=True).start()
+            threading.Thread(target=self._pump_replies, args=(server, client), daemon=True).start()
 
-    def _pump(self, source: socket.socket, sink: socket.socket, from_server: bool) -> None:
+    def _pump_replies(self, server: socket.socket, client: socket.socket) -> None:
         try:
-            while data := source.recv(CHUNK_BYTES):
-                sink.sendall(self._restarted_reply(data) if from_server else data)
+            while data := server.recv(CHUNK_BYTES):
+                with self._lock:
+                    lost, self._reply_lost = self._reply_lost, False
+                if lost:
+                    return
+                client.sendall(data)
         except OSError:
             pass
         finally:
-            _shut(source)
-            _shut(sink)
+            _shut(server)
+            _shut(client)
 
-    def _restarted_reply(self, data: bytes) -> bytes:
-        """A reply that carries the server's uptime says the restarted server's, same width."""
-        uptime = self._uptime_seconds()
-        if uptime is None:
-            return data
 
-        def restarted(match: re.Match[bytes]) -> bytes:
-            width = len(match.group(1))
-            return b"uptime_in_seconds:" + str(uptime).rjust(width, "0").encode()[-width:]
-
-        return UPTIME_FIELD.sub(restarted, data)
+def _pump(source: socket.socket, sink: socket.socket) -> None:
+    try:
+        while data := source.recv(CHUNK_BYTES):
+            sink.sendall(data)
+    except OSError:
+        pass
+    finally:
+        _shut(source)
+        _shut(sink)
 
 
 def _shut(connection: socket.socket) -> None:

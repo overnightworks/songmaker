@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 from support.web_app import seed_user
+from tandem import Liveness
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli import audio_files
@@ -303,9 +304,7 @@ def test_update_song_force_new_version_keeps_a_generation_free_draft_immutable(
 ) -> None:
     db_session.add(Album(id="album", title="Album", artist="Artist"))
     db_session.add(Song(id="song", title="Song", album_id="album", slug="song"))
-    db_session.add(Version(
-        id="v1", song_id="song", version_number=1, lyrics="draft lyrics",
-    ))
+    db_session.add(Version(id="v1", song_id="song", version_number=1, lyrics="draft lyrics"))
     db_session.commit()
 
     version = update_song(
@@ -719,7 +718,7 @@ def _fail_by_lost_heartbeat(session: Session, now: datetime) -> None:
 
 
 def _fail_by_dead_owner(session: Session, _now: datetime) -> None:
-    recover_jobs_of_dead_owners(session, {"owner": WorkerLiveness.DEAD})
+    recover_jobs_of_dead_owners(session, {"owner": Liveness.GONE})
 
 
 @pytest.mark.parametrize("recover", [_fail_by_lost_heartbeat, _fail_by_dead_owner])

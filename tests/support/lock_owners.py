@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from support.web_app import make_authenticated_user, make_fake_redis, seed_user
+from support.web_app import (
+    make_authenticated_user,
+    make_fake_async_redis,
+    make_fake_redis,
+    seed_user,
+)
 
 from songmaker_cli.api_helpers import (
     create_job_with_rate_limit,
@@ -18,6 +24,7 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.auth_stores import DatabaseWriteLock
 from songmaker_cli.db.models import Album, User
 from songmaker_cli.job_types import JobType
+from songmaker_cli.worker_liveness import owner_leases
 
 OWNER_ID = "owner"
 
@@ -28,9 +35,10 @@ def _hold_the_write_lock(session: Session) -> None:
 
 
 LOCK_OWNERS: dict[str, Callable[[Session], object]] = {
-    "create_job_with_rate_limit": lambda session: create_job_with_rate_limit(
+    "create_job_with_rate_limit": lambda session: asyncio.run(create_job_with_rate_limit(
         session, make_authenticated_user(OWNER_ID), JobType.SCORE, redis=make_fake_redis(),
-    ),
+        owner_leases=owner_leases(make_fake_async_redis()),
+    )),
     "lock_lora_capacity": lock_lora_capacity,
     "unique_album_id": lambda session: unique_album_id(session, "Title"),
     "unique_song_slug": lambda session: unique_song_slug(session, "album", "Title"),

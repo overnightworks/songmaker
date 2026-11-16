@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -11,6 +12,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.owner_lease_epoch import aged_owner_lease_epoch
 from support.session_ids import a_session_id
 from webauth.ports import AuthenticatedUser
 
@@ -26,6 +28,34 @@ TEST_ORIGIN: Final = "https://testserver"
 
 def make_fake_redis() -> fakeredis.FakeRedis:
     return fakeredis.FakeRedis(decode_responses=True)
+
+
+def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:
+    """The asyncio client of a process's leases; it holds nothing the sync fake holds."""
+    return fakeredis.FakeAsyncRedis()
+
+
+def arrange_fake_async_redis(
+    async_redis: fakeredis.FakeAsyncRedis,
+    arrangement: Callable[[fakeredis.FakeAsyncRedis], Awaitable[object]],
+) -> None:
+    """Run ``arrangement`` in its own event loop and free the fake's connection of that loop.
+
+    A connection a fake keeps after the loop ended cannot serve the next loop.
+    """
+
+    async def arrange_and_disconnect() -> None:
+        try:
+            await arrangement(async_redis)
+        finally:
+            await async_redis.connection_pool.disconnect()
+
+    asyncio.run(arrange_and_disconnect())
+
+
+async def settle_owner_leases(async_redis: fakeredis.FakeAsyncRedis) -> None:
+    """Date the epoch of the owner leases a lease span back, so an absent lease reads GONE."""
+    await async_redis.set(*aged_owner_lease_epoch())
 
 
 def refusal_body(key: Key, **values: str) -> dict[str, object]:
@@ -69,6 +99,16 @@ def install_app_context(app, ctx) -> None:
     install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
 
 
+def make_app_context(
+    *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis,
+) -> AppContext:
+    """A context on fakes for the asyncio side, over the caller's database and sync Redis."""
+    return AppContext(
+        db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        async_redis=make_fake_async_redis(),
+    )
+
+
 def make_router_ctx(
     tmp_path: Path,
     *,
@@ -83,7 +123,7 @@ def make_router_ctx(
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
+        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
     if seed_db is not None:
         with ctx.db() as session:
@@ -164,7 +204,7 @@ def make_test_app(
     redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis,
+        signing_key=TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})

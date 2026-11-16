@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from support.queue_stream_audio import stub_audio_build
-from support.web_app import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 
 from songmaker_cli import queue_streams
 from songmaker_cli.app_context import AppContext
@@ -35,7 +35,7 @@ def ctx(tmp_path: Path, pg_factory, monkeypatch) -> AppContext:
     (audio_dir / "owner" / "take.mp3").write_bytes(b"source")
     return AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
 
 

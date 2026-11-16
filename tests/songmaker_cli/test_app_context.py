@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from support.web_app import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import (
@@ -29,6 +29,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
         trusted_proxies=TrustedProxies.parse("172.16.0.0/12"),
+        async_redis=make_fake_async_redis(),
     )
 
 

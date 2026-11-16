@@ -11,7 +11,13 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from support.session_ids import a_session_id
-from support.web_app import install_app_context, make_fake_redis, seed_user, web_client
+from support.web_app import (
+    install_app_context,
+    make_fake_async_redis,
+    make_fake_redis,
+    seed_user,
+    web_client,
+)
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.ports import AuthenticatedUser
 
@@ -36,7 +42,7 @@ def _build_auth_app(_db, tmp_path: Path, redis=None):
         redis = make_fake_redis()
     ctx = AppContext(
         db=_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=_TEST_SECRET, redis=redis,
+        signing_key=_TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
     )
     app = FastAPI()
     install_app_context(app, ctx)

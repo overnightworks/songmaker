@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 import sqlalchemy as sa
 from support.loop_ticks import run_ticks_observing_status
-from support.web_app import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 
 import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.app_context import AppContext
@@ -53,7 +53,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir.mkdir()
     return AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
 
 
