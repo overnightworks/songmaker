@@ -27,7 +27,7 @@ from songmaker_cli.messages import message
 
 @pytest.mark.parametrize("completed", [0, 1], ids=["first-take", "second-take"])
 def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
-    seeded_db, generation_worker_peer, completed,
+    seeded_db, generation_worker_peer, completed, locked_ffmpeg,
 ):
     """A hold or an unsettled Redis restart met at /generate requeues the takes still missing."""
     queued = []
