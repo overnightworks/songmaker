@@ -10,10 +10,16 @@ vi.mock('#lib/api/client.ts', () => ({
 	fetchLastFailedGeneration: vi.fn()
 }));
 
-import { activeJobs, trackJob } from './jobs';
+import {
+	activeJobs,
+	generationFailures,
+	hydrateGenerationFailure,
+	resetGenerationFailuresForTests,
+	trackJob
+} from './jobs';
 import { toasts } from './toast';
 import { resetConnectivityForTests } from './connectivity';
-import type { JobStatus } from '#lib/api/client.ts';
+import { fetchLastFailedGeneration, type JobStatus } from '#lib/api/client.ts';
 
 class FakeEventSource {
 	static latest: FakeEventSource;
@@ -122,6 +128,23 @@ describe('the sentence a tracked job shows when it ends', () => {
 				error_message: failure
 			})
 		).toEqual(['3/4 completed, 1 failed: Generating failed — try again.']);
+	});
+
+	it('a reloaded partial generate names the takes that completed before its cause', async () => {
+		resetGenerationFailuresForTests();
+		vi.mocked(fetchLastFailedGeneration).mockResolvedValue({
+			job: jobStatus({
+				status: 'partial',
+				take_count: 2,
+				completed_takes: 1,
+				error_message: { key: 'jobFailure.generationFailed', values: {} }
+			})
+		});
+		await hydrateGenerationFailure('s1');
+		expect(get(generationFailures).s1).toEqual({
+			message: '1/2 completed, 1 failed: Generating failed — try again.',
+			unavailable: false
+		});
 	});
 
 	it('a cancelled voice training raises no toast, the voice page says so in place', async () => {

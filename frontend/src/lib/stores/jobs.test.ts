@@ -826,22 +826,6 @@ describe('jobs store', () => {
 			expect(get(generationFailures).s1).toEqual({ message: VRAM_LINE, unavailable: false });
 		});
 
-		it('a reloaded partial generate names the takes that completed before its cause', async () => {
-			mockFetchLastFailedGeneration.mockResolvedValue({
-				job: makeJob({
-					status: 'partial',
-					take_count: 2,
-					completed_takes: 1,
-					error_message: VRAM_FAILURE
-				})
-			});
-			await hydrateGenerationFailure('s1');
-			expect(get(generationFailures).s1).toEqual({
-				message: `1/2 completed, 1 failed: ${VRAM_LINE}`,
-				unavailable: false
-			});
-		});
-
 		it('shows nothing when a newer take suppressed the failure server-side', async () => {
 			mockFetchLastFailedGeneration.mockResolvedValue({ job: null });
 			await hydrateGenerationFailure('s1');
