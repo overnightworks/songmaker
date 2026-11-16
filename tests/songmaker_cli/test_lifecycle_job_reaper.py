@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
-from support.loop_ticks import run_ticks_observing_status
+from support.loop_ticks import run_ticks_observing_status, scripted_tick_locks
 from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 
 import songmaker_cli.cover_runner as cover_runner
@@ -337,14 +337,18 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
         state=SimpleNamespace(
             ctx=SimpleNamespace(
                 db=ctx.db,
+                async_redis=None,
                 redis=SimpleNamespace(
                     exists=lambda *_args, **_kwargs: False,
                     get=lambda *_args, **_kwargs: None,
-                    set=lambda *_args, **_kwargs: True,
                 ),
             ),
             background_loop_registry=registry,
         ),
+    )
+    monkeypatch.setattr(
+        "songmaker_cli.lifecycle.tick_locks",
+        scripted_tick_locks(["generation"] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1)),
     )
     _add_job(ctx, job_id="missing-policy", job_type="unknown_type", status=JobStatus.QUEUED)
     completed_ticks = 0
@@ -377,10 +381,10 @@ def _run_reaper_ticks(
         registry.record_failure(BackgroundLoopName.STALE_JOB_REAPER, RuntimeError("earlier"))
     app = SimpleNamespace(
         state=SimpleNamespace(
-            ctx=SimpleNamespace(redis=SimpleNamespace(set=MagicMock(side_effect=lock_results))),
-            background_loop_registry=registry,
+            ctx=SimpleNamespace(async_redis=None), background_loop_registry=registry,
         ),
     )
+    monkeypatch.setattr("songmaker_cli.lifecycle.tick_locks", scripted_tick_locks(lock_results))
     monkeypatch.setattr("songmaker_cli.lifecycle._run_stale_job_reaper_tick", tick)
     return run_ticks_observing_status(
         monkeypatch, stale_job_reaper_loop(app), registry,
@@ -409,7 +413,9 @@ def test_a_good_reaper_tick_resets_a_failing_loop(monkeypatch) -> None:
     )
 
     statuses = _run_reaper_ticks(
-        monkeypatch, lock_results=[True] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1), tick=tick,
+        monkeypatch,
+        lock_results=["generation"] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1),
+        tick=tick,
     )
 
     assert statuses[BACKGROUND_LOOP_FAILURE_THRESHOLD] is BackgroundLoopStatus.FAILING

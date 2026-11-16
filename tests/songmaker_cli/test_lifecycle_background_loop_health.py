@@ -7,11 +7,13 @@ import os
 import threading
 from contextlib import nullcontext
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+import fakeredis
 import pytest
-from support.loop_ticks import run_ticks_observing_status
-from support.web_app import make_test_app
+from support.loop_ticks import run_ticks_observing_status, scripted_tick_locks
+from support.owner_lease_epoch import aged_epoch
+from support.web_app import arrange_fake_async_redis, make_test_app
 
 import songmaker_cli.cover_runner as cover_runner
 import songmaker_cli.lifecycle as lifecycle
@@ -21,6 +23,7 @@ from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import (
+    TICK_LOCK_LASTS,
     BackfillResult,
     BackgroundLoopName,
 )
@@ -96,12 +99,10 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             background_loop_registry=registry,
-            ctx=SimpleNamespace(
-                db=lambda: nullcontext(),
-                redis=SimpleNamespace(set=lambda *_args, **_kwargs: True),
-            ),
+            ctx=SimpleNamespace(db=lambda: nullcontext(), async_redis=None),
         ),
     )
+    monkeypatch.setattr(lifecycle, "tick_locks", scripted_tick_locks(["generation"]))
     tick_started = False
 
     async def fake_sleep(_seconds: float) -> None:
@@ -141,9 +142,10 @@ def _run_score_backfill_ticks(
     app = SimpleNamespace(
         state=SimpleNamespace(
             background_loop_registry=registry,
-            ctx=SimpleNamespace(redis=SimpleNamespace(set=MagicMock(side_effect=lock_results))),
+            ctx=SimpleNamespace(async_redis=None),
         ),
     )
+    monkeypatch.setattr(lifecycle, "tick_locks", scripted_tick_locks(lock_results))
     monkeypatch.setattr(lifecycle, "backfill_unscored_generations", backfill)
     monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
     return run_ticks_observing_status(
@@ -173,7 +175,7 @@ def test_score_backfill_reads_failing_during_a_redis_outage_and_runs_the_next_ti
     outage = [RuntimeError("redis unavailable")] * BACKGROUND_LOOP_FAILURE_THRESHOLD
 
     statuses = _run_score_backfill_ticks(
-        monkeypatch, lock_results=[*outage, True], backfill=backfill,
+        monkeypatch, lock_results=[*outage, "generation"], backfill=backfill,
     )
 
     assert statuses[BACKGROUND_LOOP_FAILURE_THRESHOLD] is BackgroundLoopStatus.FAILING
@@ -191,12 +193,103 @@ def test_a_healthy_score_backfill_tick_resets_a_failing_loop(monkeypatch, dispat
     )
 
     statuses = _run_score_backfill_ticks(
-        monkeypatch, lock_results=[True] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1),
+        monkeypatch, lock_results=["generation"] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1),
         backfill=backfill,
     )
 
     assert statuses[BACKGROUND_LOOP_FAILURE_THRESHOLD] is BackgroundLoopStatus.FAILING
     assert statuses[-1] is BackgroundLoopStatus.OK
+
+
+class _TickingProcess:
+    """One web process's periodic loop over a Redis server it shares with the others.
+
+    ``run_one_tick`` returns whether its tick ran, as the work the tick does is counted here.
+    """
+
+    def __init__(self, monkeypatch, server: fakeredis.FakeServer, loop_name: BackgroundLoopName):
+        self.registry = BackgroundLoopRegistry()
+        self.loop_name = loop_name
+        self.runs = 0
+        self._monkeypatch = monkeypatch
+        self._app = SimpleNamespace(
+            state=SimpleNamespace(
+                background_loop_registry=self.registry,
+                ctx=SimpleNamespace(async_redis=fakeredis.FakeAsyncRedis(server=server)),
+            ),
+        )
+
+    def run_one_tick(self) -> bool:
+        runs_before = self.runs
+
+        def reaper_tick(*_args, **_kwargs) -> tuple[int, int]:
+            self.runs += 1
+            return 0, 0
+
+        async def backfill(*_args, **_kwargs) -> BackfillResult:
+            self.runs += 1
+            return BackfillResult(dispatched=0, first_error=None)
+
+        self._monkeypatch.setattr(lifecycle, "_run_stale_job_reaper_tick", reaper_tick)
+        self._monkeypatch.setattr(lifecycle, "backfill_unscored_generations", backfill)
+        self._monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
+        loops = {
+            BackgroundLoopName.STALE_JOB_REAPER: lifecycle.stale_job_reaper_loop,
+            BackgroundLoopName.SCORE_BACKFILL: lifecycle.score_backfill_loop,
+        }
+        run_ticks_observing_status(
+            self._monkeypatch, loops[self.loop_name](self._app), self.registry, self.loop_name, 1,
+        )
+        arrange_fake_async_redis(self._app.state.ctx.async_redis, _nothing)
+        return self.runs > runs_before
+
+
+async def _nothing(_redis) -> None:
+    return None
+
+
+def _settle_the_epoch(server: fakeredis.FakeServer) -> None:
+    arrange_fake_async_redis(
+        fakeredis.FakeAsyncRedis(server=server),
+        lambda redis: redis.set(*aged_epoch(TICK_LOCK_LASTS.total_seconds())),
+    )
+
+
+TICKING_LOOPS = [BackgroundLoopName.STALE_JOB_REAPER, BackgroundLoopName.SCORE_BACKFILL]
+
+
+@pytest.mark.parametrize("loop_name", TICKING_LOOPS)
+def test_one_of_two_processes_runs_a_tick_and_the_other_reads_ok(
+    monkeypatch, loop_name: BackgroundLoopName,
+) -> None:
+    server = fakeredis.FakeServer()
+    _settle_the_epoch(server)
+    first = _TickingProcess(monkeypatch, server, loop_name)
+    second = _TickingProcess(monkeypatch, server, loop_name)
+
+    ran = [first.run_one_tick(), second.run_one_tick()]
+
+    assert ran == [True, False]
+    assert second.registry.loop_health()[loop_name].status is BackgroundLoopStatus.OK
+
+
+@pytest.mark.parametrize("loop_name", TICKING_LOOPS)
+def test_a_tick_waits_out_a_redis_restart_without_a_failure_and_runs_once_it_settled(
+    monkeypatch, loop_name: BackgroundLoopName,
+) -> None:
+    server = fakeredis.FakeServer()
+    _settle_the_epoch(server)
+    process = _TickingProcess(monkeypatch, server, loop_name)
+    arrange_fake_async_redis(
+        fakeredis.FakeAsyncRedis(server=server), lambda redis: redis.flushall(),
+    )
+
+    ran_just_after_the_restart = process.run_one_tick()
+    _settle_the_epoch(server)
+    ran_once_settled = process.run_one_tick()
+
+    assert (ran_just_after_the_restart, ran_once_settled) == (False, True)
+    assert process.registry.loop_health()[loop_name].status is BackgroundLoopStatus.OK
 
 
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(

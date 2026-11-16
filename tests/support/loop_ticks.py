@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Coroutine
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,3 +34,20 @@ def run_ticks_observing_status(
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(loop)
     return statuses
+
+
+def scripted_tick_locks(results: list[object]) -> object:
+    """A stand-in for ``lifecycle.tick_locks`` whose ``acquire`` answers ``results`` in order.
+
+    An answer is a generation (the tick runs), None (another process holds the lock, or Redis
+    restarted a moment ago) or an exception to raise (Redis is unreachable).
+    """
+    remaining = iter(results)
+
+    async def acquire(_name: str) -> object:
+        answer = next(remaining)
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    return lambda _redis: SimpleNamespace(acquire=acquire)
