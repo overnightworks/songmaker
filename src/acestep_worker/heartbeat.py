@@ -90,18 +90,19 @@ async def reserve_gpu_hold(redis: Redis, worker_id: str) -> str | None:
     """The generation of a new hold, or None while a generation is queued or a hold is live.
 
     The depth is read again after ``acquire``: an admission that read the lock free before it
-    has raised the depth by then, and one that comes after it reads the lock held.
+    has raised the depth by then, and one that comes after it reads the lock held. The old key
+    is written before that second read, so an admission of the previous release, which reads
+    only the old key, either sees it or has raised the depth by then.
     """
     if await read_queue_depth(redis, worker_id) > 0:
         return None
-    locks = gpu_hold_locks(redis)
-    generation = await locks.acquire(worker_id)
+    generation = await gpu_hold_locks(redis).acquire(worker_id)
     if generation is None:
         return None
-    if await read_queue_depth(redis, worker_id) > 0:
-        await locks.release(worker_id, generation)
-        return None
     await _write_old_gpu_hold(redis, worker_id, generation)
+    if await read_queue_depth(redis, worker_id) > 0:
+        await release_gpu_hold(redis, worker_id, generation)
+        return None
     return generation
 
 

@@ -208,20 +208,22 @@ def test_generation_admit_wins_against_a_later_hold_reserve(settled_redis, event
     assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
 
 
-class _AdmittingBetweenDepthReads(fakeredis.aioredis.FakeRedis):
-    """A client that admits a generation right after the first read of the queue depth."""
+class _AdmittingAfterADepthRead(fakeredis.aioredis.FakeRedis):
+    """A client that runs an admission right after its ``after_read``-th read of the queue depth."""
 
-    def __init__(self, *, server, worker_id: str) -> None:
+    def __init__(self, *, server, worker_id: str, after_read: int, admit) -> None:
         super().__init__(server=server)
         self._depth_key = queue_depth_key(worker_id)
+        self._after_read = after_read
+        self._admit = admit
         self._depth_reads = 0
 
     async def get(self, name, *args, **kwargs):
         value = await super().get(name, *args, **kwargs)
         if name == self._depth_key:
             self._depth_reads += 1
-            if self._depth_reads == 1:
-                await super().incr(self._depth_key)
+            if self._depth_reads == self._after_read:
+                await self._admit(self)
         return value
 
 
@@ -230,7 +232,10 @@ def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold
 ) -> None:
     """The admission read the lock free, then the reserve took it: the depth read after
     ``acquire`` shows the admission, so the reserve gives the hold back."""
-    reserving = _AdmittingBetweenDepthReads(server=server, worker_id="w1")
+    reserving = _AdmittingAfterADepthRead(
+        server=server, worker_id="w1", after_read=1,
+        admit=lambda client: client.incr(queue_depth_key("w1")),
+    )
 
     async def scenario() -> tuple[str | None, bool]:
         generation = await reserve_gpu_hold(reserving, "w1")
@@ -238,6 +243,35 @@ def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold
 
     assert event_loop.run_until_complete(scenario()) == (None, True)
     assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
+
+
+# The admit script of the previous release: it reads only the old hold key.
+_PREVIOUS_RELEASE_ADMIT_SCRIPT = """
+if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+redis.call('INCR', KEYS[1])
+return 1
+"""
+
+
+def test_an_admission_of_the_previous_release_never_overlaps_a_reserve(
+    settled_redis, server, event_loop,
+) -> None:
+    """The previous release's admission runs right after the reserve's second depth read."""
+    admitted_by_previous_release: list[bool] = []
+
+    async def previous_release_admits(client) -> None:
+        admitted_by_previous_release.append(bool(await client.eval(
+            _PREVIOUS_RELEASE_ADMIT_SCRIPT, 2, queue_depth_key("w1"), gpu_hold_old_key("w1"),
+        )))
+
+    reserving = _AdmittingAfterADepthRead(
+        server=server, worker_id="w1", after_read=2, admit=previous_release_admits,
+    )
+
+    generation = event_loop.run_until_complete(reserve_gpu_hold(reserving, "w1"))
+
+    assert admitted_by_previous_release == [False]
+    assert generation is not None
 
 
 def test_the_generation_controls_renew_and_release(settled_redis, event_loop) -> None:
