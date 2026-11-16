@@ -36,7 +36,7 @@ def _settle_the_real_servers_epoch(redis_url: str) -> None:
 def _lose_everything(redis_url: str) -> None:
     """What a Redis restart does to the keys."""
     with Redis.from_url(redis_url) as server:
-        server.flushall()
+        server.flushdb()
 
 
 def _in_two_processes(
