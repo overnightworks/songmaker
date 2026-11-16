@@ -62,6 +62,7 @@ from songmaker_cli.scheduler import (
     AllWorkersHeld,
     GenerationProgressCallback,
     NoCapacityError,
+    WorkerHeld,
     WorkerTaskFailed,
 )
 
@@ -900,14 +901,7 @@ async def run_generation_job(
         tmp_copies = _temporary_generation_audio_paths(ctx)
         try:
             await _generate_variants(
-                admitted_worker,
-                redis,
-                db_factory,
-                job_id,
-                song_id,
-                count,
-                ctx,
-                progress,
+                admitted_worker, redis, db_factory, request, ctx, progress,
             )
         finally:
             _remove_temporary_generation_audio(tmp_copies)
@@ -952,19 +946,28 @@ async def _admit_generation_worker_or_requeue(
             db_factory=db_factory,
         )
     except AllWorkersHeld:
-        _update_job(
-            db_factory,
-            request.job_id,
-            JobStatus.QUEUED,
-            queue_reason_message=message("jobWait.voiceTraining"),
-        )
-        await redis.enqueue_job(
-            JobFunction.GENERATE,
-            *request.queue_args(),
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-            _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
-        )
+        await _requeue_generation(request, redis, db_factory)
         return None
+
+
+async def _requeue_generation(
+    request: GenerationJobRequest,
+    redis: ArqRedis,
+    db_factory: sessionmaker[Session],
+) -> None:
+    """Queue the job again behind the hold that keeps it off its worker."""
+    _update_job(
+        db_factory,
+        request.job_id,
+        JobStatus.QUEUED,
+        queue_reason_message=message("jobWait.voiceTraining"),
+    )
+    await redis.enqueue_job(
+        JobFunction.GENERATE,
+        *request.queue_args(),
+        _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
+    )
 
 
 async def _build_generation_job_context(
@@ -1029,27 +1032,32 @@ async def _generate_variants(
     admitted_worker,
     redis: ArqRedis,
     db_factory: sessionmaker[Session],
-    job_id: str,
-    song_id: str,
-    count: int,
+    request: GenerationJobRequest,
     ctx: GenerationContext,
     progress: GenerationProgressTracker,
 ) -> None:
+    job_id, count = request.job_id, request.count
     completed = 0
     for index in range(count):
         if _job_is_terminal(db_factory, job_id):
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
-        persisted_gen_id, error = await _generate_variant(
-            admitted_worker, db_factory, job_id,
-            index, count, ctx, progress,
-        )
+        try:
+            persisted_gen_id, error = await _generate_variant(
+                admitted_worker, db_factory, job_id,
+                index, count, ctx, progress,
+            )
+        except WorkerHeld:
+            remaining = replace(request, count=count - completed)
+            log.info("Generation job %s: worker held, %d takes wait", job_id, remaining.count)
+            await _requeue_generation(remaining, redis, db_factory)
+            return
         if error is not None:
             progress.record_failure(error)
             continue
         completed += 1
         if persisted_gen_id:
-            await _auto_score_generation(redis, db_factory, persisted_gen_id, song_id)
+            await _auto_score_generation(redis, db_factory, persisted_gen_id, request.song_id)
     _finalize_generation_job(db_factory, job_id, count, completed, progress.failure)
 
 
@@ -1096,7 +1104,7 @@ async def _generate_variant(
             if not handed_to_post_process:
                 _discard_fetched_take(worker_result.audio_path)
         return persisted_gen_id, None
-    except ReferenceDeletedDuringTake:
+    except (ReferenceDeletedDuringTake, WorkerHeld):
         raise
     except (NoCapacityError, WorkerTaskFailed) as exc:
         log.warning("Generation %d/%d failed: %s", index + 1, count, exc)

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
-from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+from acestep_engine.constants import GPU_HELD_DETAIL, MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import NOT_STARTED, AceStepProgress
 from acestep_worker import lm_failure
@@ -368,7 +368,7 @@ class _WorkerRoutes:
 async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tuple[str, Any]:
     async with deps.gpu_hold_admission_lock:
         if await gpu_hold_blocks_generation(deps.redis, deps.worker_id):
-            raise HTTPException(status_code=409, detail="GPU is held for LoRA training")
+            raise HTTPException(status_code=409, detail=GPU_HELD_DETAIL)
         loaded = await deps.cache.acquire_for_use(req.mode)
         if loaded is None:
             raise HTTPException(

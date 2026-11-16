@@ -925,6 +925,40 @@ def test_s5_generation_job_reload_unavailable(
             assert (tmp_path / "audio" / generation.wav_path).is_file()
 
 
+@pytest.mark.parametrize("completed", [0, 1], ids=["first-take", "second-take"])
+def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
+    seeded_db, generation_worker_peer, completed,
+):
+    """S5-A/D, L5: A hold or an unsettled Redis restart met at /generate requeues the rest."""
+    from acestep_engine.constants import GPU_HELD_DETAIL
+
+    queued = []
+
+    async def enqueue_job(function, *args, **kwargs):
+        queued.append((function, args, kwargs))
+
+    async def exercise():
+        held = WorkerReply(409, GPU_HELD_DETAIL)
+        scenario = WorkerScenario(
+            loaded_modes=("sft",), submit_answers=(None,) * completed + (held,),
+        )
+        async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
+            peer.redis.enqueue_job = enqueue_job
+            await _run_peer_generation(seeded_db, peer, 2)
+            assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
+
+    run_async(exercise())
+    assert [(function, args[3]) for function, args, _ in queued] == [
+        (JobFunction.GENERATE, 2 - completed),
+    ]
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "queued"
+        assert job.queue_reason_message == message("jobWait.voiceTraining")
+        assert job.error is None
+        assert session.query(Generation).count() == completed
+
+
 @pytest.mark.parametrize(
     ("outcomes", "status", "completed", "prefix", "gated_take"),
     [
