@@ -119,7 +119,9 @@ async def renew_gpu_hold(redis: Redis, worker_id: str, generation: str) -> bool:
     return renewed
 
 
-async def _delete_old_gpu_hold_carrying(redis: Redis, worker_id: str, generation: str | bytes) -> None:
+async def _delete_old_gpu_hold_carrying(
+    redis: Redis, worker_id: str, generation: str | bytes,
+) -> None:
     await redis.eval(RELEASE_OLD_GPU_HOLD_SCRIPT, 1, gpu_hold_old_key(worker_id), generation)
 
 

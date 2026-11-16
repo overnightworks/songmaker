@@ -124,11 +124,7 @@ def _format_sse(event: WorkerTaskEvent) -> bytes:
     return f"event: {event.type}\ndata: {payload}\n\n".encode()
 
 
-async def _renew_gpu_hold_until_done(
-    redis: Redis,
-    worker_id: str,
-    token: str,
-) -> None:
+async def _renew_gpu_hold_until_done(redis: Redis, worker_id: str, token: str) -> None:
     while True:
         await asyncio.sleep(DEFAULT_INTERVAL_SECONDS)
         if not await renew_gpu_hold(redis, worker_id, token):

@@ -48,7 +48,7 @@
 "src/songmaker_cli/jobs/lora_training.py" = 1508
 "src/songmaker_cli/queue_streams.py" = 918
 "tests/acestep_engine/test_client.py" = 818
-"tests/acestep_worker/test_wrapper.py" = 1516
+"tests/acestep_worker/test_wrapper.py" = 1501
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1180
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1841
 "tests/songmaker_cli/test_admin_api.py" = 999
