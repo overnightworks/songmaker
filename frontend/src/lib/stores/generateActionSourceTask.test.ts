@@ -161,7 +161,10 @@ describe('runSourceTask (S4, #1912 acceptance 4)', () => {
 		const line = "Generating isn't available right now.";
 		sourceGeneration.set(makeGeneration());
 		vi.mocked(repaintGeneration).mockRejectedValueOnce(
-			new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'job9')
+			new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'job9', {
+				key: 'jobFailure.generationUnavailable',
+				values: {}
+			})
 		);
 		await runSourceTask();
 		expect(addToast).not.toHaveBeenCalled();

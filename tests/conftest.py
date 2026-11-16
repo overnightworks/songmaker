@@ -76,13 +76,6 @@ pytest_plugins = [
 os.environ.setdefault("OIDC_CLIENT_SECRET_FILE", write_test_client_secret())
 
 
-@pytest.fixture(params=SONGMAKER_FAILURE_CASES)
-def generation_failure_case(request):
-    """S5-C/D, L6: Historical stored lines retain their read contract."""
-    error_class, cause, historical, _, _ = request.param
-    return error_class(cause), historical
-
-
 @pytest.fixture(
     params=[
         *SONGMAKER_FAILURE_CASES,

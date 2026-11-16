@@ -720,7 +720,10 @@ describe('generate action execution', () => {
 	it('a press refused as unavailable shows its lasting line with no toast (S4, #1923 acceptance 3)', async () => {
 		const line = "Generating isn't available right now.";
 		vi.mocked(generateSong).mockRejectedValueOnce(
-			new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'job9')
+			new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'job9', {
+				key: 'jobFailure.generationUnavailable',
+				values: {}
+			})
 		);
 		await generate();
 		expect(addToast).not.toHaveBeenCalled();

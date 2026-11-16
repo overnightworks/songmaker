@@ -78,20 +78,22 @@ def test_only_the_jobs_of_a_dead_owner_fail_with_the_restart_verdict(pg_factory)
         assert _outcome(session, unowned)[0] == JobStatus.RUNNING
 
 
-def test_a_failed_job_stores_the_sentence_of_its_message(pg_factory) -> None:
+def test_a_failed_job_stores_its_message(pg_factory) -> None:
     with pg_factory() as session:
         job = create_job(session, JobType.CHAT)
-        failure = message("jobFailure.reported", cause="ACE-Step down")
-        update_job_status(session, job.id, JobStatusUpdate(JobStatus.FAILED, error=failure))
+        failure = message("jobFailure.workerReported", cause="ACE-Step down")
+        update_job_status(
+            session, job.id, JobStatusUpdate(JobStatus.FAILED, error_message=failure),
+        )
         session.commit()
-        assert session.get(Job, job.id).error == "ACE-Step down"
+        assert session.get(Job, job.id).error_message == failure
 
 
-def test_a_job_of_a_dead_owner_stores_the_restart_sentence(pg_factory) -> None:
+def test_a_job_of_a_dead_owner_stores_the_restart_message(pg_factory) -> None:
     with pg_factory() as session:
         gone = _running_job(session, JobType.CHAT, GONE)
         recover_jobs_of_dead_owners(session, {GONE: Liveness.GONE})
-        assert session.get(Job, gone).error == "Server restarted while job was in progress"
+        assert session.get(Job, gone).error_message == JOB_ERROR_SERVER_RESTARTED.error_message
 
 
 def test_a_queued_job_of_a_dead_owner_fails_too_and_a_finished_one_is_left(pg_factory) -> None:

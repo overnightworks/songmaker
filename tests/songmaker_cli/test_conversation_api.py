@@ -401,7 +401,7 @@ def test_chat_turn_closing_after_completion_keeps_job_completed(client, service)
     with factory() as session:
         job = session.query(Job).filter_by(type="chat").one()
         assert job.status == "completed"
-        assert job.error is None
+        assert job.error_message is None
         assert job.error_type is None
 
 
