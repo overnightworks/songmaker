@@ -4,7 +4,10 @@ import asyncio
 import json
 from datetime import timedelta
 
+import fakeredis
+import fakeredis.aioredis
 import pytest
+from support.owner_lease_epoch import settled_epoch
 from support.wrapper_deps import settled_fake_redis
 from tandem import Liveness
 
@@ -93,6 +96,57 @@ def test_clear_orphaned_queue_ends_the_hold_of_a_previous_process() -> None:
     assert previous_hold is not None
     assert depth is None
     assert hold.liveness is Liveness.GONE
+
+
+class _ReplacingTheHoldAfterTheFirstScript(fakeredis.aioredis.FakeRedis):
+    """A client whose hold is taken by another process once its first script has answered."""
+
+    def __init__(self, *, server, replace_hold) -> None:
+        super().__init__(server=server, decode_responses=False)
+        self._replace_hold = replace_hold
+        self._replaced = False
+
+    async def evalsha(self, *args, **kwargs):
+        reply = await super().evalsha(*args, **kwargs)
+        if not self._replaced:
+            self._replaced = True
+            await self._replace_hold()
+        return reply
+
+
+def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None:
+    worker_id = "acestep-worker-0"
+
+    async def go():
+        server = fakeredis.FakeServer()
+        fakeredis.FakeRedis(server=server).set(*settled_epoch())
+        other = fakeredis.aioredis.FakeRedis(server=server, decode_responses=False)
+        previous = await gpu_hold_locks(other).acquire(worker_id)
+        assert previous is not None
+        replacement: list[str] = []
+
+        async def replace_hold() -> None:
+            assert await gpu_hold_locks(other).release(worker_id, previous)
+            acquired = await gpu_hold_locks(other).acquire(worker_id)
+            assert acquired is not None
+            replacement.append(acquired)
+
+        loop = HeartbeatLoop(
+            redis=_ReplacingTheHoldAfterTheFirstScript(server=server, replace_hold=replace_hold),
+            worker_id=worker_id,
+            state_provider=_no_state,
+        )
+        await loop.clear_orphaned_queue()
+        return replacement, await gpu_hold_locks(other).state(worker_id)
+
+    replacement, hold = _run(go())
+
+    assert hold.liveness is Liveness.ALIVE
+    assert hold.generation == replacement[0]
+
+
+async def _no_state() -> dict[str, object]:
+    return {}
 
 
 def test_start_stop_cycles() -> None:
