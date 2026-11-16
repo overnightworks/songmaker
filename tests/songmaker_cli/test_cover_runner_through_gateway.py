@@ -654,7 +654,7 @@ def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog, ext
         fingerprint = json.loads(request.content)["user"]
         key = world.stack.config.gateway.key_file.read_text().strip()
         seen = [
-            world.job(job_id).error or "",
+            world.job(job_id).error_message.sentence() if world.job(job_id).error_message else "",
             world.client.get(f"/api/jobs/{job_id}").text,
             world.client.get(SUGGEST).text,
         ]

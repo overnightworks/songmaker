@@ -23,7 +23,7 @@ import {
 	watchReconnectOpportunities
 } from '#lib/stores/sseReconnect.ts';
 import { addToast } from '#lib/stores/toast.ts';
-import { pageText, type TextKey } from '#lib/utils/page-words.ts';
+import { messageText, pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 // Each job's update changes only that job, and cancelling one job's reconnect
 // leaves the other jobs' timers running.
@@ -134,16 +134,34 @@ export function resetGenerationFailuresForTests(): void {
 
 const GENERATION_UNAVAILABLE_ERROR_TYPE = 'generation_unavailable';
 
-type FailureFields = Pick<JobStatus, 'error' | 'error_type'>;
+type PartialFields = Pick<JobStatus, 'error_message' | 'completed_takes' | 'take_count'>;
+type FailureFields = Pick<JobStatus, 'error_message' | 'error_type'> &
+	Partial<PartialFields & Pick<JobStatus, 'status'>>;
 
 function failureMessage(job: FailureFields, type: TrackedJobType): string {
-	if (job.error_type === 'server_restart') return pageText('jobEnd.serverRestart');
-	return job.error || jobEndText(type, 'failed');
+	return messageText(job.error_message) ?? jobEndText(type, 'failed');
+}
+
+/** A partial end names the takes that completed before its cause; one that finished no count says only its cause. */
+function partialMessage(job: PartialFields, type: TrackedJobType): string {
+	const cause = messageText(job.error_message);
+	if (job.completed_takes == null || job.take_count == null) {
+		return cause ?? jobEndText(type, 'partial');
+	}
+	return pageText('jobFailure.partialTakes', {
+		completed: String(job.completed_takes),
+		count: job.take_count,
+		failed: String(job.take_count - job.completed_takes),
+		cause: cause ?? jobEndText(type, 'partial')
+	});
 }
 
 function generationFailure(job: FailureFields): GenerationFailure {
 	return {
-		message: failureMessage(job, JOB_TYPE_GENERATE),
+		message:
+			job.status === 'partial'
+				? partialMessage(job, JOB_TYPE_GENERATE)
+				: failureMessage(job, JOB_TYPE_GENERATE),
 		unavailable: job.error_type === GENERATION_UNAVAILABLE_ERROR_TYPE
 	};
 }
@@ -167,7 +185,7 @@ export function showGenerationUnavailableRefusal(songId: string, error: unknown)
 		return false;
 	}
 	const failure = generationFailure({
-		error: error.detail,
+		error_message: error.refusal,
 		error_type: error.errorType
 	});
 	generationFailures.update((failures) => ({ ...failures, [songId]: failure }));
@@ -252,7 +270,7 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 		return;
 	}
 	if (job.status === 'partial') {
-		addToast(job.error || jobEndText(job.type, 'partial'), 'info');
+		addToast(partialMessage(job, job.type), 'info');
 		return;
 	}
 	if (job.status === 'cancelled') {

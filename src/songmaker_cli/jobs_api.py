@@ -49,7 +49,6 @@ from songmaker_cli.job_types import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
@@ -99,7 +98,8 @@ def api_get_job(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
-    return musician_job_response(job, queue_position=get_queue_position(session, job))
+    queue_position = get_queue_position(session, job)
+    return JobResponse.from_orm(job, queue_position=queue_position)
 
 
 @router.get(
@@ -159,10 +159,7 @@ def _fetch_job_response(ctx: AppContext, job_id: str) -> JobResponse | None:
         job = get_job(db_session, job_id)
         if not job:
             return None
-        return musician_job_response(
-            job,
-            queue_position=get_queue_position(db_session, job),
-        )
+        return JobResponse.from_orm(job, queue_position=get_queue_position(db_session, job))
 
 
 async def _fetch_job_response_before(
@@ -207,7 +204,8 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
             response.take_count,
             response.queue_reason_message,
             response.queue_position,
-            response.error,
+            response.error_message,
+            response.completed_takes,
             response.error_type,
         )
         if observation != previous_observation:
@@ -300,7 +298,7 @@ def api_cancel_job(
     if job.type == JobType.COVER:
         publish_cover_cancel(ctx.redis, job_id)
     job = get_job(session, job_id)
-    return musician_job_response(job)
+    return JobResponse.from_orm(job)
 
 
 ADMIN_ONLY_JOB_TYPES: Final = frozenset({

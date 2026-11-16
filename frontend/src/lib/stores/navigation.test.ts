@@ -1286,7 +1286,7 @@ describe('opening a song recovers its generation state', () => {
 					type: 'generate',
 					status: 'failed',
 					progress: 0,
-					error: 'boom',
+					error_message: { key: 'jobFailure.recorded', values: { cause: 'boom' } },
 					error_type: errorType,
 					started_at: null,
 					completed_at: '2026-01-02T00:00:00+00:00'

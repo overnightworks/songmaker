@@ -82,7 +82,6 @@ from ._runtime import (
 from .generation_failure import (
     GenerationFailure,
     generation_failure,
-    partial_failure_error,
     running_failure_pair,
     select_generation_failure,
 )
@@ -199,7 +198,7 @@ class GenerationProgressTracker:
             JobStatus.RUNNING,
             progress=self.reached,
             phase=unset_if_none(self.phase),
-            error=error,
+            error_message=error,
             error_type=error_type,
             **fields,
         )
@@ -631,13 +630,14 @@ def _finalize_generation_job(
             job_id,
             JobStatus.PARTIAL,
             progress=completed / count,
-            error=partial_failure_error(completed, count, failure.message),
+            error_message=failure.message,
             error_type=failure.error_type,
+            completed_takes=completed, take_count=count,
         )
     else:
         _update_job(
             db_factory, job_id, JobStatus.FAILED,
-            error=failure.message, error_type=failure.error_type,
+            error_message=failure.message, error_type=failure.error_type,
         )
 
 
@@ -694,7 +694,7 @@ async def _dispatch_auto_score(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error=message("jobFailure.scoringWorkerDown"),
+                error_message=message("jobFailure.scoringWorkerDown"),
                 error_type="setup_error",
             )
             return
@@ -711,7 +711,7 @@ async def _dispatch_auto_score(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=message("jobFailure.scoringEnqueueFailed"),
+            error_message=message("jobFailure.scoringEnqueueFailed"),
             error_type="setup_error",
         )
 
@@ -913,7 +913,7 @@ async def run_generation_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=message("jobFailure.generationCancelled"),
+            error_message=message("jobFailure.generationCancelled"),
             error_type="timeout",
         )
         raise
@@ -924,7 +924,7 @@ async def run_generation_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=failure.message,
+            error_message=failure.message,
             error_type=failure.error_type,
         )
     finally:
@@ -990,7 +990,7 @@ async def _build_generation_job_context(
             db_factory,
             request.job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, request.job_id),
+            error_message=_sanitize_error(exc, request.job_id),
             error_type="setup_error",
         )
         return None

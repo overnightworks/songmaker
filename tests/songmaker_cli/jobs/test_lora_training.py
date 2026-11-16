@@ -379,7 +379,7 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
         assert lora.model_mode == "sft"
         assert lora.error_message.sentence() == expected_error
         assert job.status == JobStatus.FAILED
-        assert job.error == expected_error
+        assert job.error_message == lora.error_message
         assert job.error_type == expected_error_type
     assert not (
         seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
@@ -529,7 +529,7 @@ def test_worker_training_failure_keeps_a_training_specific_reason(
         assert lora.status == LoraStatus.FAILED
         assert lora.error_message == message("voiceFailure.workerTrainingFailed")
         assert job.status == JobStatus.FAILED
-        assert job.error == "Worker training failed"
+        assert job.error_message == message("voiceFailure.workerTrainingFailed")
 
 
 def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
@@ -589,7 +589,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
         assert lora.status == LoraStatus.FAILED
         assert lora.error_message == message("voiceFailure.cancelled")
         job = get_job(session, "job-1")
-        assert job.error == message("voiceFailure.cancelled").sentence()
+        assert job.error_message == message("voiceFailure.cancelled")
         assert job.queue_reason_message is None
 
 
@@ -888,7 +888,7 @@ def test_deleted_lora_rejected(seeded, db_factory) -> None:
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.FAILED
-        assert "deleted" in (job.error or "").lower()
+        assert job.error_message == message("voiceFailure.deleted")
 
 
 def test_missing_lora_fails_job(seeded, db_factory) -> None:
@@ -968,7 +968,7 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.FAILED
-        assert job.error == "Generation queue did not drain before LoRA training could start"
+        assert job.error_message == message("voiceFailure.drainTimeout")
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
         assert lora.error_message == message("voiceFailure.drainTimeout")
