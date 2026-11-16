@@ -1649,8 +1649,10 @@ panel shows "Try again" at once; after a crash within 20 s.
 `owner_gone_reaper` loop health shows in `/health/details`, and fails nothing. A
 Redis that lost its data reads an absent lease `unknown` until the lease span has passed
 since the first command after the loss (tandem's epoch), by when the pods have renewed
-their leases; an owner id the reading lacks is `unknown`, and the job pass never asks about
-its own process. A renewal that fails is retried every interval and logged by tandem; the
+their leases; an owner id the reading lacks is `unknown`. The job pass judges this process's own jobs
+like any other's, so a job of a generation its lease lost fails although the process lives on; after an
+empty restart, a live owner's stamped jobs of the lost generation fail on the first pass after its
+renewal, while rows without a generation follow their owner. A renewal that fails is retried every interval and logged by tandem; the
 `owner_gone_reaper` tick reads this process's own lease, not its old key, and the `owner_lease`
 loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
 pass apart). A pod that lost its lease while alive (a Redis outage longer than the
