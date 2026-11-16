@@ -11,8 +11,9 @@ classes of old row map as follows:
 
 * a partial prefix "c/n completed, f failed: cause" keeps its counts when f = n - c, and its cause
   maps like any other text; any other prefix is kept whole as `jobFailure.recorded`;
-* the two LoRA mode errors and the chat "<problem>: <detail>" map through their templates with
-  the quoted values as gaps;
+* the two LoRA mode errors of a LoRA training job and the chat "<problem>: <detail>" of a chat job
+  map through their templates with the quoted values as gaps; the same text on any other job
+  type is no such template and falls to the buckets below;
 * an admin model job's raw worker text is `jobFailure.workerReported` with the text as its cause;
 * the raw worker text of an old Generate row (error type `generation_error`) is dropped for good:
   the row becomes `jobFailure.generationFailed`;
@@ -118,6 +119,8 @@ ADMIN_MODEL_ERROR_TYPES = frozenset(
     {"worker_error", "worker_unreachable", "download_error", "sse_transport"},
 )
 GENERATE_ERROR_TYPE = "generation_error"
+LORA_TRAINING_JOB_TYPE = "lora_training"
+CHAT_JOB_TYPE = "chat"
 BUCKETS = (
     "exact", "partial", "mode", "chat", "workerReported", "generationFailed", "recorded", "null",
 )
@@ -143,6 +146,7 @@ jobs = sa.table(
     sa.column("id", sa.String),
     sa.column("error", sa.Text),
     sa.column("error_type", sa.String),
+    sa.column("type", sa.String),
     sa.column("take_count", sa.Integer),
     sa.column("error_message", sa.JSON(none_as_null=True)),
     sa.column("completed_takes", sa.Integer),
@@ -153,15 +157,18 @@ def _token(key: str, values: Mapping[str, str] | None = None) -> dict[str, objec
     return {"key": key, "values": dict(values or {})}
 
 
-def _classified(sentence: str, error_type: str | None) -> tuple[str, dict[str, object]]:
+def _classified(
+    sentence: str, error_type: str | None, job_type: str,
+) -> tuple[str, dict[str, object]]:
     """The bucket of a stored sentence and the token it becomes; a partial is no cause."""
     if sentence in STORED_MESSAGE_KEYS:
         return "exact", _token(STORED_MESSAGE_KEYS[sentence])
-    for key, pattern in _MODE_PATTERNS.items():
-        matched = pattern.fullmatch(sentence)
-        if matched:
-            return "mode", _token(key, matched.groupdict())
-    chat = _CHAT_PATTERN.fullmatch(sentence)
+    if job_type == LORA_TRAINING_JOB_TYPE:
+        for key, pattern in _MODE_PATTERNS.items():
+            matched = pattern.fullmatch(sentence)
+            if matched:
+                return "mode", _token(key, matched.groupdict())
+    chat = _CHAT_PATTERN.fullmatch(sentence) if job_type == CHAT_JOB_TYPE else None
     if chat:
         return "chat", _token(CHAT_PROBLEM_KEY, chat.groupdict())
     if error_type == GENERATE_ERROR_TYPE:
@@ -172,7 +179,7 @@ def _classified(sentence: str, error_type: str | None) -> tuple[str, dict[str, o
 
 
 def _migrated(
-    sentence: str, error_type: str | None,
+    sentence: str, error_type: str | None, job_type: str,
 ) -> tuple[str, dict[str, object], int | None, int | None]:
     """The bucket, the token, the takes that completed and the takes asked for, of one row."""
     partial = _PARTIAL_PATTERN.fullmatch(sentence)
@@ -180,9 +187,9 @@ def _migrated(
         completed, count, failed = (int(partial[name]) for name in ("completed", "count", "failed"))
         if failed != count - completed:
             return "recorded", _token(RECORDED_KEY, {"cause": sentence}), None, None
-        _, token = _classified(partial["cause"], error_type)
+        _, token = _classified(partial["cause"], error_type, job_type)
         return "partial", token, completed, count
-    bucket, token = _classified(sentence, error_type)
+    bucket, token = _classified(sentence, error_type, job_type)
     return bucket, token, None, None
 
 
@@ -194,10 +201,11 @@ def upgrade() -> None:
     connection = op.get_bind()
     counts: Counter[str] = Counter()
     rows = connection.execute(
-        sa.select(jobs.c.id, jobs.c.error, jobs.c.error_type).where(jobs.c.error.is_not(None)),
+        sa.select(jobs.c.id, jobs.c.error, jobs.c.error_type, jobs.c.type)
+        .where(jobs.c.error.is_not(None)),
     ).all()
-    for job_id, sentence, error_type in rows:
-        bucket, token, completed, count = _migrated(sentence, error_type)
+    for job_id, sentence, error_type, job_type in rows:
+        bucket, token, completed, count = _migrated(sentence, error_type, job_type)
         counts[bucket] += 1
         values: dict[str, object] = {"error_message": token}
         if completed is not None:
