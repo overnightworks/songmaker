@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Annotated, Final, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from acestep_engine.settings import EngineSettings
@@ -58,10 +58,6 @@ DEFAULT_SERVER_PORT: Final = 8080
 # What `/health/details` reports for an image built without the release build arguments.
 UNRELEASED_TAG: Final[str] = "unreleased"
 UNKNOWN_COMMIT: Final[str] = "unknown"
-_RELEASE_FIELD_DEFAULTS: Final = {
-    "songmaker_release": UNRELEASED_TAG,
-    "songmaker_commit": UNKNOWN_COMMIT,
-}
 
 _PUBLIC_BASE_URL_SCHEMES: Final = frozenset({"http", "https"})
 # urlsplit hands back a nonsense netloc verbatim ("http://https://host" splits
@@ -176,12 +172,12 @@ class Settings(BaseSettings):
     # Optional so direct runs and tests start; /metrics answers 503 while unset.
     songmaker_monitoring_token: SecretStr | None = None
 
-    @field_validator("songmaker_release", "songmaker_commit", mode="before")
+    @field_validator("songmaker_commit", mode="before")
     @classmethod
-    def blank_release_value_is_missing(cls, value: object, info: ValidationInfo) -> object:
+    def blank_commit_is_missing(cls, value: object) -> object:
         """An unset build argument reaches the image as an empty ENV: that is "missing"."""
         if isinstance(value, str) and not value.strip():
-            return _RELEASE_FIELD_DEFAULTS[info.field_name or ""]
+            return UNKNOWN_COMMIT
         return value
 
     @field_validator("scoring_whisper_model_dir", "scoring_audiobox_checkpoint", mode="before")
@@ -221,6 +217,12 @@ class Settings(BaseSettings):
                 "bare origin (scheme://host[:port]), a subdirectory deployment is not supported",
             )
         return f"{parsed.scheme}://{parsed.netloc}"
+
+    @property
+    def release_tag(self) -> str:
+        """The running image's release tag: `v` plus its service version, if built with one."""
+        version = self.service_version.strip()
+        return f"v{version}" if version else UNRELEASED_TAG
 
     @property
     def token_client_ids(self) -> frozenset[str]:
@@ -454,7 +456,7 @@ class Settings(BaseSettings):
     )
 
     # ── Release (written into the image by the build arguments) ───────
-    songmaker_release: str = UNRELEASED_TAG
+    service_version: str = ""
     songmaker_commit: str = UNKNOWN_COMMIT
 
     # ── Filesystem roots (override via env for Docker volume mounts) ──

@@ -71,10 +71,10 @@ it.each(['playing', 'paused', 'loading', 'recovering', 'waiting-for-network'] as
 		mounted = mount(LibraryRow, {
 			target: document.body,
 			props: {
-				title: 'Album',
+				title: 'Moonlight',
 				subtitle: '3 songs',
 				coverAlt: 'Cover',
-				openLabel: 'Open album Album',
+				openLabel: 'Open album Moonlight',
 				onopen: () => undefined,
 				onplay: () => undefined,
 				current: true,
@@ -87,7 +87,7 @@ it.each(['playing', 'paused', 'loading', 'recovering', 'waiting-for-network'] as
 		);
 		expect(document.querySelector('.row-play')).toHaveAccessibleName(
 			(status === 'paused' ? words['libraryWall.playTitle'] : words['libraryWall.pauseTitle'])({
-				title: 'Album'
+				title: 'Moonlight'
 			})
 		);
 		expect(document.querySelector('.tile-subtitle')).toHaveTextContent('3 songs');
@@ -122,10 +122,10 @@ it.each([
 		mounted = mount(LibraryRow, {
 			target: document.body,
 			props: {
-				title: 'Album',
+				title: 'Moonlight',
 				subtitle: '3 songs',
 				coverAlt: 'Cover',
-				openLabel: 'Open album Album',
+				openLabel: 'Open album Moonlight',
 				onopen: () => undefined,
 				lightUp: asked,
 				onlit: () => reported++

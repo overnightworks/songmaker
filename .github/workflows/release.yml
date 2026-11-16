@@ -21,7 +21,7 @@ jobs:
       checks: read
       contents: read
       pull-requests: read
-    uses: overnightworks/quality/.github/workflows/release-gate.yml@07196e5a108fca24be8614279e42003d0b78efe3 # v0.20.0
+    uses: overnightworks/quality/.github/workflows/release-gate.yml@915acb8df197c4765b6637b4f3ab67f2fba09c4a # v0.21.0
     with:
       version: ${{ inputs.version }}
       form: YYYY.MM.DD.N
@@ -36,7 +36,6 @@ jobs:
           - image: web
             file: Dockerfile
             build-args: |
-              SONGMAKER_RELEASE=v${{ inputs.version }}
               SONGMAKER_COMMIT=${{ needs.gate.outputs.commit }}
           - image: music-worker
             file: docker/music-worker.Dockerfile
@@ -50,7 +49,7 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: overnightworks/quality/.github/workflows/image.yml@07196e5a108fca24be8614279e42003d0b78efe3 # v0.20.0
+    uses: overnightworks/quality/.github/workflows/image.yml@915acb8df197c4765b6637b4f3ab67f2fba09c4a # v0.21.0
     with:
       image: ${{ matrix.image }}
       file: ${{ matrix.file }}
@@ -64,7 +63,7 @@ jobs:
     needs: [gate, image]
     permissions:
       contents: write
-    uses: overnightworks/quality/.github/workflows/release-tag.yml@07196e5a108fca24be8614279e42003d0b78efe3 # v0.20.0
+    uses: overnightworks/quality/.github/workflows/release-tag.yml@915acb8df197c4765b6637b4f3ab67f2fba09c4a # v0.21.0
     with:
       version: ${{ inputs.version }}
       commit: ${{ needs.gate.outputs.commit }}

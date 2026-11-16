@@ -511,7 +511,7 @@ it('1354_rule_10: opening album B keeps the mark and Pause on queue source A', a
 
 it('1354_rule_10: the row withdraws an album start waiting for the network', async () => {
 	phoneViewport();
-	albumList.set([album({ id: 'waiting', title: 'Waiting', has_playable_take: true })]);
+	albumList.set([album({ id: 'waiting', title: 'Evening Tide', has_playable_take: true })]);
 	songList.set([
 		makeSong({ id: 'waiting-song', album_id: 'waiting', generations: [], generation_count: 1 })
 	]);
@@ -528,18 +528,18 @@ it('1354_rule_10: the row withdraws an album start waiting for the network', asy
 	await tick();
 	expect(get(pendingStart)).toBeNull();
 	expect(get(playStartNotice)).toBe('idle');
-	expect(root.querySelector('.row-play')).toHaveAccessibleName(rowLabel('play', 'Waiting'));
+	expect(root.querySelector('.row-play')).toHaveAccessibleName(rowLabel('play', 'Evening Tide'));
 });
 
-it('1354_rule_43: the phone row starts an album and leaves Shuffle on', async () => {
+it('1354_rule_43: the phone row starts an album and leaves shuffle on', async () => {
 	phoneViewport();
-	albumList.set([album({ id: 'shuffle', title: 'Shuffle', has_playable_take: true })]);
+	albumList.set([album({ id: 'shuffle', title: 'Morning Tide', has_playable_take: true })]);
 	songList.set([
 		makeSong({ id: 'shuffle-song', album_id: 'shuffle', generations: [makeGeneration()] })
 	]);
 	albumSongsLoad.set({ shuffle: 'idle' });
 	setShuffle(true);
-	getByRoleButton(await render(), rowLabel('play', 'Shuffle')).click();
+	getByRoleButton(await render(), rowLabel('play', 'Morning Tide')).click();
 	await tick();
 	expect(get(shuffleEnabled)).toBe(true);
 });
