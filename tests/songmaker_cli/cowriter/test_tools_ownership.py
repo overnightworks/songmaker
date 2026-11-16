@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server import auth
 
 
@@ -65,6 +66,14 @@ def ownership_factory(pg_factory):
     return factory
 
 
+def _running_chat_job_id(factory) -> str:
+    with factory() as session:
+        job = Job(type=JobType.CHAT, user_id="actor", status=JobStatus.RUNNING)
+        session.add(job)
+        session.commit()
+        return job.id
+
+
 def _actor_session_id(factory) -> str:
     with factory() as session:
         return session.query(UserSession).filter_by(user_id="actor").one().id
@@ -100,7 +109,7 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
     if route == "hand-tool":
         hand_tool = next(t for t in cowriter_hand_tools(factory) if t.declaration.name == name)
         principal = Principal(iss="issuer.test", sub="actor")
-        with bound_to_turn(CallingTurn(_actor_session_id(factory))):
+        with bound_to_turn(CallingTurn(_actor_session_id(factory), _running_chat_job_id(factory))):
             result = asyncio.run(hand_tool.handler(principal, arguments))
         return result.is_error, result.content if result.is_error else json.loads(result.content)
     with factory() as session:
@@ -173,13 +182,13 @@ def test_tools_only_reach_owned_resources(
         assert session.query(Song).count() == 2 + created
         assert session.query(Version).count() == 2 + edited
         assert session.query(UserSongWork).count() == int(edited)
-        assert session.query(Job).count() == int(cover)
+        assert session.query(Job).filter_by(type=JobType.COVER).count() == int(cover)
         if edited:
             work = session.query(UserSongWork).one()
             assert work.user_id == "actor"
             assert session.get(Song, work.song_id).album_id == "album-actor"
         if cover:
-            job = session.query(Job).one()
+            job = session.query(Job).filter_by(type=JobType.COVER).one()
             assert (job.album_id, job.user_id) == ("album-actor", "actor")
 
 
@@ -255,7 +264,7 @@ def test_an_admins_turn_with_another_persons_content_answers_404_and_creates_no_
 
     assert response.status_code == 404
     with ownership_factory() as session:
-        assert session.query(Job).count() == 0
+        assert session.query(Job).filter_by(type=JobType.COVER).count() == 0
     assert stack.gateway_requests == []
 
 
@@ -289,5 +298,5 @@ def test_the_coherence_verdict_is_stored_only_on_the_actors_own_take(
         )
         assert session.query(Version).count() == 2
         assert session.query(UserSongWork).count() == 0
-        assert session.query(Job).count() == 0
+        assert session.query(Job).filter_by(type=JobType.COVER).count() == 0
         assert session.query(Song).count() == 2

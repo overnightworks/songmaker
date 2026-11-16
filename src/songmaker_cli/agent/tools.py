@@ -31,9 +31,10 @@ _REFUSED: Final = ToolOutcome("The tool call was refused.", is_error=True)
 
 @dataclass(frozen=True)
 class CallingTurn:
-    """The turn whose tool calls are running: the session that asked for it."""
+    """The turn whose tool calls are running: the session that asked for it and its chat job."""
 
     session_id: str
+    job_id: str
 
 
 _calling_turn: ContextVar[CallingTurn] = ContextVar("calling_turn")
@@ -72,9 +73,8 @@ def cowriter_hand_tools(session_factory: sessionmaker[Session]) -> list[HandTool
 def _handler_for(name: str, session_factory: sessionmaker[Session]):
     async def handle(principal: Principal, arguments: JsonObject) -> ToolOutcome:
         turn = _calling_turn.get(None)
-        session_id = None if turn is None else turn.session_id
         return await asyncio.to_thread(
-            _execute, session_factory, principal.sub, name, arguments, session_id,
+            _execute, session_factory, principal.sub, name, arguments, turn,
         )
 
     return handle
@@ -85,7 +85,7 @@ def _execute(
     user_id: str,
     name: str,
     arguments: JsonObject,
-    session_id: str | None,
+    turn: CallingTurn | None,
 ) -> ToolOutcome:
     with session_factory() as session:
         try:
@@ -93,6 +93,8 @@ def _execute(
         except ToolUserNotFoundError:
             return _REFUSED
         outcome = execute_cowriter_tool(
-            session, user, name, arguments, session_id=session_id,
+            session, user, name, arguments,
+            session_id=None if turn is None else turn.session_id,
+            turn_job_id=None if turn is None else turn.job_id,
         )
     return outcome
