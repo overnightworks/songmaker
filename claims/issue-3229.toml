@@ -1,0 +1,8 @@
+claim_id = "edf2a536178940fbaf30f98806df895f"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "67ad08fa149676ce6a07ee546a78d6fced920e98"
+branch = "claude/issue-3229-songmaker-s-quality-pin-moves-to-v0-21-0"
+scope = [".github/workflows", "Dockerfile", "docker/docker-compose.test.yml", "docs/architecture.md", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/LibraryRow.test.ts", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/routes/layout.test.ts", "quality", "src/songmaker_cli/settings.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_settings.py", "tests/songmaker_cli/test_settings_api_release.py"]
+opened_commit = "20eb63beb5fae29942bfed4fb20bd863de561e3c"
+whole_reason = "One pin bump: quality v0.21.0 turns six test locators red and takes over the image version, so its tests, workflows, Dockerfile and Settings move together."
