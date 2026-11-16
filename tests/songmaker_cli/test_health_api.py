@@ -11,6 +11,7 @@ never a lucky real GPU.
 from __future__ import annotations
 
 import json
+import socket
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -20,9 +21,14 @@ from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import redis
+import redis.asyncio
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 from support.web_app import make_test_app
 
 from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
+from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import AceStepWorker, Job
 from songmaker_cli.health_api import (
@@ -156,6 +162,14 @@ def health_client(tmp_path, mock_arq_pool, pg_factory):
 
 
 @pytest.fixture
+def refused_redis_port():
+    """A port nothing listens on; the bound socket stays open so no process can take it."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        yield reserved.getsockname()[1]
+
+
+@pytest.fixture
 def expected_health_json() -> bytes:
     return (
         b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
@@ -223,6 +237,23 @@ def test_health_preserves_response_bytes(
     )
     assert response.status_code == 200
     assert response.content == expected
+
+
+def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
+    tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers,
+) -> None:
+    retry_never = Retry(NoBackoff(), 0)
+    refused = {"host": "127.0.0.1", "port": refused_redis_port, "retry": retry_never}
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=_seed_one_worker, redis=redis.Redis(**refused),
+    )
+
+    client.app.dependency_overrides[get_arq_pool_dep] = lambda: redis.asyncio.Redis(**refused)
+    with client:
+        response = client.get("/health/details", headers=monitoring_headers)
+
+    assert response.status_code == 200
+    assert response.json()["redis"] == "error"
 
 
 @pytest.mark.parametrize(
