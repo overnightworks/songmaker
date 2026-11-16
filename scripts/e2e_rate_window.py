@@ -14,8 +14,9 @@ policy that classifies each path is importable:
 
 A request line carries the route template, never the path, so the policy classifies
 the template; a request no route answered (a document, a static file, a 404) has none
-and is not counted. A request the limiter refused is counted: the request line sits
-outside it.
+and is not counted. A request the limiter refused is logged, since the request line
+sits outside it, but the refusal answers before routing and has no route, so the peak
+does not count it.
 """
 # ruff: noqa: T201 - this report prints the busiest rate-limit window
 

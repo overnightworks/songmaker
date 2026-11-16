@@ -228,8 +228,9 @@ peak, with room for one CI retry landing inside the same window (#1555). The
 same step prints the busiest sign-in window, measured over its own 600-second
 window, and `SIGN_IN_RATE_LIMIT` in `docker/docker-compose.test.yml` is kept at
 least three times above the summed sign-in peak of both projects. The
-request line sits outside the limiter, so a request it refused with 429 is counted
-as well. Re-running the suite
+request line sits outside the limiter, so a request it refused with 429 is logged, but
+the refusal answers before routing: its line has no route, so the peak does not count
+it. Re-running the suite
 repeatedly against the same stack inside that window is cumulative, not reset
 per run — see "Running it locally" below. If this suite gains more specs,
 check the printed peak against the override rather than trusting the
