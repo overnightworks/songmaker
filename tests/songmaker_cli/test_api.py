@@ -2965,7 +2965,7 @@ def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
 
     assert len(events) == 1
     assert events[0]["status"] == "failed"
-    assert events[0]["error"] == failure.sentence()
+    assert events[0]["error"] == "test error"
     assert events[0]["error_message"] == failure.model_dump()
 
 
