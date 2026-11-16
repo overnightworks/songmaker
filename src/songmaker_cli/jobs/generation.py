@@ -951,22 +951,16 @@ async def _admit_generation_worker_or_requeue(
 
 
 async def _requeue_generation(
-    request: GenerationJobRequest,
-    redis: ArqRedis,
-    db_factory: sessionmaker[Session],
+    request: GenerationJobRequest, redis: ArqRedis, db_factory: sessionmaker[Session],
 ) -> None:
     """Queue the job again behind the hold that keeps it off its worker."""
     _update_job(
-        db_factory,
-        request.job_id,
-        JobStatus.QUEUED,
+        db_factory, request.job_id, JobStatus.QUEUED,
         queue_reason_message=message("jobWait.voiceTraining"),
     )
     await redis.enqueue_job(
-        JobFunction.GENERATE,
-        *request.queue_args(),
-        _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
+        JobFunction.GENERATE, *request.queue_args(),
+        _queue_name=ARQ_MUSIC_QUEUE_NAME, _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
     )
 
 
@@ -1048,9 +1042,7 @@ async def _generate_variants(
                 index, count, ctx, progress,
             )
         except WorkerHeld:
-            remaining = replace(request, count=count - completed)
-            log.info("Generation job %s: worker held, %d takes wait", job_id, remaining.count)
-            await _requeue_generation(remaining, redis, db_factory)
+            await _requeue_generation(replace(request, count=count - completed), redis, db_factory)
             return
         if error is not None:
             progress.record_failure(error)

@@ -99,7 +99,7 @@
 
 [function_lines."src/songmaker_cli/jobs/generation.py"]
 "post_process_generation" = 79
-"run_generation_job" = 98
+"run_generation_job" = 91
 
 [function_lines."src/songmaker_cli/jobs/lora_training.py"]
 "_prepare_and_submit_lora" = 70
