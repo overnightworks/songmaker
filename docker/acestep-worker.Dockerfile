@@ -118,7 +118,8 @@ WORKDIR /app
 # wrapper vs ACE-Step model subprocess). The wrapper image stays small.
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --extra acestep-worker \
-    && rm -f /tmp/uv-*.lock # why: The lock pins every package with its hashes, tandem by its git commit, which a hashed pip install cannot take. nvidia-ml-py3 has only a source distribution in the lock and tandem is built from its commit; git is in the base image.
+        --no-build --no-binary-package nvidia-ml-py3 --no-binary-package overnightworks-tandem \
+    && rm -f /tmp/uv-*.lock # why: The lock pins every package with its hashes, tandem by its git commit, which a hashed pip install cannot take. nvidia-ml-py3 has only a source distribution in the lock and tandem is built from its commit; git is in the base image. Those two are the only packages uv may build; any other package without a wheel fails the build.
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
