@@ -76,7 +76,9 @@ def lease_span_has_passed_on_the_server(redis_client: Redis) -> None:
 
 def _owner_of_the_lease(redis_client: Redis, owner_id: str) -> JobOwner:
     """``owner_id`` as its jobs name it: with the generation its live lease holds."""
-    return an_owner(owner_id, owner_lease_generation(redis_client, owner_id))
+    generation = owner_lease_generation(redis_client, owner_id)
+    assert generation is not None
+    return an_owner(owner_id, generation)
 
 
 def _a_ghost() -> JobOwner:
