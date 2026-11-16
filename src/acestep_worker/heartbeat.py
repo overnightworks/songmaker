@@ -119,19 +119,28 @@ async def renew_gpu_hold(redis: Redis, worker_id: str, generation: str) -> bool:
     return renewed
 
 
+async def _delete_old_gpu_hold_carrying(redis: Redis, worker_id: str, generation: str | bytes) -> None:
+    await redis.eval(RELEASE_OLD_GPU_HOLD_SCRIPT, 1, gpu_hold_old_key(worker_id), generation)
+
+
 async def release_gpu_hold(redis: Redis, worker_id: str, generation: str) -> bool:
     released = await gpu_hold_locks(redis).release(worker_id, generation)
-    await redis.eval(RELEASE_OLD_GPU_HOLD_SCRIPT, 1, gpu_hold_old_key(worker_id), generation)
+    await _delete_old_gpu_hold_carrying(redis, worker_id, generation)
     return released
 
 
 async def release_orphaned_gpu_hold(redis: Redis, worker_id: str) -> None:
-    """End the hold a previous process of this worker left, with the generation it holds."""
-    locks = gpu_hold_locks(redis)
-    state = await locks.state(worker_id)
+    """End the hold a previous process of this worker left, with the generation it holds.
+
+    Neither layout of the hold is ended by a replacement taken after the read: the lock by the
+    generation read, the old key by the value read.
+    """
+    observed_old_key = await redis.get(gpu_hold_old_key(worker_id))
+    state = await gpu_hold_locks(redis).state(worker_id)
     if state.liveness is Liveness.ALIVE and state.generation is not None:
-        await locks.release(worker_id, state.generation)
-    await redis.delete(gpu_hold_old_key(worker_id))
+        await release_gpu_hold(redis, worker_id, state.generation)
+    elif observed_old_key is not None:
+        await _delete_old_gpu_hold_carrying(redis, worker_id, observed_old_key)
 
 
 StateProvider = Callable[[], Awaitable[dict[str, Any]]]

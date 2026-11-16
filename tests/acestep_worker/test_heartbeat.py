@@ -131,6 +131,7 @@ def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None
             assert await gpu_hold_locks(other).release(worker_id, previous)
             acquired = await gpu_hold_locks(other).acquire(worker_id)
             assert acquired is not None
+            await other.set(gpu_hold_old_key(worker_id), acquired, ex=15)
             replacement.append(acquired)
 
         loop = HeartbeatLoop(
@@ -139,12 +140,17 @@ def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None
             state_provider=_no_state,
         )
         await loop.clear_orphaned_queue()
-        return replacement, await gpu_hold_locks(other).state(worker_id)
+        return (
+            replacement,
+            await gpu_hold_locks(other).state(worker_id),
+            await other.get(gpu_hold_old_key(worker_id)),
+        )
 
-    replacement, hold = _run(go())
+    replacement, hold, old_key = _run(go())
 
     assert hold.liveness is Liveness.ALIVE
     assert hold.generation == replacement[0]
+    assert old_key == replacement[0].encode()
 
 
 async def _no_state() -> dict[str, object]:
