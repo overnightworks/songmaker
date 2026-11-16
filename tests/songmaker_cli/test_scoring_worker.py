@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from logline.testing import configured
+
 import songmaker_cli.scoring_worker as sw_mod
 from songmaker_cli.scoring_worker import ScoringWorker
 
@@ -76,7 +78,7 @@ def test_on_startup_initializes_scorer() -> None:
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.worker_base.configure"),
+        configured("restored-after-the-test"),
         patch(
             "songmaker_cli.scoring.subprocess_runner.ScorerProcess",
             return_value=mock_scorer,

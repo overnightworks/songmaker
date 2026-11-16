@@ -89,7 +89,6 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_main_serves_on_the_configured_host_and_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("acestep_worker.__main__.configure", lambda service: None)
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("WORKER_BIND_HOST", "127.0.0.1")
@@ -101,6 +100,7 @@ def test_main_serves_on_the_configured_host_and_port(monkeypatch: pytest.MonkeyP
     served: list[tuple[str, int]] = []
 
     with (
+        configured("restored-after-the-test"),
         patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
         patch(
             "acestep_worker.__main__.make_acestep_runner",
@@ -113,7 +113,6 @@ def test_main_serves_on_the_configured_host_and_port(monkeypatch: pytest.MonkeyP
 
 
 def test_main_exits_with_the_code_serve_owes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("acestep_worker.__main__.configure", lambda service: None)
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
@@ -121,7 +120,7 @@ def test_main_exits_with_the_code_serve_owes(monkeypatch: pytest.MonkeyPatch) ->
 
     get_worker_settings.cache_clear()
 
-    with pytest.raises(SystemExit) as exit_info:
+    with configured("restored-after-the-test"), pytest.raises(SystemExit) as exit_info:
         main(serve_deps=lambda *_: LM_FAILURE_EXIT_CODE)
 
     assert exit_info.value.code == LM_FAILURE_EXIT_CODE

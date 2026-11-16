@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from logline.testing import configured
@@ -108,6 +109,13 @@ def test_get_db_factory_independent_per_instance() -> None:
     assert mock_init.call_count == 2
 
 
+def _settings_on(redis_url: str) -> Settings:
+    return Settings(
+        database_url="postgresql://example", redis_url=redis_url,
+        session_secret="session-secret", songmaker_internal_token="internal-token",
+    )
+
+
 # ── logging ───────────────────────────────────────────────────────
 
 
@@ -119,19 +127,21 @@ def test_get_db_factory_independent_per_instance() -> None:
     ],
 )
 def test_a_worker_writes_its_lines_under_its_own_service_name(
-    worker_class: type[WorkerBase], service: str, capsys: pytest.CaptureFixture[str],
+    worker_class: type[WorkerBase],
+    service: str,
+    redis_url: str,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    worker = worker_class()
+    worker = worker_class(settings=_settings_on(redis_url))
     worker.get_db_factory = MagicMock()
-    worker._start_owner_lease = AsyncMock()
 
-    with (
-        configured("restored-after-the-test"),
-        patch("songmaker_cli.scoring.subprocess_runner.ScorerProcess"),
-        patch("songmaker_cli.scoring.subprocess_runner.set_scorer_process"),
-    ):
-        _run(worker.on_startup({}))
+    async def start_log_and_stop() -> None:
+        await worker.on_startup({})
         logging.getLogger("songmaker_cli.probe").info("probe.ended")
+        await worker.on_shutdown({})
+
+    with configured("restored-after-the-test"):
+        _run(start_log_and_stop())
 
     lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert {line["service"] for line in lines} == {service}
@@ -141,12 +151,14 @@ def test_a_worker_writes_its_lines_under_its_own_service_name(
 # ── owner lease ───────────────────────────────────────────────────
 
 
-def _worker_on(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
-    monkeypatch.setattr("songmaker_cli.worker_base.configure", lambda service: None)
-    worker = _DummyWorker(settings=Settings(
-        database_url="postgresql://example", redis_url=redis_url,
-        session_secret="session-secret", songmaker_internal_token="internal-token",
-    ))
+@pytest.fixture
+def restored_logging() -> Iterator[None]:
+    with configured("restored-after-the-test"):
+        yield
+
+
+def _worker_on(redis_url: str) -> _DummyWorker:
+    worker = _DummyWorker(settings=_settings_on(redis_url))
     worker.get_db_factory = MagicMock()
     return worker
 
@@ -160,9 +172,9 @@ async def _held_leases(redis_url: str) -> set[str]:
 
 
 def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
-    worker = _worker_on(redis_url, monkeypatch)
+    worker = _worker_on(redis_url)
 
     async def start_and_stop() -> tuple[set[str], set[str]]:
         await worker.on_startup({})
@@ -174,9 +186,9 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
 
 
 def test_a_worker_whose_database_cannot_open_holds_no_lease(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
-    worker = _worker_on(redis_url, monkeypatch)
+    worker = _worker_on(redis_url)
     worker.get_db_factory = MagicMock(side_effect=OSError("the database is down"))
 
     async def start_and_read_the_leases() -> set[str]:
@@ -188,10 +200,10 @@ def test_a_worker_whose_database_cannot_open_holds_no_lease(
 
 
 def test_a_shutdown_that_cannot_end_the_lease_still_ends(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url, monkeypatch)
+        worker = _worker_on(proxy.url)
 
         async def start_and_stop_with_redis_cut() -> None:
             await worker.on_startup({})
