@@ -346,6 +346,7 @@ export interface GenerationRetentionReport {
 
 export interface GenerationUnavailableResponse {
 	detail: string;
+	message: Message;
 	error_type: string;
 	job_id: string;
 }
@@ -362,7 +363,9 @@ export interface JobItem {
 	current_epoch?: number | null;
 	train_epochs?: number | null;
 	remaining_time_estimate?: number | 'calculating' | null;
+	completed_takes?: number | null;
 	error?: string | null;
+	error_message?: Message | null;
 	error_type?: string | null;
 	retry_after_seconds?: number | null;
 	queue_reason?: string | null;

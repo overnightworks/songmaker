@@ -1258,7 +1258,8 @@ export type Words = {
     readonly "jobFailure.noWorkers": string;
     readonly "jobFailure.internal": string;
     readonly "jobFailure.unexpected": string;
-    readonly "jobFailure.reported": (gaps: { readonly cause: string }) => string;
+    readonly "jobFailure.workerReported": (gaps: { readonly cause: string }) => string;
+    readonly "jobFailure.recorded": (gaps: { readonly cause: string }) => string;
     readonly "jobFailure.generationFailed": string;
     readonly "jobFailure.generationUnavailable": string;
     readonly "jobFailure.gpuOutOfMemory": string;
@@ -1293,7 +1294,6 @@ export type Words = {
     readonly "voiceFailure.modeUnsupported": (gaps: { readonly workerMode: string }) => string;
     readonly "voiceFailure.modeMismatch": (gaps: { readonly requestedMode: string; readonly workerMode: string }) => string;
     readonly "voiceFailure.recorded": (gaps: { readonly cause: string }) => string;
-    readonly "jobEnd.serverRestart": string;
     readonly "jobEnd.generateCompleted": string;
     readonly "jobEnd.generatePartial": string;
     readonly "jobEnd.generateCancelled": string;
@@ -2959,7 +2959,8 @@ export const words: Words = {
     "jobFailure.noWorkers": "No ACE-Step workers available",
     "jobFailure.internal": "Internal error during processing",
     "jobFailure.unexpected": "An unexpected error occurred",
-    "jobFailure.reported": (gaps: { readonly cause: string }) => gaps.cause,
+    "jobFailure.workerReported": (gaps: { readonly cause: string }) => "The worker reported: " + gaps.cause,
+    "jobFailure.recorded": (gaps: { readonly cause: string }) => gaps.cause,
     "jobFailure.generationFailed": "Generating failed — try again.",
     "jobFailure.generationUnavailable": "Generating isn't available right now.",
     "jobFailure.gpuOutOfMemory": "Too long for the GPU right now — try a shorter duration.",
@@ -2994,7 +2995,6 @@ export const words: Words = {
     "voiceFailure.modeUnsupported": (gaps: { readonly workerMode: string }) => "Worker completed LoRA training with unsupported model mode: " + gaps.workerMode,
     "voiceFailure.modeMismatch": (gaps: { readonly requestedMode: string; readonly workerMode: string }) => "Worker completed LoRA training with model mode " + gaps.workerMode + ", expected " + gaps.requestedMode,
     "voiceFailure.recorded": (gaps: { readonly cause: string }) => gaps.cause,
-    "jobEnd.serverRestart": "Server restarted — please retry",
     "jobEnd.generateCompleted": "generate completed",
     "jobEnd.generatePartial": "generate partially completed",
     "jobEnd.generateCancelled": "generate cancelled",

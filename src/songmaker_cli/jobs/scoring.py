@@ -75,7 +75,7 @@ def run_scoring_job(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error=message("jobFailure.scoringAudioMissing"),
+                error_message=message("jobFailure.scoringAudioMissing"),
                 error_type="setup_error",
             )
             log.error("Scoring job %s: MP3 not found at %s", job_id, scoring_input.mp3_path_rel)
@@ -120,7 +120,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error_message=_sanitize_error(exc, job_id),
             error_type="timeout",
         )
     except Exception as exc:
@@ -129,7 +129,7 @@ def run_scoring_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error_message=_sanitize_error(exc, job_id),
             error_type="scoring_error",
         )
 
@@ -157,7 +157,7 @@ def _load_scoring_input(
                 db_factory,
                 job_id,
                 JobStatus.FAILED,
-                error=message("jobFailure.scoringGenerationMissing"),
+                error_message=message("jobFailure.scoringGenerationMissing"),
                 error_type="setup_error",
             )
             return None

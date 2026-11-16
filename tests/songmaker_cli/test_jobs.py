@@ -648,8 +648,7 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "partial"
-        assert "1/3 completed" in job.error
-        assert "2 failed" in job.error
+        assert (job.completed_takes, job.take_count) == (1, 3)
 
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
@@ -681,8 +680,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert "Song not found" in job.error
+        assert (job.status, job.error_message) == ("failed", message("jobFailure.songNotFound"))
         assert session.query(ResourceEvent).count() == 0
 
 
@@ -710,8 +708,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert "Version not found" in job.error
+        assert (job.status, job.error_message) == ("failed", message("jobFailure.versionNotFound"))
 
 
 async def _run_peer_generation(factory, peer, count):
@@ -734,7 +731,7 @@ def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == message("jobFailure.generationUnavailable").sentence()
+        assert job.error_message == message("jobFailure.generationUnavailable")
         assert job.error_type == "generation_unavailable"
         assert session.query(Generation).count() == 0
 
@@ -791,8 +788,8 @@ def test_generation_job_selects_musician_line(
         job = get_job(session, "j1")
         assert job.status == ("partial" if completed else "failed")
         assert job.error_type == "generation_error"
-        prefix = "1/2 completed, 1 failed: " if completed else ""
-        assert job.error == prefix + message("jobFailure.generationFailed").sentence()
+        assert job.error_message == message("jobFailure.generationFailed")
+        assert job.completed_takes == (1 if completed else None)
         generations = session.query(Generation).all()
         assert len(generations) == completed
         for generation in generations:
@@ -846,7 +843,7 @@ def test_generation_job_sanitizes_auto_load_response(
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert job.error_type == "generation_unavailable"
-        assert job.error == message("jobFailure.generationUnavailable").sentence()
+        assert job.error_message == message("jobFailure.generationUnavailable")
     assert "j1" in caplog.text
     assert cause in caplog.text
 
@@ -872,7 +869,7 @@ def test_s5_generation_job_worker_disappears_before_request(
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == message("jobFailure.generationUnavailable").sentence()
+        assert job.error_message == message("jobFailure.generationUnavailable")
         assert job.error_type == "generation_unavailable"
         assert session.query(Generation).count() == 0
     assert "j1" in caplog.text
@@ -915,8 +912,8 @@ def test_s5_generation_job_reload_unavailable(
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == ("partial" if completed else "failed")
-        prefix = "1/2 completed, 1 failed: " if completed else ""
-        assert job.error == prefix + message("jobFailure.generationUnavailable").sentence()
+        assert job.error_message == message("jobFailure.generationUnavailable")
+        assert job.completed_takes == (1 if completed else None)
         assert job.error_type == "generation_unavailable"
         generations = session.query(Generation).all()
         assert len(generations) == completed
@@ -926,20 +923,20 @@ def test_s5_generation_job_reload_unavailable(
 
 
 @pytest.mark.parametrize(
-    ("outcomes", "status", "completed", "prefix", "gated_take"),
+    ("outcomes", "status", "completed", "gated_take"),
     [
-        (("oom",), "failed", 0, "", None),
-        (("oom", "success"), "partial", 1, "1/2 completed, 1 failed: ", None),
-        (("success", "oom"), "partial", 1, "1/2 completed, 1 failed: ", None),
-        (("oom", "oom"), "failed", 0, "", None),
-        (("oom", "generic"), "failed", 0, "", None),
-        (("generic", "oom"), "failed", 0, "", (2, None, None)),
+        (("oom",), "failed", 0, None),
+        (("oom", "success"), "partial", 1, None),
+        (("success", "oom"), "partial", 1, None),
+        (("oom", "oom"), "failed", 0, None),
+        (("oom", "generic"), "failed", 0, None),
+        (("generic", "oom"), "failed", 0, (2, None, None)),
     ],
     ids=["oom", "oom-success", "success-oom", "oom-oom", "oom-generic", "generic-oom"],
 )
 def test_s8_take_outcomes(
     seeded_db, generation_worker_peer, tmp_path, locked_ffmpeg,
-    outcomes, status, completed, prefix, gated_take,
+    outcomes, status, completed, gated_take,
 ):
     """S8-B/D/E/F: Real worker takes continue and retain the selected OOM cause."""
 
@@ -966,7 +963,7 @@ def test_s8_take_outcomes(
                     await entered.wait()
                     with seeded_db() as session:
                         job = get_job(session, "j1")
-                        assert (job.take_index, job.error, job.error_type) == gated_take
+                        assert (job.take_index, job.error_message, job.error_type) == gated_take
                     release.set()
                 await task
                 assert [kind for kind, _ in peer.requests].count("submit") == len(outcomes)
@@ -981,7 +978,8 @@ def test_s8_take_outcomes(
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == status
-        assert job.error == prefix + "Too long for the GPU right now — try a shorter duration."
+        assert job.error_message == message("jobFailure.gpuOutOfMemory")
+        assert job.completed_takes == (completed or None)
         assert job.error_type == "gpu_out_of_memory"
         generations = session.query(Generation).filter_by(song_id="s1").all()
         assert len(generations) == completed
@@ -1013,7 +1011,7 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == "Internal error during processing"
+        assert job.error_message == message("jobFailure.internal")
         assert session.query(Generation).count() == 0
         assert session.query(ResourceEvent).count() == 0
         assert session.query(Job).filter_by(type="score", song_id="s1").count() == 0
@@ -1764,7 +1762,8 @@ def test_s8_cancel_after_oom(seeded_db, generation_worker_peer, tmp_path, locked
                 assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
                 with seeded_db() as session:
                     job = get_job(session, "j1")
-                    assert (job.status, job.error, job.error_type) == ("cancelled", None, None)
+                    assert (job.status, job.error_type) == ("cancelled", None)
+                    assert job.error_message is None
                     assert session.query(Generation).count() == 1
                     assert all(path.is_file() for path in paths)
             finally:
@@ -2174,7 +2173,7 @@ def test_scoring_job_generation_not_found(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j2")
         assert job.status == "failed"
-        assert "Generation not found" in job.error
+        assert job.error_message == message("jobFailure.scoringGenerationMissing")
 
 
 def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
@@ -2197,7 +2196,7 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j2")
         assert job.status == "failed"
-        assert job.error == "Audio file not found for scoring"
+        assert job.error_message == message("jobFailure.scoringAudioMissing")
 
 
 def test_scoring_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Path) -> None:
@@ -2348,7 +2347,7 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j2")
         assert job.status == "failed"
-        assert job.error == "Internal error during processing"
+        assert job.error_message == message("jobFailure.internal")
 
 
 # ── Job metrics queries ──────────────────────────────────────────
@@ -2489,7 +2488,7 @@ def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
     with seeded_db() as session:
         job = get_job(session, "job1")
         assert job.status == "failed"
-        assert job.error == message("jobFailure.internal").sentence()
+        assert job.error_message == message("jobFailure.internal")
         assert job.error_type == "worker_missing"
 
 
@@ -2543,7 +2542,7 @@ def test_load_model_on_worker_returns_5xx(seeded_db, response_format: str) -> No
         job = get_job(session, "w1-job")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
-        assert job.error == worker_response
+        assert job.error_message == message("jobFailure.workerReported", cause=worker_response)
 
 
 def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, caplog) -> None:
@@ -2570,7 +2569,7 @@ def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, capl
     assert long_tail in caplog.text
     with seeded_db() as session:
         job = get_job(session, "w1-job")
-        assert job.error == long_tail
+        assert job.error_message == message("jobFailure.workerReported", cause=long_tail)
         assert job.error_type == "worker_error"
 
 
@@ -2691,7 +2690,7 @@ def test_download_model_on_worker_returns_5xx(seeded_db, response_format: str) -
         job = get_job(session, "dl4")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
-        assert job.error == cause
+        assert job.error_message == message("jobFailure.workerReported", cause=cause)
 
 
 def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> None:
@@ -2783,7 +2782,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         job = get_job(session, "dl6")
         assert job.status == "failed"
         assert job.error_type == "download_error"
-        assert job.error == "HF 401 unauthorized"
+        assert job.error_message.values == {"cause": "HF 401 unauthorized"}
     assert consume_calls["count"] == 3
 
 
@@ -2892,7 +2891,7 @@ def test_download_model_on_worker_aborts_when_another_job_holds_the_download(see
         job = get_job(session, "dl10")
         assert job.status == "failed"
         assert job.error_type == "duplicate_download"
-        assert job.error == message("jobFailure.internal").sentence()
+        assert job.error_message == message("jobFailure.internal")
     assert redis.store[download_key("sft")] == "previous-job"
 
 

@@ -185,15 +185,16 @@ def claim_next_cover_job(session: Session, owner_id: str) -> Job | None:
 class JobStatusUpdate:
     """One status write for a job; each field names the job column it writes.
 
-    Progress, error, error type, the wait a busy refusal named and queue reason
-    describe the job at this write, so leaving them out resets them. The remaining fields only some
-    writers know; ``UNSET`` keeps what the job already holds.
+    Progress, error, error type, the wait a busy refusal named, queue reason and the takes that
+    completed describe the job at this write, so leaving them out resets them. The remaining
+    fields only some writers know; ``UNSET`` keeps what the job already holds.
     """
 
     status: JobStatus
     _: KW_ONLY
     progress: float = 0.0
-    error: Message | None = None
+    error_message: Message | None = None
+    completed_takes: int | None = None
     error_type: str | None = None
     retry_after_seconds: int | None = None
     queue_reason_message: Message | None = None
@@ -227,18 +228,13 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
     for column in fields(update):
         value = getattr(update, column.name)
         if value is not UNSET:
-            setattr(job, column.name, _error_text(value) if column.name == "error" else value)
+            setattr(job, column.name, value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
     if status in JOB_TERMINAL_STATUSES:
         _apply_terminal_values(job, now)
     session.flush()
     return True
-
-
-def _error_text(error: Message | None) -> str | None:
-    """The sentence the Text column `jobs.error` stores for a failure's message."""
-    return None if error is None else error.sentence()
 
 
 def _terminal_values(now: datetime) -> dict[str, object]:
@@ -374,12 +370,12 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
 
 @dataclass(frozen=True)
 class JobVerdict:
-    error: Message
+    error_message: Message
     error_type: str
 
 
 JOB_ERROR_SERVER_RESTARTED: Final = JobVerdict(
-    error=message("jobFailure.serverRestarted"), error_type="server_restart",
+    error_message=message("jobFailure.serverRestarted"), error_type="server_restart",
 )
 
 
@@ -394,7 +390,7 @@ def _queued_verdict(
         liveness = WorkerLiveness.UNKNOWN
     if liveness is WorkerLiveness.DEAD:
         return JobVerdict(
-            error=message("jobFailure.noWorkerAlive"),
+            error_message=message("jobFailure.noWorkerAlive"),
             error_type="no_worker_alive",
         )
     if liveness is WorkerLiveness.ALIVE:
@@ -405,14 +401,14 @@ def _queued_verdict(
         )
         if _is_started_stale(job, full_queue_cutoff):
             return JobVerdict(
-                error=message("jobFailure.queuedFullQueueBound"),
+                error_message=message("jobFailure.queuedFullQueueBound"),
                 error_type="queued_full_queue_bound",
             )
         return None
     age_cutoff = now - timedelta(seconds=thresholds.queued_seconds)
     if _is_started_stale(job, age_cutoff):
         return JobVerdict(
-            error=message("jobFailure.queuedTooLong"),
+            error_message=message("jobFailure.queuedTooLong"),
             error_type="queued_too_long",
         )
     return None
@@ -432,7 +428,7 @@ def _recover_stale_job_if_unchanged(
     *,
     status: str,
     heartbeat_at: datetime | None,
-    error: Message,
+    error_message: Message,
     error_type: str,
     completed_at: datetime,
 ) -> bool:
@@ -445,7 +441,7 @@ def _recover_stale_job_if_unchanged(
         )
         .values(
             status=JobStatus.FAILED,
-            error=_error_text(error),
+            error_message=error_message,
             error_type=error_type,
             **_terminal_values(completed_at),
         )
@@ -499,7 +495,7 @@ def recover_jobs_of_dead_owners(
         job_type = job.type
         if _recover_stale_job_if_unchanged(
             session, job, status=job.status, heartbeat_at=job.heartbeat_at,
-            error=verdict.error, error_type=verdict.error_type,
+            error_message=verdict.error_message, error_type=verdict.error_type,
             completed_at=now,
         ):
             recovered[job_type] = recovered.get(job_type, 0) + 1
@@ -591,7 +587,7 @@ def _recover_stale_job(
         job,
         status=status,
         heartbeat_at=heartbeat_at,
-        error=verdict.error,
+        error_message=verdict.error_message,
         error_type=verdict.error_type,
         completed_at=now,
     )

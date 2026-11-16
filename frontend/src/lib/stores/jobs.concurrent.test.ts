@@ -62,6 +62,10 @@ class FakeJobStream {
 	}
 }
 
+function reported(cause: string): JobStatus['error_message'] {
+	return { key: 'jobFailure.workerReported', values: { cause } };
+}
+
 function generateJob(overrides: Partial<JobStatus> = {}): JobStatus {
 	return {
 		id: 'j1',
@@ -70,7 +74,7 @@ function generateJob(overrides: Partial<JobStatus> = {}): JobStatus {
 		progress: 0,
 		take_index: null,
 		take_count: null,
-		error: null,
+		error_message: null,
 		error_type: null,
 		started_at: null,
 		completed_at: null,
@@ -257,13 +261,15 @@ describe('a failure hydration in flight while a live failure arrives', () => {
 
 		trackJob(generateJob(), {});
 		trackJob(generateJob(), { songId: 'song-1' });
-		streamOf('j1').say(generateJob({ status: 'failed', error: 'live cause' }));
+		streamOf('j1').say(generateJob({ status: 'failed', error_message: reported('live cause') }));
 		await vi.advanceTimersByTimeAsync(0);
-		hydration.resolve({ job: generateJob({ id: 'j-old', status: 'failed', error: 'old cause' }) });
+		hydration.resolve({
+			job: generateJob({ id: 'j-old', status: 'failed', error_message: reported('old cause') })
+		});
 		await hydrating;
 
 		expect(get(generationFailures)['song-1']).toEqual({
-			message: 'live cause',
+			message: 'The worker reported: live cause',
 			unavailable: false
 		});
 	});

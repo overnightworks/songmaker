@@ -37,7 +37,7 @@ from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_job, update_job_s
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
 from songmaker_cli.jobs._runtime import ReferenceDeletedDuringTake
-from songmaker_cli.messages import message
+from songmaker_cli.messages import Message, message
 from songmaker_cli.scheduler import WorkerGpuOutOfMemory, WorkerTaskFailed
 
 REFERENCE_A = "u1/refs/aaaaaaaa-0000-0000-0000-000000000001.wav"
@@ -251,15 +251,15 @@ def test_a_job_whose_version_links_another_users_row_fails_before_dispatch(
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert (job.status, job.error_type, job.error) == (
-            "failed", "setup_error", "Reference audio not found",
+        assert (job.status, job.error_type, job.error_message) == (
+            "failed", "setup_error", message("jobFailure.referenceAudioNotFound"),
         )
     assert _recorded_references(seeded_db) == []
 
 
 # ── a reference deleted while a take generates ─────────────────────
 
-DELETED_DURING_TAKE = "The reference track was deleted while this take was generating."
+DELETED_DURING_TAKE = message("jobFailure.referenceDeletedDuringTake")
 
 
 def _delete_reference(seeded_db, reference_id: str, *, takes: tuple[str, ...] = ()) -> None:
@@ -279,10 +279,10 @@ def _saved_takes(seeded_db) -> list[str]:
         return [take.id for take in session.query(Generation).filter_by(song_id="s1")]
 
 
-def _job_outcome(seeded_db) -> tuple[str, str | None, str | None]:
+def _job_outcome(seeded_db) -> tuple[str, Message | None, str | None]:
     with seeded_db() as session:
         job = get_job(session, "j1")
-        return job.status, job.error, job.error_type
+        return job.status, job.error_message, job.error_type
 
 
 def _dispatching(tmp_path: Path, steps) -> tuple[list[int], object]:
@@ -369,7 +369,7 @@ def test_a_gpu_memory_failure_still_wins_over_a_later_take_failure(
 
     status, error, error_type = _job_outcome(seeded_db)
     assert (status, error_type) == ("failed", "gpu_out_of_memory")
-    assert error == message("jobFailure.gpuOutOfMemory").sentence()
+    assert error == message("jobFailure.gpuOutOfMemory")
 
 
 def test_a_reference_gone_after_an_earlier_take_was_saved_and_deleted_fails_the_job(
@@ -423,7 +423,7 @@ def test_a_take_number_conflict_fails_the_job_as_unexpected_and_saves_no_take(
         _run_job(seeded_db, tmp_path)
 
     status, error, _ = _job_outcome(seeded_db)
-    assert (status, error) == ("failed", message("jobFailure.unexpected").sentence())
+    assert (status, error) == ("failed", message("jobFailure.unexpected"))
     assert _saved_takes(seeded_db) == []
 
 
