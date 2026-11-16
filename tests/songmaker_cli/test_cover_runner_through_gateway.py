@@ -11,6 +11,8 @@ import asyncio
 import base64
 import json
 import logging
+import threading
+import types
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib.resources import files
@@ -557,6 +559,50 @@ def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
 
     assert world.job(job_id).status == JobStatus.CANCELLED
     assert world.suggestions() == []
+
+
+def _runner_log_levels(caplog) -> list[int]:
+    return [record.levelno for record in caplog.records if record.name == cover_runner.log.name]
+
+
+@pytest.mark.parametrize(
+    "pubsub_class", [_SubscribeRefused, _SubscriptionNeverConfirmed],
+    ids=["subscribe_refused", "subscription_unconfirmed"],
+)
+def test_a_subscription_redis_does_not_confirm_is_logged_and_gives_no_listener(
+    pubsub_class, caplog,
+):
+    with caplog.at_level(logging.WARNING, logger=cover_runner.log.name):
+        listener = cover_runner._subscribe_to_cancellations(
+            types.SimpleNamespace(pubsub=pubsub_class),
+        )
+
+    assert listener is None
+    assert _runner_log_levels(caplog) == [logging.WARNING]
+
+
+class _PubsubNamingTheJob:
+    def __init__(self, job_id: str) -> None:
+        self.job_id = job_id
+
+    def get_message(self, timeout: float = 0.0) -> dict[str, str]:
+        return {"type": "message", "data": self.job_id}
+
+    def close(self) -> None:
+        pass
+
+
+def test_a_listener_that_fails_hears_no_cancel_and_logs_it(caplog):
+    def database_is_down():
+        raise RuntimeError("database unavailable")
+
+    with caplog.at_level(logging.WARNING, logger=cover_runner.log.name):
+        heard = cover_runner._wait_for_cancellation(
+            _PubsubNamingTheJob("job"), database_is_down, "job", threading.Event(),
+        )
+
+    assert heard is False
+    assert _runner_log_levels(caplog) == [logging.ERROR]
 
 
 def test_a_cancel_between_the_start_and_the_picture_sends_no_request(world, monkeypatch):
