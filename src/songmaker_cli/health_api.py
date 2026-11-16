@@ -9,11 +9,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Final
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.exceptions import RedisError
@@ -415,14 +416,21 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
         uptime_seconds=uptime,
         background_loops=request.app.state.background_loop_registry.loop_health(),
         release=ReleaseInfo.from_settings(config),
+        shutting_down=request.app.state.background_loop_registry.shutting_down,
     )
 
 
 @router.get("/health", openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION))
 async def health_check(
-    request: Request, pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
+    request: Request,
+    response: Response,
+    pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
 ) -> HealthStatusResponse:
-    return HealthStatusResponse.from_signals(await _read_health_signals(request, pool))
+    """The readiness probe's route: 503 while this process cannot serve, 200 otherwise."""
+    signals = await _read_health_signals(request, pool)
+    if not signals.ready:
+        response.status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    return HealthStatusResponse.from_signals(signals)
 
 
 @router.get(

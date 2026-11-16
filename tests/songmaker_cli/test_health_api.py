@@ -239,6 +239,38 @@ def test_health_preserves_response_bytes(
     assert response.content == expected
 
 
+def _begin_shutdown(client, monkeypatch) -> None:
+    client.app.state.background_loop_registry.begin_shutdown()
+
+
+def _lose_the_database(client, monkeypatch) -> None:
+    monkeypatch.setattr("songmaker_cli.health_api._check_db", lambda ctx: False)
+
+
+def _lose_the_acestep_worker(client, monkeypatch) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
+    arq_mod._pool.get = AsyncMock(return_value=None)
+
+
+@pytest.mark.parametrize(
+    ("arrange", "expected_status_code"),
+    [
+        (_begin_shutdown, 503),
+        (_lose_the_database, 503),
+        (_lose_the_acestep_worker, 200),
+        (lambda client, monkeypatch: None, 200),
+    ],
+    ids=["shutting-down", "database-lost", "acestep-worker-lost", "serving"],
+)
+def test_health_answers_ready_exactly_while_the_process_can_serve(
+    health_client, monkeypatch, arrange, expected_status_code,
+) -> None:
+    arrange(health_client, monkeypatch)
+
+    assert health_client.get("/health").status_code == expected_status_code
+
+
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
     tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers,
 ) -> None:
