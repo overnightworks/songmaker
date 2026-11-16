@@ -7,12 +7,12 @@ import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import fakeredis.aioredis
 import pytest
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
+from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import LoopbackServer
 
 from songmaker_cli.acestep_state import worker_state_key
@@ -127,7 +127,7 @@ def test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch(
     async def exercise() -> None:
         peer = LoraAuthPeer(internal_token + accepted_token_suffix)
         server = LoopbackServer(peer.app)
-        async with fakeredis.aioredis.FakeRedis() as redis:
+        async with SettledFakeAsyncRedis() as redis:
             try:
                 async with asyncio.timeout(15):
                     base_url = await server.start()

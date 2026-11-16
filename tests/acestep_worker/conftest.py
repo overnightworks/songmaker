@@ -9,11 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import fakeredis.aioredis
 import httpx
 import pytest
 from support.acestep_http import acestep_http
-from support.wrapper_deps import INTERNAL_HEADERS, make_deps
+from support.wrapper_deps import INTERNAL_HEADERS, make_deps, settled_fake_redis
 
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.model_cache import LoadedModel, ModelCache
@@ -103,7 +102,7 @@ def _fake_train_runner(operation_events: list[str], train_events: list[str]):
 
 
 def _build_train_lora_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    redis = settled_fake_redis()
     operation_events: list[str] = []
 
     async def loader(mode: str) -> LoadedModel:

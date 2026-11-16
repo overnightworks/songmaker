@@ -223,8 +223,6 @@ WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
 # scoring worker.
 SCORE_BACKFILL_INTERVAL_SECONDS = 120
 SCORE_BACKFILL_BATCH_SIZE = 5
-SCORE_BACKFILL_LOCK_KEY = f"{REDIS_KEY_PREFIX}:score_backfill_lock"
-SCORE_BACKFILL_LOCK_TTL_SECONDS = 60
 # A chronically-unscorable generation (corrupt file, scorer bug) must not
 # starve the rest of the backlog by winning the same oldest-first batch every
 # tick forever. Redis tracks a per-generation attempt count (no schema

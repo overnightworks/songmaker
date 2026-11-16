@@ -71,6 +71,8 @@ acestep-worker = [
     "fastapi>=0.100,<1",
     "uvicorn>=0.50,<1",
     "redis[hiredis]>=5.0,<9",
+    # The GPU hold is a tandem lock. A git pin by tag like the server extra's, from the one tag.
+    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.5.2",
     "huggingface_hub>=0.20,<3",
     "nvidia-ml-py3>=7.352,<8",
 ]

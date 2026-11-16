@@ -9,9 +9,9 @@ import wave
 from io import BytesIO
 from pathlib import Path
 
-import fakeredis.aioredis
 from fastapi.testclient import TestClient
 from support.web_app import make_test_app
+from support.wrapper_deps import settled_fake_redis
 
 from acestep_worker.heartbeat import worker_state_key
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
@@ -90,7 +90,7 @@ def test_fake_worker_registers_with_the_internal_api(
 
 
 def test_fake_worker_publishes_the_worker_heartbeat(tmp_path: Path) -> None:
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    redis = settled_fake_redis()
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",
         internal_token=get_settings().songmaker_internal_token.get_secret_value(),
@@ -126,7 +126,7 @@ def test_fake_worker_emits_epoch_progress_and_an_adapter_result(tmp_path: Path) 
         output_dir=tmp_path / "worker-output",
         control_plane_url="",
     )
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    redis = settled_fake_redis()
     app = create_fake_training_worker_app(settings, redis=redis)
     headers = {INTERNAL_TOKEN_HEADER: settings.internal_token}
 

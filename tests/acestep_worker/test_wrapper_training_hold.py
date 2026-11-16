@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
+from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
+import fakeredis
 import pytest
+from fastapi.testclient import TestClient
+from support.owner_lease_epoch import settled_epoch
+from support.wrapper_deps import INTERNAL_HEADERS, make_deps
 
-from acestep_worker.heartbeat import DEFAULT_TTL_SECONDS, gpu_hold_key
+from acestep_worker.heartbeat import GPU_HOLD_LASTS, gpu_hold_locks
+from acestep_worker.wrapper import create_app
 
 _LOWERED_TTL_SECONDS = 3
 _BOUND_SECONDS = 5
@@ -33,20 +41,23 @@ def test_a_training_renews_its_hold_after_each_interval(
 
     monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", renew_and_signal)
 
-    async def scenario() -> tuple[str, bytes | None, int]:
+    async def scenario() -> tuple[str, str | None, timedelta]:
         nonlocal hold_lowered
         async with train_lora_worker() as worker:
             token = await worker.reserve_hold()
-            key = gpu_hold_key(worker.deps.worker_id)
-            observed: list[tuple[bytes | None, int]] = []
+            locks = gpu_hold_locks(worker.deps.redis)
+            worker_id = worker.deps.worker_id
+            observed: list[tuple[str | None, timedelta]] = []
 
             async def runner(store: Any, task_id: str, **_kwargs: Any) -> None:
                 nonlocal hold_lowered
-                redis = worker.deps.redis
-                await redis.expire(key, _LOWERED_TTL_SECONDS)
+                lowered_expiry_ms = (time.time() + _LOWERED_TTL_SECONDS) * 1000
+                await worker.deps.redis.zadd(locks.keys.expiry, {worker_id: lowered_expiry_ms})
                 hold_lowered = True
                 await asyncio.wait_for(renewed_after_lowering.wait(), _BOUND_SECONDS)
-                observed.append((await redis.get(key), await redis.ttl(key)))
+                state = await locks.state(worker_id)
+                assert state.remaining is not None
+                observed.append((state.generation, state.remaining))
                 await store.fail(task_id, "stopped")
 
             worker.deps.train_lora_runner = runner
@@ -55,10 +66,10 @@ def test_a_training_renews_its_hold_after_each_interval(
             await worker.spawned[0]
             return token, *observed[0]
 
-    token, holder, ttl_seconds = asyncio.run(scenario())
+    token, holder, remaining = asyncio.run(scenario())
 
-    assert holder == token.encode()
-    assert ttl_seconds == DEFAULT_TTL_SECONDS
+    assert holder == token
+    assert timedelta(seconds=_LOWERED_TTL_SECONDS) < remaining <= GPU_HOLD_LASTS
 
 
 def test_a_training_whose_hold_is_lost_at_handover_is_refused_and_its_renewal_is_cancelled(
@@ -108,3 +119,29 @@ def test_a_training_whose_hold_is_lost_at_handover_is_refused_and_its_renewal_is
     assert renewal_cancelled
     assert spawned == []
     assert created_ids == []
+
+
+def test_a_worker_answers_busy_until_a_redis_restart_is_settled_and_fails_nothing(
+    tmp_path: Path,
+) -> None:
+    """After a restart a hold may have been lost: reserve and generate get the ordinary 409
+    for one span, then the worker serves both again."""
+    deps, redis = make_deps(tmp_path)
+    server = redis.connection_pool.connection_kwargs["server"]
+    restarted_redis = fakeredis.FakeRedis(server=server)
+    app = create_app(deps)
+    generation = {"mode": "sft", "config": {"prompt": "test", "lyrics": ""}}
+    with TestClient(app, headers=INTERNAL_HEADERS) as client:
+        assert client.post("/load_model", json={"mode": "sft"}).status_code == 200
+        restarted_redis.flushall()
+
+        reserved = client.post("/gpu_hold/reserve")
+        generated = client.post("/generate", json=generation)
+        restarted_redis.set(*settled_epoch())
+        reserved_when_settled = client.post("/gpu_hold/reserve")
+
+    assert reserved.status_code == 409
+    assert reserved.json()["detail"] == "GPU is busy or held"
+    assert generated.status_code == 409
+    assert generated.json()["detail"] == "GPU is held for LoRA training"
+    assert reserved_when_settled.status_code == 200

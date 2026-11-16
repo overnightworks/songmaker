@@ -128,6 +128,11 @@ def spawn_background(coro: Awaitable[None]) -> asyncio.Task[None]:
     return task
 
 
+# One entry per (checkpoint directory, mode) while its download runs. The snapshot transfer is a
+# thread that cannot be cancelled, so a second request for the mode joins the running task.
+_running_downloads: dict[tuple[Path, str], asyncio.Future[str]] = {}
+
+
 async def start_download(
     task_store: TaskStore,
     *,
@@ -135,7 +140,20 @@ async def start_download(
     checkpoint_dir: Path,
     download_fn: DownloadFn = hf_snapshot_download,
 ) -> str:
-    task_id = await task_store.create("download")
+    """The task id of the download of ``mode``; a download already running for it is joined."""
+    key = (checkpoint_dir, mode)
+    running = _running_downloads.get(key)
+    if running is not None:
+        return await running
+    reserved: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    _running_downloads[key] = reserved
+    try:
+        task_id = await task_store.create("download")
+    except BaseException:
+        del _running_downloads[key]
+        reserved.cancel()
+        raise
+    reserved.set_result(task_id)
     spawn_background(
         run_download(
             task_store,
@@ -144,5 +162,5 @@ async def start_download(
             checkpoint_dir=checkpoint_dir,
             download_fn=download_fn,
         )
-    )
+    ).add_done_callback(lambda _finished: _running_downloads.pop(key, None))
     return task_id

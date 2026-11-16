@@ -11,19 +11,20 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
-from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+from acestep_engine.constants import GPU_HELD_DETAIL, MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import NOT_STARTED, AceStepProgress
 from acestep_worker import lm_failure
 from acestep_worker.child_tasks import settle_child_task
 from acestep_worker.clock import utcnow
 from acestep_worker.downloads import (
+    DownloadFn,
+    hf_snapshot_download,
     list_available_modes,
     spawn_background,
     start_download,
@@ -31,11 +32,11 @@ from acestep_worker.downloads import (
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import (
     DEFAULT_INTERVAL_SECONDS,
-    DEFAULT_TTL_SECONDS,
     HeartbeatLoop,
-    gpu_hold_key,
+    gpu_hold_blocks_generation,
     gpu_hold_matches,
-    queue_depth_key,
+    gpu_hold_remaining_seconds,
+    read_queue_depth,
     release_gpu_hold,
     renew_gpu_hold,
     reserve_gpu_hold,
@@ -115,6 +116,7 @@ class WorkerDeps:
     # need not know about GPU health; __main__.py wires the real
     # gpu_util.check_gpu_health in production.
     gpu_health_checker: Callable[[], GpuHealth] = lambda: GpuHealth(GpuHealthStatus.OK)
+    download_fn: DownloadFn = hf_snapshot_download
 
 
 def _format_sse(event: WorkerTaskEvent) -> bytes:
@@ -122,19 +124,10 @@ def _format_sse(event: WorkerTaskEvent) -> bytes:
     return f"event: {event.type}\ndata: {payload}\n\n".encode()
 
 
-async def read_queue_depth(redis: Redis, worker_id: str) -> int:
-    raw = await redis.get(queue_depth_key(worker_id))
-    return int(raw) if raw is not None else 0
-
-
-async def _renew_gpu_hold_until_done(
-    redis: Redis,
-    worker_id: str,
-    token: str,
-) -> None:
+async def _renew_gpu_hold_until_done(redis: Redis, worker_id: str, token: str) -> None:
     while True:
         await asyncio.sleep(DEFAULT_INTERVAL_SECONDS)
-        if not await renew_gpu_hold(redis, worker_id, token, DEFAULT_TTL_SECONDS):
+        if not await renew_gpu_hold(redis, worker_id, token):
             raise RuntimeError("GPU hold token was lost during LoRA training")
 
 
@@ -143,7 +136,7 @@ async def _start_gpu_hold_renewal(
     worker_id: str,
     token: str,
 ) -> asyncio.Task[None]:
-    if not await renew_gpu_hold(redis, worker_id, token, DEFAULT_TTL_SECONDS):
+    if not await renew_gpu_hold(redis, worker_id, token):
         raise RuntimeError("GPU hold token was lost before LoRA training started")
     return asyncio.create_task(_renew_gpu_hold_until_done(redis, worker_id, token))
 
@@ -183,7 +176,7 @@ async def _cancel_gpu_hold_renewal(renew_task: asyncio.Task[None]) -> None:
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     snapshot = deps.cache.snapshot()
     gpu_health = deps.gpu_health_checker()
-    hold_seconds = await deps.redis.ttl(gpu_hold_key(deps.worker_id))
+    hold_seconds = await gpu_hold_remaining_seconds(deps.redis, deps.worker_id)
     last_error = deps.last_error
     return {
         "loaded": [{"mode": info.mode, "size_gb": info.size_gb} for info in snapshot.loaded],
@@ -201,7 +194,7 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
         "vram_measured": snapshot.vram_measured,
         "available_modes": list_available_modes(deps.checkpoint_dir),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
-        "training_hold_seconds": hold_seconds if hold_seconds > 0 else None,
+        "training_hold_seconds": hold_seconds,
         "pinned": list(snapshot.pinned),
         "gpu_healthy": not gpu_health.is_broken,
         "gpu_health_detail": gpu_health.detail,
@@ -310,26 +303,16 @@ class _WorkerRoutes:
         return TaskCreatedResponse(task_id=task_id)
 
     async def reserve_hold(self) -> GpuHoldResponse:
-        token = str(uuid4())
         async with self._deps.gpu_hold_admission_lock:
             if self._deps.gpu_hold_generation_tasks:
                 raise HTTPException(status_code=409, detail="GPU is busy or held")
-            if not await reserve_gpu_hold(
-                self._deps.redis,
-                self._deps.worker_id,
-                token,
-                DEFAULT_TTL_SECONDS,
-            ):
+            generation = await reserve_gpu_hold(self._deps.redis, self._deps.worker_id)
+            if generation is None:
                 raise HTTPException(status_code=409, detail="GPU is busy or held")
-        return GpuHoldResponse(token=token)
+        return GpuHoldResponse(token=generation)
 
     async def renew_hold(self, req: GpuHoldTokenRequest) -> None:
-        if not await renew_gpu_hold(
-            self._deps.redis,
-            self._deps.worker_id,
-            req.token,
-            DEFAULT_TTL_SECONDS,
-        ):
+        if not await renew_gpu_hold(self._deps.redis, self._deps.worker_id, req.token):
             raise HTTPException(status_code=409, detail=GPU_HOLD_REJECTED_DETAIL)
 
     async def release_hold(self, req: GpuHoldTokenRequest) -> None:
@@ -362,6 +345,7 @@ class _WorkerRoutes:
             self._deps.task_store,
             mode=req.mode,
             checkpoint_dir=self._deps.checkpoint_dir,
+            download_fn=self._deps.download_fn,
         )
         return TaskCreatedResponse(task_id=task_id)
 
@@ -383,8 +367,8 @@ class _WorkerRoutes:
 
 async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tuple[str, Any]:
     async with deps.gpu_hold_admission_lock:
-        if await deps.redis.exists(gpu_hold_key(deps.worker_id)):
-            raise HTTPException(status_code=409, detail="GPU is held for LoRA training")
+        if await gpu_hold_blocks_generation(deps.redis, deps.worker_id):
+            raise HTTPException(status_code=409, detail=GPU_HELD_DETAIL)
         loaded = await deps.cache.acquire_for_use(req.mode)
         if loaded is None:
             raise HTTPException(

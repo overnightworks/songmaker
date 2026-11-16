@@ -11,21 +11,43 @@ see ``tests/songmaker_cli/test_acestep_state.py`` for the cross-package assertio
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import Mapping
+import logging
+from collections.abc import AsyncIterator, Callable, Mapping
+from contextlib import asynccontextmanager
+from datetime import timedelta
 from typing import Any
 
 from arq.connections import ArqRedis
+from redis.exceptions import RedisError
+from tandem import Liveness, Locks, Script, StoreError
+
+from songmaker_cli.constants import REDIS_KEY_PREFIX
+
+log = logging.getLogger(__name__)
 
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
-GPU_HOLD_KEY_PREFIX = "songmaker:acestep:hold"
 DOWNLOAD_KEY_PREFIX = "songmaker:acestep:download"
 LM_FAILURE_KEY_PREFIX = "songmaker:acestep:lm-failure"
-DOWNLOAD_TTL_SECONDS = 1800
+GPU_HOLD_OLD_KEY_PREFIX = "songmaker:acestep:hold"
+GPU_HOLD_FAMILY = "gpu"
+GPU_HOLD_LASTS = timedelta(seconds=15)
+DOWNLOAD_LOCK_FAMILY = "download"
+# The holder extends the lock while it downloads, so a crashed holder frees the mode after one
+# span; the same span bounds how long a download waits after a Redis restart.
+DOWNLOAD_LOCK_LASTS = timedelta(seconds=15)
+DOWNLOAD_LOCK_EXTEND_EVERY = timedelta(seconds=5)
+DOWNLOAD_LOCK_POLL_SECONDS = 1.0
 
+# KEYS: the queue depth, then the GPU holds' epoch, expiry and generation keys, then the old hold
+# key; ARGV: the lock span in ms and the worker id. A hold, or a restart that may have lost one,
+# refuses the admission.
 ADMIT_GENERATION_SCRIPT = """
-if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+local keys = {epoch = KEYS[2], expiry = KEYS[3], generation = KEYS[4]}
+if tandem.lock_state(keys, ARGV[2], ARGV[1]) then return 0 end
+if redis.call('EXISTS', KEYS[5]) == 1 then return 0 end
 redis.call('INCR', KEYS[1])
 return 1
 """
@@ -39,8 +61,29 @@ def queue_depth_key(worker_id: str) -> str:
     return f"{QUEUE_KEY_PREFIX}:{worker_id}"
 
 
-def gpu_hold_key(worker_id: str) -> str:
-    return f"{GPU_HOLD_KEY_PREFIX}:{worker_id}"
+def gpu_hold_old_key(worker_id: str) -> str:
+    """The key the previous release holds for a worker's GPU hold; the worker writes it beside the
+    lock for one release, so a reader of either release sees a hold of the other.
+
+    ``acestep_worker.heartbeat`` builds the same key.
+    """
+    return f"{GPU_HOLD_OLD_KEY_PREFIX}:{worker_id}"
+
+
+def gpu_hold_locks(pool: ArqRedis) -> Locks:
+    """The GPU holds of the workers, one lock per worker id; the worker takes and renews them.
+
+    ``acestep_worker.heartbeat`` builds the same family.
+    """
+    return Locks(
+        pool, key_prefix=REDIS_KEY_PREFIX, family=GPU_HOLD_FAMILY, lasts=GPU_HOLD_LASTS,
+    )
+
+
+async def gpu_hold_is_free(pool: ArqRedis, worker_id: str) -> bool:
+    """Whether no hold is live and none can have been lost to a Redis restart."""
+    state = await gpu_hold_locks(pool).state(worker_id)
+    return state.liveness is Liveness.GONE and not await pool.exists(gpu_hold_old_key(worker_id))
 
 
 def download_key(mode: str) -> str:
@@ -106,29 +149,132 @@ async def decr_queue_depth(pool: ArqRedis, worker_id: str) -> int:
 
 
 async def admit_generation(pool: ArqRedis, worker_id: str) -> bool:
-    result = await pool.eval(
-        ADMIT_GENERATION_SCRIPT,
-        2,
-        queue_depth_key(worker_id),
-        gpu_hold_key(worker_id),
+    locks = gpu_hold_locks(pool)
+    result = await Script(pool, ADMIT_GENERATION_SCRIPT).run(
+        [
+            queue_depth_key(worker_id),
+            locks.keys.epoch,
+            locks.keys.expiry,
+            locks.keys.generation,
+            gpu_hold_old_key(worker_id),
+        ],
+        [int(locks.lasts.total_seconds() * 1000), worker_id],
     )
     return bool(result)
 
 
-async def set_download_in_progress(pool: ArqRedis, mode: str, job_id: str) -> bool:
-    result = await pool.set(
-        download_key(mode),
-        job_id,
-        ex=DOWNLOAD_TTL_SECONDS,
-        nx=True,
+def download_locks(pool: ArqRedis) -> Locks:
+    """The single-flight locks of the model downloads, one lock per mode."""
+    return Locks(
+        pool, key_prefix=REDIS_KEY_PREFIX, family=DOWNLOAD_LOCK_FAMILY, lasts=DOWNLOAD_LOCK_LASTS,
     )
-    return bool(result)
 
 
-async def clear_download_in_progress(pool: ArqRedis, mode: str) -> None:
-    await pool.delete(download_key(mode))
+class DownloadAlreadyRunning(Exception):
+    """Another job holds the download lock of the mode; ``job_id`` is its label, when it has one."""
+
+    def __init__(self, job_id: str | None) -> None:
+        super().__init__(job_id)
+        self.job_id = job_id
 
 
 async def read_download_in_progress(pool: ArqRedis, mode: str) -> str | None:
+    """The job that downloads ``mode``, from the label its holder keeps beside the lock.
+
+    A lock names no holder, so the holder writes its job id under ``download_key`` for as long as
+    it extends the lock. The label also reads as in progress for a holder of the previous release,
+    which wrote the same key.
+    """
     raw = await pool.get(download_key(mode))
     return decode_redis_text(raw)
+
+
+async def _acquire_download_lock(pool: ArqRedis, locks: Locks, mode: str) -> str:
+    """The generation of the lock; a Redis restart is waited out, a live holder is refused."""
+    attempts = int(DOWNLOAD_LOCK_LASTS.total_seconds() / DOWNLOAD_LOCK_POLL_SECONDS) + 2
+    for _ in range(attempts):
+        generation = await locks.acquire(mode)
+        if generation is not None:
+            return generation
+        if (await locks.state(mode)).liveness is Liveness.ALIVE:
+            raise DownloadAlreadyRunning(await read_download_in_progress(pool, mode))
+        await asyncio.sleep(DOWNLOAD_LOCK_POLL_SECONDS)
+    raise RuntimeError(f"The download lock of {mode} stayed unsettled after a Redis restart")
+
+
+class DownloadLockLost(Exception):
+    """The download lock of ``mode`` ended under its holder, so another job may download it now."""
+
+    def __init__(self, mode: str) -> None:
+        super().__init__(mode)
+        self.mode = mode
+
+
+async def _keep_download_lock(
+    pool: ArqRedis, locks: Locks, mode: str, job_id: str, generation: str,
+    on_lost: Callable[[], None],
+) -> None:
+    """Extend the lock and its label until cancelled; once it is lost, call ``on_lost`` every span.
+
+    A cancel can be absorbed by a cancel scope of the block that it races, so the stop repeats
+    until the block ends and cancels this task.
+    """
+    label_seconds = int(DOWNLOAD_LOCK_LASTS.total_seconds())
+    while True:
+        await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
+        try:
+            if not await locks.extend(mode, generation):
+                break
+            await pool.set(download_key(mode), job_id, ex=label_seconds)
+        except (StoreError, RedisError):
+            log.warning("Could not extend the download lock of %s", mode, exc_info=True)
+    log.warning("The download lock of %s was lost during its download", mode)
+    while True:
+        on_lost()
+        await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
+
+
+# Deletes the label only while it still names the job that wrote it.
+DELETE_DOWNLOAD_LABEL_SCRIPT = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+return redis.call('DEL', KEYS[1])
+"""
+
+
+@asynccontextmanager
+async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> AsyncIterator[None]:
+    """Hold the download lock of ``mode`` for the block, or raise ``DownloadAlreadyRunning``.
+
+    A block whose lock is lost is cancelled and raises ``DownloadLockLost``, leaving the lock and
+    the label to the job that holds them now. The transfer already running on the ACE-Step worker
+    is not cancelled; the worker joins the next download of the mode to it.
+    """
+    locks = download_locks(pool)
+    generation = await _acquire_download_lock(pool, locks, mode)
+    holder = asyncio.current_task()
+    stops = 0
+
+    def stop_the_download() -> None:
+        nonlocal stops
+        stops += 1
+        holder.cancel()
+
+    keeper = asyncio.create_task(
+        _keep_download_lock(pool, locks, mode, job_id, generation, stop_the_download),
+    )
+    try:
+        await pool.set(
+            download_key(mode), job_id, ex=int(DOWNLOAD_LOCK_LASTS.total_seconds()),
+        )
+        yield
+    except asyncio.CancelledError:  # NOSONAR(S7497) Own cancel becomes DownloadLockLost.
+        for _ in range(stops):
+            holder.uncancel()
+        if stops and holder.cancelling() == 0:
+            raise DownloadLockLost(mode) from None
+        raise
+    finally:
+        keeper.cancel()
+        await asyncio.gather(keeper, return_exceptions=True)
+        await pool.eval(DELETE_DOWNLOAD_LABEL_SCRIPT, 1, download_key(mode), job_id)
+        await locks.release(mode, generation)

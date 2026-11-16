@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import fakeredis.aioredis
 import httpx
 import pytest
 from support.generation_job_world import (
@@ -18,7 +17,9 @@ from support.generation_job_world import (
     persist_via_post_process,
     run_async,
 )
+from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
+from support.wrapper_deps import reserved_gpu_hold
 
 from acestep_engine.models import TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
@@ -352,14 +353,14 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
 
 
 def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
-    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
-        redis = fakeredis.aioredis.FakeRedis()
+        redis = SettledFakeAsyncRedis()
         redis.enqueue_job = AsyncMock()
         await _seed_healthy_worker(redis, seeded_db)
-        assert await reserve_gpu_hold(redis, "w1", "hold-token", 15)
+        hold_token = await reserved_gpu_hold(redis, "w1")
 
         dispatch = AsyncMock(return_value=make_generation_dto())
         with (
@@ -380,7 +381,7 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
                 assert queued.status == "queued"
                 assert queued.queue_reason_message == message("jobWait.voiceTraining")
 
-            assert await release_gpu_hold(redis, "w1", "hold-token")
+            assert await release_gpu_hold(redis, "w1", hold_token)
             await run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
@@ -401,13 +402,13 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
     from songmaker_cli.scheduler import pick_worker
 
     async def exercise() -> None:
-        redis = fakeredis.aioredis.FakeRedis()
+        redis = SettledFakeAsyncRedis()
         redis.enqueue_job = AsyncMock()
         await _seed_healthy_worker(redis, seeded_db)
 
         async def pick_then_hold(session, pool, target_mode):
             worker = await pick_worker(session, pool, target_mode)
-            assert await reserve_gpu_hold(pool, worker.id, "training-token", 15)
+            assert await reserve_gpu_hold(pool, worker.id)
             return worker
 
         build_context = MagicMock()
@@ -549,7 +550,7 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
-        redis = fakeredis.aioredis.FakeRedis()
+        redis = SettledFakeAsyncRedis()
         await _seed_healthy_worker(redis, seeded_db)
         take_count = 0
 
@@ -558,7 +559,7 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
 
             take_count += 1
             assert await read_queue_depth(redis, "w1") == 1
-            assert not await reserve_gpu_hold(redis, "w1", "training-token", 15)
+            assert not await reserve_gpu_hold(redis, "w1")
             return make_generation_dto(seed=take_count)
 
         with (
@@ -577,8 +578,8 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
 
         assert take_count == 3
         assert await read_queue_depth(redis, "w1") == 0
-        assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
-        assert await release_gpu_hold(redis, "w1", "training-token")
+        hold_token = await reserved_gpu_hold(redis, "w1")
+        assert await release_gpu_hold(redis, "w1", hold_token)
 
     run_async(exercise())
 
@@ -601,7 +602,7 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
         raise WorkerTaskFailed("worker failed")
 
     async def exercise() -> None:
-        redis = fakeredis.aioredis.FakeRedis()
+        redis = SettledFakeAsyncRedis()
         await _seed_healthy_worker(redis, seeded_db)
         with (
             patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
@@ -621,7 +622,7 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
                     target_model="sft", owner_id="o1",
                 )
         assert await read_queue_depth(redis, "w1") == 0
-        assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
+        assert await reserve_gpu_hold(redis, "w1")
 
     run_async(exercise())
 
@@ -2582,21 +2583,7 @@ def _seed_download_job(factory, job_id: str = "dl-job") -> None:
         session.commit()
 
 
-class _FakeRedis:
-    def __init__(self) -> None:
-        self.store: dict[str, str] = {}
-
-    async def set(self, key, value, ex=None, nx=False):
-        if nx and key in self.store:
-            return None
-        self.store[key] = value if isinstance(value, str) else str(value)
-        return True
-
-    async def get(self, key):
-        return self.store.get(key)
-
-    async def delete(self, key):
-        self.store.pop(key, None)
+_FakeRedis = SettledFakeAsyncRedis
 
 
 def _seed_online_worker(factory, redis: _FakeRedis, worker_id: str = "w1") -> None:
@@ -2886,12 +2873,13 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
     assert download_key("sft") not in redis.store
 
 
-def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> None:
-    from songmaker_cli.acestep_state import download_key
+def test_download_model_on_worker_aborts_when_another_job_holds_the_download(seeded_db) -> None:
+    from songmaker_cli.acestep_state import download_key, download_locks
     from songmaker_cli.jobs import download_model_on_worker
 
     _seed_download_job(seeded_db, "dl10")
     redis = _FakeRedis()
+    run_async(download_locks(redis.another_process()).acquire("sft"))
     redis.store[download_key("sft")] = "previous-job"
 
     run_async(download_model_on_worker(

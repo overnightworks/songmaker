@@ -36,7 +36,7 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+from acestep_engine.constants import GPU_HELD_DETAIL, MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
 from acestep_engine.thread_handoff import acquire_in_thread
@@ -44,7 +44,7 @@ from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )
 from songmaker_cli.acestep_state import (
-    gpu_hold_key,
+    gpu_hold_is_free,
     read_queue_depth,
     read_worker_state,
     worker_is_online,
@@ -104,6 +104,14 @@ class WorkerModeNotLoaded(WorkerTaskFailed):
 
     Another job's ``/load_model`` may evict this job's mode between two of
     its takes, since a mode is only held while a take runs on it.
+    """
+
+
+class WorkerHeld(WorkerTaskFailed):
+    """Raised when ``/generate`` finds the worker held, or its hold unsettled after a Redis restart.
+
+    The job's admission was checked before the hold, or before the restart, took the worker, so
+    the job waits and runs again instead of failing.
     """
 
 
@@ -217,7 +225,7 @@ async def pick_worker(
     workers = await _list_online_workers(db, redis)
     if not workers:
         raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
-    available = [worker for worker in workers if not await redis.exists(gpu_hold_key(worker.id))]
+    available = [worker for worker in workers if await gpu_hold_is_free(redis, worker.id)]
     if not available:
         raise AllWorkersHeld("All online ACE-Step workers are held for LoRA training")
     return _pick_from(available, target_mode)
@@ -341,6 +349,8 @@ async def _submit_generation(
             raise WorkerGenerationUnavailable(str(exc)) from exc
         if _answers_mode_not_loaded(resp, target_mode):
             raise WorkerModeNotLoaded(worker_response_cause(resp))
+        if _answers_gpu_held(resp):
+            raise WorkerHeld(worker_response_cause(resp))
         resp.raise_for_status()
         return resp.json()["task_id"]
 
@@ -349,6 +359,12 @@ def _answers_mode_not_loaded(response: httpx.Response, mode: str) -> bool:
     if response.status_code != httpx.codes.CONFLICT:
         return False
     return worker_response_cause(response) == MODE_NOT_LOADED_DETAIL.format(mode=mode)
+
+
+def _answers_gpu_held(response: httpx.Response) -> bool:
+    if response.status_code != httpx.codes.CONFLICT:
+        return False
+    return worker_response_cause(response) == GPU_HELD_DETAIL
 
 
 async def _iterate_task_events(

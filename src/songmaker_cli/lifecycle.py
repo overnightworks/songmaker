@@ -12,7 +12,7 @@ from typing import Final
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
-from tandem import Lapse, Liveness, StoreError
+from tandem import Client, Lapse, Liveness, Locks, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text
 from songmaker_cli.app_context import AppContext
@@ -42,9 +42,23 @@ _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
     1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS
 )
 # The web process owns stale-job recovery for every job type.
-JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
-JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
+TICK_LOCK_FAMILY: Final = "tick"
+TICK_LOCK_LASTS: Final = timedelta(seconds=60)
+JOB_REAPER_LOCK_NAME: Final = "job-reaper"
+SCORE_BACKFILL_LOCK_NAME: Final = "score-backfill"
 OWNER_REAPER_FAILURE_MESSAGE: Final = "Owner-gone pass failed"
+
+
+def tick_locks(redis: Client) -> Locks:
+    """The locks that let one web process run each periodic tick.
+
+    A tick takes its lock and never releases it: the lock lasts ``TICK_LOCK_LASTS``, which is the
+    throttle, so the other processes skip every tick inside that span. After a Redis restart
+    ``acquire`` returns None for the same span, and every process skips its ticks until then.
+    """
+    return Locks(
+        redis, key_prefix=REDIS_KEY_PREFIX, family=TICK_LOCK_FAMILY, lasts=TICK_LOCK_LASTS,
+    )
 
 
 def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
@@ -247,27 +261,18 @@ async def backfill_unscored_generations(
 async def score_backfill_loop(app: FastAPI) -> None:
     """Run the throttled score-backfill tick for the server lifetime.
 
-    Uses a single-flight Redis lock so
-    only one web replica dispatches a given tick's batch.
+    Uses a tandem lock so only one web replica dispatches a given tick's batch.
     """
     from songmaker_cli.arq_pool import get_arq_pool
-    from songmaker_cli.constants import (
-        SCORE_BACKFILL_INTERVAL_SECONDS,
-        SCORE_BACKFILL_LOCK_KEY,
-        SCORE_BACKFILL_LOCK_TTL_SECONDS,
-    )
+    from songmaker_cli.constants import SCORE_BACKFILL_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
+    locks = tick_locks(ctx.async_redis)
     while True:
         await asyncio.sleep(SCORE_BACKFILL_INTERVAL_SECONDS)
         try:
-            acquired = await asyncio.to_thread(
-                ctx.redis.set,
-                SCORE_BACKFILL_LOCK_KEY, "1",
-                ex=SCORE_BACKFILL_LOCK_TTL_SECONDS, nx=True,
-            )
-            if not acquired:
+            if await locks.acquire(SCORE_BACKFILL_LOCK_NAME) is None:
                 registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
                 continue
             result = await backfill_unscored_generations(ctx, get_arq_pool())
@@ -350,19 +355,15 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
     """Run stale-job reaping and LoRA reconciliation for the server lifetime.
 
     The lifecycle loop is the one periodic job-reaper owner. It uses the same
-    single-flight Redis lock idiom as ``score_backfill_loop`` so one web replica handles each tick.
+    tandem lock as ``score_backfill_loop`` so one web replica handles each tick.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
+    locks = tick_locks(ctx.async_redis)
     while True:
         await asyncio.sleep(JOB_REAPER_INTERVAL_SECONDS)
         try:
-            acquired = await asyncio.to_thread(
-                ctx.redis.set,
-                JOB_REAPER_LOCK_KEY, "1",
-                ex=JOB_REAPER_LOCK_TTL_SECONDS, nx=True,
-            )
-            if not acquired:
+            if await locks.acquire(JOB_REAPER_LOCK_NAME) is None:
                 registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
                 continue
             await asyncio.to_thread(_run_stale_job_reaper_tick, ctx)

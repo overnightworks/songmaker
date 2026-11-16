@@ -4,29 +4,36 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 
 import fakeredis.aioredis
 import pytest
+from support.owner_lease_epoch import settled_epoch
+from support.refused_download import attempt_download_that_must_not_run
+from support.wrapper_deps import settled_fake_redis
 
 from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
-    ADMIT_GENERATION_SCRIPT,
     DOWNLOAD_KEY_PREFIX,
-    GPU_HOLD_KEY_PREFIX,
+    DOWNLOAD_LOCK_LASTS,
     LM_FAILURE_KEY_PREFIX,
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
+    DownloadAlreadyRunning,
+    DownloadLockLost,
     admit_generation,
-    clear_download_in_progress,
     decr_queue_depth,
     download_key,
-    gpu_hold_key,
+    download_locks,
+    gpu_hold_is_free,
+    gpu_hold_locks,
+    gpu_hold_old_key,
     lm_failure_key,
     queue_depth_key,
     read_download_in_progress,
     read_queue_depth,
     read_worker_state,
-    set_download_in_progress,
+    single_flight_download,
     worker_is_online,
     worker_state_key,
 )
@@ -40,28 +47,43 @@ def event_loop():
 
 
 @pytest.fixture
-def redis():
-    return fakeredis.aioredis.FakeRedis()
+def server():
+    return fakeredis.FakeServer()
 
 
-def test_key_prefixes_match_worker_heartbeat() -> None:
-    from acestep_worker.heartbeat import (
-        ADMIT_GENERATION_SCRIPT as WORKER_ADMIT_GENERATION_SCRIPT,
-    )
-    from acestep_worker.heartbeat import (
-        GPU_HOLD_KEY_PREFIX as WORKER_GPU_HOLD_PREFIX,
-    )
+@pytest.fixture
+def redis(server):
+    return fakeredis.aioredis.FakeRedis(server=server)
+
+
+@pytest.fixture
+def settled_redis(redis, event_loop):
+    """A Redis that has run longer than any lock lasts, as a process finds it in operation."""
+    event_loop.run_until_complete(redis.set(*settled_epoch()))
+    return redis
+
+
+@pytest.fixture
+def another_process(server):
+    """A second process's client on the same server."""
+    return fakeredis.aioredis.FakeRedis(server=server)
+
+
+def test_key_prefixes_match_worker_heartbeat(redis) -> None:
     from acestep_worker.heartbeat import (
         QUEUE_KEY_PREFIX as WORKER_QUEUE_PREFIX,
     )
     from acestep_worker.heartbeat import (
         WORKER_KEY_PREFIX as WORKER_WORKER_PREFIX,
     )
+    from acestep_worker.heartbeat import gpu_hold_locks as worker_gpu_hold_locks
+    from acestep_worker.heartbeat import gpu_hold_old_key as worker_gpu_hold_old_key
 
     assert WORKER_KEY_PREFIX == WORKER_WORKER_PREFIX
     assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
-    assert GPU_HOLD_KEY_PREFIX == WORKER_GPU_HOLD_PREFIX
-    assert ADMIT_GENERATION_SCRIPT == WORKER_ADMIT_GENERATION_SCRIPT
+    assert gpu_hold_locks(redis).keys == worker_gpu_hold_locks(redis).keys
+    assert gpu_hold_locks(redis).lasts == worker_gpu_hold_locks(redis).lasts
+    assert gpu_hold_old_key("w1") == worker_gpu_hold_old_key("w1")
 
 
 def test_lm_failure_key_matches_the_workers_key() -> None:
@@ -98,22 +120,12 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
     asyncio.run(cache.load("sft"))
     asyncio.run(cache.pin("sft"))
 
-    fake_redis = MagicMock()
-
-    async def _zero_queue(*_args, **_kwargs):
-        return 0
-
-    async def _no_hold(*_args, **_kwargs):
-        return -2
-
-    fake_redis.get = _zero_queue
-    fake_redis.ttl = _no_hold
     deps = WorkerDeps(
         worker_id="acestep-worker-0",
         cache=cache,
         task_store=MagicMock(),
         heartbeat=MagicMock(),
-        redis=fake_redis,
+        redis=settled_fake_redis(),
         registry_client=None,
         registration=None,
         checkpoint_dir=Path("/nonexistent"),
@@ -183,33 +195,162 @@ def test_queue_depth_key_format() -> None:
     assert queue_depth_key("acestep-worker-0") == "songmaker:acestep:queue:acestep-worker-0"
 
 
-def test_gpu_hold_key_format() -> None:
-    assert gpu_hold_key("acestep-worker-0") == "songmaker:acestep:hold:acestep-worker-0"
-    assert GPU_HOLD_KEY_PREFIX == "songmaker:acestep:hold"
+def test_reserve_wins_against_a_later_generation_admit(settled_redis, event_loop) -> None:
+    assert event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+
+    assert not event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 0
 
 
-def test_reserve_wins_against_a_later_generation_admit(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(reserve_gpu_hold(redis, "w1", "token", 15))
+def test_generation_admit_wins_against_a_later_hold_reserve(settled_redis, event_loop) -> None:
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
 
-    assert not event_loop.run_until_complete(admit_generation(redis, "w1"))
-    assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 0
-
-
-def test_generation_admit_wins_against_a_later_hold_reserve(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(admit_generation(redis, "w1"))
-
-    assert not event_loop.run_until_complete(reserve_gpu_hold(redis, "w1", "token", 15))
-    assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 1
+    assert not event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
 
 
-def test_hold_token_controls_renew_and_release(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(reserve_gpu_hold(redis, "w1", "token", 15))
-    assert event_loop.run_until_complete(redis.ttl(gpu_hold_key("w1"))) == 15
-    assert not event_loop.run_until_complete(renew_gpu_hold(redis, "w1", "wrong", 15))
-    assert not event_loop.run_until_complete(release_gpu_hold(redis, "w1", "wrong"))
-    assert event_loop.run_until_complete(renew_gpu_hold(redis, "w1", "token", 15))
-    assert event_loop.run_until_complete(release_gpu_hold(redis, "w1", "token"))
-    assert event_loop.run_until_complete(admit_generation(redis, "w1"))
+class _AdmittingAfterADepthRead(fakeredis.aioredis.FakeRedis):
+    """A client that runs an admission right after its ``after_read``-th read of the queue depth."""
+
+    def __init__(self, *, server, worker_id: str, after_read: int, admit) -> None:
+        super().__init__(server=server)
+        self._depth_key = queue_depth_key(worker_id)
+        self._after_read = after_read
+        self._admit = admit
+        self._depth_reads = 0
+
+    async def get(self, name, *args, **kwargs):
+        value = await super().get(name, *args, **kwargs)
+        if name == self._depth_key:
+            self._depth_reads += 1
+            if self._depth_reads == self._after_read:
+                await self._admit(self)
+        return value
+
+
+def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold(
+    settled_redis, server, event_loop,
+) -> None:
+    """The admission read the lock free, then the reserve took it: the depth read after
+    ``acquire`` shows the admission, so the reserve gives the hold back."""
+    reserving = _AdmittingAfterADepthRead(
+        server=server, worker_id="w1", after_read=1,
+        admit=lambda client: client.incr(queue_depth_key("w1")),
+    )
+
+    async def scenario() -> tuple[str | None, bool]:
+        generation = await reserve_gpu_hold(reserving, "w1")
+        return generation, await gpu_hold_is_free(settled_redis, "w1")
+
+    assert event_loop.run_until_complete(scenario()) == (None, True)
+    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
+
+
+# The admit script of the previous release: it reads only the old hold key.
+_PREVIOUS_RELEASE_ADMIT_SCRIPT = """
+if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+redis.call('INCR', KEYS[1])
+return 1
+"""
+
+
+def test_an_admission_of_the_previous_release_never_overlaps_a_reserve(
+    settled_redis, server, event_loop,
+) -> None:
+    """The previous release's admission runs right after the reserve's second depth read."""
+    admitted_by_previous_release: list[bool] = []
+
+    async def previous_release_admits(client) -> None:
+        admitted_by_previous_release.append(bool(await client.eval(
+            _PREVIOUS_RELEASE_ADMIT_SCRIPT, 2, queue_depth_key("w1"), gpu_hold_old_key("w1"),
+        )))
+
+    reserving = _AdmittingAfterADepthRead(
+        server=server, worker_id="w1", after_read=2, admit=previous_release_admits,
+    )
+
+    generation = event_loop.run_until_complete(reserve_gpu_hold(reserving, "w1"))
+
+    assert admitted_by_previous_release == [False]
+    assert generation is not None
+
+
+def test_the_generation_controls_renew_and_release(settled_redis, event_loop) -> None:
+    generation = event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+    assert generation
+    assert not event_loop.run_until_complete(renew_gpu_hold(settled_redis, "w1", "wrong"))
+    assert not event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", "wrong"))
+    assert event_loop.run_until_complete(renew_gpu_hold(settled_redis, "w1", generation))
+    assert event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", generation))
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+
+
+def test_a_hold_is_free_only_while_none_is_live(settled_redis, event_loop) -> None:
+    assert event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+    generation = event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
+    assert not event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+    event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", generation))
+    assert event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+
+
+def test_a_hold_of_the_previous_release_keeps_every_reader_off_the_worker(
+    settled_redis, event_loop,
+) -> None:
+    """The previous release holds a GPU under ``songmaker:acestep:hold:<id>`` alone."""
+    assert gpu_hold_old_key("w1") == "songmaker:acestep:hold:w1"
+
+    async def scenario() -> tuple[bool, bool, int]:
+        await settled_redis.set(gpu_hold_old_key("w1"), "token", ex=15)
+        free = await gpu_hold_is_free(settled_redis, "w1")
+        admitted = await admit_generation(settled_redis, "w1")
+        return free, admitted, await read_queue_depth(settled_redis, "w1")
+
+    assert event_loop.run_until_complete(scenario()) == (False, False, 0)
+
+
+def test_a_hold_is_written_beside_its_lock_as_the_previous_release_reads_it(
+    settled_redis, event_loop,
+) -> None:
+    async def scenario() -> tuple[str, list[bytes | None]]:
+        key = gpu_hold_old_key("w1")
+        generation = await reserve_gpu_hold(settled_redis, "w1")
+        assert generation
+        reserved = await settled_redis.get(key)
+        await settled_redis.delete(key)
+        assert await renew_gpu_hold(settled_redis, "w1", generation)
+        renewed = await settled_redis.get(key)
+        assert await release_gpu_hold(settled_redis, "w1", generation)
+        released = await settled_redis.get(key)
+        newer = await reserve_gpu_hold(settled_redis, "w1")
+        assert not await release_gpu_hold(settled_redis, "w1", generation)
+        return newer, [reserved, renewed, released, await settled_redis.get(key)]
+
+    newer, (reserved, renewed, released, after_stale_release) = event_loop.run_until_complete(
+        scenario(),
+    )
+    assert renewed == reserved
+    assert released is None
+    assert after_stale_release == newer.encode()
+
+
+def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(
+    settled_redis, event_loop,
+) -> None:
+    """After a restart the hold may have been lost: nothing is admitted or reserved until a
+    span passed, and every refusal is the ordinary busy answer."""
+
+    async def scenario() -> tuple[bool, bool, str | None, int]:
+        await settled_redis.flushall()
+        free = await gpu_hold_is_free(settled_redis, "w1")
+        admitted = await admit_generation(settled_redis, "w1")
+        reserved = await reserve_gpu_hold(settled_redis, "w1")
+        return free, admitted, reserved, await read_queue_depth(settled_redis, "w1")
+
+    assert event_loop.run_until_complete(scenario()) == (False, False, None, 0)
+
+    event_loop.run_until_complete(settled_redis.set(*settled_epoch()))
+
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
 
 
 def test_read_worker_state_missing(redis, event_loop) -> None:
@@ -293,44 +434,123 @@ def test_read_download_in_progress_missing(redis, event_loop) -> None:
     assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) is None
 
 
-def test_set_then_read_download_in_progress(redis, event_loop) -> None:
-    event_loop.run_until_complete(set_download_in_progress(redis, "xl-sft", "job-abc"))
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "xl-sft")) == "job-abc"
-
-
-def test_clear_download_in_progress(redis, event_loop) -> None:
-    event_loop.run_until_complete(set_download_in_progress(redis, "sft", "job-1"))
-    event_loop.run_until_complete(clear_download_in_progress(redis, "sft"))
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) is None
-
-
-def test_clear_download_in_progress_idempotent(redis, event_loop) -> None:
-    event_loop.run_until_complete(clear_download_in_progress(redis, "never-set"))
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "never-set")) is None
-
-
-def test_set_download_in_progress_has_ttl(redis, event_loop) -> None:
-    from songmaker_cli.acestep_state import DOWNLOAD_TTL_SECONDS
-
-    event_loop.run_until_complete(set_download_in_progress(redis, "turbo", "job-x"))
-    ttl = event_loop.run_until_complete(redis.ttl(download_key("turbo")))
-    assert 0 < ttl <= DOWNLOAD_TTL_SECONDS
-
-
-def test_set_download_in_progress_returns_true_on_acquire(redis, event_loop) -> None:
-    acquired = event_loop.run_until_complete(
-        set_download_in_progress(redis, "sft", "job-1"),
-    )
-    assert acquired is True
-
-
-def test_set_download_in_progress_returns_false_when_already_set(
-    redis,
-    event_loop,
+def test_a_download_is_labelled_with_its_job_while_it_holds_the_lock(
+    settled_redis, event_loop,
 ) -> None:
-    event_loop.run_until_complete(set_download_in_progress(redis, "sft", "job-1"))
-    again = event_loop.run_until_complete(
-        set_download_in_progress(redis, "sft", "job-2"),
+    async def scenario() -> tuple[str | None, int, str | None]:
+        async with single_flight_download(settled_redis, "turbo", "job-x"):
+            during = await read_download_in_progress(settled_redis, "turbo")
+            label_seconds = await settled_redis.ttl(download_key("turbo"))
+        return during, label_seconds, await read_download_in_progress(settled_redis, "turbo")
+
+    during, label_seconds, after = event_loop.run_until_complete(scenario())
+
+    assert (during, after) == ("job-x", None)
+    assert 0 < label_seconds <= DOWNLOAD_LOCK_LASTS.total_seconds()
+
+
+def test_a_second_download_of_a_mode_is_refused_with_the_holders_job(
+    settled_redis, another_process, event_loop,
+) -> None:
+    async def scenario() -> str | None:
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            with pytest.raises(DownloadAlreadyRunning) as refused:
+                await attempt_download_that_must_not_run(another_process, "sft", "job-2")
+        return refused.value.job_id
+
+    assert event_loop.run_until_complete(scenario()) == "job-1"
+
+
+def test_two_modes_download_side_by_side(settled_redis, another_process, event_loop) -> None:
+    async def scenario() -> None:
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            async with single_flight_download(another_process, "turbo", "job-2"):
+                pass
+
+    event_loop.run_until_complete(scenario())
+
+
+def test_a_mode_downloads_again_once_its_download_ended(
+    settled_redis, another_process, event_loop,
+) -> None:
+    async def scenario() -> None:
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            pass
+        async with single_flight_download(another_process, "sft", "job-2"):
+            pass
+
+    event_loop.run_until_complete(scenario())
+
+
+def test_a_download_waits_out_a_redis_restart_instead_of_failing(
+    settled_redis, event_loop, monkeypatch,
+) -> None:
+    real_sleep = asyncio.sleep
+    waits = 0
+
+    async def settle_while_waiting(_seconds: float) -> None:
+        nonlocal waits
+        waits += 1
+        await settled_redis.set(*settled_epoch())
+        await real_sleep(0)
+
+    async def scenario() -> str | None:
+        await settled_redis.flushall()
+        monkeypatch.setattr("songmaker_cli.acestep_state.asyncio.sleep", settle_while_waiting)
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            return await read_download_in_progress(settled_redis, "sft")
+
+    assert event_loop.run_until_complete(scenario()) == "job-1"
+    assert waits >= 1
+
+
+def test_a_download_whose_lock_was_taken_over_stops_and_leaves_the_new_holders_label(
+    settled_redis, another_process, event_loop, monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
     )
-    assert again is False
-    assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) == "job-1"
+
+    async def download_while_another_process_takes_the_lock() -> None:
+        new_holder_locks = download_locks(another_process)
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            await another_process.zrem(new_holder_locks.keys.expiry, "sft")
+            assert await new_holder_locks.acquire("sft") is not None
+            await another_process.set(download_key("sft"), "job-2", ex=15)
+            await asyncio.sleep(30)
+
+    async def scenario() -> str | None:
+        with pytest.raises(DownloadLockLost) as lost:
+            await download_while_another_process_takes_the_lock()
+        assert lost.value.mode == "sft"
+        return await read_download_in_progress(another_process, "sft")
+
+    assert event_loop.run_until_complete(scenario()) == "job-2"
+
+
+def test_a_download_whose_first_stop_is_swallowed_by_its_block_is_stopped_again(
+    settled_redis, another_process, event_loop, monkeypatch,
+) -> None:
+    """A native cancel racing a cancel scope of the block (anyio's connect) is absorbed by it."""
+    monkeypatch.setattr(
+        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
+    )
+
+    async def download_that_absorbs_its_first_stop() -> None:
+        new_holder_locks = download_locks(another_process)
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            await another_process.zrem(new_holder_locks.keys.expiry, "sft")
+            assert await new_holder_locks.acquire("sft") is not None
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                pass
+            await asyncio.sleep(30)
+
+    async def scenario() -> None:
+        async with asyncio.timeout(10):
+            await download_that_absorbs_its_first_stop()
+
+    scenario_run = scenario()
+    with pytest.raises(DownloadLockLost):
+        event_loop.run_until_complete(scenario_run)
