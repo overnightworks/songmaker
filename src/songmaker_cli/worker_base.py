@@ -8,6 +8,7 @@ whose lease is gone; no worker fails another's jobs.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import uuid
@@ -22,7 +23,7 @@ from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
-from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases
 
@@ -81,12 +82,14 @@ class WorkerBase:
                 return False
         return True
 
-    async def on_startup(self, _ctx) -> None:
+    async def on_startup(self, ctx) -> None:
         from songmaker_cli.logging_config import configure_logging
 
         configure_logging()
 
         log.info("%s worker starting up...", self.worker_name())
+        # arq runs on_startup inside the task a stop signal cancels, so its end marks the stop.
+        asyncio.current_task().add_done_callback(lambda _stopped: stop_retrying(ctx["redis"]))
         # Opening the database may wait for it to start; the lease says "alive" only after.
         self.get_db_factory()
         await self._start_owner_lease()
