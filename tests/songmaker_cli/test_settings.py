@@ -533,8 +533,10 @@ def test_defaults_keep_every_pod_within_postgres_connection_limit() -> None:
 def test_rejects_a_pool_that_exceeds_postgres_connection_limit(
     override: dict[str, int],
 ) -> None:
+    settings_values = {**_required_settings(), **override}
+
     with pytest.raises(ValidationError, match="Connection budget"):
-        Settings(**_required_settings(), **override)
+        Settings(**settings_values)
 
 
 def test_accepts_a_pool_the_configured_postgres_limit_admits() -> None:

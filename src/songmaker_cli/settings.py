@@ -150,11 +150,12 @@ class ProcessKind:
     pods: int
 
 
-# Pods per process kind that open a pooled engine: two web pods (platform#581 rule
-# 10), one music worker, one scoring worker. Not counted: the `migrate` init
-# container and the probe, inspect and Alembic engines of `init_db`, which run
-# one at a time and close before the same pod opens its pooled engine, so a pod
-# never holds more than its pool; the acestep worker opens no database.
+# Pods per process kind that open a pooled engine: two web pods (the platform
+# requires two for availability), one music worker, one scoring worker. Not
+# counted: the `migrate` init container and the probe, inspect and Alembic
+# engines of `init_db`, which run one at a time and close before the same pod
+# opens its pooled engine, so a pod never holds more than its pool; the acestep
+# worker opens no database.
 PROCESS_KINDS = (
     ProcessKind("web", 2),
     ProcessKind("music-worker", 1),
