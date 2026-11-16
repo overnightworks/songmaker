@@ -1,7 +1,0 @@
-claim_id = "797a691cd1b949efa5742e3691df9464"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "a88e3b5cdc8392dc9731c75dc9048fbb04477dc3"
-branch = "claude/issue-3243-an-empty-stored-failure-cause-shows-the"
-scope = ["frontend/src/lib/stores/jobs.end.test.ts", "frontend/src/lib/stores/jobs.ts", "tests/songmaker_cli/test_api_models_jobs.py"]
-opened_commit = "aa91f81c941ee1b3c23fb8607c95a362ceb26198"
