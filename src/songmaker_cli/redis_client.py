@@ -104,6 +104,18 @@ def build_arq_redis_settings(url: str, *, ride_out_outage: bool = False) -> Redi
     return settings
 
 
+def stop_retrying(client: AsyncRedis) -> None:
+    """Make every later command of ``client`` fail at once, as a stopping worker needs.
+
+    arq deletes its health-check key before it ends a worker; with the retry of
+    ``ride_out_outage`` that wait would outlast a platform's grace period.
+    """
+    from redis.asyncio.retry import Retry
+    from redis.backoff import NoBackoff
+
+    client.set_retry(Retry(NoBackoff(), 0))
+
+
 def redis_health(r: Redis) -> bool:
     try:
         return r.ping()

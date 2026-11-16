@@ -1585,7 +1585,8 @@ SIGKILLed and even the values the run did produce would be lost.
   recovery below). Queued work remains in arq for a replacement worker to claim
   after a deploy. A worker's arq connection retries a refused or lost connection for
   `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
-  process's arq pool fails fast.
+  process's arq pool fails fast. A stop signal ends that retry, so a worker
+  stops within seconds during the outage.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
 **Stale-job recovery** (web process — #446, #456): The lifecycle loop is the
