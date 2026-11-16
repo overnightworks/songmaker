@@ -90,13 +90,13 @@ class Release:
 
 
 class HeldGateway(FakeGateway):
-    """A gateway that holds each request until ``released`` is set, then answers ``reply``.
+    """A gateway that holds each request until ``released`` is set, then answers ``replies``.
 
     ``received`` is set when a request arrives, ``closed`` when a held request is cancelled.
     """
 
-    def __init__(self, reply: Reply | None = None) -> None:
-        super().__init__(reply or Reply(status=500))
+    def __init__(self, *replies: Reply) -> None:
+        super().__init__(*(replies or (Reply(status=500),)))
         self.received = threading.Event()
         self.released = Release()
         self.closed = threading.Event()

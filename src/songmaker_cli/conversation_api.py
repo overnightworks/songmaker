@@ -48,6 +48,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.cover_runner import run_until_cancelled
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.cowriter.turn_context import TurnContextEnvelope, load_turn_context
 from songmaker_cli.db.models import ChatMessage
@@ -164,21 +165,40 @@ async def _run_chat_turn(
     prepared: PreparedChatTurn,
     frames: ChatTurnFrames,
 ) -> None:
-    """Run a started turn on its own session, independent of the request that started it."""
+    """Run a started turn on its own session, independent of the request that started it.
+
+    A cancel of the chat job, sent to any web process, stops the turn here before it makes
+    further tool edits; what the turn already committed stays.
+    """
+    try:
+        turn = await run_until_cancelled(
+            caller.app.state.ctx,
+            prepared.job_id,
+            lambda: _stream_chat_turn(req, caller, prepared, frames),
+        )
+        if not turn.cancelled():
+            turn.result()
+    finally:
+        frames.end()
+
+
+async def _stream_chat_turn(
+    req: ChatTurnV2Request,
+    caller: TurnCaller,
+    prepared: PreparedChatTurn,
+    frames: ChatTurnFrames,
+) -> None:
     from songmaker_cli.jobs._runtime import _keep_chat_job_heartbeat
 
     db_factory: sessionmaker[Session] = caller.app.state.ctx.db
-    try:
-        with bound_to_turn(CallingTurn(caller.session_id)), db_factory() as session:
-            lifecycle = ChatTurnLifecycle(
-                session,
-                prepared.job_id,
-                asyncio.create_task(_keep_chat_job_heartbeat(db_factory, prepared.job_id)),
-            )
-            async for frame in _chat_event_generator(req, caller, session, prepared, lifecycle):
-                frames.publish(frame)
-    finally:
-        frames.end()
+    with bound_to_turn(CallingTurn(caller.session_id)), db_factory() as session:
+        lifecycle = ChatTurnLifecycle(
+            session,
+            prepared.job_id,
+            asyncio.create_task(_keep_chat_job_heartbeat(db_factory, prepared.job_id)),
+        )
+        async for frame in _chat_event_generator(req, caller, session, prepared, lifecycle):
+            frames.publish(frame)
 
 
 _PROBLEM_STATUS: Final = {

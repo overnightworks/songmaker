@@ -8,6 +8,7 @@ import logging
 import shutil
 import threading
 import uuid
+from collections.abc import Callable, Coroutine
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,8 +64,8 @@ _PICTURE_REJECTED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "picture_reject
 _RUN_FAILED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "cover run failed")
 
 # A cancel commits to PostgreSQL, then names the job id on this channel: the process that
-# draws the picture receives it, reads the job and stops the picture. Delivery is
-# at-most-once; the committed status is the truth the publication checks.
+# runs the cover picture or the co-writer turn receives it, reads the job and stops the
+# work. Delivery is at-most-once; the committed status is the truth the publication checks.
 COVER_CANCEL_CHANNEL: Final = f"{REDIS_KEY_PREFIX}:cover_cancel"
 _CANCEL_POLL_SECONDS: Final = 1.0
 _SUBSCRIPTION_CONFIRMATION_SECONDS: Final = 5.0
@@ -81,15 +82,15 @@ class _CoverStart:
 
 
 def publish_cover_cancel(redis, job_id: str) -> None:
-    """Tell every web process that a cover job's cancellation has committed.
+    """Tell every web process that a job's cancellation has committed.
 
     Only the id travels. An unreachable Redis leaves the committed cancel standing: the
-    picture then ends on its own and its publication refuses the cancelled job.
+    job then ends on its own and its publication refuses the cancelled job.
     """
     try:
         redis.publish(COVER_CANCEL_CHANNEL, job_id)
     except RedisError:
-        log.warning("A cover job's cancel could not reach the process drawing it")
+        log.warning("A job's cancel could not reach the process running it")
 
 
 def _subscribe_to_cancellations(redis):
@@ -100,7 +101,7 @@ def _subscribe_to_cancellations(redis):
         if pubsub.get_message(timeout=_SUBSCRIPTION_CONFIRMATION_SECONDS) is not None:
             return pubsub
     except RedisError:
-        log.warning("Cover cancel channel unreachable; a cancel will not stop the picture")
+        log.warning("Cancel channel unreachable; a cancel will not stop the running job")
     pubsub.close()
     return None
 
@@ -118,7 +119,7 @@ def _wait_for_cancellation(pubsub, db_factory, job_id: str, stop: threading.Even
             ):
                 return True
     except RedisError:
-        log.warning("Cover cancel channel lost; a cancel will not stop the picture")
+        log.warning("Cancel channel lost; a cancel will not stop the running job")
     finally:
         pubsub.close()
     return False
@@ -243,6 +244,41 @@ async def run_claimed_cover_suggestion_job(app, job_id: str) -> None:
         await _stop_heartbeats(heartbeat_task)
 
 
+async def run_until_cancelled(ctx, job_id: str, work: Callable[[], Coroutine]) -> asyncio.Task:
+    """Run ``work`` as its own task, cancelled when a cancel of ``job_id`` is heard.
+
+    Returns the finished task. Subscribed before ``work`` starts: a cancel committed after
+    its first read of the job is heard. A cancel stops the task, never the caller.
+    """
+    pubsub = await asyncio.to_thread(_subscribe_to_cancellations, ctx.redis)
+    stop_listening = threading.Event()
+    task = asyncio.create_task(work())
+    cancellation = (
+        None if pubsub is None else asyncio.ensure_future(asyncio.to_thread(
+            _wait_for_cancellation, pubsub, ctx.db, job_id, stop_listening,
+        ))
+    )
+    try:
+        await asyncio.wait(
+            {task} if cancellation is None else {task, cancellation},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if (
+            not task.done()
+            and cancellation is not None
+            and cancellation.done()
+            and cancellation.result()
+        ):
+            task.cancel()
+        await asyncio.wait({task})
+    finally:
+        stop_listening.set()
+        if not task.done():
+            task.cancel()
+            await asyncio.wait({task})
+    return task
+
+
 async def _draw(app, job_id: str, start: _CoverStart) -> bytes | TurnProblem | None:
     """The picture for ``start``, why there is none, or ``None`` after an explicit cancel.
 
@@ -254,35 +290,10 @@ async def _draw(app, job_id: str, start: _CoverStart) -> bytes | TurnProblem | N
         return TurnProblem(AgentProblem.SIGN_IN_AGAIN, "no asking session")
     caller = TurnCaller(app, start.session_id, start.user)
     ctx = app.state.ctx
-    # Subscribed before the picture reads the job: a cancel committed after that read is heard.
-    pubsub = await asyncio.to_thread(_subscribe_to_cancellations, ctx.redis)
-    stop_listening = threading.Event()
-    picture = asyncio.create_task(
-        _picture_while_running(ctx.db, job_id, caller, start.album_data),
+    picture = await run_until_cancelled(
+        ctx, job_id,
+        lambda: _picture_while_running(ctx.db, job_id, caller, start.album_data),
     )
-    cancellation = (
-        None if pubsub is None else asyncio.ensure_future(asyncio.to_thread(
-            _wait_for_cancellation, pubsub, ctx.db, job_id, stop_listening,
-        ))
-    )
-    try:
-        await asyncio.wait(
-            {picture} if cancellation is None else {picture, cancellation},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if (
-            not picture.done()
-            and cancellation is not None
-            and cancellation.done()
-            and cancellation.result()
-        ):
-            picture.cancel()
-        await asyncio.wait({picture})
-    finally:
-        stop_listening.set()
-        if not picture.done():
-            picture.cancel()
-            await asyncio.wait({picture})
     if picture.cancelled():
         log.info(COVER_PICTURE_CANCELLED_LOG, job_id)
         return None
