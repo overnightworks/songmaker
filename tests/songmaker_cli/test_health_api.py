@@ -11,6 +11,7 @@ never a lucky real GPU.
 from __future__ import annotations
 
 import json
+import socket
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -20,6 +21,9 @@ from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import redis
+from redis.backoff import NoBackoff
+from redis.retry import Retry
 from support.web_app import make_test_app
 
 from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
@@ -156,6 +160,17 @@ def health_client(tmp_path, mock_arq_pool, pg_factory):
 
 
 @pytest.fixture
+def redis_refusing_connections():
+    """A client of a Redis that is down: nothing listens at its address."""
+    with socket.socket() as unused_port:
+        unused_port.bind(("127.0.0.1", 0))
+        port = unused_port.getsockname()[1]
+    return redis.Redis(
+        host="127.0.0.1", port=port, retry=Retry(NoBackoff(), 0), socket_connect_timeout=1,
+    )
+
+
+@pytest.fixture
 def expected_health_json() -> bytes:
     return (
         b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
@@ -223,6 +238,18 @@ def test_health_preserves_response_bytes(
     )
     assert response.status_code == 200
     assert response.content == expected
+
+
+def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
+    tmp_path, mock_arq_pool, pg_factory, redis_refusing_connections, monitoring_headers,
+) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, redis=redis_refusing_connections)
+
+    with client:
+        response = client.get("/health/details", headers=monitoring_headers)
+
+    assert response.status_code == 200
+    assert response.json()["redis"] == "error"
 
 
 @pytest.mark.parametrize(

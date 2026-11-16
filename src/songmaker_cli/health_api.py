@@ -30,6 +30,7 @@ from songmaker_cli.db.queries.jobs import (
     last_job_failure_time,
 )
 from songmaker_cli.db.queries.workers import list_worker_identities
+from songmaker_cli.request_policies import HEALTH_DETAILS_PATH
 
 PROM_HTTP_REQUESTS_TOTAL: Final[str] = "songmaker_http_requests_total"
 PROM_HTTP_REQUEST_DURATION_MS: Final[str] = "songmaker_http_request_duration_milliseconds_total"
@@ -416,7 +417,7 @@ async def health_check(request: Request) -> HealthStatusResponse:
 
 
 @router.get(
-    "/health/details",
+    HEALTH_DETAILS_PATH,
     dependencies=[Depends(require_monitoring_token)],
     openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION),
 )

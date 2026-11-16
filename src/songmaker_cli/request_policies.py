@@ -100,7 +100,15 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 # and CI's E2E are its callers --
 # exempting it would let an anonymous caller hammer the priciest endpoint
 # for free. It stays in the API class.
+#
+# `/health/details` is here: it does its work only for the monitoring token, so
+# an anonymous caller gets a cheap 401, and the budget it spends would make it
+# answer 503 while Redis is down, exactly when its body is needed to name the outage.
+# `/metrics`, behind the same token, keeps its budget, so guesses at the token stay limited.
+HEALTH_DETAILS_PATH: Final = "/health/details"
+
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
+    HEALTH_DETAILS_PATH,
     "/manifest.webmanifest",
     "/robots.txt",
     "/favicon.svg",
