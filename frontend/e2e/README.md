@@ -214,9 +214,12 @@ workflow's own `/health` and `/health/details` smoke test before Playwright even
 anything seeded through Playwright's `request` API context (global setup's
 library, each attempt's playlist), and a retry re-running a whole flow inside
 the same window. What the rate limiter actually counts is measured from
-`docker compose logs songmaker-web`'s access log, filtered to the runner's
-one IP and to the API class by the same rate-limit policy the server uses
-(`scripts/e2e_rate_window.py`). The E2E workflow's "Busiest API and sign-in rate-limit
+`docker compose logs songmaker-web`'s request lines (one `request.ended` line per
+request, carrying its route template, client address and time), grouped by client
+address and filtered to the API class by the same rate-limit policy the server uses
+(`scripts/e2e_rate_window.py`). A request no route answered (a page document, a static
+file, a 404) has no template and is not counted, so the printed peak can sit below what
+the limiter counted. The E2E workflow's "Busiest API and sign-in rate-limit
 windows" step prints that busiest 60-second API window after every Playwright run
 (in CI once per shard job, locally once for both projects), counting setup, cleanup, retries and browser traffic, so the figure cannot go
 stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
@@ -224,9 +227,9 @@ stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
 peak, with room for one CI retry landing inside the same window (#1555). The
 same step prints the busiest sign-in window, measured over its own 600-second
 window, and `SIGN_IN_RATE_LIMIT` in `docker/docker-compose.test.yml` is kept at
-least three times above the summed sign-in peak of both projects. A
-request the limiter refused never reaches the access log, so on a run that
-hit 429 the printed peak is only a lower bound. Re-running the suite
+least three times above the summed sign-in peak of both projects. The
+request line sits outside the limiter, so a request it refused with 429 is counted
+as well. Re-running the suite
 repeatedly against the same stack inside that window is cumulative, not reset
 per run — see "Running it locally" below. If this suite gains more specs,
 check the printed peak against the override rather than trusting the
