@@ -81,7 +81,6 @@ from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
     is_visible_generation_failure,
-    musician_job_response,
 )
 from songmaker_cli.messages import Message, message
 from songmaker_cli.reference_audio import commit_unused_stamps
@@ -372,7 +371,7 @@ def api_last_failed_generation(
         and newest_take.created_at > job.completed_at
     ):
         return LastFailedGenerationResponse(job=None)
-    return LastFailedGenerationResponse(job=musician_job_response(job))
+    return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
 
 
 _REPAINT_TAKE_DESCRIPTION = (
@@ -635,9 +634,12 @@ async def _generation_capacity_error(
             raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     except NoCapacityError as exc:
         failure = generation_failure(exc, job_id)
-        _fail_job(ctx, job_id, error=failure.message, error_type=failure.error_type)
+        _fail_job(ctx, job_id, error_message=failure.message, error_type=failure.error_type)
         response = GenerationUnavailableResponse(
-            detail=failure.message.sentence(), error_type=failure.error_type, job_id=job_id,
+            detail=failure.message.sentence(),
+            message=failure.message,
+            error_type=failure.error_type,
+            job_id=job_id,
         )
         return JSONResponse(status_code=503, content=response.model_dump())
     return None
@@ -651,16 +653,18 @@ def _queue_unavailable_refusal(ctx: AppContext, job_id: str) -> Refusal:
 def _fail_job(
     ctx: AppContext,
     job_id: str,
-    error: Message | None = None,
+    error_message: Message | None = None,
     error_type: str | None = None,
 ) -> None:
-    error = error or message("jobRefusal.queueUnavailable")
+    error_message = error_message or message("jobRefusal.queueUnavailable")
     try:
         with ctx.db() as session:
             update_job_status(
                 session,
                 job_id,
-                JobStatusUpdate(JobStatus.FAILED, error=error, error_type=error_type),
+                JobStatusUpdate(
+                    JobStatus.FAILED, error_message=error_message, error_type=error_type,
+                ),
             )
             session.commit()
     except Exception:

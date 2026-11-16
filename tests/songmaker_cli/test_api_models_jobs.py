@@ -87,3 +87,43 @@ def test_a_queue_wait_whose_key_the_catalog_lacks_fails_that_response_and_logs_j
 
     assert "job-1" in caplog.text
     assert "jobWait.retired" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("completed_takes", "take_count", "cause", "expected"),
+    [
+        (None, None, "jobFailure.generationTimedOut", "Generation timed out"),
+        (1, 2, "jobFailure.generationTimedOut", "1/2 completed, 1 failed: Generation timed out"),
+        (
+            12, 15, "jobFailure.generationFailed",
+            "12/15 completed, 3 failed: Generating failed — try again.",
+        ),
+    ],
+)
+def test_response_sentence_of_a_failure_leads_a_partial_with_its_takes(
+    completed_takes, take_count, cause, expected,
+):
+    """An agent reads a partial Generate failure as its takes and then its cause."""
+    job = Job(
+        id="partial", type="generate", status="partial", progress=0.5,
+        error_message=message(cause), completed_takes=completed_takes, take_count=take_count,
+        error_type="generation_error",
+    )
+    response = JobResponse.from_orm(job)
+    assert response.error == expected
+    assert response.error_message == message(cause)
+    assert response.completed_takes == completed_takes
+
+
+def test_response_of_a_job_without_a_failure_has_no_sentence_and_no_message():
+    response = JobResponse.from_orm(Job(id="ok", type="generate", status="running", progress=0.1))
+    assert (response.error, response.error_message, response.completed_takes) == (None, None, None)
+
+
+def test_response_fails_loudly_for_completed_takes_without_a_take_count():
+    job = Job(
+        id="broken", type="generate", status="partial", progress=0.5,
+        error_message=message("jobFailure.generationFailed"), completed_takes=1,
+    )
+    with pytest.raises(RuntimeError, match="completed takes without a take count"):
+        JobResponse.from_orm(job)

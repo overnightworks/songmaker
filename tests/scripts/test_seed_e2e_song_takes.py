@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from songmaker_cli.db.models import Album, Generation, User
+from songmaker_cli.messages import message
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -201,7 +202,7 @@ def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_
     assert get_queue_position(session, job) == 2
 
 
-def test_failed_command_stores_the_given_worker_sentence_on_the_job(seeded_job):
+def test_failed_command_stores_the_given_worker_sentence_as_the_cause_on_the_job(seeded_job):
     import argparse
 
     from songmaker_cli.db.queries.jobs import get_job
@@ -218,7 +219,28 @@ def test_failed_command_stores_the_given_worker_sentence_on_the_job(seeded_job):
     job = get_job(session, running.id)
 
     assert job is not None
-    assert (job.status, job.error) == (JobStatus.FAILED, "CUDA out of memory")
+    assert (job.status, job.error_message) == (
+        JobStatus.FAILED, message("jobFailure.workerReported", cause="CUDA out of memory"),
+    )
+
+
+def test_failed_command_stores_the_generation_failed_message_for_a_generate_failure(seeded_job):
+    import argparse
+
+    from songmaker_cli.db.queries.jobs import get_job
+
+    session, _, running = seeded_job
+    seed_e2e_job_states.cmd_set_failed(
+        session,
+        argparse.Namespace(
+            job_id=running.id, error="CUDA out of memory", error_type="generation_error",
+            retry_after_seconds=None,
+        ),
+    )
+    job = get_job(session, running.id)
+
+    assert job is not None
+    assert job.error_message == message("jobFailure.generationFailed")
 
 
 @pytest.fixture

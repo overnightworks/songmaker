@@ -360,6 +360,12 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         CheckConstraint(
+            "error_message IS NULL OR ("
+            "COALESCE(json_typeof(error_message->'key'), '') = 'string' "
+            "AND COALESCE(json_typeof(error_message->'values'), '') = 'object')",
+            name="ck_jobs_error_message_shape",
+        ),
+        CheckConstraint(
             "queue_reason_message IS NULL OR ("
             "COALESCE(json_typeof(queue_reason_message->'key'), '') = 'string' "
             "AND COALESCE(json_typeof(queue_reason_message->'values'), '') = 'object')",
@@ -378,7 +384,8 @@ class Job(Base):
     current_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     train_epochs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     training_started_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_takes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     retry_after_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_reason_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)

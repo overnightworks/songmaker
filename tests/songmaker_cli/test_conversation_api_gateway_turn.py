@@ -263,7 +263,7 @@ def test_a_turn_whose_job_ended_while_the_reply_was_held_adds_no_answer(world):
                 job.id,
                 JobStatusUpdate(
                     JobStatus.FAILED,
-                    error=message("jobFailure.reported", cause="heartbeat stopped"),
+                    error_message=message("jobFailure.workerReported", cause="heartbeat stopped"),
                 ),
             )
             session.commit()
@@ -688,8 +688,17 @@ def test_a_turns_cover_keeps_its_session_when_another_session_of_the_person_ends
     assert _cover_jobs(world)[0].session_id is None
 
 
+class _ContextWhoseCancelsAreLost:
+    """A context whose Redis hears no cancel, so the cancelled turn runs on."""
+
+    class redis:  # noqa: N801
+        @staticmethod
+        def publish(*_arguments) -> None:
+            return None
+
+
 def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
-    """Turn A (S1) is held and cancelled; A's reply arrives while turn B (S2) is still running."""
+    """Turn A (S1) is held and cancelled, the cancel lost; its reply arrives during turn B (S2)."""
     import asyncio
 
     from songmaker_cli.api_models import ChatTurnV2Request
@@ -715,7 +724,7 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
             while not gateway.requests:
                 await asyncio.sleep(0)
             chat_job = canceller.query(Job).filter_by(type="chat").one()
-            api_cancel_job(chat_job.id, _TURN_PERSON, canceller)
+            api_cancel_job(chat_job.id, _TURN_PERSON, canceller, _ContextWhoseCancelsAreLost())
             second = await api_chat_turn(
                 ChatTurnV2Request(message="b"),
                 request_in_session(app, second_session), _TURN_PERSON, turn_b,

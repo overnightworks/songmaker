@@ -214,7 +214,7 @@ def _fail_unqueued_job(db: Session, job_id: str) -> NoReturn:
     update_job_status(
         db,
         job_id,
-        JobStatusUpdate(JobStatus.FAILED, error=message("jobRefusal.queueUnavailable")),
+        JobStatusUpdate(JobStatus.FAILED, error_message=message("jobRefusal.queueUnavailable")),
     )
     db.commit()
     raise Refusal(503, "jobRefusal.queueUnavailable")
