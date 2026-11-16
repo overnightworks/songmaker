@@ -81,9 +81,9 @@ RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker
 # rewrite them.
 RUN install -d -o songmaker -g songmaker /app/data/queue-streams /app/data/audio
 # After the last RUN so the node and uv layers stay cached across releases.
-ARG SONGMAKER_RELEASE
+ARG SERVICE_VERSION
 ARG SONGMAKER_COMMIT
-ENV SONGMAKER_RELEASE=$SONGMAKER_RELEASE SONGMAKER_COMMIT=$SONGMAKER_COMMIT
+ENV SERVICE_VERSION=$SERVICE_VERSION SONGMAKER_COMMIT=$SONGMAKER_COMMIT
 USER 1000:1000
 
 EXPOSE 8080

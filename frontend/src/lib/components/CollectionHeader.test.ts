@@ -70,7 +70,8 @@ function baseProps(): CollectionHeaderProps {
 // close the header passed in, so a test sees the header's side of the seam.
 function fakeCoverEditor(): NonNullable<CollectionHeaderProps['coverEditor']> {
 	return createRawSnippet((close: () => () => void) => ({
-		render: () => '<div class="fake-cover-editor"><button type="button">Done</button></div>',
+		render: () =>
+			'<div class="fake-cover-editor"><button type="button">Close editor</button></div>',
 		setup: (element: Element) => {
 			element.querySelector('button')?.addEventListener('click', () => close()());
 		}
@@ -79,7 +80,8 @@ function fakeCoverEditor(): NonNullable<CollectionHeaderProps['coverEditor']> {
 
 function fakeDetailsEditor(): NonNullable<CollectionHeaderProps['detailsEditor']> {
 	return createRawSnippet((close: () => () => void) => ({
-		render: () => '<div class="fake-details-editor"><button type="button">Done</button></div>',
+		render: () =>
+			'<div class="fake-details-editor"><button type="button">Close editor</button></div>',
 		setup: (element: Element) => {
 			element.querySelector('button')?.addEventListener('click', () => close()());
 		}
@@ -432,7 +434,7 @@ describe('CollectionHeader', () => {
 			expect(identity.querySelector('.header-title')).not.toBeNull();
 			expect(target.querySelector('.play-circle')).not.toBeNull();
 
-			getByRoleButton(target, 'Done').click();
+			getByRoleButton(target, 'Close editor').click();
 			await tick();
 
 			expect(target.querySelector('.fake-cover-editor')).toBeNull();
@@ -565,7 +567,7 @@ describe('CollectionHeader', () => {
 		expect(titles.querySelector('h2')).toBeNull();
 		expect(titles.querySelector('.header-count')).not.toBeNull();
 
-		getByRoleButton(target, 'Done').click();
+		getByRoleButton(target, 'Close editor').click();
 		await tick();
 
 		expect(target.querySelector('.fake-details-editor')).toBeNull();

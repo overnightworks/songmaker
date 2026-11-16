@@ -1315,7 +1315,7 @@ def test_health_queue_depth_cap_reached(
         patch("songmaker_cli.settings.get_settings") as mock_settings,
     ):
         mock_settings.return_value.configure_mock(
-            max_queue_depth=2, songmaker_release=UNRELEASED_TAG, songmaker_commit=UNKNOWN_COMMIT,
+            max_queue_depth=2, release_tag=UNRELEASED_TAG, songmaker_commit=UNKNOWN_COMMIT,
             songmaker_monitoring_token=MagicMock(
                 get_secret_value=lambda: monitoring_headers["Authorization"].split()[1],
             ),
