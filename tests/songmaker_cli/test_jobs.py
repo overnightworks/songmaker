@@ -27,10 +27,7 @@ from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
-from songmaker_cli.constants import (
-    ARQ_SCORING_QUEUE_NAME,
-    INTERNAL_TOKEN_HEADER,
-)
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.models import (
     Generation,
     Job,
@@ -1864,6 +1861,8 @@ def live_scorer_process():
     process._ensure_started()
     yield process
     process.shutdown()
+def _score_generation(db, audio_dir) -> None:
+    run_scoring_job("j2", "g1", None, db_factory=db, audio_dir=audio_dir, owner=an_owner("o1"))
 
 
 def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
@@ -1884,12 +1883,8 @@ def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
         lambda *_args, **_kwargs: _scoring_result(timed_out=True),
     )
 
-    with patch(
-        "songmaker_cli.jobs.get_scorer_process",
-        return_value=live_scorer_process,
-    ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+    with patch("songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process):
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         assert get_job(session, "j2").status == "completed"
@@ -1917,12 +1912,8 @@ def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
         lambda *_args, **_kwargs: _scoring_result(),
     )
 
-    with patch(
-        "songmaker_cli.jobs.get_scorer_process",
-        return_value=live_scorer_process,
-    ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+    with patch("songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process):
+        _score_generation(seeded_db, audio_dir)
 
     assert live_scorer_process.alive
     assert live_scorer_process._process.pid == pid_before
@@ -1958,8 +1949,7 @@ def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
             side_effect=_cancel_and_report_a_timeout,
         ),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         assert get_job(session, "j2").status == "cancelled"
@@ -1988,8 +1978,7 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
             return_value=MagicMock(score=MagicMock(return_value=mock_result)),
         ),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -2014,8 +2003,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
             return_value=MagicMock(score=MagicMock(return_value=mock_result)),
         ),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         gen = get_generation(session, "g1")
@@ -2076,8 +2064,7 @@ def test_scoring_job_uses_generation_version_not_latest(
         "songmaker_cli.jobs.get_scorer_process",
         return_value=MagicMock(score=_capture_score),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     meta = captured["meta"]
     assert meta is not None
@@ -2119,8 +2106,7 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
         "songmaker_cli.jobs.get_scorer_process",
         return_value=MagicMock(score=_capture_score),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -2161,8 +2147,7 @@ def test_scoring_job_uses_configured_per_scorer_budgets(
         "songmaker_cli.jobs.get_scorer_process",
         return_value=MagicMock(score=_capture_score),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     config = captured["config"]
     assert config.timeout_for("text_accuracy") == 600
@@ -2216,8 +2201,7 @@ def test_scoring_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Path)
     _cancel_job(seeded_db, "j2")
     scorer = MagicMock(score=MagicMock(return_value=_scoring_result()))
     with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     scorer.score.assert_not_called()
     with seeded_db() as session:
@@ -2247,8 +2231,7 @@ def test_scoring_job_cancelled_after_start_does_not_score_or_persist(
         patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer),
         patch("songmaker_cli.jobs.scoring._update_job", side_effect=mark_running_then_cancel),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     scorer.score.assert_not_called()
     with seeded_db() as session:
@@ -2279,8 +2262,7 @@ def test_scoring_job_cancelled_after_loading_input_does_not_score_or_persist(
             side_effect=cancel_after_loading_input,
         ),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     scorer.score.assert_not_called()
     with seeded_db() as session:
@@ -2308,8 +2290,7 @@ def test_scoring_job_cancel_during_run_skips_finalize(seeded_db, tmp_path: Path)
         "songmaker_cli.jobs.get_scorer_process",
         return_value=MagicMock(score=_score_and_cancel),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -2335,8 +2316,7 @@ def test_scoring_job_persistence_lock_rejects_a_late_cancellation(
         patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer),
         patch("songmaker_cli.jobs.scoring._job_is_terminal", return_value=False),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     score.assert_called_once()
     with seeded_db() as session:
@@ -2357,8 +2337,7 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
             ),
         ),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
-            owner=an_owner("o1"))
+        _score_generation(seeded_db, audio_dir)
 
     with seeded_db() as session:
         job = get_job(session, "j2")

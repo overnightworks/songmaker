@@ -106,9 +106,7 @@ class Album(ShareMixin, Base):
 
     deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        TZDateTime, nullable=True, index=True,
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True, index=True)
 
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade=DELETE_ORPHANS)
     cover_suggestions: Mapped[list[AlbumCoverSuggestion]] = relationship(

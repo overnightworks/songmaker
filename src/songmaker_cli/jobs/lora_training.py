@@ -1011,9 +1011,7 @@ def _persist_crashed_lora_reconciliation(
             error_message=error_message,
         )
         return
-    storage_rel = str(
-        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-    )
+    storage_rel = str(Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME)
     update_user_lora(
         session,
         lora_id,

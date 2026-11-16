@@ -27,11 +27,7 @@ from songmaker_cli.api_models import (
     StoredGenerationParams,
 )
 from songmaker_cli.arq_pool import is_scoring_worker_healthy
-from songmaker_cli.config import (
-    audio_file_path,
-    build_ace_config,
-    resolve_model_mode,
-)
+from songmaker_cli.config import audio_file_path, build_ace_config, resolve_model_mode
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,

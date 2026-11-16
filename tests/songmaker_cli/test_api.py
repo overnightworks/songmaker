@@ -48,9 +48,7 @@ _DEFAULT_USER_ID = "u-test"
 def client(tmp_path: Path, pg_factory) -> TestClient:
     factory = pg_factory
     with factory() as session:
-        session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user", role="user",
-        ))
+        session.add(User(id=_DEFAULT_USER_ID, username="test_user", role="user"))
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
 
