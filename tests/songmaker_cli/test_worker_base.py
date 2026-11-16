@@ -8,10 +8,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from arq.connections import create_pool
+from arq.worker import Worker, func
 from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
-from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
+from songmaker_cli.redis_client import build_arq_redis_settings, create_async_redis
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
@@ -164,6 +167,47 @@ def test_a_shutdown_that_cannot_end_the_lease_still_ends(
             await worker.on_shutdown({})
 
         _run(start_and_stop_with_redis_cut())
+
+
+def test_a_worker_rides_out_a_redis_outage_and_keeps_serving(
+    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+) -> None:
+    async def answer(_ctx) -> str:
+        return "answered"
+
+    with redis_proxy(redis_url) as proxy:
+        worker = _worker_on(proxy.url, monkeypatch)
+
+        async def cut_restore_and_enqueue() -> tuple[str, bool, set[str]]:
+            arq_worker = Worker(
+                functions=[func(answer, name="answer")],
+                on_startup=worker.on_startup,
+                redis_settings=build_arq_redis_settings(proxy.url, ride_out_outage=True),
+                handle_signals=False,
+                poll_delay=0.1,
+            )
+            serving = asyncio.create_task(arq_worker.main())
+            await asyncio.sleep(1)
+            proxy.refuse()
+            await asyncio.sleep(2)
+            proxy.restore()
+            client = await create_pool(build_arq_redis_settings(redis_url))
+            try:
+                result = await (await client.enqueue_job("answer")).result(timeout=20)
+                still_serving = not serving.done()
+                async with asyncio.timeout(OWNER_LEASE_TTL_SECONDS):
+                    while not (leases := await _held_leases(redis_url)):
+                        await asyncio.sleep(0.2)
+            finally:
+                await client.aclose()
+                serving.cancel()
+                await asyncio.gather(serving, return_exceptions=True)
+                await worker.on_shutdown({})
+            return result, still_serving, leases
+
+        result, still_serving, leases = _run(cut_restore_and_enqueue())
+
+    assert (result, still_serving, leases) == ("answered", True, {worker.owner_id})
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:
