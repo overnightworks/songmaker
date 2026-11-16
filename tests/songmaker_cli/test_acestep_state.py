@@ -551,5 +551,6 @@ def test_a_download_whose_first_stop_is_swallowed_by_its_block_is_stopped_again(
         async with asyncio.timeout(10):
             await download_that_absorbs_its_first_stop()
 
+    scenario_run = scenario()
     with pytest.raises(DownloadLockLost):
-        event_loop.run_until_complete(scenario())
+        event_loop.run_until_complete(scenario_run)
