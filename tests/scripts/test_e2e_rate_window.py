@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 from logline import REQUEST_EVENT
+from logline.testing import configured
+from support.request_lines import request_lines
+from support.web_app import make_test_app
 
 from songmaker_cli.request_policies import (
+    API_BUDGET_NAME,
     BACKCHANNEL_LOGOUT_PATH,
     SIGN_IN_PATHS,
+    STREAM_BUDGET_NAME,
     build_rate_limit_policy,
 )
 from songmaker_cli.settings import Settings
@@ -163,3 +170,35 @@ def test_each_budget_is_measured_over_its_own_window(policy, path: str, budget_o
 
     assert rate_window.busiest_window(lines, policy, budget).request_count == 2
     assert rate_window.busiest_window(beyond, policy, budget).request_count == 1
+
+
+@pytest.mark.parametrize(
+    ("path", "route", "budget_name"),
+    [
+        ("/api/songs/proof", "/api/songs/{song_id}", API_BUDGET_NAME),
+        ("/api/jobs/proof/stream", "/api/jobs/{job_id}/stream", STREAM_BUDGET_NAME),
+    ],
+)
+def test_the_request_line_the_server_writes_names_a_route_that_spends_its_paths_budget(
+    tmp_path: Path, pg_factory, capsys: pytest.CaptureFixture[str], policy,
+    path: str, route: str, budget_name: str,
+) -> None:
+    """defect:#1576 -- the report that sizes the E2E rate limit reads the line the server writes."""
+    server_app, _ = make_test_app(tmp_path, factory=pg_factory)
+
+    async def request() -> None:
+        transport = httpx.ASGITransport(app=server_app.app, client=(RUNNER_IP, 55000))
+        async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
+            assert (await client.get(path)).status_code == 401
+
+    before = datetime.now(timezone.utc)
+    with configured("songmaker-web"):
+        asyncio.run(request())
+    after = datetime.now(timezone.utc)
+
+    (line,) = request_lines(capsys.readouterr().out)
+    record = rate_window.parse_request_record(json.dumps(line))
+    assert record is not None
+    assert (record.client_ip, record.route) == (RUNNER_IP, route)
+    assert rate_window.budget_spent_by(record, policy).name == budget_name
+    assert before <= record.at <= after

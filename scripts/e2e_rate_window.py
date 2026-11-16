@@ -14,9 +14,8 @@ policy that classifies each path is importable:
 
 A request line carries the route template, never the path, so the policy classifies
 the template; a request no route answered (a document, a static file, a 404) has none
-and is not counted. FastAPI names the template of an included router without the include's
-prefix (`/songs/{song_id}` for `/api/songs/{song_id}`), which the policy's prefix rules
-cannot match. The reported peaks are therefore approximations, not bounds.
+and is not counted. A request the limiter refused is counted: the request line sits
+outside it.
 """
 # ruff: noqa: T201 - this report prints the busiest rate-limit window
 

@@ -16,12 +16,12 @@ from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from logline import RequestLineMiddleware, configure
+from logline import RequestLineMiddleware, configure, set_route
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
@@ -269,6 +269,19 @@ def _install_request_line(app: FastAPI) -> None:
     app.add_middleware(RequestLineMiddleware)
 
 
+async def _report_the_full_route(request: Request) -> None:
+    """Give the request line the route's template with the prefixes of the routers it sits in.
+
+    FastAPI's route holds only its own path (`/songs/{song_id}`), while the rate-limit policy and
+    an operator reading the log both speak of the whole one (`/api/songs/{song_id}`). The prefix is
+    what the request path has before the route's own part.
+    """
+    route = request.scope["route"]
+    own_path = route.path_format.format(**request.scope["path_params"])
+    prefix = request.scope["path"].removesuffix(own_path)
+    set_route(request.scope, prefix + route.path)
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
@@ -281,7 +294,7 @@ def create_app(
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
-        lifespan=_lifespan,
+        lifespan=_lifespan, dependencies=[Depends(_report_the_full_route)],
     )
     if ctx is None:
         ctx = _create_default_context(audio_dir, data_dir)

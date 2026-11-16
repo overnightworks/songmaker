@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from logline import REQUEST_EVENT
 from logline.testing import configured
+from support.request_lines import request_lines
 from support.web_app import (
     TEST_SECRET,
     make_app_context,
@@ -601,11 +601,6 @@ def test_hsts_header_absent_when_cookie_secure_is_false(server_app: TestClient) 
     assert "Strict-Transport-Security" not in resp.headers
 
 
-def _request_lines(output: str) -> list[dict[str, object]]:
-    lines = [json.loads(line) for line in output.splitlines()]
-    return [line for line in lines if line["event"] == REQUEST_EVENT]
-
-
 def test_request_line_names_the_forwarded_client(
     server_app: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -616,7 +611,7 @@ def test_request_line_names_the_forwarded_client(
             server_app, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
         )
 
-    (request_line,) = _request_lines(capsys.readouterr().out)
+    (request_line,) = request_lines(capsys.readouterr().out)
     assert request_line["ip"] == "203.0.113.1"
 
 
@@ -626,7 +621,7 @@ def test_request_line_names_the_peer_when_the_chain_is_malformed(
     with configured("songmaker-web"), _trusting_the_proxy_network(server_app):
         _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
 
-    (request_line,) = _request_lines(capsys.readouterr().out)
+    (request_line,) = request_lines(capsys.readouterr().out)
     assert request_line["ip"] == _TRUSTED_PEER
 
 
@@ -636,10 +631,10 @@ def test_request_line_names_the_route_status_and_service_of_an_api_request(
     with configured("songmaker-web"):
         response = server_app.get("/api/songs/s1")
 
-    (request_line,) = _request_lines(capsys.readouterr().out)
+    (request_line,) = request_lines(capsys.readouterr().out)
     assert response.status_code == 200
     assert request_line["service"] == "songmaker-web"
-    assert str(request_line["route"]).endswith("/songs/{song_id}")
+    assert request_line["route"] == "/api/songs/{song_id}"
     assert request_line["status"] == 200
     assert request_line["outcome"] == "ok"
     assert request_line["trace_id"]
@@ -651,7 +646,7 @@ def test_a_request_the_security_stack_refuses_still_gets_its_request_line(
     with configured("songmaker-web"):
         response = server_app.get("/api/songs", headers={"host": "unlisted.example"})
 
-    (request_line,) = _request_lines(capsys.readouterr().out)
+    (request_line,) = request_lines(capsys.readouterr().out)
     assert response.status_code == 400
     assert request_line["status"] == 400
     assert request_line["outcome"] == "ok"
@@ -1825,46 +1820,3 @@ def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
     """The lyrics alignment worker is same-origin; default-src 'none' would block it."""
     resp = server_app.get("/")
     assert "worker-src 'self'" in resp.headers["Content-Security-Policy"]
-
-
-def test_real_request_line_is_readable_by_rate_window_parser(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory, capsys: pytest.CaptureFixture[str],
-) -> None:
-    """defect:#1576 -- the report that sizes the E2E rate limit reads the line the server writes."""
-    import importlib.util
-    import sys
-
-    parser_path = Path(__file__).resolve().parents[2] / "scripts" / "e2e_rate_window.py"
-    spec = importlib.util.spec_from_file_location("e2e_rate_window", parser_path)
-    assert spec is not None
-    assert spec.loader is not None
-    parser_module = importlib.util.module_from_spec(spec)
-    # Dataclasses resolve postponed annotations through the module registry.
-    with monkeypatch.context() as module_patch:
-        module_patch.setitem(sys.modules, spec.name, parser_module)
-        spec.loader.exec_module(parser_module)
-    parse_request_record = parser_module.parse_request_record
-
-    server_app, _ = make_test_app(tmp_path, factory=pg_factory)
-
-    async def request():
-        transport = httpx.ASGITransport(app=server_app.app, client=(_TRUSTED_PEER, 55000))
-        async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
-            response = await client.get(
-                "/api/songs/proof", headers={"x-forwarded-for": "203.0.113.1"},
-            )
-            assert response.status_code == 401
-
-    before = datetime.now(timezone.utc)
-    with configured("songmaker-web"), _trusting_the_proxy_network(server_app):
-        asyncio.run(request())
-    after = datetime.now(timezone.utc)
-    (line,) = [
-        line for line in capsys.readouterr().out.splitlines()
-        if json.loads(line)["event"] == REQUEST_EVENT
-    ]
-    record = parse_request_record(line)
-    assert record is not None
-    assert record.client_ip == "203.0.113.1"
-    assert record.route.endswith("/songs/{song_id}")
-    assert before <= record.at <= after
