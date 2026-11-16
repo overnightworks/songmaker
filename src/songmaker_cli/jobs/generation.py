@@ -222,6 +222,9 @@ class GenerationJobRequest:
     repaint_params: RepaintTaskParams | None
     cover_params: CoverTaskParams | None
 
+    def with_takes_left(self, count: int) -> GenerationJobRequest:
+        return replace(self, count=count)
+
     def queue_args(
         self,
     ) -> tuple[str, str, str, int, str, int | None, str, dict | None, dict | None]:
@@ -1041,8 +1044,9 @@ async def _generate_variants(
                 index, count, ctx, progress,
             )
         except WorkerHeld:
-            takes_left: GenerationJobRequest = replace(request, count=count - completed)
-            await _requeue_generation(takes_left, redis, db_factory)
+            await _requeue_generation(
+                request.with_takes_left(count - completed), redis, db_factory,
+            )
             return
         if error is not None:
             progress.record_failure(error)
