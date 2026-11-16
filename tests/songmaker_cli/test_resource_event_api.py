@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from logline import RequestLineMiddleware
 from sqlalchemy import event as sqlalchemy_event
 from support.resource_event_world import _authenticated_clients, _collect, _create_event, _parse_sse
 from support.web_app import make_fake_redis, web_client
@@ -31,6 +32,7 @@ from songmaker_cli.db.models import Job, ResourceEvent, ResourceEventCursor, Use
 from songmaker_cli.db.queries.resource_events import (
     list_resource_events_after,
 )
+from songmaker_cli.middleware.client_address import ClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.resource_event_api import POSTGRES_BIGINT_MAX
@@ -771,16 +773,13 @@ def _set_resource_stream_deadline(app, deadline_seconds: float) -> None:
         if middleware.cls is ResourceStreamDeadlineMiddleware
     ]
     assert len(deadline_middleware) == 1
-    assert app.user_middleware[0] is deadline_middleware[0]
+    outside_deadline = app.user_middleware[: app.user_middleware.index(deadline_middleware[0])]
+    assert {middleware.cls for middleware in outside_deadline} == {
+        RequestLineMiddleware,
+        ClientAddressMiddleware,
+    }
+    deadline_middleware[0].kwargs["deadline_seconds"] = deadline_seconds
     app.middleware_stack = app.build_middleware_stack()
-    runtime_middleware = app.middleware_stack
-    while runtime_middleware is not None and not isinstance(
-        runtime_middleware,
-        ResourceStreamDeadlineMiddleware,
-    ):
-        runtime_middleware = getattr(runtime_middleware, "app", None)
-    assert isinstance(runtime_middleware, ResourceStreamDeadlineMiddleware)
-    runtime_middleware.deadline_seconds = deadline_seconds
 
 
 def _resource_event_stream_scope(client: TestClient) -> dict:

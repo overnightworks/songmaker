@@ -16,6 +16,7 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import ClassVar
 
+from logline import configure
 from redis.asyncio import Redis as AsyncRedis
 
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
@@ -33,7 +34,7 @@ log = logging.getLogger(__name__)
 class WorkerBase:
     """Base class for arq workers.
 
-    Subclasses set the ClassVars (job_types, queue_name, max_jobs) and add
+    Subclasses set the ClassVars (service_name, job_types, queue_name, max_jobs) and add
     their own task methods. The instance owns the DB engine + factory and the
     process's owner id: its jobs carry the id from the moment they run, and its
     lease says the process lives.
@@ -44,6 +45,7 @@ class WorkerBase:
     finds bound methods.
     """
 
+    service_name: ClassVar[str]
     job_types: ClassVar[tuple[str, ...]]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
@@ -83,9 +85,7 @@ class WorkerBase:
         return True
 
     async def on_startup(self, ctx) -> None:
-        from songmaker_cli.logging_config import configure_logging
-
-        configure_logging()
+        configure(self.service_name)
 
         log.info("%s worker starting up...", self.worker_name())
         # arq runs on_startup inside the task a stop signal cancels, so its end marks the stop.

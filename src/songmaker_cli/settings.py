@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Final, Literal
+from typing import Annotated, Final
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -282,7 +282,8 @@ class Settings(BaseSettings):
     generation_result_max_bytes: int = Field(default=GENERATION_RESULT_MAX_BYTES, gt=0)
 
     # ── Logging ───────────────────────────────────────────────────────
-    log_format: Literal["text", "json"] = "text"
+    # logline reads LOG_LEVEL from the environment itself; the field is declared so
+    # extra="forbid" accepts the LOG_LEVEL a .env sets for the compose services.
     log_level: str = "INFO"
 
     # ── Database ──────────────────────────────────────────────────────
