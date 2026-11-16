@@ -12,6 +12,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.job_owner import an_owner
 from support.owner_lease_epoch import aged_owner_lease_epoch, settled_epoch
 from support.session_ids import a_session_id
 from webauth.ports import AuthenticatedUser
@@ -137,10 +138,12 @@ def make_app_context(
     *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis,
 ) -> AppContext:
     """A context on fakes for the asyncio side, over the caller's database and sync Redis."""
-    return AppContext(
+    ctx = AppContext(
         db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
         async_redis=make_fake_async_redis(),
     )
+    ctx.owner = an_owner(ctx.owner_id)
+    return ctx
 
 
 def make_router_ctx(
@@ -159,6 +162,7 @@ def make_router_ctx(
         signing_key=TEST_SECRET,
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
+    ctx.owner = an_owner(ctx.owner_id)
     if seed_db is not None:
         with ctx.db() as session:
             seed_db(session)

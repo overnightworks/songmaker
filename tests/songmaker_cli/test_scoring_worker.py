@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from support.job_owner import an_owner
+
 import songmaker_cli.scoring_worker as sw_mod
 from songmaker_cli.scoring_worker import ScoringWorker
 
@@ -19,6 +21,7 @@ def _mock_ctx():
 
 def _make_worker() -> ScoringWorker:
     worker = ScoringWorker()
+    worker.owner = an_owner(worker.owner_id)
     worker.check_job_still_valid = MagicMock(return_value=True)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
@@ -65,11 +68,12 @@ def test_score_names_the_worker_as_the_owner() -> None:
     with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
         _run(worker.score(_mock_ctx(), "j1", "g1", None))
 
-    assert mock_run.call_args.kwargs["owner_id"] == worker.owner_id
+    assert mock_run.call_args.kwargs["owner"] is worker.owner
 
 
 def test_on_startup_initializes_scorer() -> None:
     worker = ScoringWorker()
+    worker.owner = an_owner(worker.owner_id)
     worker.get_db_factory = MagicMock()
 
     mock_scorer = MagicMock()
@@ -90,6 +94,7 @@ def test_on_startup_initializes_scorer() -> None:
 
 def test_on_shutdown_stops_scorer() -> None:
     worker = ScoringWorker()
+    worker.owner = an_owner(worker.owner_id)
     mock_session = MagicMock()
     mock_factory = MagicMock()
     mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -112,6 +117,7 @@ def test_on_shutdown_stops_scorer() -> None:
 
 def test_on_shutdown_handles_missing_scorer() -> None:
     worker = ScoringWorker()
+    worker.owner = an_owner(worker.owner_id)
     mock_session = MagicMock()
     mock_factory = MagicMock()
     mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)

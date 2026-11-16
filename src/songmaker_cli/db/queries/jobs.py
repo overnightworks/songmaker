@@ -26,7 +26,12 @@ from songmaker_cli.job_types import (
 from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
-from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
+from songmaker_cli.worker_liveness import (
+    JobOwner,
+    JobOwnerStamp,
+    WorkerLiveness,
+    liveness_for_job_type,
+)
 
 log = logging.getLogger(__name__)
 
@@ -43,15 +48,22 @@ def create_job(
     album_id: str | None = None,
     version_id: str | None = None,
     session_id: str | None = None,
-    owner_id: str | None = None,
+    owner: JobOwner | None = None,
 ) -> Job:
     job = Job(
         type=job_type, user_id=user_id, song_id=song_id, album_id=album_id,
-        version_id=version_id, session_id=session_id, owner_id=owner_id,
+        version_id=version_id, session_id=session_id, **owner_columns(owner),
     )
     session.add(job)
     session.flush()
     return job
+
+
+def owner_columns(owner: JobOwner | None) -> dict[str, str | None]:
+    """The columns that name a job's owner; every write of one goes through here, together."""
+    if owner is None:
+        return {"owner_id": None, "owner_generation": None}
+    return {"owner_id": owner.owner_id, "owner_generation": owner.generation}
 
 
 class ActiveJobError(Exception):
@@ -150,8 +162,8 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     )
 
 
-def claim_next_cover_job(session: Session, owner_id: str) -> Job | None:
-    """Atomically move the oldest queued cover job to running, owned by ``owner_id``.
+def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
+    """Atomically move the oldest queued cover job to running, owned by ``owner``.
 
     The status predicate is deliberately repeated on the UPDATE.  Competing
     web processes may select the same candidate, but only one can change its
@@ -172,7 +184,7 @@ def claim_next_cover_job(session: Session, owner_id: str) -> Job | None:
             Job.type == JobType.COVER,
             Job.status == JobStatus.QUEUED,
         )
-        .values(status=JobStatus.RUNNING, heartbeat_at=now, owner_id=owner_id)
+        .values(status=JobStatus.RUNNING, heartbeat_at=now, **owner_columns(owner))
         .returning(Job.id),
     ).scalar_one_or_none()
     if claimed_id is None:
@@ -198,7 +210,7 @@ class JobStatusUpdate:
     error_type: str | None = None
     retry_after_seconds: int | None = None
     queue_reason_message: Message | None = None
-    owner_id: str | _Unset = UNSET
+    owner: JobOwner | _Unset = UNSET
     current_epoch: int | _Unset = UNSET
     train_epochs: int | _Unset = UNSET
     training_started_at: datetime | _Unset = UNSET
@@ -227,8 +239,11 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
         job.take_count = None
     for column in fields(update):
         value = getattr(update, column.name)
-        if value is not UNSET:
+        if value is not UNSET and column.name != "owner":
             setattr(job, column.name, value)
+    if update.owner is not UNSET:
+        for column_name, value in owner_columns(update.owner).items():
+            setattr(job, column_name, value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
     if status in JOB_TERMINAL_STATUSES:
@@ -454,37 +469,45 @@ def _recover_stale_job_if_unchanged(
     return True
 
 
-def active_job_owner_ids(session: Session) -> set[str]:
-    """The processes that own a queued or running job; a job without an owner names none."""
+def active_job_owner_stamps(session: Session) -> set[JobOwnerStamp]:
+    """The owners of the queued and running jobs, each with the generation the job names.
+
+    A job without an owner names none. Read this before the liveness of the leases it names: a
+    job written after the read names a stamp the verdict does not know and is left alone.
+    """
     return {
-        owner_id
-        for (owner_id,) in session.query(Job.owner_id)
+        JobOwnerStamp(owner_id, generation)
+        for owner_id, generation in session.query(Job.owner_id, Job.owner_generation)
         .filter(Job.owner_id.is_not(None), Job.status.in_(JOB_ACTIVE_STATUSES))
         .distinct()
     }
 
 
 def _owner_gone_verdict(
-    job: Job, owner_liveness: Mapping[str, Liveness] | None,
+    job: Job, owner_liveness: Mapping[JobOwnerStamp, Liveness] | None,
 ) -> JobVerdict | None:
-    """Fail a job only for an owner read as GONE; an owner the map lacks reads UNKNOWN."""
+    """Fail a job only for an owner stamp read as GONE; a stamp the map lacks reads UNKNOWN."""
     if job.owner_id is None or owner_liveness is None:
         return None
-    if owner_liveness.get(job.owner_id, Liveness.UNKNOWN) is Liveness.GONE:
+    stamp = JobOwnerStamp(job.owner_id, job.owner_generation)
+    if owner_liveness.get(stamp, Liveness.UNKNOWN) is Liveness.GONE:
         return JOB_ERROR_SERVER_RESTARTED
     return None
 
 
 def recover_jobs_of_dead_owners(
-    session: Session, owner_liveness: Mapping[str, Liveness],
+    session: Session, owner_liveness: Mapping[JobOwnerStamp, Liveness],
 ) -> dict[str, int]:
-    """Fail the active jobs of every owner read as GONE and return counts keyed by type."""
+    """Fail the active jobs of every owner stamp read as GONE and return counts keyed by type."""
     if not owner_liveness:
         return {}
     now = datetime.now(timezone.utc)
     jobs = (
         session.query(Job)
-        .filter(Job.owner_id.in_(list(owner_liveness)), Job.status.in_(JOB_ACTIVE_STATUSES))
+        .filter(
+            Job.owner_id.in_({stamp.owner_id for stamp in owner_liveness}),
+            Job.status.in_(JOB_ACTIVE_STATUSES),
+        )
         .all()
     )
     recovered: dict[str, int] = {}
@@ -511,7 +534,7 @@ def recover_stale_jobs_by_age_and_type(
     user_id: str | None = None,
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
-    owner_liveness: Mapping[str, Liveness] | None = None,
+    owner_liveness: Mapping[JobOwnerStamp, Liveness] | None = None,
     max_queue_depth: int | None = None,
 ) -> dict[str, int]:
     """Recover stale jobs using the one per-type liveness policy.
@@ -520,7 +543,7 @@ def recover_stale_jobs_by_age_and_type(
     Unknown signals use the #446 age guard; alive signals allow one full queue
     before failing. The lifecycle reaper uses the configured global queue
     depth; a submission supplies its resolved per-user queue depth. Running
-    jobs fail only when their heartbeat is old. A job whose owner ``owner_liveness``
+    jobs fail only when their heartbeat is old. A job whose owner stamp ``owner_liveness``
     reads as GONE fails at once.
     ``user_id`` lets the submission path apply that exact policy before
     enforcing an active-job limit, without defining a second freshness bound.
@@ -571,7 +594,7 @@ def _recover_stale_job(
     thresholds: JobStaleThresholds,
     now: datetime,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None,
-    owner_liveness: Mapping[str, Liveness] | None,
+    owner_liveness: Mapping[JobOwnerStamp, Liveness] | None,
     max_queue_depth: int | None,
 ) -> bool:
     status = job.status

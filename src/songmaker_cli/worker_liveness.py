@@ -7,12 +7,13 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Iterable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
-from typing import Any
+from typing import Any, NamedTuple
 
 from redis.exceptions import RedisError
-from tandem import Client, Hold, Leases, Liveness, StoreError
+from tandem import Client, Hold, Leases, LeaseState, Liveness, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text, worker_is_online, worker_state_key
 from songmaker_cli.constants import (
@@ -67,12 +68,45 @@ def owner_leases(redis: Client) -> Leases:
     )
 
 
+class JobOwnerStamp(NamedTuple):
+    """What a job row stores of its owner: the process and the lease generation it held."""
+
+    owner_id: str
+    generation: str | None
+    """``None`` on a row written before generations were stored."""
+
+
+@dataclass(frozen=True)
+class JobOwner:
+    """A process that runs jobs: its id and the lease it holds, whose generation may change."""
+
+    owner_id: str
+    hold: Hold
+
+    @property
+    def generation(self) -> str:
+        return self.hold.generation
+
+
 async def owner_lease_liveness(
-    leases: Leases, owner_ids: Collection[str],
-) -> dict[str, Liveness]:
-    """Whether each owner's lease is live, gone or possibly lost with a Redis restart."""
-    states = await leases.state(owner_ids)
-    return {owner_id: state.liveness for owner_id, state in states.items()}
+    leases: Leases, stamps: Collection[JobOwnerStamp],
+) -> dict[JobOwnerStamp, Liveness]:
+    """Whether the lease each stamp names is live, gone or possibly lost with a Redis restart.
+
+    A lease that lapsed and started anew is a different generation: a stamp of the lapsed one
+    reads GONE although its owner lives. A stamp without a generation, or an owner whose lease
+    state names none, reads as its owner does.
+    """
+    states = await leases.state({stamp.owner_id for stamp in stamps})
+    return {stamp: _liveness_of_stamp(stamp, states[stamp.owner_id]) for stamp in stamps}
+
+
+def _liveness_of_stamp(stamp: JobOwnerStamp, state: LeaseState) -> Liveness:
+    if state.liveness is not Liveness.ALIVE:
+        return state.liveness
+    if stamp.generation is None or state.generation is None:
+        return Liveness.ALIVE
+    return Liveness.ALIVE if stamp.generation == state.generation else Liveness.GONE
 
 
 @asynccontextmanager
@@ -82,8 +116,8 @@ async def keep_owner_lease(
     *,
     on_new_start: Callable[[], Awaitable[None]] | None = None,
     every: timedelta = timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS),
-) -> AsyncIterator[Hold]:
-    """Hold the lease of ``owner_id`` for the block, renewed every ``every``.
+) -> AsyncIterator[JobOwner]:
+    """Hold the lease of ``owner_id`` for the block, renewed every ``every``, and yield the owner.
 
     A lease that cannot be started fails the entry. One that cannot be ended because Redis
     is unreachable is left to lapse by itself, so a process always shuts down. When the lease
@@ -97,7 +131,7 @@ async def keep_owner_lease(
         _treat_a_new_generation_as_a_start(hold, owner_id, on_new_start, every),
     )
     try:
-        yield hold
+        yield JobOwner(owner_id, hold)
     finally:
         watching.cancel()
         try:

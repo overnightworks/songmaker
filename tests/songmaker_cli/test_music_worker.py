@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from support.job_owner import an_owner
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
@@ -28,6 +29,7 @@ def _mock_ctx():
 def _make_worker() -> MusicWorker:
     """Fresh worker with DB / dirs / job-validity stubbed."""
     worker = MusicWorker()
+    worker.owner = an_owner(worker.owner_id)
     worker.check_job_still_valid = MagicMock(return_value=True)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
@@ -79,7 +81,7 @@ def test_generate_runs_queued_job() -> None:
     mock_run.assert_awaited_once()
     kwargs = mock_run.await_args.kwargs
     assert kwargs["redis"] is ctx["redis"]
-    assert kwargs["owner_id"] == worker.owner_id
+    assert kwargs["owner"] is worker.owner
 
 
 def test_generate_passes_seed_and_target_model() -> None:
@@ -105,7 +107,7 @@ def test_train_lora_passes_the_explicit_training_configuration_and_target_mode()
 
     assert mock_run.await_args.kwargs["training_config"] == worker._settings.lora_training_config
     assert mock_run.await_args.kwargs["target_mode"] == "turbo"
-    assert mock_run.await_args.kwargs["owner_id"] == worker.owner_id
+    assert mock_run.await_args.kwargs["owner"] is worker.owner
 
 
 def test_lora_training_uses_its_own_timeout() -> None:

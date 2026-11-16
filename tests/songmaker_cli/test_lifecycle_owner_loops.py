@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import fakeredis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from support.job_owner import create_job_of_unstamped_owner
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import arrange_fake_async_redis, make_fake_async_redis, settle_owner_leases
 
@@ -17,7 +18,6 @@ from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
     JOB_ERROR_SERVER_RESTARTED,
     JobStatusUpdate,
-    create_job,
     update_job_status,
 )
 from songmaker_cli.health_types import (
@@ -55,7 +55,7 @@ def _loop_app(async_redis, db, audio_dir: Path) -> SimpleNamespace:
 
 def _running_job_of(factory, owner_id: str) -> str:
     with factory() as session:
-        job = create_job(session, JobType.CHAT, owner_id=owner_id)
+        job = create_job_of_unstamped_owner(session, JobType.CHAT, owner_id)
         assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
         return job.id
@@ -165,7 +165,7 @@ def test_a_cover_another_process_failed_while_this_lease_had_lapsed_leaves_no_st
     pg_factory, tmp_path,
 ) -> None:
     with pg_factory() as session:
-        cover = create_job(session, JobType.COVER, owner_id=OWNER)
+        cover = create_job_of_unstamped_owner(session, JobType.COVER, OWNER)
         for status in (JobStatus.RUNNING, JobStatus.FAILED):
             assert update_job_status(session, cover.id, JobStatusUpdate(status))
         session.commit()

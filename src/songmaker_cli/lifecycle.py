@@ -32,7 +32,7 @@ from songmaker_cli.job_timing import (
     OWNER_GONE_CHECK_INTERVAL_SECONDS,
 )
 from songmaker_cli.job_types import JobType
-from songmaker_cli.worker_liveness import WorkerLiveness, owner_lease_liveness
+from songmaker_cli.worker_liveness import JobOwnerStamp, WorkerLiveness, owner_lease_liveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
@@ -377,11 +377,13 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
 async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
     """Fail the active jobs of every other process whose lease is gone, then clean its covers.
 
-    Only a GONE owner's jobs fail: a Redis that cannot be read, or that may have
-    restarted empty, reads UNKNOWN. This process's own jobs are never orphaned.
+    A job fails only when the lease generation it names is gone: its owner's lease ended, or
+    started anew under another generation. A job that names no generation fails with its owner.
+    A Redis that cannot be read, or that may have restarted empty, reads UNKNOWN. A job that
+    another process wrote after the stamps were read is left alone, and so are this process's own.
     """
-    owner_ids = await asyncio.to_thread(_active_job_owner_ids_but_own, ctx)
-    owner_liveness = await owner_lease_liveness(ctx.owner_leases, owner_ids)
+    stamps = await asyncio.to_thread(_active_job_owner_stamps_but_own, ctx)
+    owner_liveness = await owner_lease_liveness(ctx.owner_leases, stamps)
     return await asyncio.to_thread(_fail_jobs_of_gone_owners, ctx, owner_liveness)
 
 
@@ -394,14 +396,18 @@ async def reconcile_ended_covers(ctx: AppContext) -> None:
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
 
 
-def _active_job_owner_ids_but_own(ctx: AppContext) -> set[str]:
-    from songmaker_cli.db.queries.jobs import active_job_owner_ids
+def _active_job_owner_stamps_but_own(ctx: AppContext) -> set[JobOwnerStamp]:
+    from songmaker_cli.db.queries.jobs import active_job_owner_stamps
 
     with ctx.db() as session:
-        return active_job_owner_ids(session) - {ctx.owner_id}
+        return {
+            stamp for stamp in active_job_owner_stamps(session) if stamp.owner_id != ctx.owner_id
+        }
 
 
-def _fail_jobs_of_gone_owners(ctx: AppContext, owner_liveness: Mapping[str, Liveness]) -> int:
+def _fail_jobs_of_gone_owners(
+    ctx: AppContext, owner_liveness: Mapping[JobOwnerStamp, Liveness],
+) -> int:
     from songmaker_cli.db.queries.jobs import recover_jobs_of_dead_owners
 
     with ctx.db() as session:
@@ -416,9 +422,9 @@ def _fail_jobs_of_gone_owners(ctx: AppContext, owner_liveness: Mapping[str, Live
 async def owner_lapse_loop(app: FastAPI) -> None:
     """Fail the jobs of an owner as soon as its lease lapses, on the one web process that claims it.
 
-    A lapse is only a trigger: the pass reads liveness again, so an owner that started anew
-    since keeps its jobs, and one whose lapse was lost with a Redis restart is found by
-    ``owner_gone_reaper_loop``.
+    A lapse is only a trigger: the pass reads liveness again, so the jobs of the lapsed
+    generation fail and those an owner that started anew has written since keep running, and
+    a lapse lost with a Redis restart is found by ``owner_gone_reaper_loop``.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)

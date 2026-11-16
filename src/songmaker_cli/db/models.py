@@ -407,6 +407,7 @@ class Job(Base):
     )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    owner_generation: Mapped[str | None] = mapped_column(Text, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     started_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)

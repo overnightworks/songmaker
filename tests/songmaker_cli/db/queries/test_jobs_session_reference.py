@@ -20,6 +20,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.job_timing import JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import reap_stale_jobs
+from songmaker_cli.worker_liveness import JobOwnerStamp
 
 NOW = datetime(2030, 1, 1, tzinfo=timezone.utc)
 SESSION_ID = "s" * 43
@@ -102,7 +103,7 @@ def test_a_job_that_goes_on_running_keeps_its_session(ctx):
 def test_the_recovery_of_a_dead_owner_clears_the_session(ctx):
     _add_job_asked_by_the_session(ctx, status=JobStatus.RUNNING, owner_id="owner")
     with ctx.db() as session:
-        recover_jobs_of_dead_owners(session, {"owner": Liveness.GONE})
+        recover_jobs_of_dead_owners(session, {JobOwnerStamp("owner", None): Liveness.GONE})
         session.commit()
     assert _reference(ctx) is None
 

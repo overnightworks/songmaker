@@ -20,6 +20,7 @@ from support.generation_job_world import (
     patch_generation_dispatch,
     run_async,
 )
+from support.job_owner import an_owner
 
 from songmaker_cli.api_models.songs import SongCreateRequest, SongUpdateRequest
 from songmaker_cli.db.models import Generation
@@ -340,7 +341,7 @@ def _run_generation_whose_terminal_check_fails_after_the_fetch(
                 data_dir=tmp_path / "data",
                 redis=MagicMock(),
                 target_model="sft",
-                owner_id="o1",
+                owner=an_owner("o1"),
             )
         )
     return fetched_take

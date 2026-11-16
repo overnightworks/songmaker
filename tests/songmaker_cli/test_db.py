@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
+from support.job_owner import an_owner, create_job_of_unstamped_owner
 from support.web_app import seed_user
 from tandem import Liveness
 
@@ -91,7 +92,7 @@ from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.timestamps import aware_timestamp
-from songmaker_cli.worker_liveness import WorkerLiveness
+from songmaker_cli.worker_liveness import JobOwnerStamp, WorkerLiveness
 
 
 @pytest.mark.parametrize("offset", [None, timezone.utc, timezone(timedelta(hours=5, minutes=30))])
@@ -674,7 +675,7 @@ def test_entering_running_starts_without_a_generation_start(
     seeded_session.commit()
 
     if claim_cover:
-        assert job_queries.claim_next_cover_job(seeded_session, "owner").id == job.id
+        assert job_queries.claim_next_cover_job(seeded_session, an_owner("owner")).id == job.id
     else:
         update_job_status(
             seeded_session,
@@ -718,14 +719,14 @@ def _fail_by_lost_heartbeat(session: Session, now: datetime) -> None:
 
 
 def _fail_by_dead_owner(session: Session, _now: datetime) -> None:
-    recover_jobs_of_dead_owners(session, {"owner": Liveness.GONE})
+    recover_jobs_of_dead_owners(session, {JobOwnerStamp("owner", None): Liveness.GONE})
 
 
 @pytest.mark.parametrize("recover", [_fail_by_lost_heartbeat, _fail_by_dead_owner])
 def test_recovery_failing_a_generating_job_clears_its_generation_start(
     seeded_session: Session, recover,
 ) -> None:
-    job = create_job(seeded_session, JobType.GENERATE, owner_id="owner")
+    job = create_job_of_unstamped_owner(seeded_session, JobType.GENERATE, "owner")
     update_job_status(
         seeded_session, job.id, JobStatusUpdate(JobStatus.RUNNING, phase=GenerationPhase.WRITING)
     )

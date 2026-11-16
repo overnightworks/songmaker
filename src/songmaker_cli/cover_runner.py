@@ -45,6 +45,7 @@ from songmaker_cli.job_timing import JOB_HEARTBEAT_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs._runtime import _touch_heartbeat, _update_job
 from songmaker_cli.messages import Message, message
+from songmaker_cli.worker_liveness import JobOwner
 
 log = logging.getLogger(__name__)
 
@@ -167,7 +168,7 @@ def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
 async def run_next_cover_job(app) -> bool:
     """Claim and run one queued cover job."""
     ctx = app.state.ctx
-    job_id = await asyncio.to_thread(_claim_next_cover_job, ctx.db, ctx.owner_id)
+    job_id = await asyncio.to_thread(_claim_next_cover_job, ctx.db, ctx.owner)
     if job_id is None:
         return False
     await run_claimed_cover_suggestion_job(app, job_id)
@@ -351,9 +352,9 @@ def build_cover_prompt(album, songs) -> str:
     return header + json.dumps(album_data, ensure_ascii=False, separators=(",", ":"))
 
 
-def _claim_next_cover_job(db_factory, owner_id: str) -> str | None:
+def _claim_next_cover_job(db_factory, owner: JobOwner) -> str | None:
     with db_factory() as session:
-        job = claim_next_cover_job(session, owner_id)
+        job = claim_next_cover_job(session, owner)
         session.commit()
         return None if job is None else job.id
 

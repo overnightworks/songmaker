@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from support.job_owner import an_owner
 
 from songmaker_cli.db.models import Generation
 from songmaker_cli.jobs.scoring import run_scoring_job
@@ -158,7 +159,8 @@ def _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path: Path) -> Pipe
     with patch(
         "songmaker_cli.jobs.get_scorer_process", return_value=MagicMock(score=capture_score),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir, owner_id="o1")
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir,
+            owner=an_owner("o1"))
     return captured["config"]
 
 

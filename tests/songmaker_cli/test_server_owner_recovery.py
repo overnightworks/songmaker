@@ -15,9 +15,12 @@ from support.app_processes import (
     WebProcess,
     WebProcesses,
     age_the_owner_lease_epoch,
+    end_the_owner_lease,
     leased_owner_ids,
+    owner_lease_generation,
     poll_until,
 )
+from support.job_owner import an_owner, create_job_of_unstamped_owner
 from support.web_cluster_world import start_owner
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
@@ -71,8 +74,8 @@ def lease_span_has_passed_on_the_server(redis_client: Redis) -> None:
 
 def _seed_running_jobs(factory, cluster: WebProcesses, owner_id: str) -> RunningJobs:
     with factory() as session:
-        chat = create_job(session, JobType.CHAT, owner_id=owner_id)
-        cover = create_job(session, JobType.COVER, owner_id=owner_id)
+        chat = create_job_of_unstamped_owner(session, JobType.CHAT, owner_id)
+        cover = create_job_of_unstamped_owner(session, JobType.COVER, owner_id)
         for job in (chat, cover):
             assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
@@ -172,6 +175,45 @@ def test_a_clean_stop_of_one_process_ends_its_jobs_on_the_other_within_one_tick(
     )
 
 
+def _seed_running_job_of_generation(factory, owner_id: str, generation: str) -> str:
+    with factory() as session:
+        job = create_job(session, JobType.CHAT, owner=an_owner(owner_id, generation))
+        assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
+        session.commit()
+        return job.id
+
+
+def test_a_lease_that_lapsed_and_started_again_ends_the_jobs_of_its_old_generation_only(
+    a_and_b, redis_client,
+) -> None:
+    cluster, factory, _, owner_a, _, _ = a_and_b
+    lapsed_generation = owner_lease_generation(redis_client, owner_a)
+    job_of_the_lapsed_generation = _seed_running_job_of_generation(
+        factory, owner_a, lapsed_generation,
+    )
+
+    end_the_owner_lease(redis_client, owner_a, lapsed_generation)
+    assert poll_until(
+        lambda: _failed_with_the_restart_verdict(factory, [job_of_the_lapsed_generation]),
+        deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
+    )
+    assert poll_until(
+        lambda: owner_lease_generation(redis_client, owner_a) not in (None, lapsed_generation),
+        deadline_seconds=OWNER_LEASE_REFRESH_SECONDS + MARGIN_SECONDS,
+    )
+    job_of_the_new_generation = _seed_running_job_of_generation(
+        factory, owner_a, owner_lease_generation(redis_client, owner_a),
+    )
+
+    ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
+
+    assert poll_until(
+        lambda: _is_reaped(factory, ghost),
+        deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
+    )
+    assert _statuses(factory, [job_of_the_new_generation]) == [JobStatus.RUNNING]
+
+
 def test_a_crash_of_one_process_ends_its_jobs_on_the_other_once_the_lease_has_lapsed(
     a_and_b,
 ) -> None:
@@ -251,7 +293,10 @@ WORKER_JOB_TYPES = (
 def _seed_running_worker_jobs(factory, owner_id: str) -> tuple[str, ...]:
     """One running job of each type a worker executes, owned by ``owner_id``."""
     with factory() as session:
-        jobs = [create_job(session, job_type, owner_id=owner_id) for job_type in WORKER_JOB_TYPES]
+        jobs = [
+            create_job_of_unstamped_owner(session, job_type, owner_id)
+            for job_type in WORKER_JOB_TYPES
+        ]
         for job in jobs:
             assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()

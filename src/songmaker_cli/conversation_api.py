@@ -236,7 +236,7 @@ async def _prepare_chat_turn(
         user,
         JobType.CHAT,
         redis=ctx.redis, owner_leases=ctx.owner_leases,
-        owner_id=ctx.owner_id,
+        owner=ctx.owner,
     )
     _refuse_while_another_turn_runs(session, user)
     update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
