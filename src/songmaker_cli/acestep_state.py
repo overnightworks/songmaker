@@ -261,7 +261,7 @@ async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> Asyn
             download_key(mode), job_id, ex=int(DOWNLOAD_LOCK_LASTS.total_seconds()),
         )
         yield
-    except asyncio.CancelledError:
+    except asyncio.CancelledError:  # NOSONAR(S7497) Own cancel becomes DownloadLockLost.
         if lost and holder.uncancel() == 0:
             raise DownloadLockLost(mode) from None
         raise
