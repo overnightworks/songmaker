@@ -21,6 +21,7 @@ DEFAULT_TTL_SECONDS = 15
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
 
+GPU_HOLD_OLD_KEY_PREFIX = "songmaker:acestep:hold"
 LOCK_KEY_PREFIX = "songmaker"
 GPU_HOLD_FAMILY = "gpu"
 GPU_HOLD_LASTS = timedelta(seconds=DEFAULT_TTL_SECONDS)
@@ -32,6 +33,24 @@ def worker_state_key(worker_id: str) -> str:
 
 def queue_depth_key(worker_id: str) -> str:
     return f"{QUEUE_KEY_PREFIX}:{worker_id}"
+
+
+# Deletes the old hold key only while it still carries the generation the caller released.
+RELEASE_OLD_GPU_HOLD_SCRIPT = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+return redis.call('DEL', KEYS[1])
+"""
+
+
+def gpu_hold_old_key(worker_id: str) -> str:
+    """The key the previous release holds for a worker's GPU hold, kept beside the lock.
+
+    Web, music worker and ACE-Step worker are separate deployments that do not restart together,
+    so a process of the previous release reads only this key. The worker writes it with the hold
+    and every reader of this release treats it as a hold too. Deleting the key's writes and
+    reads ends the stage.
+    """
+    return f"{GPU_HOLD_OLD_KEY_PREFIX}:{worker_id}"
 
 
 def gpu_hold_locks(redis: Redis) -> Locks:
@@ -55,7 +74,9 @@ async def gpu_hold_matches(redis: Redis, worker_id: str, generation: str) -> boo
 async def gpu_hold_blocks_generation(redis: Redis, worker_id: str) -> bool:
     """Whether a hold, or a Redis restart that may have lost one, keeps a generation off the GPU."""
     state = await gpu_hold_locks(redis).state(worker_id)
-    return state.liveness is not Liveness.GONE
+    if state.liveness is not Liveness.GONE:
+        return True
+    return bool(await redis.exists(gpu_hold_old_key(worker_id)))
 
 
 async def gpu_hold_remaining_seconds(redis: Redis, worker_id: str) -> int | None:
@@ -80,15 +101,27 @@ async def reserve_gpu_hold(redis: Redis, worker_id: str) -> str | None:
     if await read_queue_depth(redis, worker_id) > 0:
         await locks.release(worker_id, generation)
         return None
+    await _write_old_gpu_hold(redis, worker_id, generation)
     return generation
 
 
+async def _write_old_gpu_hold(redis: Redis, worker_id: str, generation: str) -> None:
+    await redis.set(
+        gpu_hold_old_key(worker_id), generation, ex=int(GPU_HOLD_LASTS.total_seconds()),
+    )
+
+
 async def renew_gpu_hold(redis: Redis, worker_id: str, generation: str) -> bool:
-    return await gpu_hold_locks(redis).extend(worker_id, generation)
+    renewed = await gpu_hold_locks(redis).extend(worker_id, generation)
+    if renewed:
+        await _write_old_gpu_hold(redis, worker_id, generation)
+    return renewed
 
 
 async def release_gpu_hold(redis: Redis, worker_id: str, generation: str) -> bool:
-    return await gpu_hold_locks(redis).release(worker_id, generation)
+    released = await gpu_hold_locks(redis).release(worker_id, generation)
+    await redis.eval(RELEASE_OLD_GPU_HOLD_SCRIPT, 1, gpu_hold_old_key(worker_id), generation)
+    return released
 
 
 async def release_orphaned_gpu_hold(redis: Redis, worker_id: str) -> None:
@@ -97,6 +130,7 @@ async def release_orphaned_gpu_hold(redis: Redis, worker_id: str) -> None:
     state = await locks.state(worker_id)
     if state.liveness is Liveness.ALIVE and state.generation is not None:
         await locks.release(worker_id, state.generation)
+    await redis.delete(gpu_hold_old_key(worker_id))
 
 
 StateProvider = Callable[[], Awaitable[dict[str, Any]]]

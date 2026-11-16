@@ -23,6 +23,7 @@ from songmaker_cli.acestep_state import (
     download_key,
     gpu_hold_is_free,
     gpu_hold_locks,
+    gpu_hold_old_key,
     lm_failure_key,
     queue_depth_key,
     read_download_in_progress,
@@ -72,11 +73,13 @@ def test_key_prefixes_match_worker_heartbeat(redis) -> None:
         WORKER_KEY_PREFIX as WORKER_WORKER_PREFIX,
     )
     from acestep_worker.heartbeat import gpu_hold_locks as worker_gpu_hold_locks
+    from acestep_worker.heartbeat import gpu_hold_old_key as worker_gpu_hold_old_key
 
     assert WORKER_KEY_PREFIX == WORKER_WORKER_PREFIX
     assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
     assert gpu_hold_locks(redis).keys == worker_gpu_hold_locks(redis).keys
     assert gpu_hold_locks(redis).lasts == worker_gpu_hold_locks(redis).lasts
+    assert gpu_hold_old_key("w1") == worker_gpu_hold_old_key("w1")
 
 
 def test_lm_failure_key_matches_the_workers_key() -> None:
@@ -202,30 +205,36 @@ def test_generation_admit_wins_against_a_later_hold_reserve(settled_redis, event
     assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
 
 
+class _AdmittingBetweenDepthReads(fakeredis.aioredis.FakeRedis):
+    """A client that admits a generation right after the first read of the queue depth."""
+
+    def __init__(self, *, server, worker_id: str) -> None:
+        super().__init__(server=server)
+        self._depth_key = queue_depth_key(worker_id)
+        self._depth_reads = 0
+
+    async def get(self, name, *args, **kwargs):
+        value = await super().get(name, *args, **kwargs)
+        if name == self._depth_key:
+            self._depth_reads += 1
+            if self._depth_reads == 1:
+                await super().incr(self._depth_key)
+        return value
+
+
 def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold(
-    settled_redis, event_loop, monkeypatch,
+    settled_redis, server, event_loop,
 ) -> None:
     """The admission read the lock free, then the reserve took it: the depth read after
     ``acquire`` shows the admission, so the reserve gives the hold back."""
-    from acestep_worker import heartbeat
-
-    depth_reads = 0
-    read_depth = heartbeat.read_queue_depth
-
-    async def admit_between_the_reads(redis, worker_id: str) -> int:
-        nonlocal depth_reads
-        depth_reads += 1
-        if depth_reads == 2:
-            await redis.incr(queue_depth_key(worker_id))
-        return await read_depth(redis, worker_id)
-
-    monkeypatch.setattr(heartbeat, "read_queue_depth", admit_between_the_reads)
+    reserving = _AdmittingBetweenDepthReads(server=server, worker_id="w1")
 
     async def scenario() -> tuple[str | None, bool]:
-        generation = await reserve_gpu_hold(settled_redis, "w1")
+        generation = await reserve_gpu_hold(reserving, "w1")
         return generation, await gpu_hold_is_free(settled_redis, "w1")
 
     assert event_loop.run_until_complete(scenario()) == (None, True)
+    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
 
 
 def test_the_generation_controls_renew_and_release(settled_redis, event_loop) -> None:
@@ -244,6 +253,46 @@ def test_a_hold_is_free_only_while_none_is_live(settled_redis, event_loop) -> No
     assert not event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
     event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", generation))
     assert event_loop.run_until_complete(gpu_hold_is_free(settled_redis, "w1"))
+
+
+def test_a_hold_of_the_previous_release_keeps_every_reader_off_the_worker(
+    settled_redis, event_loop,
+) -> None:
+    """The previous release holds a GPU under ``songmaker:acestep:hold:<id>`` alone."""
+    assert gpu_hold_old_key("w1") == "songmaker:acestep:hold:w1"
+
+    async def scenario() -> tuple[bool, bool, int]:
+        await settled_redis.set(gpu_hold_old_key("w1"), "token", ex=15)
+        free = await gpu_hold_is_free(settled_redis, "w1")
+        admitted = await admit_generation(settled_redis, "w1")
+        return free, admitted, await read_queue_depth(settled_redis, "w1")
+
+    assert event_loop.run_until_complete(scenario()) == (False, False, 0)
+
+
+def test_a_hold_is_written_beside_its_lock_as_the_previous_release_reads_it(
+    settled_redis, event_loop,
+) -> None:
+    async def scenario() -> tuple[str, list[bytes | None]]:
+        key = gpu_hold_old_key("w1")
+        generation = await reserve_gpu_hold(settled_redis, "w1")
+        assert generation
+        reserved = await settled_redis.get(key)
+        await settled_redis.delete(key)
+        assert await renew_gpu_hold(settled_redis, "w1", generation)
+        renewed = await settled_redis.get(key)
+        assert await release_gpu_hold(settled_redis, "w1", generation)
+        released = await settled_redis.get(key)
+        newer = await reserve_gpu_hold(settled_redis, "w1")
+        assert not await release_gpu_hold(settled_redis, "w1", generation)
+        return newer, [reserved, renewed, released, await settled_redis.get(key)]
+
+    newer, (reserved, renewed, released, after_stale_release) = event_loop.run_until_complete(
+        scenario(),
+    )
+    assert renewed == reserved
+    assert released is None
+    assert after_stale_release == newer.encode()
 
 
 def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(

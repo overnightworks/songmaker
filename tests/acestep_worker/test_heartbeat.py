@@ -14,7 +14,9 @@ from tandem import Liveness
 from acestep_worker.heartbeat import (
     GPU_HOLD_LASTS,
     HeartbeatLoop,
+    gpu_hold_blocks_generation,
     gpu_hold_locks,
+    gpu_hold_old_key,
     queue_depth_key,
     reserve_gpu_hold,
     worker_state_key,
@@ -147,6 +149,25 @@ def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None
 
 async def _no_state() -> dict[str, object]:
     return {}
+
+
+def test_a_hold_of_the_previous_release_keeps_a_generation_off_the_worker() -> None:
+    async def go():
+        redis = settled_fake_redis()
+        await redis.set(gpu_hold_old_key("acestep-worker-0"), "token", ex=15)
+        return await gpu_hold_blocks_generation(redis, "acestep-worker-0")
+
+    assert _run(go())
+
+
+def test_clear_orphaned_queue_ends_the_hold_of_a_previous_release() -> None:
+    async def go():
+        loop, redis = _make_loop()
+        await redis.set(gpu_hold_old_key("acestep-worker-0"), "token", ex=15)
+        await loop.clear_orphaned_queue()
+        return await gpu_hold_blocks_generation(redis, "acestep-worker-0")
+
+    assert not _run(go())
 
 
 def test_start_stop_cycles() -> None:
