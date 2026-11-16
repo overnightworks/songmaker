@@ -20,6 +20,7 @@ never ships: it lives outside ``scripts/``, which the image copies.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
@@ -28,6 +29,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from http.cookies import SimpleCookie
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import SecretStr
 from starlette.responses import Response
@@ -39,8 +41,11 @@ from songmaker_cli.app_context import AppContext, build_web_auth_config, parse_t
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore, DatabaseSubjectUserStore
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.queries.auth import get_user_by_username
-from songmaker_cli.redis_client import create_redis
+from songmaker_cli.redis_client import create_async_redis, create_redis
 from songmaker_cli.settings import get_settings
+
+if TYPE_CHECKING:
+    from redis.asyncio import Redis as AsyncRedis
 
 REQUEST_ENVIRONMENT_VARIABLE = "SEED_SESSIONS_REQUEST"
 DEFAULT_ROLE = "user"
@@ -48,7 +53,7 @@ DEFAULT_ROLE = "user"
 UNUSED_DIRECTORY = Path("/nonexistent")
 
 
-def _auth_config(session_factory) -> WebAuthConfig:
+def _auth_config(session_factory, async_redis: AsyncRedis) -> WebAuthConfig:
     settings = get_settings()
     context = AppContext(
         db=session_factory,
@@ -56,6 +61,7 @@ def _auth_config(session_factory) -> WebAuthConfig:
         data_dir=UNUSED_DIRECTORY,
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=create_redis(settings.redis_url),
+        async_redis=async_redis,
         trusted_proxies=parse_trusted_proxies(settings),
     )
     return build_web_auth_config(context, settings)
@@ -100,10 +106,14 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
 def main() -> int:
     request = json.loads(os.environ[REQUEST_ENVIRONMENT_VARIABLE])
     session_factory = connect_db(resolve_database_url())
-    config = _auth_config(session_factory)
-    with session_factory() as session:
-        seeded = [_seed(session, config, entry) for entry in request.get("seed", [])]
-        session.commit()
+    async_redis = create_async_redis(get_settings().redis_url)
+    try:
+        config = _auth_config(session_factory, async_redis)
+        with session_factory() as session:
+            seeded = [_seed(session, config, entry) for entry in request.get("seed", [])]
+            session.commit()
+    finally:
+        asyncio.run(async_redis.aclose())
     print(json.dumps(seeded))
     return 0
 

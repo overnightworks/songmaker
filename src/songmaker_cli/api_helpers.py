@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Annotated, Final, NoReturn, Protocol
 
 from fastapi import Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from redis.exceptions import RedisError
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from tandem import Liveness, StoreError
 from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
@@ -76,12 +76,13 @@ from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
     WorkerLiveness,
-    read_owner_liveness,
+    owner_lease_liveness,
     read_worker_liveness,
 )
 
 if TYPE_CHECKING:
     from redis import Redis
+    from tandem import Leases
 
     from songmaker_cli.settings import Settings
 
@@ -232,7 +233,7 @@ def _enforce_job_limits(
     user: AuthenticatedUser,
     job_type: JobType,
     worker_liveness: WorkerLiveness,
-    owner_liveness: Mapping[str, WorkerLiveness],
+    owner_liveness: Mapping[str, Liveness],
 ) -> None:
     """Recover stale jobs, then roll back with 429 when a queue or rate limit is reached."""
     settings = get_settings()
@@ -268,18 +269,18 @@ def _enforce_job_limits(
         raise Refusal(429, "jobRefusal.hourlyLimit", limit=str(limit), jobType=job_type)
 
 
-def _read_owner_liveness_or_unknown(
-    redis: Redis, owner_ids: set[str],
-) -> Mapping[str, WorkerLiveness]:
+async def _read_owner_liveness_or_unknown(
+    owner_leases: Leases, owner_ids: set[str],
+) -> Mapping[str, Liveness]:
     """A Redis that cannot be read leaves every owner UNKNOWN, which fails no job."""
     try:
-        return read_owner_liveness(redis, owner_ids)
-    except RedisError:
+        return await owner_lease_liveness(owner_leases, owner_ids)
+    except StoreError:
         _log.warning("Could not read owner liveness", exc_info=True)
         return {}
 
 
-def create_job_with_rate_limit(
+async def create_job_with_rate_limit(
     session: Session,
     user: AuthenticatedUser,
     job_type: JobType,
@@ -288,6 +289,7 @@ def create_job_with_rate_limit(
     version_id: str | None = None,
     owner_id: str | None = None,
     redis: Redis,
+    owner_leases: Leases,
 ) -> Job:
     """Atomically check rate limits and create a job under an advisory lock.
 
@@ -306,7 +308,9 @@ def create_job_with_rate_limit(
     require_no_uncommitted_mutations(session, "create_job_with_rate_limit")
     worker_ids = [worker.id for worker in list_worker_identities(session)]
     worker_liveness = read_worker_liveness(redis, worker_ids)
-    owner_liveness = _read_owner_liveness_or_unknown(redis, active_job_owner_ids(session))
+    owner_liveness = await _read_owner_liveness_or_unknown(
+        owner_leases, active_job_owner_ids(session),
+    )
     session.commit()
     lock_until_transaction_ends(session, AdvisoryLock.RATE_LIMIT)
 

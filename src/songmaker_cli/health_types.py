@@ -16,6 +16,7 @@ class BackgroundLoopName(StrEnum):
     SCORE_BACKFILL = "score_backfill"
     STALE_JOB_REAPER = "stale_job_reaper"
     OWNER_LEASE = "owner_lease"
+    OWNER_LAPSES = "owner_lapses"
     OWNER_GONE_REAPER = "owner_gone_reaper"
 
 

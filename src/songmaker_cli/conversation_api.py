@@ -215,7 +215,7 @@ async def api_chat_turn(
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
     if session_id is None:
         raise Refusal(403, "cowriterRefusal.browserLogin")
-    prepared = _prepare_chat_turn(req, request, user, session)
+    prepared = await _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, TurnCaller(request.app, session_id, user), prepared)
     return StreamingResponse(
         frames.relay(), media_type=SSE_MEDIA_TYPE,
@@ -223,7 +223,7 @@ async def api_chat_turn(
     )
 
 
-def _prepare_chat_turn(
+async def _prepare_chat_turn(
     req: ChatTurnV2Request,
     request: Request,
     user: AuthenticatedUser,
@@ -231,11 +231,11 @@ def _prepare_chat_turn(
 ) -> PreparedChatTurn:
     envelope = load_turn_context(req, user, session)
     ctx = request.app.state.ctx
-    job = create_job_with_rate_limit(
+    job = await create_job_with_rate_limit(
         session,
         user,
         JobType.CHAT,
-        redis=ctx.redis,
+        redis=ctx.redis, owner_leases=ctx.owner_leases,
         owner_id=ctx.owner_id,
     )
     _refuse_while_another_turn_runs(session, user)

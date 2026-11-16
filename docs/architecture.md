@@ -1577,9 +1577,10 @@ SIGKILLed and even the values the run did produce would be lost.
   `load_model_on_worker`, and `download_model_on_worker`; the ACE-Step worker
   performs their HTTP model-serving portion. The scoring worker owns `score`.
 - A worker writes its owner id on every job it runs and holds an owner lease
-  on the Redis connection arq hands it: set at startup after the database has
-  opened, renewed every `OWNER_LEASE_REFRESH_SECONDS`, deleted at shutdown
-  before the DB pool is disposed. A worker fails no job at start or stop; a web
+  (tandem's `Leases`, family `owner`) on a Redis client of its own, made by
+  `create_async_redis`: started at startup after the database has opened, renewed
+  every `OWNER_LEASE_REFRESH_SECONDS`, ended at shutdown before the DB pool is
+  disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
   recovery below). Queued work remains in arq for a replacement worker to claim
   after a deploy.
@@ -1607,22 +1608,26 @@ apply the same queued-job rule.
 the turn starts, a cover job when it claims it, a worker job (generation, LoRA
 training, scoring, model load and download) when it first marks it running
 (`jobs.owner_id`, nullable; a job that waits in a queue and older rows have none
-and get no owner verdict). Its lease is the Redis key
-`worker_liveness.owner_lease_key(owner_id)`, set for `OWNER_LEASE_TTL_SECONDS` (15 s)
-and renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by the `owner_lease` loop of a web
-process or by `WorkerBase` after its database has opened, and deleted at the end of
-`_lifespan` or of the worker's `on_shutdown`. The `owner_gone_reaper` loop of every web process
-runs `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
-(5 s) and once at start: it reads the leases of the owners of active jobs
-(`read_owner_liveness`: a present key is `alive`, an absent one `dead`) and fails the
-active jobs of every `dead` owner, whether a web process or a worker, with the one
+and get no owner verdict). Its lease is a holder of tandem's `Leases` in the family `owner`,
+built by `worker_liveness.owner_leases` for every process from the same spans: a lease lasts
+`OWNER_LEASE_TTL_SECONDS` (15 s) and is renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by
+`worker_liveness.keep_owner_lease` (`Leases.kept`), in a web process from the end of start-up to
+the end of `_lifespan`, in a worker from after its database has opened to its `on_shutdown`. A
+web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
+serves everything else. The `owner_gone_reaper` loop of every web process runs
+`lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
+(5 s) and once at start: it reads the owners of active jobs through `Leases.state` (`worker_liveness.owner_lease_liveness`)
+(`alive`, `gone` or `unknown`) and fails the active jobs of every `gone` owner, whether a web
+process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then
-removes the suggestion and staging directory of the covers it ended. No lock orders
-the processes: the failing update is conditional on the row it read. Only a web
+removes the suggestion and staging directory of the covers it ended. The `owner_lapses` loop
+(`Leases.serve_lapses`) runs the same pass as soon as a lease has ended or expired, on the one
+web process that claims the lapse. No lock orders the processes: the failing update is
+conditional on the row it read. Only a web
 process reads leases, so a worker's jobs end while a web process runs. A start of
 either kind leaves a live sibling's jobs alone; a clean stop ends the stopped
 process's jobs within one tick after its lifespan or its worker shutdown ends, a
-crash within the lease TTL plus a tick. A worker that is cancelled at its shutdown
+crash within the lease span plus a tick. A worker that is cancelled at its shutdown
 ends its running generation and LoRA jobs itself, and arq queues the cancelled task
 again; the new run finds the job terminal and returns. A killed worker's job stays in
 the arq queue until its in-progress key expires, then another run does the same. A
@@ -1632,12 +1637,21 @@ panel shows "Try again" at once; after a crash within 20 s.
 
 `unknown` never fails a job. A Redis that cannot be read fails the pass, which the
 `owner_gone_reaper` loop health shows in `/health/details`, and fails nothing. A
-Redis whose `INFO server` `uptime_in_seconds` is below the lease TTL may have
-restarted empty, so an absent key reads `unknown` there until the pods have renewed
-their leases; an owner id the reading lacks is `unknown`, and a pass never asks about
-its own process. A pod that lost its lease while alive (a Redis outage longer than the
-TTL) may see a sibling fail its jobs; every later write of that job then refuses, as
-for any terminal job. A cover's staging directory is named by its job id alone, so it
+Redis that lost its data reads an absent lease `unknown` until the lease span has passed
+since the first command after the loss (tandem's epoch), by when the pods have renewed
+their leases; an owner id the reading lacks is `unknown`, and the job pass never asks about
+its own process. A renewal that fails is retried every interval and logged by tandem; the
+`owner_gone_reaper` tick reads this process's own lease, not its old key, and the `owner_lease`
+loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
+pass apart). A pod that lost its lease while alive (a Redis outage longer than the
+lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
+for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
+generation of tandem's `Hold`, logs it as a start and, in a web process, removes what every
+cover whose stored status has ended left behind (`lifecycle.reconcile_ended_covers`). The stored job status is the only fence: a job
+carries no lease generation, so a lapse cleanup that read the old lease may still fail the
+jobs of the new one. For one release every process also writes `<prefix>:owner:<id>` for the
+previous release's readers and reads an owner whose old key is live as `alive`
+(`owner_lease_old_key`). A cover's staging directory is named by its job id alone, so it
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in
 training until the next stale-job reaper tick reconciles it.
 

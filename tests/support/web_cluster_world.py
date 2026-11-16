@@ -10,6 +10,7 @@ import pytest
 from agents.backend.fake_gateway import completion
 from pydantic import SecretStr
 from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
 from support.app_processes import (
     OIDC_CLIENT_ID,
     StandIns,
@@ -74,6 +75,7 @@ def sign_in_person(
         data_dir=cluster.root,
         signing_key=cluster.session_secret.encode(),
         redis=Redis.from_url(redis_url),
+        async_redis=AsyncRedis.from_url(redis_url),
     )
     config = build_web_auth_config(context, settings)
     return SignedInPerson(user_id, issued_cookies(session_id, config))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import time
 import uuid
 from dataclasses import dataclass
@@ -9,10 +10,17 @@ from pathlib import Path
 
 import pytest
 from redis import Redis
-from support.app_processes import MusicWorkerProcess, WebProcess, WebProcesses, poll_until
+from support.app_processes import (
+    MusicWorkerProcess,
+    WebProcess,
+    WebProcesses,
+    age_the_owner_lease_epoch,
+    leased_owner_ids,
+    poll_until,
+)
 from support.web_cluster_world import start_owner
 
-from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
@@ -28,11 +36,12 @@ from songmaker_cli.job_timing import (
 )
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import OWNER_REAPER_FAILURE_MESSAGE
-from songmaker_cli.worker_liveness import owner_lease_key
+from songmaker_cli.owner_lease_old_key import old_owner_key
 
 MARGIN_SECONDS = 5.0
 CRASH_DEADLINE_SECONDS = 30.0
 LOOP_FAILING_DEADLINE_SECONDS = 40.0
+PREVIOUS_RELEASE_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -55,12 +64,9 @@ def redis_client(redis_url: str):
 
 
 @pytest.fixture(autouse=True)
-def lease_ttl_has_passed_on_the_server(redis_client: Redis) -> None:
-    """An absent lease reads dead only on a server that has run for the lease TTL."""
-    assert poll_until(
-        lambda: redis_client.info("server")["uptime_in_seconds"] >= OWNER_LEASE_TTL_SECONDS,
-        deadline_seconds=OWNER_LEASE_TTL_SECONDS + MARGIN_SECONDS,
-    )
+def lease_span_has_passed_on_the_server(redis_client: Redis) -> None:
+    """An absent lease reads gone only on a server that has run for the lease span."""
+    age_the_owner_lease_epoch(redis_client)
 
 
 def _seed_running_jobs(factory, cluster: WebProcesses, owner_id: str) -> RunningJobs:
@@ -114,6 +120,33 @@ def test_a_process_that_starts_ends_the_jobs_of_an_owner_that_is_gone_and_no_liv
     ) == ([JobStatus.RUNNING] * 2, True, True)
 
 
+def test_an_owner_of_the_previous_release_keeps_its_jobs_when_a_process_starts(
+    web_cluster, redis_client,
+) -> None:
+    cluster, factory = web_cluster
+    previous_owner = uuid.uuid4().hex
+    redis_client.set(
+        old_owner_key(REDIS_KEY_PREFIX, previous_owner), "1", ex=PREVIOUS_RELEASE_SECONDS,
+    )
+    jobs = _seed_running_jobs(factory, cluster, previous_owner)
+
+    start_owner(cluster, redis_client, "a")
+
+    assert _statuses(factory, jobs.ids) == [JobStatus.RUNNING] * 2
+
+
+def test_a_process_shows_the_previous_release_its_old_key_until_it_stops(
+    web_cluster, redis_client,
+) -> None:
+    cluster, _ = web_cluster
+    process, owner = start_owner(cluster, redis_client, "a")
+    key = old_owner_key(REDIS_KEY_PREFIX, owner)
+
+    assert redis_client.exists(key) == 1
+    process.stop()
+    assert redis_client.exists(key) == 0
+
+
 @pytest.fixture
 def a_and_b(web_cluster, redis_client):
     """A and B on one database and Redis; A runs the seeded jobs, B is the observer."""
@@ -132,7 +165,7 @@ def test_a_clean_stop_of_one_process_ends_its_jobs_on_the_other_within_one_tick(
 
     process_a.stop()
 
-    assert redis_client.exists(owner_lease_key(owner_a)) == 0
+    assert owner_a not in leased_owner_ids(redis_client)
     assert poll_until(
         lambda: _is_reaped(factory, jobs),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
@@ -172,6 +205,18 @@ def test_a_crash_with_redis_unreachable_ends_nothing_until_redis_answers_again(
     )
 
 
+def test_a_stop_with_redis_unreachable_still_shuts_the_process_down(
+    proxied_cluster, redis_client,
+) -> None:
+    cluster, _, proxy = proxied_cluster
+    process, _ = start_owner(cluster, redis_client, "a")
+
+    proxy.cut()
+    process.stop()
+
+    assert process.process.returncode != -signal.SIGKILL, "the stop needed the kill"
+
+
 def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     proxied_cluster, redis_client,
 ) -> None:
@@ -186,7 +231,7 @@ def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
 
     assert poll_until(
-        lambda: redis_client.exists(owner_lease_key(owner_a)) == 1,
+        lambda: owner_a in leased_owner_ids(redis_client),
         deadline_seconds=OWNER_LEASE_REFRESH_SECONDS + MARGIN_SECONDS,
     )
     assert poll_until(lambda: _is_reaped(factory, ghost), deadline_seconds=CRASH_DEADLINE_SECONDS)
@@ -254,7 +299,7 @@ def test_a_clean_stop_of_one_music_worker_ends_its_jobs_within_one_tick_and_no_o
 ) -> None:
     music_workers.worker_a.stop()
 
-    assert redis_client.exists(owner_lease_key(music_workers.worker_a.owner_id)) == 0
+    assert music_workers.worker_a.owner_id not in leased_owner_ids(redis_client)
     assert poll_until(
         lambda: _failed_with_the_restart_verdict(music_workers.factory, music_workers.jobs_of_a),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
