@@ -526,3 +526,30 @@ def test_a_download_whose_lock_was_taken_over_stops_and_leaves_the_new_holders_l
         return await read_download_in_progress(another_process, "sft")
 
     assert event_loop.run_until_complete(scenario()) == "job-2"
+
+
+def test_a_download_whose_first_stop_is_swallowed_by_its_block_is_stopped_again(
+    settled_redis, another_process, event_loop, monkeypatch,
+) -> None:
+    """A native cancel racing a cancel scope of the block (anyio's connect) is absorbed by it."""
+    monkeypatch.setattr(
+        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
+    )
+
+    async def download_that_absorbs_its_first_stop() -> None:
+        new_holder_locks = download_locks(another_process)
+        async with single_flight_download(settled_redis, "sft", "job-1"):
+            await another_process.zrem(new_holder_locks.keys.expiry, "sft")
+            assert await new_holder_locks.acquire("sft") is not None
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                pass
+            await asyncio.sleep(30)
+
+    async def scenario() -> None:
+        async with asyncio.timeout(10):
+            await download_that_absorbs_its_first_stop()
+
+    with pytest.raises(DownloadLockLost):
+        event_loop.run_until_complete(scenario())

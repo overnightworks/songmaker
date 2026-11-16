@@ -214,18 +214,24 @@ async def _keep_download_lock(
     pool: ArqRedis, locks: Locks, mode: str, job_id: str, generation: str,
     on_lost: Callable[[], None],
 ) -> None:
-    """Extend the lock and its label until cancelled; call ``on_lost`` when the lock is lost."""
+    """Extend the lock and its label until cancelled; once it is lost, call ``on_lost`` every span.
+
+    A cancel can be absorbed by a cancel scope of the block that it races, so the stop repeats
+    until the block ends and cancels this task.
+    """
     label_seconds = int(DOWNLOAD_LOCK_LASTS.total_seconds())
     while True:
         await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
         try:
             if not await locks.extend(mode, generation):
-                log.warning("The download lock of %s was lost during its download", mode)
-                on_lost()
-                return
+                break
             await pool.set(download_key(mode), job_id, ex=label_seconds)
         except (StoreError, RedisError):
             log.warning("Could not extend the download lock of %s", mode, exc_info=True)
+    log.warning("The download lock of %s was lost during its download", mode)
+    while True:
+        on_lost()
+        await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
 
 
 # Deletes the label only while it still names the job that wrote it.
@@ -246,11 +252,11 @@ async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> Asyn
     locks = download_locks(pool)
     generation = await _acquire_download_lock(pool, locks, mode)
     holder = asyncio.current_task()
-    lost = False
+    stops = 0
 
     def stop_the_download() -> None:
-        nonlocal lost
-        lost = True
+        nonlocal stops
+        stops += 1
         holder.cancel()
 
     keeper = asyncio.create_task(
@@ -262,7 +268,9 @@ async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> Asyn
         )
         yield
     except asyncio.CancelledError:  # NOSONAR(S7497) Own cancel becomes DownloadLockLost.
-        if lost and holder.uncancel() == 0:
+        for _ in range(stops):
+            holder.uncancel()
+        if stops and holder.cancelling() == 0:
             raise DownloadLockLost(mode) from None
         raise
     finally:
