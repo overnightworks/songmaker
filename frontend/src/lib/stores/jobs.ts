@@ -134,14 +134,16 @@ export function resetGenerationFailuresForTests(): void {
 
 const GENERATION_UNAVAILABLE_ERROR_TYPE = 'generation_unavailable';
 
-type FailureFields = Pick<JobStatus, 'error_message' | 'error_type'>;
+type PartialFields = Pick<JobStatus, 'error_message' | 'completed_takes' | 'take_count'>;
+type FailureFields = Pick<JobStatus, 'error_message' | 'error_type'> &
+	Partial<PartialFields & Pick<JobStatus, 'status'>>;
 
 function failureMessage(job: FailureFields, type: TrackedJobType): string {
 	return messageText(job.error_message) ?? jobEndText(type, 'failed');
 }
 
 /** A partial end names the takes that completed before its cause; one that finished no count says only its cause. */
-function partialMessage(job: JobStatus, type: TrackedJobType): string {
+function partialMessage(job: PartialFields, type: TrackedJobType): string {
 	const cause = messageText(job.error_message);
 	if (job.completed_takes == null || job.take_count == null) {
 		return cause ?? jobEndText(type, 'partial');
@@ -156,7 +158,10 @@ function partialMessage(job: JobStatus, type: TrackedJobType): string {
 
 function generationFailure(job: FailureFields): GenerationFailure {
 	return {
-		message: failureMessage(job, JOB_TYPE_GENERATE),
+		message:
+			job.status === 'partial'
+				? partialMessage(job, JOB_TYPE_GENERATE)
+				: failureMessage(job, JOB_TYPE_GENERATE),
 		unavailable: job.error_type === GENERATION_UNAVAILABLE_ERROR_TYPE
 	};
 }
