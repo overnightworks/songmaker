@@ -15,11 +15,11 @@ import logging
 import random
 import shutil
 import subprocess
-import threading
+import time
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
@@ -56,7 +56,12 @@ from songmaker_cli.audio_paths import (
     confined_under,
     resolve_audio_path,
 )
-from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
+from songmaker_cli.constants import (
+    REDIS_KEY_PREFIX,
+    REDIS_RL_QUEUE_STREAM_PREFIX,
+    LimiterFailurePolicy,
+)
+from songmaker_cli.db.advisory_locks import try_lock_until_transaction_ends
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.refusals import Refusal
@@ -82,6 +87,8 @@ def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
 
 FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
 QUEUE_STREAM_DURATION_LIMIT_DETAIL = "Queue duration exceeds the maximum stream duration"
+QUEUE_STREAM_REDIS_PREFIX: Final = f"{REDIS_KEY_PREFIX}:queue-stream"
+QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
 QUEUE_STREAM_MANIFEST_GLOB: Final = "*.json"
 QUEUE_STREAM_MANIFEST_SUFFIX: Final = ".json"
 QUEUE_STREAM_TEMP_AUDIO_SUFFIX: Final = ".tmp.mp3"
@@ -98,16 +105,6 @@ QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL: Final = "Queue stream audio not found"
 
 
 SnapshotScope = Literal["auth", "shared-playlist", "shared-album"]
-
-
-@dataclass
-class _BuildLockEntry:
-    lock: threading.Lock = field(default_factory=threading.Lock)
-    waiters: int = 0
-
-
-_build_locks: dict[str, _BuildLockEntry] = {}
-_build_locks_guard = threading.Lock()
 
 
 class QueueStreamManifest(BaseModel):
@@ -225,7 +222,7 @@ def build_queue_stream_snapshot(
     prepared_sources = admission.prepared_sources
     windowed = windowed_by_count
     content_hash = _content_hash(scope, scope_id, prepared_sources, windowed=windowed)
-    with _build_lock(content_hash):
+    with _build_lock(ctx, content_hash):
         reusable = _find_reusable_snapshot(ctx, content_hash, stream_url)
         if reusable:
             return reusable
@@ -252,9 +249,6 @@ def _build_queue_stream_snapshot(
 ) -> QueueStreamManifestResponse:
     stream_dir = _stream_dir(ctx)
     snapshot_id = uuid.uuid4().hex
-    output_path = stream_dir / f"{snapshot_id}.mp3"
-    output_tmp_path = stream_dir / f"{snapshot_id}.tmp.mp3"
-    concat_path = stream_dir / f"{snapshot_id}.concat.txt"
     manifest_path = stream_dir / f"{snapshot_id}.json"
 
     audio_paths: list[Path] = []
@@ -273,13 +267,7 @@ def _build_queue_stream_snapshot(
 
     windowed = windowed_by_count
 
-    try:
-        write_concat_file(concat_path, audio_paths)
-        run_ffmpeg_concat(concat_path, output_tmp_path)
-        output_tmp_path.replace(output_path)
-    finally:
-        concat_path.unlink(missing_ok=True)
-        output_tmp_path.unlink(missing_ok=True)
+    _render_snapshot_audio(stream_dir, snapshot_id, audio_paths)
 
     expires_at = datetime.now(timezone.utc) + QUEUE_STREAM_TTL
     manifest = QueueStreamManifest(
@@ -293,6 +281,7 @@ def _build_queue_stream_snapshot(
         tracks=tracks,
     )
     manifest.save(manifest_path)
+    _publish_manifest(ctx, manifest)
     _enforce_cache_quota(stream_dir, protected_snapshot_ids={snapshot_id})
 
     return QueueStreamManifestResponse(
@@ -376,29 +365,67 @@ def _content_hash(
     return hasher.hexdigest()
 
 
-@contextmanager
-def _build_lock(content_hash: str) -> Iterator[None]:
-    """Serialize concurrent builds that share a content hash.
-
-    Entries are reference-counted and removed once no caller still
-    references them, so ``_build_locks`` does not grow without bound over
-    the server's lifetime. The removal is race-free: a waiter always
-    registers itself (incrementing ``waiters`` under the guard) before it
-    can block on the lock, so a builder can only delete the entry once no
-    other thread still holds a reference to it.
-    """
-    with _build_locks_guard:
-        entry = _build_locks.setdefault(content_hash, _BuildLockEntry())
-        entry.waiters += 1
-    entry.lock.acquire()
+def _render_snapshot_audio(stream_dir: Path, snapshot_id: str, audio_paths: list[Path]) -> None:
+    output_path = stream_dir / f"{snapshot_id}.mp3"
+    output_tmp_path = stream_dir / f"{snapshot_id}.tmp.mp3"
+    concat_path = stream_dir / f"{snapshot_id}.concat.txt"
     try:
-        yield
+        write_concat_file(concat_path, audio_paths)
+        run_ffmpeg_concat(concat_path, output_tmp_path)
+        output_tmp_path.replace(output_path)
     finally:
-        entry.lock.release()
-        with _build_locks_guard:
-            entry.waiters -= 1
-            if entry.waiters == 0 and _build_locks.get(content_hash) is entry:
-                del _build_locks[content_hash]
+        concat_path.unlink(missing_ok=True)
+        output_tmp_path.unlink(missing_ok=True)
+
+
+@contextmanager
+def _build_lock(ctx: AppContext, key: str) -> Iterator[None]:
+    """Serialize builds of one content hash or snapshot id across every web process.
+
+    A PostgreSQL advisory lock lives as long as its transaction, so a process that dies
+    mid-build frees it. A waiter polls with a try-lock and returns its connection between
+    polls, so a queue of waiters holds no pool slots while the winner builds.
+    """
+    lock_id = int(key[:15], 16)
+    while True:
+        session = ctx.db()
+        try:
+            if try_lock_until_transaction_ends(session, lock_id):
+                yield
+                return
+        finally:
+            session.close()
+        time.sleep(QUEUE_STREAM_BUILD_POLL_SECONDS)
+
+
+def queue_stream_manifest_key(snapshot_id: str) -> str:
+    return f"{QUEUE_STREAM_REDIS_PREFIX}:manifest:{snapshot_id}"
+
+
+def _content_key(content_hash: str) -> str:
+    return f"{QUEUE_STREAM_REDIS_PREFIX}:content:{content_hash}"
+
+
+def _publish_manifest(ctx: AppContext, manifest: QueueStreamManifest) -> None:
+    """Make the snapshot's record readable by every web process until it expires."""
+    lasts = int(QUEUE_STREAM_TTL.total_seconds())
+    with ctx.redis.pipeline() as pipeline:
+        pipeline.set(
+            queue_stream_manifest_key(manifest.snapshot_id), manifest.model_dump_json(), ex=lasts,
+        )
+        pipeline.set(_content_key(manifest.content_hash), manifest.snapshot_id, ex=lasts)
+        pipeline.execute()
+
+
+def _published_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest | None:
+    raw = ctx.redis.get(queue_stream_manifest_key(snapshot_id))
+    if raw is None:
+        return None
+    try:
+        return QueueStreamManifest.model_validate_json(raw)
+    except ValidationError as exc:
+        log.warning("Queue stream record %s failed validation: %s", snapshot_id, exc)
+        return None
 
 
 def _find_reusable_snapshot(
@@ -406,51 +433,58 @@ def _find_reusable_snapshot(
     content_hash: str,
     stream_url: str,
 ) -> QueueStreamManifestResponse | None:
-    now = datetime.now(timezone.utc)
-    manifests = sorted(
-        _stream_dir(ctx).glob(QUEUE_STREAM_MANIFEST_GLOB),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
+    snapshot_id = ctx.redis.get(_content_key(content_hash))
+    manifest = None if snapshot_id is None else _published_manifest(ctx, snapshot_id)
+    if manifest is None or manifest.expires_at < datetime.now(timezone.utc):
+        return None
+    return QueueStreamManifestResponse(
+        snapshot_id=manifest.snapshot_id,
+        stream_url=stream_url,
+        expires_at=manifest.expires_at.isoformat(),
+        total_duration=manifest.total_duration,
+        windowed=manifest.windowed,
+        tracks=manifest.tracks,
     )
-    for manifest_path in manifests:
-        manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is None or not _valid_snapshot_id(manifest_path.stem):
-            continue
-        if manifest.snapshot_id != manifest_path.stem or manifest.content_hash != content_hash:
-            continue
-        audio_path = queue_stream_audio_path(ctx, manifest.snapshot_id)
-        if manifest.expires_at < now or not audio_path.exists():
-            continue
-        return QueueStreamManifestResponse(
-            snapshot_id=manifest.snapshot_id,
-            stream_url=stream_url,
-            expires_at=manifest.expires_at.isoformat(),
-            total_duration=manifest.total_duration,
-            windowed=manifest.windowed,
-            tracks=manifest.tracks,
-        )
-    return None
 
 
 def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
+    """The snapshot's record, with its audio on this process's disk.
+
+    A snapshot another process built has its record in Redis and no audio here; the audio
+    is rebuilt from the record's tracks.
+    """
     if not _valid_snapshot_id(snapshot_id):
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
     manifest_path = _stream_dir(ctx) / f"{snapshot_id}.json"
-    if not manifest_path.exists():
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
-    manifest = QueueStreamManifest.load(manifest_path)
+    manifest = (
+        QueueStreamManifest.load(manifest_path)
+        if manifest_path.exists()
+        else _published_manifest(ctx, snapshot_id)
+    )
     if manifest is None:
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
 
-    now = datetime.now(timezone.utc)
-    if manifest.expires_at < now:
+    if manifest.expires_at < datetime.now(timezone.utc):
         delete_snapshot_files(ctx, snapshot_id)
         raise HTTPException(404, "Queue stream expired")  # unread: share
 
-    audio_path = queue_stream_audio_path(ctx, snapshot_id)
-    if not audio_path.exists():
-        raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL)  # unread: share
+    if not queue_stream_audio_path(ctx, snapshot_id).exists():
+        _rebuild_snapshot_audio(ctx, manifest)
     return manifest
+
+
+def _rebuild_snapshot_audio(ctx: AppContext, manifest: QueueStreamManifest) -> None:
+    stream_dir = _stream_dir(ctx)
+    with _build_lock(ctx, manifest.snapshot_id):
+        if queue_stream_audio_path(ctx, manifest.snapshot_id).exists():
+            return
+        try:
+            audio_paths = [resolve_audio_path(ctx.audio_dir, t.mp3_path) for t in manifest.tracks]
+        except (AudioFileNotFoundError, AudioPathRejectedError) as exc:
+            raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL) from exc  # unread: share
+        stream_dir.mkdir(parents=True, exist_ok=True)
+        _render_snapshot_audio(stream_dir, manifest.snapshot_id, audio_paths)
+        manifest.save(stream_dir / f"{manifest.snapshot_id}.json")
 
 
 def queue_stream_audio_path(ctx: AppContext, snapshot_id: str) -> Path:

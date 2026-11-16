@@ -20,6 +20,7 @@ from songmaker_cli.queue_streams import (
     QueueStreamManifest,
     build_queue_stream_snapshot,
     cleanup_expired_queue_streams,
+    queue_stream_manifest_key,
     track_source_from_generation,
 )
 
@@ -77,51 +78,33 @@ def test_a_second_build_of_the_same_queue_reuses_the_first_snapshot(ctx, stream_
     assert _build_snapshot(ctx) == first
 
 
-def test_a_build_passes_over_a_snapshot_whose_audio_is_gone(ctx, stream_dir) -> None:
+def test_a_build_reuses_a_snapshot_whose_audio_is_gone_and_the_audio_is_rebuilt_on_load(
+    ctx, stream_dir
+) -> None:
     first = _build_snapshot(ctx)
-    (stream_dir / f"{first}.mp3").unlink()
+    audio = stream_dir / f"{first}.mp3"
+    audio.unlink()
 
-    assert _build_snapshot(ctx) != first
+    reused = _build_snapshot(ctx)
+    queue_streams.load_queue_stream_manifest(ctx, first)
+
+    assert (reused, audio.exists()) == (first, True)
 
 
 def test_a_build_passes_over_an_expired_snapshot(ctx, stream_dir) -> None:
     first = _build_snapshot(ctx)
-    manifest_path = stream_dir / f"{first}.json"
-    manifest = QueueStreamManifest.load(manifest_path)
+    manifest = QueueStreamManifest.load(stream_dir / f"{first}.json")
     expired = manifest.model_copy(update={"expires_at": manifest.expires_at - timedelta(days=1)})
-    expired.save(manifest_path)
+    ctx.redis.set(queue_stream_manifest_key(first), expired.model_dump_json())
 
     assert _build_snapshot(ctx) != first
 
 
-def test_a_build_passes_over_an_unreadable_manifest(ctx, stream_dir) -> None:
+def test_a_build_passes_over_an_unreadable_record(ctx, stream_dir) -> None:
     first = _build_snapshot(ctx)
-    (stream_dir / f"{first}.json").write_text("{", encoding="utf-8")
+    ctx.redis.set(queue_stream_manifest_key(first), "{")
 
     assert _build_snapshot(ctx) != first
-
-
-@pytest.mark.parametrize("file_stem", [OTHER_SNAPSHOT_ID, "notes"])
-def test_a_build_passes_over_a_manifest_whose_name_is_not_the_id_it_records(
-    ctx, stream_dir, file_stem
-) -> None:
-    first = _build_snapshot(ctx)
-    (stream_dir / f"{first}.json").rename(stream_dir / f"{file_stem}.json")
-
-    assert _build_snapshot(ctx) != first
-
-
-def test_a_build_passes_over_a_manifest_recording_an_id_that_is_not_a_valid_snapshot_id(
-    ctx, stream_dir
-) -> None:
-    first = _build_snapshot(ctx)
-    manifest_path = stream_dir / f"{first}.json"
-    manifest = QueueStreamManifest.load(manifest_path)
-    manifest_path.unlink()
-    manifest.model_copy(update={"snapshot_id": "notes"}).save(stream_dir / "notes.json")
-    (stream_dir / f"{first}.mp3").rename(stream_dir / "notes.mp3")
-
-    assert _build_snapshot(ctx) != "notes"
 
 
 def test_the_sweep_keeps_every_file_of_a_live_snapshot_however_old(ctx, stream_dir) -> None:

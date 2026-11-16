@@ -26,3 +26,12 @@ def lock_until_transaction_ends(session: Session, lock_id: int) -> None:
     Different ids serialize independently; a computed id is an `int`.
     """
     session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=int(lock_id)))
+
+
+def try_lock_until_transaction_ends(session: Session, lock_id: int) -> bool:
+    """Take the lock as `lock_until_transaction_ends` does; False when another holds it."""
+    return bool(
+        session.execute(
+            text("SELECT pg_try_advisory_xact_lock(:id)").bindparams(id=int(lock_id)),
+        ).scalar_one(),
+    )

@@ -674,9 +674,15 @@ ffmpeg and request-session release through the shared builders;
 and scan-window refusals.
 
 Built snapshots live in `queue-streams/` under the data directory as
-`<id>.json` and `<id>.mp3`. A build reuses the newest unexpired snapshot of the
-same content whose manifest is named after the id it records and whose audio
-still exists. A snapshot lives eight hours. The sweep (at startup and in the
+`<id>.json` and `<id>.mp3`, a cache of the process that built them. Every build
+also publishes the manifest to Redis (`songmaker:queue-stream:manifest:<id>` and
+`songmaker:queue-stream:content:<hash>`, eight hours), and builds of one content
+hash are serialised across web processes by a PostgreSQL advisory lock whose waiters
+poll and hold no connection. A build reuses the unexpired snapshot Redis names for
+its content hash, whichever process built it; a process that serves the audio of a
+snapshot it has no file for rebuilds the file from the manifest's tracks under the
+same lock. The audio stays on each process's disk until audio moves to the object
+store. A snapshot lives eight hours. The sweep (at startup and in the
 maintenance loop) removes the files of expired or unreadable manifests, then
 every regular file of no live snapshot older than 24 hours (a running build's
 `.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
@@ -1801,8 +1807,8 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   release (`songmaker:job_reaper_lock`, `songmaker:score_backfill_lock`) are not staged: with
   one web process and `Recreate` no process of either release runs a tick beside the other.
 - The ACE-Step GPU hold and the model-download single-flight are tandem locks too
-  ([docs/acestep.md](acestep.md), "Locks in Redis"). `queue_streams._build_locks` stays a
-  thread lock: it guards one process's cache build, not a share across pods.
+  ([docs/acestep.md](acestep.md), "Locks in Redis"). A queue-stream build is serialised
+  across processes by a PostgreSQL advisory lock keyed by its content hash (see "Built snapshots").
 - A queued job reports `No worker alive for this job type — please retry.`
   when its known-dead execution worker exceeded its grace, or `Queued too long — please retry.`
   when it exceeded the age guard. A running one reports `Took too long to finish — please retry.`
