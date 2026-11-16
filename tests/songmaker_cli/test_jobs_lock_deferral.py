@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from pathlib import Path
 
 import pytest
 from support.generation_job_world import run_async
@@ -14,14 +14,12 @@ from support.worker_http_peer import WorkerReply, WorkerScenario
 
 from acestep_engine.constants import GPU_HELD_DETAIL
 from songmaker_cli.acestep_state import (
-    download_key,
     download_locks,
     read_queue_depth,
     worker_state_key,
 )
 from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries.jobs import get_job
-from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.job_types import JobFunction
 from songmaker_cli.jobs import download_model_on_worker, run_generation_job
 from songmaker_cli.messages import message
@@ -63,52 +61,60 @@ def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
         assert session.query(Generation).count() == completed
 
 
-def test_a_download_that_lost_its_lock_stops_and_fails_its_job(seeded_db, monkeypatch) -> None:
+def test_a_download_that_lost_its_lock_stops_and_the_next_job_joins_the_running_transfer(
+    seeded_db, generation_worker_peer, monkeypatch,
+) -> None:
+    """The transfer on the worker cannot be cancelled, so the next job of the mode joins it."""
     monkeypatch.setattr(
         "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
     )
     with seeded_db() as session:
-        session.add(Job(id="dl-lost", type="download_model_on_worker", status="queued"))
-        register_worker(
-            session, worker_id="w1", host="acestep-worker", port=8001, gpu_id=0,
-            vram_total_gb=24.0,
-        )
+        for job_id in ("dl-lost", "dl-next"):
+            session.add(Job(id=job_id, type="download_model_on_worker", status="queued"))
         session.commit()
     redis = SettledFakeAsyncRedis()
-    redis.store[worker_state_key("w1")] = json.dumps({"loaded": [], "gpu_healthy": True})
-    new_holder = redis.another_process()
-    new_holder_locks = download_locks(new_holder)
+    transfers_started = 0
 
-    fake_submit_response = MagicMock(status_code=200)
-    fake_submit_response.json = MagicMock(return_value={"task_id": "t"})
-    fake_client = AsyncMock()
-    fake_client.post = AsyncMock(return_value=fake_submit_response)
-    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
-    fake_client.__aexit__ = AsyncMock(return_value=False)
-    downloads_started = 0
+    async def exercise() -> None:
+        nonlocal transfers_started
+        async with generation_worker_peer(WorkerScenario(), db_factory=seeded_db) as peer:
+            redis.store[worker_state_key(peer.settings.worker_id)] = json.dumps(
+                {"loaded": [], "gpu_healthy": True},
+            )
+            transfer_running = asyncio.Event()
+            transfer_may_end = asyncio.Event()
 
-    async def a_download_another_job_takes_over(*args, **kwargs):
-        nonlocal downloads_started
-        downloads_started += 1
-        await new_holder.zrem(new_holder_locks.keys.expiry, "sft")
-        assert await new_holder_locks.acquire("sft") is not None
-        await new_holder.set(download_key("sft"), "job-2", ex=15)
-        await asyncio.sleep(30)
+            async def controllable_transfer(repo_id: str, local_dir: Path) -> None:
+                nonlocal transfers_started
+                transfers_started += 1
+                transfer_running.set()
+                await transfer_may_end.wait()
 
-    with (
-        patch("httpx.AsyncClient", return_value=fake_client),
-        patch(
-            "songmaker_cli.scheduler.consume_download_task_stream",
-            new=a_download_another_job_takes_over,
-        ),
-    ):
-        run_async(download_model_on_worker(
-            {"redis": redis}, "dl-lost", "sft", db_factory=seeded_db, owner_id="o1",
-        ))
+            peer.deps.download_fn = controllable_transfer
+            lost_job = asyncio.create_task(download_model_on_worker(
+                {"redis": redis}, "dl-lost", "sft", db_factory=seeded_db, owner_id="o1",
+            ))
+            await transfer_running.wait()
+            other_process = redis.another_process()
+            other_locks = download_locks(other_process)
+            await other_process.zrem(other_locks.keys.expiry, "sft")
+            generation = await other_locks.acquire("sft")
+            assert generation is not None
+            await lost_job
+            await other_locks.release("sft", generation)
+            streams_before = [kind for kind, _ in peer.requests].count("stream")
+            next_job = asyncio.create_task(download_model_on_worker(
+                {"redis": redis}, "dl-next", "sft", db_factory=seeded_db, owner_id="o1",
+            ))
+            while [kind for kind, _ in peer.requests].count("stream") == streams_before:
+                await asyncio.sleep(0.01)
+            transfer_may_end.set()
+            await next_job
+
+    run_async(exercise())
 
     with seeded_db() as session:
-        job = get_job(session, "dl-lost")
-        assert job.status == "failed"
-        assert job.error_type == "download_lock_lost"
-    assert downloads_started == 1
-    assert redis.store[download_key("sft")] == "job-2"
+        assert get_job(session, "dl-lost").status == "failed"
+        assert get_job(session, "dl-lost").error_type == "download_lock_lost"
+        assert get_job(session, "dl-next").status == "completed"
+    assert transfers_started == 1
