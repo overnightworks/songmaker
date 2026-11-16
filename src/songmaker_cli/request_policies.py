@@ -104,7 +104,8 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 # `/health/details` is here: it does its work only for the monitoring token, so
 # an anonymous caller gets a cheap 401, and the budget it spends would make it
 # answer 503 while Redis is down, exactly when its body is needed to name the outage.
-# `/metrics`, behind the same token, keeps its budget, so guesses at the token stay limited.
+# No budget limits guesses at the monitoring token on this path; the token's entropy
+# (the `monitoring-token` file the platform generates, no minimum length in code) is the bound.
 HEALTH_DETAILS_PATH: Final = "/health/details"
 
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
