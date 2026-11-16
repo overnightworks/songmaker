@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import socket
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
 from redis import Redis
@@ -20,6 +22,13 @@ LOOPBACK = "127.0.0.1"
 CHUNK_BYTES = 65536
 ACCEPT_POLL_SECONDS = 0.2
 HELD_REPLY_LIMIT_SECONDS = 10.0
+
+
+@dataclass
+class _HeldRequest:
+    """When the request whose reply is to be held reached the proxy; ``None`` while none did."""
+
+    received_at: float | None = None
 
 
 class RedisProxy:
@@ -34,6 +43,7 @@ class RedisProxy:
         self._cut = False
         self._reply_lost = False
         self._holding_for: bytes | None = None
+        self._client_timeout_seconds = 0.0
         self._replies_held = 0
         self._replies_delivered = 0
         self._replies_expired = 0
@@ -62,14 +72,17 @@ class RedisProxy:
         with self._lock:
             self._reply_lost = True
 
-    def hold_replies_to(self, request_part: bytes) -> None:
+    def hold_replies_to(self, request_part: bytes, *, client_timeout_seconds: float) -> None:
         """Run every command that contains ``request_part`` but hold its reply back.
 
         The replies go out when ``release_held_replies`` is called, which also stops holding. A
-        reply whose client gave up on it before then is counted by ``expired_held_replies``.
+        client waits at most ``client_timeout_seconds`` for a reply, so a reply held that long
+        is counted by ``expired_held_replies`` whatever the client did with it, as is one whose
+        client had hung up.
         """
         with self._lock:
             self._holding_for = request_part
+            self._client_timeout_seconds = client_timeout_seconds
             self._replies_held = 0
             self._replies_delivered = 0
             self._replies_expired = 0
@@ -90,7 +103,7 @@ class RedisProxy:
 
     @property
     def expired_held_replies(self) -> int:
-        """The held replies whose client had hung up when they were released."""
+        """The held replies whose client had given up waiting when they were released."""
         with self._lock:
             return self._replies_expired
 
@@ -159,16 +172,16 @@ class RedisProxy:
             server = socket.create_connection(self._server_address)
             with self._lock:
                 self._connections.extend((client, server))
-            reply_is_to_hold = threading.Event()
+            held_request = _HeldRequest()
             client_hung_up = threading.Event()
             threading.Thread(
                 target=self._pump_requests,
-                args=(client, server, reply_is_to_hold, client_hung_up),
+                args=(client, server, held_request, client_hung_up),
                 daemon=True,
             ).start()
             threading.Thread(
                 target=self._pump_replies,
-                args=(server, client, reply_is_to_hold, client_hung_up),
+                args=(server, client, held_request, client_hung_up),
                 daemon=True,
             ).start()
 
@@ -176,14 +189,14 @@ class RedisProxy:
         self,
         client: socket.socket,
         server: socket.socket,
-        reply_is_to_hold: threading.Event,
+        held_request: _HeldRequest,
         client_hung_up: threading.Event,
     ) -> None:
         try:
             while data := client.recv(CHUNK_BYTES):
                 with self._lock:
                     if self._holding_for is not None and self._holding_for in data:
-                        reply_is_to_hold.set()
+                        held_request.received_at = time.monotonic()
                 server.sendall(data)
         except OSError:
             pass
@@ -196,7 +209,7 @@ class RedisProxy:
         self,
         server: socket.socket,
         client: socket.socket,
-        reply_is_to_hold: threading.Event,
+        held_request: _HeldRequest,
         client_hung_up: threading.Event,
     ) -> None:
         try:
@@ -205,19 +218,21 @@ class RedisProxy:
                     lost, self._reply_lost = self._reply_lost, False
                 if lost:
                     return
-                held = reply_is_to_hold.is_set()
-                if held:
-                    reply_is_to_hold.clear()
+                requested_at, held_request.received_at = held_request.received_at, None
+                if requested_at is not None:
                     with self._reply_was_held:
                         self._replies_held += 1
                         self._reply_was_held.notify_all()
                     self._reply_released.wait(HELD_REPLY_LIMIT_SECONDS)
-                    if client_hung_up.is_set():
+                    with self._lock:
+                        client_timeout = self._client_timeout_seconds
+                    waited = time.monotonic() - requested_at
+                    if client_hung_up.is_set() or waited >= client_timeout:
                         with self._reply_was_held:
                             self._replies_expired += 1
                         return
                 client.sendall(data)
-                if held:
+                if requested_at is not None:
                     with self._reply_was_held:
                         self._replies_delivered += 1
                         self._reply_was_held.notify_all()

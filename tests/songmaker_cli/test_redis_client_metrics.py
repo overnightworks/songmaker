@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+from contextlib import suppress
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
+from redis.exceptions import RedisError
 from support.redis_proxy import redis_proxy
 from support.web_app import TEST_SECRET, make_fake_async_redis, web_client
 
@@ -44,6 +47,28 @@ def test_the_async_client_replays_a_command_whose_reply_the_line_lost(redis_url:
                 await client.aclose()
 
         assert asyncio.run(read_after_a_lost_reply()) == b"value"
+
+
+def test_a_reply_held_for_the_clients_whole_timeout_is_expired_though_the_client_stays_connected(
+    redis_url: str,
+) -> None:
+    timeout_seconds = 0.1
+    with redis_proxy(redis_url) as proxy, create_redis(proxy.url) as client:
+        proxy.hold_replies_to(b"held-key", client_timeout_seconds=timeout_seconds)
+
+        def ask() -> None:
+            with suppress(RedisError):
+                client.get("held-key")
+
+        asked = threading.Thread(target=ask, daemon=True)
+        asked.start()
+        assert proxy.wait_until_replies_are_held(1, deadline_seconds=5.0)
+        threading.Event().wait(timeout_seconds)
+
+        proxy.release_held_replies()
+        asked.join(timeout=5.0)
+
+        assert proxy.expired_held_replies == 1
 
 
 def test_the_sync_client_and_arq_settings_connect_to_the_same_url() -> None:

@@ -24,7 +24,11 @@ from support.app_processes import (
 from support.job_owner import an_owner, create_job_of_owner
 from support.web_cluster_world import start_owner
 
-from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
+from songmaker_cli.constants import (
+    BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    REDIS_KEY_PREFIX,
+    REDIS_SOCKET_TIMEOUT_SECONDS,
+)
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
@@ -214,7 +218,10 @@ def test_a_job_written_after_the_cleanup_read_its_owner_gone_keeps_running_while
     # generation when their reply is held, so every pass that can fail it is held here. The
     # process's Redis client gives up on a reply after its socket timeout, so the new generation
     # follows at once and the replies are released before that.
-    line_of_b.hold_replies_to(old_owner_key(REDIS_KEY_PREFIX, owner_a).encode())
+    line_of_b.hold_replies_to(
+        old_owner_key(REDIS_KEY_PREFIX, owner_a).encode(),
+        client_timeout_seconds=REDIS_SOCKET_TIMEOUT_SECONDS,
+    )
     line_of_a.cut()
     end_the_owner_lease(redis_client, owner_a, lapsed_generation)
     assert line_of_b.wait_until_replies_are_held(
