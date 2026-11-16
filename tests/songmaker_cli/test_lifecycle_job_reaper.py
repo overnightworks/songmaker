@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
-from support.loop_ticks import run_ticks_observing_status, scripted_tick_locks
+from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
 from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 
 import songmaker_cli.cover_runner as cover_runner
@@ -30,6 +29,7 @@ from songmaker_cli.job_timing import (
 )
 from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.lifecycle import (
+    JOB_REAPER_LOCK_NAME,
     BackgroundLoopName,
     _run_stale_job_reaper_tick,
     reap_stale_jobs,
@@ -333,11 +333,14 @@ class TestLifecycleReaper:
 def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
     """Missing policy rows fail the lifecycle loop instead of hiding active jobs."""
     registry = BackgroundLoopRegistry()
+    tick_lock = ScriptedTickLock(
+        JOB_REAPER_LOCK_NAME, ["generation"] * BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
             ctx=SimpleNamespace(
                 db=ctx.db,
-                async_redis=None,
+                async_redis=tick_lock.async_redis,
                 redis=SimpleNamespace(
                     exists=lambda *_args, **_kwargs: False,
                     get=lambda *_args, **_kwargs: None,
@@ -346,24 +349,13 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
             background_loop_registry=registry,
         ),
     )
-    monkeypatch.setattr(
-        "songmaker_cli.lifecycle.tick_locks",
-        scripted_tick_locks(["generation"] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1)),
-    )
     _add_job(ctx, job_id="missing-policy", job_type="unknown_type", status=JobStatus.QUEUED)
-    completed_ticks = 0
 
-    async def fake_sleep(_seconds: float) -> None:
-        nonlocal completed_ticks
-        if completed_ticks == BACKGROUND_LOOP_FAILURE_THRESHOLD:
-            raise asyncio.CancelledError()
-        completed_ticks += 1
-
-    monkeypatch.setattr("songmaker_cli.lifecycle.asyncio.sleep", fake_sleep)
-
-    loop = stale_job_reaper_loop(app)
-    with pytest.raises(asyncio.CancelledError):
-        asyncio.run(loop)
+    run_ticks_observing_status(
+        monkeypatch, stale_job_reaper_loop(app), registry,
+        BackgroundLoopName.STALE_JOB_REAPER, BACKGROUND_LOOP_FAILURE_THRESHOLD,
+        before_tick=tick_lock.before_tick,
+    )
 
     health = registry.loop_health()[BackgroundLoopName.STALE_JOB_REAPER]
     assert health.status is BackgroundLoopStatus.FAILING
@@ -379,16 +371,17 @@ def _run_reaper_ticks(
     registry = BackgroundLoopRegistry()
     for _ in range(failures_before):
         registry.record_failure(BackgroundLoopName.STALE_JOB_REAPER, RuntimeError("earlier"))
+    tick_lock = ScriptedTickLock(JOB_REAPER_LOCK_NAME, lock_results)
     app = SimpleNamespace(
         state=SimpleNamespace(
-            ctx=SimpleNamespace(async_redis=None), background_loop_registry=registry,
+            ctx=SimpleNamespace(async_redis=tick_lock.async_redis),
+            background_loop_registry=registry,
         ),
     )
-    monkeypatch.setattr("songmaker_cli.lifecycle.tick_locks", scripted_tick_locks(lock_results))
     monkeypatch.setattr("songmaker_cli.lifecycle._run_stale_job_reaper_tick", tick)
     return run_ticks_observing_status(
         monkeypatch, stale_job_reaper_loop(app), registry,
-        BackgroundLoopName.STALE_JOB_REAPER, len(lock_results),
+        BackgroundLoopName.STALE_JOB_REAPER, len(lock_results), before_tick=tick_lock.before_tick,
     )
 
 
