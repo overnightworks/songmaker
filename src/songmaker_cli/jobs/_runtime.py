@@ -42,14 +42,6 @@ REFERENCE_AUDIO_NOT_FOUND: Final = message("jobFailure.referenceAudioNotFound")
 REFERENCE_DELETED_DURING_TAKE: Final = message("jobFailure.referenceDeletedDuringTake")
 USER_LORA_UNAVAILABLE: Final = message("jobFailure.voiceUnavailable")
 
-_GENERATION_SETUP_MESSAGES: tuple[Message, ...] = (
-    SONG_NOT_FOUND,
-    VERSION_NOT_FOUND,
-    REFERENCE_AUDIO_NOT_FOUND,
-    REFERENCE_DELETED_DURING_TAKE,
-    USER_LORA_UNAVAILABLE,
-)
-
 
 class GenerationSetupError(Exception):
     """A setup failure the runtime words itself: it carries the catalog message of its reason."""

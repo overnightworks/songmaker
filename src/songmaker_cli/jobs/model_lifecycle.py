@@ -40,14 +40,10 @@ async def load_model_on_worker(
     with factory() as session:
         worker = get_worker_identity(session, worker_id)
     if worker is None:
+        missing = RuntimeError(f"Worker '{worker_id}' not registered")
         _update_job(
-            factory,
-            job_id,
-            JobStatus.FAILED,
-            error_message=_sanitize_error(
-                RuntimeError(f"Worker '{worker_id}' not registered"), job_id,
-            ),
-            error_type="worker_missing",
+            factory, job_id, JobStatus.FAILED,
+            error_message=_sanitize_error(missing, job_id), error_type="worker_missing",
         )
         return
 

@@ -98,7 +98,8 @@ def api_get_job(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
-    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+    queue_position = get_queue_position(session, job)
+    return JobResponse.from_orm(job, queue_position=queue_position)
 
 
 @router.get(

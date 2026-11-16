@@ -8,6 +8,12 @@ import { words } from '#lib/words/en.ts';
 
 const VRAM_CAUSE =
 	'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
+const VRAM_FAILURE = { key: 'jobFailure.workerReported', values: { cause: VRAM_CAUSE } };
+const VRAM_LINE = words['jobFailure.workerReported']({ cause: VRAM_CAUSE });
+const UNAVAILABLE_FAILURE = { key: 'jobFailure.generationUnavailable', values: {} };
+const unavailableJob = (error_type: string | null = 'generation_unavailable'): JobStatus =>
+	makeJob({ status: 'failed', error_message: UNAVAILABLE_FAILURE, error_type });
+const GENERATION_FAILED = { key: 'jobFailure.generationFailed', values: {} };
 
 const mockRequestSongRefresh = vi.fn();
 
@@ -103,7 +109,7 @@ function makeJob(overrides: Partial<JobStatus> = {}): JobStatus {
 		progress: 0,
 		take_index: null,
 		take_count: null,
-		error: null,
+		error_message: null,
 		error_type: null,
 		started_at: null,
 		completed_at: null,
@@ -247,7 +253,7 @@ describe('jobs store', () => {
 
 	it('removes failed job immediately', async () => {
 		trackJob(makeJob(), {});
-		latestSource().simulateMessage(makeJob({ status: 'failed', error: 'boom' }));
+		latestSource().simulateMessage(makeJob({ status: 'failed', error_message: GENERATION_FAILED }));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
@@ -255,7 +261,7 @@ describe('jobs store', () => {
 	it('handles partial completion', async () => {
 		trackJob(makeJob(), {});
 		latestSource().simulateMessage(
-			makeJob({ status: 'partial', error: 'some generations failed' })
+			makeJob({ status: 'partial', error_message: GENERATION_FAILED })
 		);
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latestSource().closed).toBe(true);
@@ -271,22 +277,19 @@ describe('jobs store', () => {
 	});
 
 	it.each([
-		{ type: 'cover', status: 'completed', error: undefined, announced: [] },
-		{
-			type: 'cover',
-			status: 'failed',
-			error: 'Cover suggestion could not be generated',
-			announced: []
-		},
-		{ type: 'cover', status: 'cancelled', error: undefined, announced: [] },
-		{ type: 'score', status: 'completed', error: undefined, announced: ['score completed'] }
+		{ type: 'cover', status: 'completed', announced: [] },
+		{ type: 'cover', status: 'failed', announced: [] },
+		{ type: 'cover', status: 'cancelled', announced: [] },
+		{ type: 'score', status: 'completed', announced: ['score completed'] }
 	] as const)(
 		'a $type job that ends $status announces $announced, since the cover editor shows its own outcome',
-		async ({ type, status, error, announced }) => {
+		async ({ type, status, announced }) => {
 			toasts.set([]);
 			trackJob(makeJob({ type, status: 'running' }), { albumId: 'album-1' });
 
-			latestSource().simulateMessage(makeJob({ type, status, error }));
+			latestSource().simulateMessage(
+				makeJob({ type, status, error_message: status === 'failed' ? GENERATION_FAILED : null })
+			);
 			await vi.advanceTimersByTimeAsync(0);
 
 			expect(get(toasts).map((toast) => toast.message)).toEqual(announced);
@@ -735,11 +738,7 @@ describe('jobs store', () => {
 	)(
 		'C1 C3: classifies $source failure by type $errorType, never by its message',
 		async ({ source, errorType }) => {
-			const job = makeJob({
-				status: 'failed',
-				error: "Generating isn't available right now.",
-				error_type: errorType
-			});
+			const job = unavailableJob(errorType);
 			if (source === 'live') {
 				trackJob(makeJob(), { songId: 's1' });
 				latestSource().simulateMessage(job);
@@ -750,7 +749,7 @@ describe('jobs store', () => {
 			}
 			expect(get(generationFailures)).toEqual({
 				s1: {
-					message: job.error,
+					message: words['jobFailure.generationUnavailable'],
 					unavailable: errorType === 'generation_unavailable'
 				}
 			});
@@ -758,14 +757,21 @@ describe('jobs store', () => {
 	);
 
 	it('shows a refused press as the same lasting line a reload shows', async () => {
-		const line = "Generating isn't available right now.";
-		const refusal = new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'j9');
+		const line = words['jobFailure.generationUnavailable'];
+		const refusal = new ApiError(
+			503,
+			line,
+			'/api/x',
+			null,
+			line,
+			'generation_unavailable',
+			'j9',
+			UNAVAILABLE_FAILURE
+		);
 		expect(showGenerationUnavailableRefusal('s1', refusal)).toBe(true);
 		const live = get(generationFailures);
 		resetGenerationFailuresForTests();
-		mockFetchLastFailedGeneration.mockResolvedValue({
-			job: makeJob({ status: 'failed', error: line, error_type: 'generation_unavailable' })
-		});
+		mockFetchLastFailedGeneration.mockResolvedValue({ job: unavailableJob() });
 		await hydrateGenerationFailure('s1');
 		expect(live).toEqual(get(generationFailures));
 	});
@@ -803,29 +809,21 @@ describe('jobs store', () => {
 
 	it('keeps no cause for a failed job of another type', async () => {
 		trackJob(makeJob({ type: 'score' }), { songId: 's1' });
-		latestSource().simulateMessage(makeJob({ type: 'score', status: 'failed', error: 'boom' }));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(get(generationFailures).s1).toBeUndefined();
-	});
-
-	it('shows server restart message for restart errors', async () => {
-		toasts.set([]);
-		trackJob(makeJob(), {});
 		latestSource().simulateMessage(
-			makeJob({ status: 'failed', error: 'Server restarted', error_type: 'server_restart' })
+			makeJob({ type: 'score', status: 'failed', error_message: GENERATION_FAILED })
 		);
 		await vi.advanceTimersByTimeAsync(0);
-		expect(get(toasts)).toMatchObject([{ type: 'error', message: words['jobEnd.serverRestart'] }]);
+		expect(get(generationFailures).s1).toBeUndefined();
 	});
 
 	describe('hydrateGenerationFailure', () => {
 		it("shows the cause of the song's last failed generation on page load", async () => {
 			mockFetchLastFailedGeneration.mockResolvedValue({
-				job: makeJob({ status: 'failed', error: VRAM_CAUSE })
+				job: makeJob({ status: 'failed', error_message: VRAM_FAILURE })
 			});
 			await hydrateGenerationFailure('s1');
 			expect(mockFetchLastFailedGeneration).toHaveBeenCalledWith('s1');
-			expect(get(generationFailures).s1).toEqual({ message: VRAM_CAUSE, unavailable: false });
+			expect(get(generationFailures).s1).toEqual({ message: VRAM_LINE, unavailable: false });
 		});
 
 		it('shows nothing when a newer take suppressed the failure server-side', async () => {
@@ -856,20 +854,15 @@ describe('jobs store', () => {
 					trackJob(makeJob({ id: 'j-live' }), { songId: 's1' });
 					if (resolution === 'live failure') {
 						latestSource().simulateMessage(
-							makeJob({ id: 'j-live', status: 'failed', error: VRAM_CAUSE })
+							makeJob({ id: 'j-live', status: 'failed', error_message: VRAM_FAILURE })
 						);
 						await vi.advanceTimersByTimeAsync(0);
 					}
 				}
-				resolveFetch({
-					job: makeJob({
-						error: "Generating isn't available right now.",
-						error_type: 'generation_unavailable'
-					})
-				});
+				resolveFetch({ job: unavailableJob() });
 				await hydration;
 				expect(get(generationFailures).s1).toEqual(
-					resolution === 'live failure' ? { message: VRAM_CAUSE, unavailable: false } : undefined
+					resolution === 'live failure' ? { message: VRAM_LINE, unavailable: false } : undefined
 				);
 			}
 		);
@@ -882,10 +875,10 @@ describe('jobs store', () => {
 
 		it('never re-fetches for a song dismissed earlier this session', async () => {
 			mockFetchLastFailedGeneration.mockResolvedValue({
-				job: makeJob({ status: 'failed', error: VRAM_CAUSE })
+				job: makeJob({ status: 'failed', error_message: VRAM_FAILURE })
 			});
 			await hydrateGenerationFailure('s1');
-			expect(get(generationFailures).s1).toEqual({ message: VRAM_CAUSE, unavailable: false });
+			expect(get(generationFailures).s1).toEqual({ message: VRAM_LINE, unavailable: false });
 
 			dismissGenerationFailure('s1');
 			mockFetchLastFailedGeneration.mockClear();

@@ -797,9 +797,7 @@ def test_update_job_status_stamps_completed_at_for_every_terminal_status(
 
     completed_at = fetched.completed_at
     update_job_status(seeded_session, job.id, JobStatusUpdate("completed", progress=1.0))
-    late = JobStatusUpdate(
-        "failed", error_message=message("jobFailure.workerReported", cause="late"),
-    )
+    late = JobStatusUpdate("failed", error_message=message("jobFailure.internal"))
     update_job_status(seeded_session, job.id, late)
     seeded_session.commit()
     seeded_session.expire_all()

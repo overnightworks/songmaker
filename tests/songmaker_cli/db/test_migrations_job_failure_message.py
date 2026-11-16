@@ -9,6 +9,7 @@ import logging
 import pytest
 import sqlalchemy as sa
 from alembic import command
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from support.migration_chain import (
     column_names,
@@ -47,7 +48,7 @@ KNOWN_SENTENCE = SENTENCES[0]
 OTHER_KNOWN_SENTENCE = SENTENCES[1]
 
 
-def _insert_job(
+def _insert_failed_job(
     engine,
     job_id: str,
     column: str,
@@ -74,40 +75,47 @@ def _partial(completed: int, count: int, failed: int, cause: str) -> str:
 
 def _seed_failures(engine) -> None:
     for number, sentence in enumerate(SENTENCES):
-        _insert_job(engine, f"known-{number}", OLD_COLUMN, sentence)
-    _insert_job(
-        engine, "partial-known", OLD_COLUMN, _partial(3, 4, 1, KNOWN_SENTENCE),
-        error_type=GENERATE_ERROR_TYPE,
+        _insert_failed_job(engine, f"known-{number}", OLD_COLUMN, sentence)
+    for job_id, sentence in (
+        ("partial-known", _partial(3, 4, 1, KNOWN_SENTENCE)),
+        ("partial-raw", _partial(1, 4, 3, RAW_WORKER_TEXT)),
+        ("partial-miscounted", _partial(3, 4, 2, KNOWN_SENTENCE)),
+    ):
+        _insert_failed_job(engine, job_id, OLD_COLUMN, sentence, error_type=GENERATE_ERROR_TYPE)
+    _insert_failed_job(
+        engine, "chat-known", OLD_COLUMN, "busy: the gateway is full",
+        error_type="busy", job_type="chat",
     )
-    _insert_job(
-        engine, "partial-raw", OLD_COLUMN, _partial(1, 4, 3, RAW_WORKER_TEXT),
-        error_type=GENERATE_ERROR_TYPE,
+    _insert_failed_job(
+        engine, "chat-unknown", OLD_COLUMN, "mood: the gateway is sad",
+        error_type="mood", job_type="chat",
     )
-    _insert_job(
-        engine, "partial-miscounted", OLD_COLUMN, _partial(3, 4, 2, KNOWN_SENTENCE),
-        error_type=GENERATE_ERROR_TYPE,
+    _insert_failed_job(
+        engine, "mode", OLD_COLUMN, UNSUPPORTED_MODE_SENTENCE,
+        error_type="lora_training_error", job_type="lora_training",
     )
-    _insert_job(engine, "chat-known", OLD_COLUMN, "busy: the gateway is full", error_type="busy",
-                job_type="chat")
-    _insert_job(engine, "chat-unknown", OLD_COLUMN, "mood: the gateway is sad", error_type="mood",
-                job_type="chat")
-    _insert_job(engine, "mode", OLD_COLUMN, UNSUPPORTED_MODE_SENTENCE,
-                error_type="lora_training_error", job_type="lora_training")
-    _insert_job(engine, "admin", OLD_COLUMN, RAW_ADMIN_TEXT, error_type=ADMIN_ERROR_TYPE,
-                job_type="model_load")
-    _insert_job(engine, "generate-raw", OLD_COLUMN, RAW_WORKER_TEXT, error_type=GENERATE_ERROR_TYPE)
-    _insert_job(engine, "other", OLD_COLUMN, UNKNOWN_TEXT, error_type="scoring_error",
-                job_type="score")
-    _insert_job(engine, "none", OLD_COLUMN, None)
+    _insert_failed_job(
+        engine, "admin", OLD_COLUMN, RAW_ADMIN_TEXT,
+        error_type=ADMIN_ERROR_TYPE, job_type="load_model_on_worker",
+    )
+    _insert_failed_job(
+        engine, "generate-raw", OLD_COLUMN, RAW_WORKER_TEXT, error_type=GENERATE_ERROR_TYPE,
+    )
+    _insert_failed_job(
+        engine, "other", OLD_COLUMN, UNKNOWN_TEXT, error_type="scoring_error", job_type="score",
+    )
+    _insert_failed_job(engine, "none", OLD_COLUMN, None)
+
+
+def _upgrade(database) -> Engine:
+    return seeded_then_upgraded(
+        database, PREVIOUS_REVISION, MIGRATION.revision, _seed_failures,
+    )
 
 
 @pytest.fixture
-def upgraded(reference_link_database, caplog):
-    caplog.set_level(logging.INFO, logger="alembic.runtime.migration")
-    engine = seeded_then_upgraded(
-        reference_link_database, PREVIOUS_REVISION, MIGRATION.revision, _seed_failures,
-    )
-    return reference_link_database[0], engine
+def upgraded(reference_link_database):
+    return reference_link_database[0], _upgrade(reference_link_database)
 
 
 def _token(engine, job_id: str) -> dict:
@@ -203,12 +211,8 @@ def test_any_other_text_is_recorded_with_the_text_as_its_cause(upgraded):
 
 def test_a_job_without_a_failure_stays_sql_null(upgraded):
     _, engine = upgraded
-    jobs = frozen_table("jobs", JOB_COLUMNS, NEW_COLUMN)
-    with engine.connect() as connection:
-        null_ids = set(connection.execute(
-            sa.select(jobs.c.id).where(jobs.c[NEW_COLUMN].is_(None))
-        ).scalars())
-    assert null_ids == {"none"}
+    tokens = stored_values(engine, "jobs", NEW_COLUMN)
+    assert [job_id for job_id, token in tokens.items() if token is None] == ["none"]
 
 
 def test_a_job_that_is_not_a_partial_gets_no_completed_takes(upgraded):
@@ -220,10 +224,11 @@ def test_a_job_that_is_not_a_partial_gets_no_completed_takes(upgraded):
     assert with_takes == {"partial-known", "partial-raw"}
 
 
-def test_every_bucket_count_is_logged(upgraded, caplog):
+def test_every_bucket_count_is_logged(reference_link_database, caplog):
+    caplog.set_level(logging.INFO, logger="alembic.runtime.migration")
+    _upgrade(reference_link_database)
     logged = " ".join(
-        record.getMessage() for record in caplog.get_records("setup")
-        if record.name.startswith("alembic")
+        record.getMessage() for record in caplog.records if record.name.startswith("alembic")
     )
     for bucket in MIGRATION.BUCKETS:
         assert bucket in logged
@@ -248,7 +253,7 @@ def test_upgrade_replaces_the_sentence_column_by_the_token_and_takes_columns(upg
 def test_the_database_refuses_a_value_that_is_not_a_token(upgraded, token):
     _, engine = upgraded
     with pytest.raises(IntegrityError):
-        _insert_job(engine, "bad", NEW_COLUMN, token)
+        _insert_failed_job(engine, "bad", NEW_COLUMN, token)
 
 
 def test_downgrade_raises_and_names_the_backup(upgraded):

@@ -632,8 +632,7 @@ def _finalize_generation_job(
             progress=completed / count,
             error_message=failure.message,
             error_type=failure.error_type,
-            completed_takes=completed,
-            take_count=count,
+            completed_takes=completed, take_count=count,
         )
     else:
         _update_job(

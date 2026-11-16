@@ -2676,9 +2676,7 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
             update_job_status(session, job_id, JobStatusUpdate("completed", progress=1.0))
             is False
         )
-        late = JobStatusUpdate(
-            "failed", error_message=message("jobFailure.workerReported", cause="late"),
-        )
+        late = JobStatusUpdate("failed", error_message=message("jobFailure.internal"))
         assert update_job_status(session, job_id, late) is False
         session.commit()
 

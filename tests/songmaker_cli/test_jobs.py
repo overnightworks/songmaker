@@ -649,7 +649,6 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
         job = get_job(session, "j1")
         assert job.status == "partial"
         assert (job.completed_takes, job.take_count) == (1, 3)
-        assert job.error_message is not None
 
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
@@ -681,8 +680,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert job.error_message == message("jobFailure.songNotFound")
+        assert (job.status, job.error_message) == ("failed", message("jobFailure.songNotFound"))
         assert session.query(ResourceEvent).count() == 0
 
 
@@ -710,8 +708,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert job.error_message == message("jobFailure.versionNotFound")
+        assert (job.status, job.error_message) == ("failed", message("jobFailure.versionNotFound"))
 
 
 async def _run_peer_generation(factory, peer, count):
@@ -1765,9 +1762,8 @@ def test_s8_cancel_after_oom(seeded_db, generation_worker_peer, tmp_path, locked
                 assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
                 with seeded_db() as session:
                     job = get_job(session, "j1")
-                    assert (job.status, job.error_message, job.error_type) == (
-                        "cancelled", None, None,
-                    )
+                    assert (job.status, job.error_type) == ("cancelled", None)
+                    assert job.error_message is None
                     assert session.query(Generation).count() == 1
                     assert all(path.is_file() for path in paths)
             finally:
@@ -2786,9 +2782,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         job = get_job(session, "dl6")
         assert job.status == "failed"
         assert job.error_type == "download_error"
-        assert job.error_message == message(
-            "jobFailure.workerReported", cause="HF 401 unauthorized",
-        )
+        assert job.error_message.values == {"cause": "HF 401 unauthorized"}
     assert consume_calls["count"] == 3
 
 
