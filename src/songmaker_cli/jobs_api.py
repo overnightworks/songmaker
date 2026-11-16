@@ -270,6 +270,8 @@ async def _leased_job_event_generator(
         release_lease_in_background(limiter, user_id, lease_token, subject="Job stream")
 
 
+# The jobs whose running work another web process stops when it hears their cancel.
+_SIGNALLED_JOB_TYPES: Final = frozenset({JobType.COVER, JobType.CHAT})
 _CANCEL_JOB_DESCRIPTION = "Cancel one of the person's own jobs while it is queued or running."
 
 
@@ -295,7 +297,7 @@ def api_cancel_job(
         raise Refusal(409, "jobRefusal.notCancellable")
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
-    if job.type == JobType.COVER:
+    if job.type in _SIGNALLED_JOB_TYPES:
         publish_cover_cancel(ctx.redis, job_id)
     job = get_job(session, job_id)
     return JobResponse.from_orm(job)
