@@ -15,6 +15,7 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis.exceptions import RedisError
 from sqlalchemy import text
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
@@ -387,11 +388,16 @@ async def _read_health_signals(request: Request) -> HealthSignals:
     workers_total = len(acestep_workers)
     workers_online = 0
     workers_lm_failed = False
-    for w in acestep_workers:
-        state = await acestep_state.read_worker_state(pool, w.id)
-        if acestep_state.worker_is_online(state):
-            workers_online += 1
-        workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
+    try:
+        for w in acestep_workers:
+            state = await acestep_state.read_worker_state(pool, w.id)
+            if acestep_state.worker_is_online(state):
+                workers_online += 1
+            workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
+    except (RedisError, OSError):
+        # Redis is down: no worker state is readable, and `redis_ok` below names the outage.
+        workers_online = 0
+        workers_lm_failed = False
 
     redis_ok = redis_client.redis_health(ctx.redis)
     return HealthSignals(

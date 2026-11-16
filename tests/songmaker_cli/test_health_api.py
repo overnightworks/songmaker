@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import redis
+import redis.asyncio
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 from support.web_app import make_test_app
@@ -160,14 +161,11 @@ def health_client(tmp_path, mock_arq_pool, pg_factory):
 
 
 @pytest.fixture
-def redis_refusing_connections():
-    """A client of a Redis that is down: nothing listens at its address."""
-    with socket.socket() as unused_port:
-        unused_port.bind(("127.0.0.1", 0))
-        port = unused_port.getsockname()[1]
-    return redis.Redis(
-        host="127.0.0.1", port=port, retry=Retry(NoBackoff(), 0), socket_connect_timeout=1,
-    )
+def refused_redis_port():
+    """A port nothing listens on; the bound socket stays open so no process can take it."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        yield reserved.getsockname()[1]
 
 
 @pytest.fixture
@@ -241,11 +239,18 @@ def test_health_preserves_response_bytes(
 
 
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
-    tmp_path, mock_arq_pool, pg_factory, redis_refusing_connections, monitoring_headers,
+    tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers, monkeypatch,
 ) -> None:
-    client, _ = make_test_app(tmp_path, factory=pg_factory, redis=redis_refusing_connections)
+    import songmaker_cli.arq_pool as arq_mod
+
+    retry_never = Retry(NoBackoff(), 0)
+    refused = {"host": "127.0.0.1", "port": refused_redis_port, "retry": retry_never}
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=_seed_one_worker, redis=redis.Redis(**refused),
+    )
 
     with client:
+        monkeypatch.setattr(arq_mod, "_pool", redis.asyncio.Redis(**refused))
         response = client.get("/health/details", headers=monitoring_headers)
 
     assert response.status_code == 200
