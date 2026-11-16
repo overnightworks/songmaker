@@ -9,11 +9,18 @@ import pytest
 from support.worker_http_peer import WorkerScenario
 
 from acestep_worker.model_cache import LoadedModel
-from songmaker_cli.scheduler import worker_response_cause
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
+from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def test_worker_request_headers_outside_a_request_carry_only_the_internal_token(
+    internal_token: str,
+) -> None:
+    assert worker_request_headers() == {INTERNAL_TOKEN_HEADER: internal_token}
 
 
 def test_generation_worker_peer_deadline_cleans_up(generation_worker_peer):

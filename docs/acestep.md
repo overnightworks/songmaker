@@ -451,7 +451,7 @@ These are set on the worker's container in the platform's `apps/songmaker/aceste
 | `ACESTEP_SHUTDOWN_KILL_SECONDS` | 5 | SIGKILL grace period |
 | `ACESTEP_HEALTH_POLL_SECONDS` | 2.0 | Health-check interval during startup probe |
 | `HF_TOKEN` | None | Hugging Face token for downloading model weights |
-| `LOG_LEVEL` | `INFO` | Standard Python logging level |
+| `LOG_LEVEL` | `INFO` | The root level of logline, which writes the worker's JSON lines under the service name `songmaker-acestep-worker`: `debug`, `info`, `warning`, `error` or `critical`, case-insensitive; anything else stops the start |
 
 ### ACE-Step subprocess env vars (passed by the worker)
 

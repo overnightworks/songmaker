@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from logline.testing import configured
+from support.request_lines import request_lines
 from support.web_app import (
     TEST_SECRET,
     make_app_context,
@@ -367,7 +369,22 @@ def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
     call_kwargs = mock_uvicorn.call_args
     assert call_kwargs.kwargs.get("port") == 9999
     assert call_kwargs.kwargs.get("log_config") is None
-    assert call_kwargs.kwargs.get("access_log") is False
+
+
+def test_run_server_writes_its_lines_under_the_web_service_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    with (
+        configured("restored-after-the-test"),
+        patch("uvicorn.run"),
+        patch("songmaker_cli.server.create_app", return_value=MagicMock()),
+    ):
+        run_server(project_root=tmp_path, port=9999)
+        logging.getLogger("songmaker_cli.probe").info("probe.ended")
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert {line["service"] for line in lines} == {"songmaker-web"}
+    assert "probe.ended" in {line["event"] for line in lines}
 
 
 def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
@@ -584,37 +601,55 @@ def test_hsts_header_absent_when_cookie_secure_is_false(server_app: TestClient) 
     assert "Strict-Transport-Security" not in resp.headers
 
 
-def _access_log_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
-    return [
-        record.getMessage() for record in caplog.records
-        if record.name == "songmaker_cli.middleware.access_log"
-    ]
-
-
-def test_access_log_names_the_forwarded_client(
-    server_app: TestClient, caplog: pytest.LogCaptureFixture,
+def test_request_line_names_the_forwarded_client(
+    server_app: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The log is what an operator reads after an incident — it must name the
+    """The log is what an operator reads after an incident -- it must name the
     visitor, not the one gateway address every visitor arrives through."""
-    with _trusting_the_proxy_network(server_app), caplog.at_level("INFO"):
+    with configured("songmaker-web"), _trusting_the_proxy_network(server_app):
         _get_through_peer(
             server_app, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
         )
 
-    messages = _access_log_messages(caplog)
-    assert messages
-    assert all("203.0.113.1" in message for message in messages)
+    (request_line,) = request_lines(capsys.readouterr().out)
+    assert request_line["ip"] == "203.0.113.1"
 
 
-def test_access_log_names_the_peer_when_the_chain_is_malformed(
-    server_app: TestClient, caplog: pytest.LogCaptureFixture,
+def test_request_line_names_the_peer_when_the_chain_is_malformed(
+    server_app: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with _trusting_the_proxy_network(server_app), caplog.at_level("INFO"):
+    with configured("songmaker-web"), _trusting_the_proxy_network(server_app):
         _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
 
-    messages = _access_log_messages(caplog)
-    assert messages
-    assert all(f"ACCESS {_TRUSTED_PEER} " in message for message in messages)
+    (request_line,) = request_lines(capsys.readouterr().out)
+    assert request_line["ip"] == _TRUSTED_PEER
+
+
+def test_request_line_names_the_route_status_and_service_of_an_api_request(
+    server_app: TestClient, capsys: pytest.CaptureFixture[str],
+) -> None:
+    with configured("songmaker-web"):
+        response = server_app.get("/api/songs/s1")
+
+    (request_line,) = request_lines(capsys.readouterr().out)
+    assert response.status_code == 200
+    assert request_line["service"] == "songmaker-web"
+    assert request_line["route"] == "/api/songs/{song_id}"
+    assert request_line["status"] == 200
+    assert request_line["outcome"] == "ok"
+    assert request_line["trace_id"]
+
+
+def test_a_request_the_security_stack_refuses_still_gets_its_request_line(
+    server_app: TestClient, capsys: pytest.CaptureFixture[str],
+) -> None:
+    with configured("songmaker-web"):
+        response = server_app.get("/api/songs", headers={"host": "unlisted.example"})
+
+    (request_line,) = request_lines(capsys.readouterr().out)
+    assert response.status_code == 400
+    assert request_line["status"] == 400
+    assert request_line["outcome"] == "ok"
 
 
 def test_run_server_infers_project_root(tmp_path: Path) -> None:
@@ -1096,65 +1131,6 @@ def test_spa_fallback_not_for_api(server_app: TestClient) -> None:
 def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
     resp = server_app.get("/audio/nonexistent/song.mp3")
     assert resp.status_code in (401, 404)
-
-
-# ── structured logging configuration ──────────────────────────────
-
-
-class TestConfigureLogging:
-    def test_text_mode_default(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
-        capsys: pytest.CaptureFixture[str],
-        isolated_logging,
-    ) -> None:
-        monkeypatch.delenv("LOG_FORMAT", raising=False)
-        from songmaker_cli.logging_config import _SongmakerLogHandler, configure_logging
-
-        root = logging.getLogger()
-        earlier_handler = _SongmakerLogHandler()
-        root.addHandler(earlier_handler)
-
-        configure_logging()
-        configure_logging()
-        logging.getLogger("songmaker.test").info("text mode")
-
-        assert earlier_handler not in root.handlers
-        assert caplog.handler in root.handlers
-        assert sum(isinstance(handler, _SongmakerLogHandler) for handler in root.handlers) == 1
-        assert "text mode" in capsys.readouterr().err
-        assert "text mode" in caplog.text
-
-    def test_json_mode(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-        isolated_logging,
-    ) -> None:
-        monkeypatch.setenv("LOG_FORMAT", "json")
-        from songmaker_cli.logging_config import configure_logging
-        configure_logging()
-        logging.getLogger("songmaker.test").info("json mode")
-        assert json.loads(capsys.readouterr().err)["event"] == "json mode"
-
-    def test_json_mode_emits_common_log_fields(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-        isolated_logging,
-    ) -> None:
-        monkeypatch.setenv("LOG_FORMAT", "json")
-        from songmaker_cli.logging_config import configure_logging
-        configure_logging()
-
-        logging.getLogger("songmaker.test").info("worker ready")
-
-        payload = json.loads(capsys.readouterr().err)
-        assert payload["event"] == "worker ready"
-        assert payload["level"] == "info"
-        assert payload["logger"] == "songmaker.test"
-        assert datetime.fromisoformat(payload["timestamp"])
 
 
 # ── health endpoint ──────────────────────────────────────────────
@@ -1844,71 +1820,3 @@ def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
     """The lyrics alignment worker is same-origin; default-src 'none' would block it."""
     resp = server_app.get("/")
     assert "worker-src 'self'" in resp.headers["Content-Security-Policy"]
-
-
-def test_real_access_record_is_readable_by_rate_window_parser(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
-) -> None:
-    """defect:#1576 -- format the actual request record while its context is still bound."""
-    import importlib.util
-    import io
-    import sys
-
-    import structlog
-
-    parser_path = Path(__file__).resolve().parents[2] / "scripts" / "e2e_rate_window.py"
-    spec = importlib.util.spec_from_file_location("e2e_rate_window", parser_path)
-    assert spec is not None
-    assert spec.loader is not None
-    parser_module = importlib.util.module_from_spec(spec)
-    # Dataclasses resolve postponed annotations through the module registry.
-    with monkeypatch.context() as module_patch:
-        module_patch.setitem(sys.modules, spec.name, parser_module)
-        spec.loader.exec_module(parser_module)
-    parse_access_record = parser_module.parse_access_record
-
-    server_app, _ = make_test_app(tmp_path, factory=pg_factory)
-    output = io.StringIO()
-    handler = logging.StreamHandler(output)
-    handler.setFormatter(structlog.stdlib.ProcessorFormatter(
-        processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.processors.JSONRenderer(),
-        ],
-        foreign_pre_chain=[
-            structlog.contextvars.merge_contextvars,
-            structlog.stdlib.add_logger_name,
-            structlog.processors.TimeStamper(fmt="iso"),
-        ],
-    ))
-    logger = logging.getLogger("songmaker_cli.middleware.access_log")
-    previous_level = logger.level
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    async def request():
-        transport = httpx.ASGITransport(app=server_app.app, client=(_TRUSTED_PEER, 55000))
-        async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
-            response = await client.get(
-                "/api/access-log-proof", headers={"x-forwarded-for": "203.0.113.1"},
-            )
-            assert response.status_code == 404
-
-    before = datetime.now(timezone.utc)
-    try:
-        with _trusting_the_proxy_network(server_app):
-            asyncio.run(request())
-    finally:
-        logger.removeHandler(handler)
-        logger.setLevel(previous_level)
-        handler.close()
-    after = datetime.now(timezone.utc)
-    lines = output.getvalue().splitlines()
-    assert len(lines) == 1
-    entry = json.loads(lines[0])
-    assert entry["logger"] == "songmaker_cli.middleware.access_log"
-    assert entry["method"] == "GET"
-    record = parse_access_record(lines[0])
-    assert record is not None
-    assert record.client_ip == "203.0.113.1"
-    assert record.path == "/api/access-log-proof"
-    assert before <= record.at <= after

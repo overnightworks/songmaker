@@ -32,6 +32,8 @@ class OwnerLeasesWithOldKey(Leases):
 
     The old key rides the renewals and the end of ``Leases.kept``, so its guarantee that an
     in-flight renewal completes before the end, even when the exit is cancelled, holds for it too.
+    ``kept`` renews and ends through the untimed steps ``renew`` and ``end`` wrap, so those are
+    what this class extends.
     """
 
     def __init__(
@@ -69,9 +71,9 @@ class OwnerLeasesWithOldKey(Leases):
             if value is not None
         }
 
-    async def renew(self, holder: str) -> Renewal:
+    async def _renew_untimed(self, holder: str) -> Renewal:
         """Renew the lease, then its old key: a failed old-key write is only logged."""
-        renewal = await super().renew(holder)
+        renewal = await super()._renew_untimed(holder)
         try:
             await self._old_key_client.set(
                 old_owner_key(self._old_key_prefix, holder),
@@ -82,10 +84,10 @@ class OwnerLeasesWithOldKey(Leases):
             log.warning("Could not renew the old owner key", exc_info=True)
         return renewal
 
-    async def end(self, holder: str, generation: str) -> bool:
+    async def _end_untimed(self, holder: str, generation: str) -> bool:
         """End the lease and drop its old key."""
         try:
-            return await super().end(holder, generation)
+            return await super()._end_untimed(holder, generation)
         finally:
             with suppress(RedisError):
                 await self._old_key_client.delete(old_owner_key(self._old_key_prefix, holder))

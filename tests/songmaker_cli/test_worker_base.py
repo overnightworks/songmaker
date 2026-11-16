@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import importlib
+import json
 import logging
 import time
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,11 +16,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 from arq.connections import create_pool
 from arq.worker import Worker, func
+from logline.testing import configured
 from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS, OWNER_LEASE_TTL_SECONDS
+from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import build_arq_redis_settings, create_async_redis
+from songmaker_cli.scoring import subprocess_runner
+from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
@@ -38,6 +44,7 @@ _ARQ_CTX = {"redis": MagicMock()}
 
 
 class _DummyWorker(WorkerBase):
+    service_name = "dummy-worker"
     job_types = ("dummy",)
     queue_name = "dummy_queue"
     max_jobs = 1
@@ -119,15 +126,58 @@ def test_get_db_factory_independent_per_instance() -> None:
     assert mock_init.call_count == 2
 
 
+def _settings_on(redis_url: str) -> Settings:
+    return Settings(
+        database_url="postgresql://example", redis_url=redis_url,
+        session_secret="session-secret", songmaker_internal_token="internal-token",
+    )
+
+
+# ── logging ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("worker_class", "service"),
+    [
+        (MusicWorker, "songmaker-music-worker"),
+        (ScoringWorker, "songmaker-scoring-worker"),
+    ],
+)
+def test_a_worker_writes_its_lines_under_its_own_service_name(
+    worker_class: type[WorkerBase],
+    service: str,
+    redis_url: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(subprocess_runner, "_scorer_process", None)
+    worker = worker_class(settings=_settings_on(redis_url))
+    worker.get_db_factory = MagicMock()
+
+    async def start_log_and_stop() -> None:
+        await worker.on_startup(_ARQ_CTX)
+        logging.getLogger("songmaker_cli.probe").info("probe.ended")
+        await worker.on_shutdown({})
+
+    with configured("restored-after-the-test"):
+        _run(start_log_and_stop())
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert {line["service"] for line in lines} == {service}
+    assert "probe.ended" in {line["event"] for line in lines}
+
+
 # ── owner lease ───────────────────────────────────────────────────
 
 
-def _worker_on(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> _DummyWorker:
-    monkeypatch.setattr("songmaker_cli.logging_config.configure_logging", lambda: None)
-    worker = _DummyWorker(settings=Settings(
-        database_url="postgresql://example", redis_url=redis_url,
-        session_secret="session-secret", songmaker_internal_token="internal-token",
-    ))
+@pytest.fixture
+def restored_logging() -> Iterator[None]:
+    with configured("restored-after-the-test"):
+        yield
+
+
+def _worker_on(redis_url: str) -> _DummyWorker:
+    worker = _DummyWorker(settings=_settings_on(redis_url))
     worker.get_db_factory = MagicMock()
     return worker
 
@@ -141,9 +191,9 @@ async def _held_leases(redis_url: str) -> set[str]:
 
 
 def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
-    worker = _worker_on(redis_url, monkeypatch)
+    worker = _worker_on(redis_url)
 
     async def start_and_stop() -> tuple[set[str], set[str]]:
         await worker.on_startup(_ARQ_CTX)
@@ -155,9 +205,9 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
 
 
 def test_a_worker_whose_database_cannot_open_holds_no_lease(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
-    worker = _worker_on(redis_url, monkeypatch)
+    worker = _worker_on(redis_url)
     worker.get_db_factory = MagicMock(side_effect=OSError("the database is down"))
 
     async def start_and_read_the_leases() -> set[str]:
@@ -169,10 +219,10 @@ def test_a_worker_whose_database_cannot_open_holds_no_lease(
 
 
 def test_a_shutdown_that_cannot_end_the_lease_still_ends(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url, monkeypatch)
+        worker = _worker_on(proxy.url)
 
         async def start_and_stop_with_redis_cut() -> None:
             await worker.on_startup(_ARQ_CTX)
@@ -215,10 +265,10 @@ async def _lease_generation(redis_url: str, owner_id: str) -> str | None:
 
 @pytest.mark.parametrize("settings_path", WORKER_SETTINGS_PATHS)
 def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str, settings_path: str,
+    restored_logging: None, redis_url: str, settings_path: str,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url, monkeypatch)
+        worker = _worker_on(proxy.url)
 
         async def cut_restore_and_enqueue() -> tuple[str, bool, str | None, str | None]:
             arq_worker = _arq_worker_of(settings_path, worker, proxy.url)
@@ -254,10 +304,10 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
 
 @pytest.mark.parametrize("settings_path", WORKER_SETTINGS_PATHS)
 def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str, settings_path: str,
+    restored_logging: None, redis_url: str, settings_path: str,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url, monkeypatch)
+        worker = _worker_on(proxy.url)
 
         async def stop_during_the_outage() -> float:
             arq_worker = _arq_worker_of(settings_path, worker, proxy.url)

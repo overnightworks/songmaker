@@ -48,7 +48,6 @@ class WorkerSettings(BaseSettings):
     control_plane_url: str | None = None
     gpu_id: int | None = None
     hf_token: SecretStr | None = None
-    log_level: str = "INFO"
 
     @field_validator("songmaker_internal_token")
     @classmethod

@@ -35,9 +35,10 @@ from pydantic_settings import BaseSettings
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
-from support.owner_lease_epoch import aged_owner_lease_epoch
+from tandem.testing import settle_epoch
 
 from acestep_worker.settings import WorkerSettings
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import owner_leases
 
@@ -292,22 +293,29 @@ def poll_until(
     return True
 
 
-def age_the_owner_lease_epoch(redis: Redis) -> None:
-    """Date the owner leases' epoch one lease span back, so an absent lease reads gone.
+def _on_the_same_server(redis: Redis) -> AsyncRedis:
+    address = redis.connection_pool.connection_kwargs
+    return AsyncRedis(host=address["host"], port=address["port"], db=address.get("db", 0))
 
-    An epoch an earlier test created on the shared Redis is dated back too.
+
+def settle_the_epoch(redis: Redis) -> None:
+    """Settle the app's epoch, so an absent lease reads gone.
+
+    An epoch an earlier test created on the shared Redis is settled too.
     """
-    redis.set(*aged_owner_lease_epoch())
+
+    async def settle() -> None:
+        async with _on_the_same_server(redis) as client:
+            await settle_epoch(client, key_prefix=REDIS_KEY_PREFIX)
+
+    asyncio.run(settle())
 
 
 def leased_owner_ids(redis: Redis) -> set[str]:
     """The owner ids whose lease Redis holds, as the production roster reads them."""
-    address = redis.connection_pool.connection_kwargs
 
     async def read_roster() -> set[str]:
-        async with AsyncRedis(
-            host=address["host"], port=address["port"], db=address.get("db", 0),
-        ) as client:
+        async with _on_the_same_server(redis) as client:
             return set((await owner_leases(client).live()).holders)
 
     return asyncio.run(read_roster())

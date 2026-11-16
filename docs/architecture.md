@@ -80,7 +80,7 @@ post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
 
-Production application containers (web, music-worker, scoring-worker, and ACE-Step workers) write JSON log lines with `timestamp`, `level`, `logger`, and `event`; Docker retains five 10 MB files per service so operational history remains bounded.
+Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
 
 ## Job Routing
 
@@ -1057,7 +1057,7 @@ delivery is at-most-once; a missed signal leaves the picture to end alone, and i
 publication refuses the cancelled job. A cancel of a co-writer turn travels the
 same way: the web process running the turn, which `POST /api/chat/turn` started, hears the
 chat job's id, reads the job and cancels the turn's task, which closes the gateway request
-before any further tool edit; edits the turn already committed stay. `covers.decode_cover_image` checks the
+before any further tool edit. A tool edit locks the turn's chat job before it commits and is refused once the job is no longer active, so none lands after the cancel. `covers.decode_cover_image` checks the
 bytes, and the runner writes the decoded picture as PNG. A run that cannot draw
 ends FAILED with the problem as `error_type`, a closed `coverProblem.*` message as `error_message`, and,
 when busy, the wait the gateway named as `retry_after_seconds`; the editor words the problem
@@ -1151,9 +1151,11 @@ derives the sign-in routes' rules itself, ahead of songmaker's: `no-store`, the
 sign-in budget on start, callback and logout, and the back-channel path's
 exemption from the rate limit and the origin check with its 32 KiB body cap.
 No middleware reads songmaker's settings.
-The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
-SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → [BearerGate →] CsrfOrigin →
-TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
+The pure-ASGI request order, outside to inside, is RequestLine → ClientAddress →
+ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit →
+[BearerGate →] CsrfOrigin → TrustedHost → HttpMetrics → Router. The request line sits outside the
+security layers, so a refused request leaves its line too, and ClientAddress hands it the address
+`resolve_client_ip` decides. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
@@ -1880,7 +1882,7 @@ The platform's Prometheus scrapes `/metrics` with the monitoring token as its be
 
 Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_last_job_failure_timestamp_seconds` (0 while nothing has ever failed), `songmaker_queue_depth{queue="music"|"scoring"}`, `songmaker_acestep_workers_total{status=...}`, `songmaker_acestep_worker_loaded_models`, `songmaker_acestep_worker_queue_depth`, `songmaker_acestep_worker_vram_used_gigabytes`, `songmaker_acestep_worker_vram_total_gigabytes` (the last two come from each acestep-worker's own heartbeat — `songmaker-web` itself has no GPU access and cannot produce a VRAM number of its own), `songmaker_background_loop_consecutive_failures{loop=...}`, and `songmaker_background_loop_alive{loop=...}`.
 
-Access logs and HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500.
+The request line and the HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500. The metrics count only the requests that pass the Host check; the request line covers every request.
 
 `GET /health` answers only `status` (below) to anyone. `GET /health/details`, behind the monitoring token (the one that guards `/metrics`), reports:
 - `music_worker`: running/stopped

@@ -112,14 +112,15 @@ RUN install -d -o songmaker -g songmaker /app
 USER 1000:1000
 WORKDIR /app
 
-# Wrapper venv at /app/.venv installs only fastapi/uvicorn/redis/huggingface_hub and tandem
+# Wrapper venv at /app/.venv installs only fastapi/uvicorn/redis/huggingface_hub, tandem and logline
 # from the songmaker root pyproject's `acestep-worker` extra. This venv is
 # completely independent from /opt/acestep/.venv (different concerns: HTTP
 # wrapper vs ACE-Step model subprocess). The wrapper image stays small.
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --extra acestep-worker \
         --no-build --no-binary-package nvidia-ml-py3 --no-binary-package overnightworks-tandem \
-    && rm -f /tmp/uv-*.lock # why: The lock pins every package with its hashes, tandem by its git commit, which a hashed pip install cannot take. nvidia-ml-py3 has only a source distribution in the lock and tandem is built from its commit; git is in the base image. Those two are the only packages uv may build; any other package without a wheel fails the build.
+        --no-binary-package overnightworks-logline \
+    && rm -f /tmp/uv-*.lock # why: The lock pins every package with its hashes, tandem and logline by their git commits, which a hashed pip install cannot take. nvidia-ml-py3 has only a source distribution in the lock, and tandem and logline are built from their commits; git is in the base image. Those three are the only packages uv may build; any other package without a wheel fails the build.
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/

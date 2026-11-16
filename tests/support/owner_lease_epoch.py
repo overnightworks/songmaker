@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-# tandem offers no public helper that settles the epoch yet, so the test names its key itself.
+# A test that needs the epoch dated to a given span, not settled at once, names its key itself.
 from tandem.keys import lease_keys
 
 from songmaker_cli.acestep_state import DOWNLOAD_LOCK_LASTS
@@ -27,11 +27,6 @@ def aged_epoch(span_seconds: float) -> tuple[str, int]:
     now_ms = time.time_ns() // 1_000_000
     aged_ms = now_ms - int((span_seconds + 1) * MILLISECONDS_PER_SECOND)
     return lease_keys(REDIS_KEY_PREFIX, OWNER_LEASE_FAMILY).epoch, aged_ms
-
-
-def aged_owner_lease_epoch() -> tuple[str, int]:
-    """The epoch dated one lease span back."""
-    return aged_epoch(OWNER_LEASE_TTL_SECONDS)
 
 
 def settled_epoch() -> tuple[str, int]:

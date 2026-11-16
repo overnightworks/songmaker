@@ -12,11 +12,13 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.owner_lease_epoch import aged_owner_lease_epoch, settled_epoch
+from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
+from tandem.testing import settle_epoch
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 if TYPE_CHECKING:
@@ -98,8 +100,8 @@ def arrange_fake_async_redis(
 
 
 async def settle_owner_leases(async_redis: fakeredis.FakeAsyncRedis) -> None:
-    """Date the epoch of the owner leases a lease span back, so an absent lease reads GONE."""
-    await async_redis.set(*aged_owner_lease_epoch())
+    """Settle the app's epoch, so an absent lease reads GONE."""
+    await settle_epoch(async_redis, key_prefix=REDIS_KEY_PREFIX)
 
 
 def refusal_body(key: Key, **values: str) -> dict[str, object]:

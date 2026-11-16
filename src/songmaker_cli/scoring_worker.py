@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class ScoringWorker(WorkerBase):
+    service_name = "songmaker-scoring-worker"
     job_types = (JobType.SCORE,)
     queue_name = ARQ_SCORING_QUEUE_NAME
 
@@ -48,9 +49,9 @@ class ScoringWorker(WorkerBase):
 
         scorer = ScorerProcess()
         set_scorer_process(scorer)
-        log.info("Scorer subprocess manager initialized")
 
         await super().on_startup(ctx)
+        log.info("Scorer subprocess manager initialized")
 
     async def on_shutdown(self, ctx) -> None:
         from songmaker_cli.scoring.subprocess_runner import get_scorer_process
