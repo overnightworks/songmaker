@@ -269,7 +269,7 @@ def _install_request_line(app: FastAPI) -> None:
     app.add_middleware(RequestLineMiddleware)
 
 
-async def _report_the_full_route(request: Request) -> None:
+def _report_the_full_route(request: Request) -> None:
     """Give the request line the route's template with the prefixes of the routers it sits in.
 
     FastAPI's route holds only its own path (`/songs/{song_id}`), while the rate-limit policy and
