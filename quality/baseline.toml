@@ -33,7 +33,7 @@
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 684
-"frontend/src/lib/stores/jobs.test.ts" = 898
+"frontend/src/lib/stores/jobs.test.ts" = 891
 "frontend/src/lib/stores/libraryContext.test.ts" = 2085
 "frontend/src/lib/stores/libraryContext.ts" = 1178
 "frontend/src/lib/stores/navigation.test.ts" = 2964
@@ -52,10 +52,10 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1180
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1841
 "tests/songmaker_cli/test_admin_api.py" = 999
-"tests/songmaker_cli/test_api.py" = 4570
+"tests/songmaker_cli/test_api.py" = 4554
 "tests/songmaker_cli/test_db.py" = 2430
 "tests/songmaker_cli/test_db_postgresql.py" = 831
-"tests/songmaker_cli/test_jobs.py" = 3072
+"tests/songmaker_cli/test_jobs.py" = 3071
 "tests/songmaker_cli/test_library_api.py" = 1621
 "tests/songmaker_cli/test_lora_api.py" = 1170
 "tests/songmaker_cli/test_playlist_api.py" = 1100
@@ -106,7 +106,7 @@
 
 [function_lines."src/songmaker_cli/jobs/model_lifecycle.py"]
 "_run_download_attempt" = 80
-"load_model_on_worker" = 62
+"load_model_on_worker" = 60
 
 [function_lines."src/songmaker_cli/jobs/scoring.py"]
 "run_scoring_job" = 96

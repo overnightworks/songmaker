@@ -1142,7 +1142,7 @@ def test_train_enqueue_failure_marks_job_and_lora_failed(
         assert lora.status == LoraStatus.FAILED
         assert lora.error_message.key == "jobRefusal.queueUnavailable"
         job = session.query(Job).filter_by(id=lora.training_job_id).first()
-        assert (job.status, job.error) == (JobStatus.FAILED, "Job queue unavailable")
+        assert (job.status, job.error_message) == (JobStatus.FAILED, lora.error_message)
 
 
 def test_train_enqueue_failure_exception_swallowed(

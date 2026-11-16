@@ -123,7 +123,7 @@ class TestLifecycleReaper:
         with ctx.db() as session:
             job = session.query(Job).filter_by(id="chat-1").one()
             assert job.status == JobStatus.FAILED
-            assert job.error == "Queued too long — please retry."
+            assert job.error_message == message("jobFailure.queuedTooLong")
             assert job.error_type == "queued_too_long"
             assert job.queue_reason_message is None
 
@@ -160,7 +160,7 @@ class TestLifecycleReaper:
         with ctx.db() as session:
             job = session.query(Job).filter_by(id="chat-running").one()
             assert job.status == JobStatus.FAILED
-            assert job.error == "Took too long to finish — please retry."
+            assert job.error_message == message("jobFailure.tookTooLong")
             assert job.error_type == "heartbeat_lost"
 
     def test_leaves_a_fresh_chat_job_alone(self, ctx) -> None:
@@ -213,7 +213,7 @@ class TestLifecycleReaper:
         with ctx.db() as session:
             job = session.query(Job).filter_by(id=f"{job_type}-queued-dead").one()
             assert job.error_type == "no_worker_alive"
-            assert job.error == "No worker alive for this job type — please retry."
+            assert job.error_message == message("jobFailure.noWorkerAlive")
 
     @pytest.mark.parametrize("job_type", tuple(JobType))
     def test_unknown_queued_age_guard_applies_for_every_job_type(
@@ -239,7 +239,7 @@ class TestLifecycleReaper:
         assert recovered == 1
         with ctx.db() as session:
             job = session.query(Job).filter_by(id=f"{job_type}-queued-old").one()
-            assert job.error == "Queued too long — please retry."
+            assert job.error_message == message("jobFailure.queuedTooLong")
             assert job.error_type == "queued_too_long"
 
     @pytest.mark.parametrize(
@@ -283,7 +283,7 @@ class TestLifecycleReaper:
         ) == 1
         with ctx.db() as session:
             job = session.query(Job).filter_by(id=f"{job_type}-alive").one()
-            assert job.error == "Queued longer than a full queue could take — please retry."
+            assert job.error_message == message("jobFailure.queuedFullQueueBound")
             assert job.error_type == "queued_full_queue_bound"
 
     def test_restart_window_keeps_a_1101_second_queued_job_until_the_full_queue_bound(

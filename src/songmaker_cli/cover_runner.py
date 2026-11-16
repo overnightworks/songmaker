@@ -319,7 +319,7 @@ def _end_with_problem(db_factory, job_id: str, problem: TurnProblem) -> None:
         db_factory,
         job_id,
         JobStatus.FAILED,
-        error=_PROBLEM_MESSAGES[problem.problem],
+        error_message=_PROBLEM_MESSAGES[problem.problem],
         error_type=problem.problem.value,
         retry_after_seconds=problem.retry_after_seconds,
     )

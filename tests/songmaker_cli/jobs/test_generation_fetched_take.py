@@ -61,7 +61,7 @@ def test_a_take_whose_fetch_failed_leaves_the_jobs_other_takes_saved(
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert (job.status, "1 failed" in job.error) == ("partial", True)
+        assert (job.status, job.completed_takes, job.take_count) == ("partial", 2, 3)
     assert _count_saved_takes(seeded_db) == saved_before + 2
 
 

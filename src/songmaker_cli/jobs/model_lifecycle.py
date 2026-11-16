@@ -40,12 +40,10 @@ async def load_model_on_worker(
     with factory() as session:
         worker = get_worker_identity(session, worker_id)
     if worker is None:
+        missing = RuntimeError(f"Worker '{worker_id}' not registered")
         _update_job(
-            factory,
-            job_id,
-            JobStatus.FAILED,
-            error=_sanitize_error(RuntimeError(f"Worker '{worker_id}' not registered"), job_id),
-            error_type="worker_missing",
+            factory, job_id, JobStatus.FAILED,
+            error_message=_sanitize_error(missing, job_id), error_type="worker_missing",
         )
         return
 
@@ -59,7 +57,7 @@ async def load_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(ConnectionError(str(exc)), job_id),
+            error_message=_sanitize_error(ConnectionError(str(exc)), job_id),
             error_type="worker_unreachable",
         )
         return
@@ -69,7 +67,7 @@ async def load_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
+            error_message=_sanitize_error(
                 WorkerTaskFailed(worker_response_cause(response)),
                 job_id,
             ),
@@ -110,7 +108,7 @@ async def download_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
+            error_message=_sanitize_error(
                 RuntimeError(
                     f"Another download for '{mode}' is already in progress (job {running.job_id})",
                 ),
@@ -123,7 +121,7 @@ async def download_model_on_worker(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
+            error_message=_sanitize_error(
                 RuntimeError(DOWNLOAD_LOCK_LOST_MESSAGE.format(mode=mode)), job_id,
             ),
             error_type="download_lock_lost",
@@ -162,7 +160,7 @@ async def _download_with_retries(factory, redis, job_id: str, mode: str) -> None
         factory,
         job_id,
         JobStatus.FAILED,
-        error=_sanitize_error(
+        error_message=_sanitize_error(
             last_error or RuntimeError("All download attempts exhausted"),
             job_id,
         ),
@@ -177,7 +175,7 @@ def _valid_download_mode(factory, job_id: str, mode: str, model_config_paths) ->
         factory,
         job_id,
         JobStatus.FAILED,
-        error=_sanitize_error(ValueError(f"Unknown model mode '{mode}'"), job_id),
+        error_message=_sanitize_error(ValueError(f"Unknown model mode '{mode}'"), job_id),
         error_type="invalid_mode",
     )
     return False
@@ -211,7 +209,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error_message=_sanitize_error(exc, job_id),
             error_type="no_workers",
         )
         return None
@@ -227,7 +225,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(ConnectionError(str(exc)), job_id),
+            error_message=_sanitize_error(ConnectionError(str(exc)), job_id),
             error_type="worker_unreachable",
         )
         return None
@@ -236,7 +234,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(WorkerTaskFailed(worker_response_cause(submit)), job_id),
+            error_message=_sanitize_error(WorkerTaskFailed(worker_response_cause(submit)), job_id),
             error_type="worker_error",
         )
         return None
@@ -257,7 +255,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(ConnectionError(str(exc)), job_id),
+            error_message=_sanitize_error(ConnectionError(str(exc)), job_id),
             error_type="sse_transport",
         )
         return None
