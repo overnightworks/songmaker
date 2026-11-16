@@ -1,7 +1,0 @@
-claim_id = "181c98935fae4bd9a3b571948ee140c5"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "749d6fa462c9bf7a78a3f25381849f42c59f91d6"
-branch = "claude/issue-3218-the-cover-cancel-listener-fails-soft-and"
-scope = ["src/songmaker_cli/cover_runner.py", "tests/songmaker_cli/test_cover_runner_through_gateway.py", "tests/songmaker_cli/test_server_cover_cancel_across_processes.py"]
-opened_commit = "03da6f4e4c08bbe8266e59219549a1805f160b7d"
