@@ -8,6 +8,8 @@ scripts held, released, raising and stopped turns here as it does in-process.
 from __future__ import annotations
 
 import asyncio
+import select
+import socket
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -18,6 +20,7 @@ import httpx2
 from agents.backend.fake_gateway import FakeGateway
 
 LOOPBACK: Final = "127.0.0.1"
+_HANG_UP_POLL_SECONDS: Final = 0.05
 _HEADERS_OF_THE_TRANSPORT: Final = frozenset({"content-length", "transfer-encoding"})
 
 
@@ -37,7 +40,10 @@ def _gateway_handler(gateway: FakeGateway) -> type[BaseHTTPRequestHandler]:
                 headers=dict(self.headers.items()),
                 content=body,
             )
-            response = asyncio.run(gateway.handle_async_request(request))
+            response = asyncio.run(self._answer_until_hung_up(gateway, request))
+            if response is None:
+                self.close_connection = True
+                return
             self.send_response(response.status_code)
             for name, value in response.headers.items():
                 if name.lower() not in _HEADERS_OF_THE_TRANSPORT:
@@ -45,6 +51,26 @@ def _gateway_handler(gateway: FakeGateway) -> type[BaseHTTPRequestHandler]:
             self.send_header("content-length", str(len(response.content)))
             self.end_headers()
             self.wfile.write(response.content)
+
+        async def _answer_until_hung_up(
+            self, gateway: FakeGateway, request: httpx2.Request,
+        ) -> httpx2.Response | None:
+            """The gateway's answer, or ``None`` once the caller closed its connection.
+
+            A real gateway ends a call whose caller left; the call is cancelled the same way.
+            """
+            call = asyncio.ensure_future(gateway.handle_async_request(request))
+            while not call.done():
+                await asyncio.wait({call}, timeout=_HANG_UP_POLL_SECONDS)
+                if not call.done() and self._caller_hung_up():
+                    call.cancel()
+                    await asyncio.gather(call, return_exceptions=True)
+                    return None
+            return call.result()
+
+        def _caller_hung_up(self) -> bool:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
 
         def log_message(self, format: str, *args: object) -> None:  # noqa: A002
             """Keep the test output free of per-request lines."""
