@@ -20,6 +20,8 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 if TYPE_CHECKING:
+    from redis import Redis
+
     from songmaker_cli.oidc_client import OidcSignIn
 
 TEST_SECRET = b"a" * 64
@@ -209,7 +211,7 @@ def make_test_app(
     *,
     factory: sessionmaker[Session],
     oidc_sign_in: OidcSignIn | None = None,
-    redis=None,
+    redis: Redis | None = None,
 ) -> tuple:
     """Create a full test app with real middleware on the required ``factory``.
 
