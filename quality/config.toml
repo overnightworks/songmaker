@@ -217,6 +217,11 @@ rule = "test-layout"
 reason = "proves the container extras against the image entrypoints, which span every package"
 
 [[layout.allow]]
+path = "tests/test_web_start_script.py"
+rule = "test-layout"
+reason = "proves the web image's start script under docker/scripts, which no package owns"
+
+[[layout.allow]]
 path = "tests/test_import_boundaries.py"
 rule = "test-layout"
 reason = "the planted-breach proof of the import contracts, which span every package"

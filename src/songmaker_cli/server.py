@@ -16,11 +16,12 @@ from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from logline import RequestLineMiddleware, configure, set_route
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
@@ -61,8 +62,9 @@ from songmaker_cli.lifecycle import (
     session_cleanup_loop,
     stale_job_reaper_loop,
 )
-from songmaker_cli.middleware.access_log import AccessLogMiddleware
+from songmaker_cli.middleware.client_address import ClientAddressMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.refusals import install_refusal_handler, not_found_response
@@ -76,6 +78,8 @@ from songmaker_cli.request_policies import (
 )
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, Settings, get_settings
 from songmaker_cli.worker_liveness import keep_owner_lease
+
+WEB_SERVICE_NAME = "songmaker-web"
 
 log = logging.getLogger(__name__)
 
@@ -257,6 +261,27 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
     return exact_paths
 
 
+def _install_request_line(app: FastAPI) -> None:
+    """Add the request line outside every other layer, so a request the security layers refuse
+    leaves its line too and the trace covers them; ClientAddressMiddleware sits just inside it
+    and names the client the trusted-proxy decider resolves."""
+    app.add_middleware(ClientAddressMiddleware)
+    app.add_middleware(RequestLineMiddleware)
+
+
+def _report_the_full_route(request: Request) -> None:
+    """Give the request line the route's template with the prefixes of the routers it sits in.
+
+    FastAPI's route holds only its own path (`/songs/{song_id}`), while the rate-limit policy and
+    an operator reading the log both speak of the whole one (`/api/songs/{song_id}`). The prefix is
+    what the request path has before the route's own part.
+    """
+    route = request.scope["route"]
+    own_path = route.path_format.format(**request.scope["path_params"])
+    prefix = request.scope["path"].removesuffix(own_path)
+    set_route(request.scope, prefix + route.path)
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
@@ -269,7 +294,7 @@ def create_app(
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
-        lifespan=_lifespan,
+        lifespan=_lifespan, dependencies=[Depends(_report_the_full_route)],
     )
     if ctx is None:
         ctx = _create_default_context(audio_dir, data_dir)
@@ -295,6 +320,7 @@ def create_app(
     mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
+    #   0. RequestLineMiddleware, ClientAddressMiddleware -- see _install_request_line
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
@@ -306,16 +332,16 @@ def create_app(
     #                                    resource token skips CSRF
     #   9. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
     #  10. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  11. AccessLogMiddleware        -- log all requests (after security checks)
+    #  11. HttpMetricsMiddleware      -- count the requests that passed the security checks
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
-    # (the true outermost layer) and outside everything else, on purpose:
+    # (the outermost security layer) and outside everything else, on purpose:
     #   - It only inspects the outgoing Accept-Encoding/Content-Type/status
     #     pair and never reads or rejects the request, so its placement
     #     cannot affect the auth/CSRF/rate-limit checks below -- those
     #     already ran and could already reject the request before this
     #     middleware's compression step ever executes.
-    #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
+    #   - Being outside CORS/BodySize/RateLimit/CSRF/HttpMetrics/SecurityHeaders
     #     means it compresses the fully-assembled response (every other
     #     middleware's headers set) exactly once, not an intermediate state.
     #   - It stays inside ResourceStreamDeadlineMiddleware because that one
@@ -326,7 +352,7 @@ def create_app(
     #     buffering, exactly as if it were absent (see `middleware/gzip.py`
     #     and `test_server_middleware.py`'s SSE test).
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
-    app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(HttpMetricsMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
         app, sign_in_paths=SIGN_IN_PATHS, csrf_origin=build_csrf_origin_policy(),
@@ -345,13 +371,13 @@ def create_app(
         compresslevel=GZIP_COMPRESS_LEVEL,
     )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
+    _install_request_line(app)
 
     # Starlette builds the middleware stack at the first request, so the routes added here
     # still sit behind the whole block above.
     app.state.mcp_front = mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
     _install_error_handlers(app)
-
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
@@ -363,7 +389,6 @@ def create_app(
         )
 
     _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
-
     sk_index = sveltekit_dir / "index.html"
     app.state.spa_index = sk_index
 
@@ -452,9 +477,7 @@ def run_server(
     audio_dir = project_root / settings.audio_dir
     data_dir = project_root / settings.data_dir
 
-    from songmaker_cli.logging_config import configure_logging
-
-    configure_logging()
+    configure(WEB_SERVICE_NAME)
 
     for d in (audio_dir, data_dir):
         if not d.exists():
@@ -481,9 +504,7 @@ def run_server(
         app,
         host=settings.host,
         port=port,
-        log_level="info",
         timeout_keep_alive=settings.request_timeout_seconds,
         proxy_headers=False,
         log_config=None,
-        access_log=False,
     )

@@ -128,7 +128,6 @@ services:
       # The runner reaches songmaker-web over plain http, not through a TLS
       # terminator, so a Secure/__Host- cookie would never come back.
       COOKIE_SECURE: "false"
-      LOG_FORMAT: json
       HOST: "0.0.0.0"
     # Each file is mounted only into the services that read it; the settings
     # read /run/secrets/<name> by their field names.
@@ -182,7 +181,6 @@ services:
       LORA_TRAINING_GRADIENT_ACCUMULATION: "${LORA_TRAINING_GRADIENT_ACCUMULATION:-4}"
       LORA_TRAINING_SAVE_EVERY_N_EPOCHS: "${LORA_TRAINING_SAVE_EVERY_N_EPOCHS:-5}"
       LORA_TRAINING_POLL_INTERVAL_SECONDS: "${LORA_TRAINING_POLL_INTERVAL_SECONDS:-5}"
-      LOG_FORMAT: json
     secrets:
       - session_secret
       - postgres_password
@@ -262,7 +260,6 @@ services:
       SCORING_MAX_JOBS: "${SCORING_MAX_JOBS:-1}"
       SCORER_TIMEOUT_SECONDS: "${SCORER_TIMEOUT_SECONDS:-120}"
       TEXT_ACCURACY_TIMEOUT_SECONDS: "${TEXT_ACCURACY_TIMEOUT_SECONDS:-300}"
-      LOG_FORMAT: json
     secrets:
       - session_secret
       - postgres_password

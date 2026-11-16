@@ -1232,10 +1232,20 @@ requires-dist = [{ name = "babel", marker = "extra == 'catalogs'", specifier = "
 provides-extras = ["catalogs"]
 
 [[package]]
-name = "overnightworks-tandem"
-version = "0.5.2"
-source = { git = "https://github.com/overnightworks/tandem?rev=v0.5.2#b1e8aabfc8c534a44b17a2bd7dff8f8d58e8b9ab" }
+name = "overnightworks-logline"
+version = "0.4.0"
+source = { git = "https://github.com/overnightworks/logline?rev=v0.4.0#24a7a6077f3bd0c382fde62e149946c70a9ced31" }
 dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "structlog" },
+]
+
+[[package]]
+name = "overnightworks-tandem"
+version = "0.8.0"
+source = { git = "https://github.com/overnightworks/tandem?rev=v0.8.0#8790769c1681b7b28fee7ad4d7399b5cff4e5a48" }
+dependencies = [
+    { name = "overnightworks-logline" },
     { name = "redis" },
 ]
 
@@ -1954,8 +1964,10 @@ acestep-worker = [
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "nvidia-ml-py3" },
+    { name = "overnightworks-logline" },
     { name = "overnightworks-tandem" },
     { name = "redis", extra = ["hiredis"] },
+    { name = "structlog" },
     { name = "uvicorn" },
 ]
 agent = [
@@ -1993,6 +2005,7 @@ server = [
     { name = "fastapi" },
     { name = "mutagen" },
     { name = "overnightworks-agents" },
+    { name = "overnightworks-logline" },
     { name = "overnightworks-tandem" },
     { name = "overnightworks-webauth", extra = ["redis"] },
     { name = "psycopg2-binary" },
@@ -2037,8 +2050,10 @@ requires-dist = [
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" },
-    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.5.2" },
-    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.5.2" },
+    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v0.4.0" },
+    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v0.4.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.8.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.8.0" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
@@ -2060,6 +2075,7 @@ requires-dist = [
     { name = "songmaker", extras = ["signal"], marker = "extra == 'whisper'" },
     { name = "soundfile", marker = "extra == 'signal'" },
     { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0,<3" },
+    { name = "structlog", marker = "extra == 'acestep-worker'", specifier = ">=24.0,<27" },
     { name = "structlog", marker = "extra == 'server'", specifier = ">=24.0,<27" },
     { name = "torch", marker = "extra == 'scoring'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "extra == 'whisper'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },

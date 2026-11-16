@@ -14,11 +14,11 @@ from support.app_processes import (
     MusicWorkerProcess,
     WebProcess,
     WebProcesses,
-    age_the_owner_lease_epoch,
     end_the_owner_lease,
     leased_owner_ids,
     owner_lease_generation,
     poll_until,
+    settle_the_epoch,
     start_the_owner_lease,
 )
 from support.job_owner import an_owner, create_job_of_owner
@@ -71,7 +71,7 @@ def redis_client(redis_url: str):
 @pytest.fixture(autouse=True)
 def lease_span_has_passed_on_the_server(redis_client: Redis) -> None:
     """An absent lease reads gone only on a server that has run for the lease span."""
-    age_the_owner_lease_epoch(redis_client)
+    settle_the_epoch(redis_client)
 
 
 def _owner_of_the_lease(redis_client: Redis, owner_id: str) -> JobOwner:

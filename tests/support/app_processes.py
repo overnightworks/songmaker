@@ -35,10 +35,11 @@ from pydantic_settings import BaseSettings
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
-from support.owner_lease_epoch import aged_owner_lease_epoch
 from tandem import Leases
+from tandem.testing import settle_epoch
 
 from acestep_worker.settings import WorkerSettings
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import owner_leases
 
@@ -301,22 +302,29 @@ def poll_until(
     return True
 
 
-def age_the_owner_lease_epoch(redis: Redis) -> None:
-    """Date the owner leases' epoch one lease span back, so an absent lease reads gone.
+def _on_the_same_server(redis: Redis) -> AsyncRedis:
+    address = redis.connection_pool.connection_kwargs
+    return AsyncRedis(host=address["host"], port=address["port"], db=address.get("db", 0))
 
-    An epoch an earlier test created on the shared Redis is dated back too.
+
+def settle_the_epoch(redis: Redis) -> None:
+    """Settle the app's epoch, so an absent lease reads gone.
+
+    An epoch an earlier test created on the shared Redis is settled too.
     """
-    redis.set(*aged_owner_lease_epoch())
+
+    async def settle() -> None:
+        async with _on_the_same_server(redis) as client:
+            await settle_epoch(client, key_prefix=REDIS_KEY_PREFIX)
+
+    asyncio.run(settle())
 
 
 def _on_the_owner_leases(redis: Redis, use: Callable[[Leases], Awaitable[T]]) -> T:
     """Run ``use`` on the production owner leases over the Redis the case's processes share."""
-    address = redis.connection_pool.connection_kwargs
 
     async def run() -> T:
-        async with AsyncRedis(
-            host=address["host"], port=address["port"], db=address.get("db", 0),
-        ) as client:
+        async with _on_the_same_server(redis) as client:
             return await use(owner_leases(client))
 
     return asyncio.run(run())

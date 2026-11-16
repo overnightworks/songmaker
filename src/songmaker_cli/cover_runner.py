@@ -100,6 +100,7 @@ def _subscribe_to_cancellations(redis):
         pubsub.subscribe(COVER_CANCEL_CHANNEL)
         if pubsub.get_message(timeout=_SUBSCRIPTION_CONFIRMATION_SECONDS) is not None:
             return pubsub
+        log.warning("Cancel channel not confirmed; a cancel will not stop the running job")
     except RedisError:
         log.warning("Cancel channel unreachable; a cancel will not stop the running job")
     pubsub.close()
@@ -120,6 +121,8 @@ def _wait_for_cancellation(pubsub, db_factory, job_id: str, stop: threading.Even
                 return True
     except RedisError:
         log.warning("Cancel channel lost; a cancel will not stop the running job")
+    except Exception:
+        log.exception("Cancel listener failed; a cancel will not stop the running job")
     finally:
         pubsub.close()
     return False

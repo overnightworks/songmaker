@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from agents.tools import ToolOutcome
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import GET_SONG_TOOL_DESCRIPTION
+from songmaker_cli.db.queries.jobs import lock_active_job
 from songmaker_cli.mcp_server.tools import (
     MCPToolError,
     tool_create_song,
@@ -40,6 +41,7 @@ from songmaker_cli.mcp_server.tools import (
     tool_update_song_style,
 )
 
+_TURN_ENDED: Final = "The turn has ended, so the edit was not made."
 _STRING = {"type": "string"}
 _INT = {"type": "integer"}
 
@@ -247,8 +249,14 @@ def execute_cowriter_tool(
     arguments: dict[str, Any],
     *,
     session_id: str | None,
+    turn_job_id: str | None = None,
 ) -> ToolOutcome:
-    """Run one tool; ``session_id`` is the asking session, handed only to a tool that needs it."""
+    """Run one tool; ``session_id`` is the asking session, handed only to a tool that needs it.
+
+    An edit made for a turn commits only while the turn's chat job is still active: the job row
+    is locked until the commit, so a cancel committed first refuses the edit and a later one
+    waits for it.
+    """
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
         return ToolOutcome(f"Unknown tool: {name}", True)
@@ -261,6 +269,9 @@ def execute_cowriter_tool(
         else:
             result = tool.handler(session, user, **arguments)
         if tool.write:
+            if turn_job_id is not None and lock_active_job(session, turn_job_id) is None:
+                session.rollback()
+                return ToolOutcome(_TURN_ENDED, True)
             session.commit()
         return ToolOutcome(_serialize(result), False)
     except MCPToolError as exc:

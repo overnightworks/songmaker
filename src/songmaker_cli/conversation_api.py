@@ -191,7 +191,7 @@ async def _stream_chat_turn(
     from songmaker_cli.jobs._runtime import _keep_chat_job_heartbeat
 
     db_factory: sessionmaker[Session] = caller.app.state.ctx.db
-    with bound_to_turn(CallingTurn(caller.session_id)), db_factory() as session:
+    with bound_to_turn(CallingTurn(caller.session_id, prepared.job_id)), db_factory() as session:
         lifecycle = ChatTurnLifecycle(
             session,
             prepared.job_id,
