@@ -22,12 +22,6 @@ GENERATION_SETUP_MESSAGES = [reason.sentence() for reason in GENERATION_SETUP_RE
 
 
 
-def reported_error(fields: dict[str, str]) -> dict[str, object]:
-    """Job columns whose `error` text is stored as the cause a worker reported."""
-    cause = {"cause": fields["error"]}
-    return {**fields, "error": Message(key="jobFailure.reported", values=cause)}
-
-
 OTHER_GENERATION_ERROR_TYPES = [
     None,
     "server_restart",

@@ -1,17 +1,11 @@
 """Generate failure ownership without worker or database dependencies."""
 
 import pytest
-from support.generation_failures import (
-    GENERATION_SETUP_MESSAGES,
-    GENERATION_SETUP_REASONS,
-    OTHER_GENERATION_ERROR_TYPES,
-)
+from support.generation_failures import GENERATION_SETUP_REASONS
 
 from songmaker_cli.jobs._runtime import GenerationSetupError
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
-    musician_error,
-    partial_failure_error,
     running_failure_pair,
     select_generation_failure,
 )
@@ -100,27 +94,6 @@ def test_s8_failure_selection(causes, expected_message, error_type, running, cap
     expected_pair = (expected_message, error_type) if running else (None, None)
     actual_pair = (pair[0] and pair[0].sentence(), pair[1])
     assert actual_pair == expected_pair
-    assert musician_error(expected_message, error_type) == expected_message
-
-
-@pytest.mark.parametrize(
-    ("completed", "count", "cause", "expected"),
-    [
-        (1, 2, "Generation timed out", "1/2 completed, 1 failed: Generation timed out"),
-        (12, 15, "raw worker cause", "12/15 completed, 3 failed: raw worker cause"),
-    ],
-)
-def test_partial_failure_formats_completed_and_failed_counts(completed, count, cause, expected):
-    """L11: Persisted partial failures retain their counts and selected cause."""
-    failure = partial_failure_error(completed, count, message("jobFailure.reported", cause=cause))
-    assert failure.sentence() == expected
-
-
-@pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
-def test_read_preserves_songmaker_counterexamples(generation_failure_case, prefix):
-    """L11: Own causes survive both complete and partial failure reads."""
-    _, expected = generation_failure_case
-    assert musician_error(prefix + expected, "generation_error") == prefix + expected
 
 
 @pytest.mark.parametrize("reason", GENERATION_SETUP_REASONS)
@@ -131,100 +104,50 @@ def test_setup_message_stays_with_existing_sanitizer(reason):
     assert failure.error_type == "generation_error"
 
 
-@pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
 @pytest.mark.parametrize(
-    "message",
-    [*GENERATION_SETUP_MESSAGES, "Generating failed — try again."],
-)
-def test_read_preserves_setup_and_generic_lines(message, prefix):
-    """L11: The remaining owned lines survive the read projection."""
-    assert musician_error(prefix + message, "generation_error") == prefix + message
-
-
-@pytest.mark.parametrize(
-    "error_type",
-    OTHER_GENERATION_ERROR_TYPES,
-)
-def test_read_preserves_other_error_types(error_type):
-    """L11: Projection does not reclassify other failures."""
-    assert musician_error("raw cause", error_type) == "raw cause"
-
-
-@pytest.mark.parametrize("error", [None, ""])
-def test_read_preserves_missing_error_text(error):
-    """L11: Missing text stays missing."""
-    assert musician_error(error, "generation_error") == error
-
-
-@pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: ", "12/15 completed, 3 failed: "])
-@pytest.mark.parametrize("cause", ["need 18.5 GB", "generation failed (no detail from ACE-Step)"])
-def test_read_replaces_unknown_cause_preserving_partial_prefix(prefix, cause):
-    """L6 L11: Historical worker detail disappears, completed counts remain."""
-    assert musician_error(prefix + cause, "generation_error") == (
-        prefix + "Generating failed — try again."
-    )
-
-
-@pytest.mark.parametrize(
-    ("error", "expected"),
+    ("completed_takes", "take_count", "cause", "expected"),
     [
-        ("x/2 completed, 1 failed: Generation timed out", "Generating failed — try again."),
-        ("1/2 completed, 1 failed:Generation timed out", "Generating failed — try again."),
-        ("prefix 1/2 completed, 1 failed: Generation timed out", "Generating failed — try again."),
-        ("١/2 completed, 1 failed: Generation timed out", "Generating failed — try again."),
+        (None, None, "jobFailure.generationTimedOut", "Generation timed out"),
+        (1, 2, "jobFailure.generationTimedOut", "1/2 completed, 1 failed: Generation timed out"),
         (
-            "1/2 completed, 1 failed: 1/2 completed, 1 failed: Generation timed out",
-            "1/2 completed, 1 failed: Generating failed — try again.",
+            12, 15, "jobFailure.generationFailed",
+            "12/15 completed, 3 failed: Generating failed — try again.",
         ),
     ],
 )
-def test_read_does_not_preserve_malformed_or_nested_prefix(error, expected):
-    """L6: Only one correctly formed leading ASCII partial prefix survives."""
-    assert musician_error(error, "generation_error") == expected
-
-
-@pytest.mark.parametrize("job_type", ["generate", "lora_training", "load_model_on_worker", "cover"])
-def test_response_preserves_fields_queue_position_and_stored_error(job_type):
-    """L5 L11: Only the Generate response error changes; the stored row does not."""
+def test_response_sentence_of_a_failure_leads_a_partial_with_its_takes(
+    completed_takes, take_count, cause, expected,
+):
+    """L11: An agent reads a partial Generate failure as its takes and then its cause."""
     from songmaker_cli.api_models import JobResponse
     from songmaker_cli.db.models import Job
-    from songmaker_cli.jobs.generation_failure import musician_job_response
 
     job = Job(
-        id="legacy",
-        type=job_type,
-        status="queued",
-        progress=0.0,
-        error="need 18.5 GB",
+        id="partial", type="generate", status="partial", progress=0.5,
+        error_message=message(cause), completed_takes=completed_takes, take_count=take_count,
         error_type="generation_error",
-        queue_reason_message=message("jobWait.queuedGenerations"),
-        take_index=1,
-        take_count=2,
     )
-    original = JobResponse.from_orm(job, queue_position=3).model_dump()
-    expected = original | {
-        "error": "Generating failed — try again." if job_type == "generate" else job.error,
-    }
-    assert musician_job_response(job, queue_position=3).model_dump() == expected
-    assert job.error == "need 18.5 GB"
-    assert job.error_type == "generation_error"
+    response = JobResponse.from_orm(job)
+    assert response.error == expected
+    assert response.error_message == message(cause)
+    assert response.completed_takes == completed_takes
 
 
-@pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
-def test_s5_response_preserves_unavailable_and_stored_row(prefix):
-    """S5-C, L5/L6/L10: New availability passes reads unchanged, including partials."""
+def test_response_of_a_job_without_a_failure_has_no_sentence_and_no_message():
+    from songmaker_cli.api_models import JobResponse
     from songmaker_cli.db.models import Job
-    from songmaker_cli.jobs.generation_failure import musician_job_response
 
-    message = prefix + "Generating isn't available right now."
+    response = JobResponse.from_orm(Job(id="ok", type="generate", status="running", progress=0.1))
+    assert (response.error, response.error_message, response.completed_takes) == (None, None, None)
+
+
+def test_response_fails_loudly_for_completed_takes_without_a_take_count():
+    from songmaker_cli.api_models import JobResponse
+    from songmaker_cli.db.models import Job
+
     job = Job(
-        id="unavailable",
-        type="generate",
-        status="failed",
-        progress=0.0,
-        error=message,
-        error_type="generation_unavailable",
+        id="broken", type="generate", status="partial", progress=0.5,
+        error_message=message("jobFailure.generationFailed"), completed_takes=1,
     )
-    response = musician_job_response(job)
-    assert response.error == job.error == message
-    assert response.error_type == job.error_type == "generation_unavailable"
+    with pytest.raises(RuntimeError, match="completed takes without a take count"):
+        JobResponse.from_orm(job)

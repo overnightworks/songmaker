@@ -797,14 +797,16 @@ def test_update_job_status_stamps_completed_at_for_every_terminal_status(
 
     completed_at = fetched.completed_at
     update_job_status(seeded_session, job.id, JobStatusUpdate("completed", progress=1.0))
-    late = JobStatusUpdate("failed", error=message("jobFailure.reported", cause="late"))
+    late = JobStatusUpdate(
+        "failed", error_message=message("jobFailure.workerReported", cause="late"),
+    )
     update_job_status(seeded_session, job.id, late)
     seeded_session.commit()
     seeded_session.expire_all()
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == terminal
     assert fetched.completed_at == completed_at
-    assert fetched.error is None
+    assert fetched.error_message is None
 
 
 def test_update_job_heartbeat_skips_terminal(seeded_session: Session) -> None:
@@ -1854,7 +1856,7 @@ def test_reaper_does_not_overwrite_job_completed_between_read_and_update(
 
     assert recover_stale_jobs_by_age_and_type(db_session, now=now) == {}
     assert job.status == JobStatus.COMPLETED
-    assert job.error is None
+    assert job.error_message is None
     assert job.completed_at is not None
     assert job.completed_at.replace(tzinfo=timezone.utc) == now
 
@@ -1887,7 +1889,7 @@ def test_reaper_marks_an_unknown_workers_old_queued_job_as_too_old(db_session: S
     after = get_job(db_session, j_queued.id)
     assert after.status == "failed"
     assert after.error_type == "queued_too_long"
-    assert "Queued too long" in after.error
+    assert after.error_message == message("jobFailure.queuedTooLong")
 
 
 def test_reaper_uses_the_supplied_resolved_queue_depth_for_an_alive_worker(
@@ -2031,8 +2033,8 @@ def test_reaper_distinguishes_queued_vs_running(
     running_after = get_job(db_session, j_running.id)
     assert queued_after.error_type == "queued_too_long"
     assert running_after.error_type == "heartbeat_lost"
-    assert "Queued too long" in queued_after.error
-    assert "Took too long" in running_after.error
+    assert queued_after.error_message == message("jobFailure.queuedTooLong")
+    assert running_after.error_message == message("jobFailure.tookTooLong")
 
 
 # ── user-filtered stale job reaper ─────────────────────────────────

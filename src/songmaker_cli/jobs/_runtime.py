@@ -51,18 +51,6 @@ _GENERATION_SETUP_MESSAGES: tuple[Message, ...] = (
 )
 
 
-def generation_error_messages() -> frozenset[str]:
-    """Expose the runtime-owned messages allowed on Generate reads."""
-    return frozenset(
-        failure.sentence()
-        for failure in (
-            *_GENERATION_SETUP_MESSAGES,
-            _UNEXPECTED_FAILURE,
-            *(failure for _, failure in _USER_FACING_ERRORS),
-        )
-    )
-
-
 class GenerationSetupError(Exception):
     """A setup failure the runtime words itself: it carries the catalog message of its reason."""
 
@@ -81,11 +69,11 @@ def _sanitize_error(
     """Log the raw failure in full; return the catalog message that words it for the musician.
 
     A worker's account of its task is the musician's line: it comes back as `reported`, by
-    default `jobFailure.reported` with that text as its cause. A setup error comes back as the
+    default `jobFailure.workerReported` with that text as its cause. A setup error comes back as the
     message it carries.
     """
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
-    reported = reported or message("jobFailure.reported", cause=str(exc))
+    reported = reported or message("jobFailure.workerReported", cause=str(exc))
     if isinstance(exc, WorkerTaskFailed):
         return reported
     if isinstance(exc, GenerationSetupError):
@@ -179,12 +167,12 @@ async def _cancel_chat_job(
 
 
 def _fail_chat_job(
-    session: Session, job_id: str, error: Message, error_type: str,
+    session: Session, job_id: str, error_message: Message, error_type: str,
 ) -> None:
     session.rollback()
     update_job_status(
         session,
         job_id,
-        JobStatusUpdate(JobStatus.FAILED, error=error, error_type=error_type),
+        JobStatusUpdate(JobStatus.FAILED, error_message=error_message, error_type=error_type),
     )
     session.commit()

@@ -9,8 +9,10 @@ from typing import Final, Literal
 from pydantic import BaseModel
 
 from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, GenerationPhase, JobStatus, JobType
 from songmaker_cli.messages import Message, stored_sentence
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]
@@ -57,6 +59,22 @@ def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
     return ceil(seconds_per_epoch * (train_epochs - current_epoch))
 
 
+def _failure_sentence(job) -> str | None:
+    """The agent's sentence of a job's failure: its cause, led by a partial Generate's takes."""
+    cause = stored_sentence(job.error_message, f"Job {job.id} failure")
+    if cause is None or job.completed_takes is None:
+        return cause
+    count = expect_present(job.take_count, f"Job {job.id} completed takes without a take count")
+    return text(
+        SOURCE_LANGUAGE,
+        "jobFailure.partialTakes",
+        count=count,
+        completed=str(job.completed_takes),
+        failed=str(count - job.completed_takes),
+        cause=cause,
+    )
+
+
 class JobResponse(BaseModel):
     id: str
     type: JobType
@@ -69,7 +87,9 @@ class JobResponse(BaseModel):
     current_epoch: int | None = None
     train_epochs: int | None = None
     remaining_time_estimate: RemainingTimeEstimate | None = None
+    completed_takes: int | None = None
     error: str | None = None
+    error_message: Message | None = None
     error_type: str | None = None
     retry_after_seconds: int | None = None
     queue_reason: str | None = None
@@ -99,7 +119,9 @@ class JobResponse(BaseModel):
             current_epoch=job.current_epoch,
             train_epochs=job.train_epochs,
             remaining_time_estimate=_remaining_time_estimate(job, now=now),
-            error=job.error,
+            completed_takes=job.completed_takes,
+            error=_failure_sentence(job),
+            error_message=job.error_message,
             error_type=job.error_type,
             retry_after_seconds=job.retry_after_seconds,
             queue_reason=stored_sentence(job.queue_reason_message, f"Job {job.id} queue wait"),
@@ -112,5 +134,6 @@ class JobResponse(BaseModel):
 
 class GenerationUnavailableResponse(BaseModel):
     detail: str
+    message: Message
     error_type: str
     job_id: str
