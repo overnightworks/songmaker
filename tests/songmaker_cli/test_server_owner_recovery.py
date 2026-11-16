@@ -20,7 +20,7 @@ from support.app_processes import (
     owner_lease_generation,
     poll_until,
 )
-from support.job_owner import an_owner, create_job_of_unstamped_owner
+from support.job_owner import an_owner, create_job_of_owner
 from support.web_cluster_world import start_owner
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
@@ -40,6 +40,7 @@ from songmaker_cli.job_timing import (
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import OWNER_REAPER_FAILURE_MESSAGE
 from songmaker_cli.owner_lease_old_key import old_owner_key
+from songmaker_cli.worker_liveness import JobOwner
 
 MARGIN_SECONDS = 5.0
 CRASH_DEADLINE_SECONDS = 30.0
@@ -72,10 +73,20 @@ def lease_span_has_passed_on_the_server(redis_client: Redis) -> None:
     age_the_owner_lease_epoch(redis_client)
 
 
-def _seed_running_jobs(factory, cluster: WebProcesses, owner_id: str) -> RunningJobs:
+def _owner_of_the_lease(redis_client: Redis, owner_id: str) -> JobOwner:
+    """``owner_id`` as its jobs name it: with the generation its live lease holds."""
+    return an_owner(owner_id, owner_lease_generation(redis_client, owner_id))
+
+
+def _a_ghost() -> JobOwner:
+    """An owner that holds no lease and never did."""
+    return an_owner(uuid.uuid4().hex)
+
+
+def _seed_running_jobs(factory, cluster: WebProcesses, owner: JobOwner | str) -> RunningJobs:
     with factory() as session:
-        chat = create_job_of_unstamped_owner(session, JobType.CHAT, owner_id)
-        cover = create_job_of_unstamped_owner(session, JobType.COVER, owner_id)
+        chat = create_job_of_owner(session, JobType.CHAT, owner)
+        cover = create_job_of_owner(session, JobType.COVER, owner)
         for job in (chat, cover):
             assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
@@ -111,8 +122,8 @@ def test_a_process_that_starts_ends_the_jobs_of_an_owner_that_is_gone_and_no_liv
 ) -> None:
     cluster, factory = web_cluster
     _, owner_a = start_owner(cluster, redis_client, "a")
-    jobs_of_a = _seed_running_jobs(factory, cluster, owner_a)
-    jobs_of_a_ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
+    jobs_of_a = _seed_running_jobs(factory, cluster, _owner_of_the_lease(redis_client, owner_a))
+    jobs_of_a_ghost = _seed_running_jobs(factory, cluster, _a_ghost())
 
     start_owner(cluster, redis_client, "b")
 
@@ -131,6 +142,7 @@ def test_an_owner_of_the_previous_release_keeps_its_jobs_when_a_process_starts(
     redis_client.set(
         old_owner_key(REDIS_KEY_PREFIX, previous_owner), "1", ex=PREVIOUS_RELEASE_SECONDS,
     )
+    # A previous release stores no generation with a job.
     jobs = _seed_running_jobs(factory, cluster, previous_owner)
 
     start_owner(cluster, redis_client, "a")
@@ -157,7 +169,7 @@ def a_and_b(web_cluster, redis_client):
     process_a, owner_a = start_owner(cluster, redis_client, "a")
     process_b, _ = start_owner(cluster, redis_client, "b")
     return cluster, factory, process_a, owner_a, process_b, _seed_running_jobs(
-        factory, cluster, owner_a,
+        factory, cluster, _owner_of_the_lease(redis_client, owner_a),
     )
 
 
@@ -205,7 +217,7 @@ def test_a_lease_that_lapsed_and_started_again_ends_the_jobs_of_its_old_generati
         factory, owner_a, owner_lease_generation(redis_client, owner_a),
     )
 
-    ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
+    ghost = _seed_running_jobs(factory, cluster, _a_ghost())
 
     assert poll_until(
         lambda: _is_reaped(factory, ghost),
@@ -230,7 +242,7 @@ def test_a_crash_with_redis_unreachable_ends_nothing_until_redis_answers_again(
     cluster, factory, proxy = proxied_cluster
     process_a, owner_a = start_owner(cluster, redis_client, "a")
     process_b, _ = start_owner(cluster, redis_client, "b")
-    jobs = _seed_running_jobs(factory, cluster, owner_a)
+    jobs = _seed_running_jobs(factory, cluster, _owner_of_the_lease(redis_client, owner_a))
 
     proxy.cut()
     process_a.kill()
@@ -265,12 +277,13 @@ def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     cluster, factory, proxy = proxied_cluster
     _, owner_a = start_owner(cluster, redis_client, "a")
     start_owner(cluster, redis_client, "b")
+    # The renewed lease starts under a new generation; a job that names none is judged by its owner.
     jobs = _seed_running_jobs(factory, cluster, owner_a)
     restarted_at = time.monotonic()
 
     proxy.restart_empty()
 
-    ghost = _seed_running_jobs(factory, cluster, uuid.uuid4().hex)
+    ghost = _seed_running_jobs(factory, cluster, _a_ghost())
 
     assert poll_until(
         lambda: owner_a in leased_owner_ids(redis_client),
@@ -290,11 +303,11 @@ WORKER_JOB_TYPES = (
 )
 
 
-def _seed_running_worker_jobs(factory, owner_id: str) -> tuple[str, ...]:
-    """One running job of each type a worker executes, owned by ``owner_id``."""
+def _seed_running_worker_jobs(factory, owner: JobOwner) -> tuple[str, ...]:
+    """One running job of each type a worker executes, owned by ``owner``."""
     with factory() as session:
         jobs = [
-            create_job_of_unstamped_owner(session, job_type, owner_id)
+            create_job_of_owner(session, job_type, owner)
             for job_type in WORKER_JOB_TYPES
         ]
         for job in jobs:
@@ -315,7 +328,7 @@ class MusicWorkers:
 
 
 @pytest.fixture
-def music_workers(web_cluster) -> MusicWorkers:
+def music_workers(web_cluster, redis_client) -> MusicWorkers:
     cluster, factory = web_cluster
     worker_a = cluster.start_music_worker("worker-a")
     worker_b = cluster.start_music_worker("worker-b")
@@ -324,15 +337,19 @@ def music_workers(web_cluster) -> MusicWorkers:
         factory,
         worker_a,
         worker_b,
-        _seed_running_worker_jobs(factory, worker_a.owner_id),
-        _seed_running_worker_jobs(factory, worker_b.owner_id),
+        _seed_running_worker_jobs(factory, _owner_of_the_lease(redis_client, worker_a.owner_id)),
+        _seed_running_worker_jobs(factory, _owner_of_the_lease(redis_client, worker_b.owner_id)),
     )
 
 
-def test_a_music_worker_that_starts_leaves_the_jobs_of_a_running_one_alone(web_cluster) -> None:
+def test_a_music_worker_that_starts_leaves_the_jobs_of_a_running_one_alone(
+    web_cluster, redis_client,
+) -> None:
     cluster, factory = web_cluster
     worker_a = cluster.start_music_worker("worker-a")
-    jobs_of_a = _seed_running_worker_jobs(factory, worker_a.owner_id)
+    jobs_of_a = _seed_running_worker_jobs(
+        factory, _owner_of_the_lease(redis_client, worker_a.owner_id),
+    )
 
     cluster.start_music_worker("worker-b")
 
