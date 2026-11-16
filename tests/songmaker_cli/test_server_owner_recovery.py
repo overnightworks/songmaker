@@ -281,7 +281,7 @@ def test_a_stop_with_redis_unreachable_still_shuts_the_process_down(
     assert process.process.returncode != -signal.SIGKILL, "the stop needed the kill"
 
 
-def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
+def test_a_redis_that_restarts_empty_ends_only_the_ghost_among_the_jobs_that_name_no_generation(
     proxied_cluster, redis_client,
 ) -> None:
     cluster, factory, proxy = proxied_cluster
@@ -302,6 +302,27 @@ def test_a_redis_that_restarts_empty_ends_nothing_and_gets_the_live_lease_back(
     assert poll_until(lambda: _is_reaped(factory, ghost), deadline_seconds=CRASH_DEADLINE_SECONDS)
     assert time.monotonic() - restarted_at >= OWNER_LEASE_TTL_SECONDS - 1
     assert _statuses(factory, jobs.ids) == [JobStatus.RUNNING] * 2
+
+
+def test_a_redis_that_restarts_empty_ends_the_jobs_that_name_the_generation_it_lost(
+    proxied_cluster, redis_client,
+) -> None:
+    cluster, factory, proxy = proxied_cluster
+    _, owner_a = start_owner(cluster, redis_client, "a")
+    start_owner(cluster, redis_client, "b")
+    lost_generation = owner_lease_generation(redis_client, owner_a)
+    jobs = _seed_running_jobs(factory, cluster, _owner_of_the_lease(redis_client, owner_a))
+
+    proxy.restart_empty()
+
+    assert poll_until(
+        lambda: owner_lease_generation(redis_client, owner_a) not in (None, lost_generation),
+        deadline_seconds=OWNER_LEASE_REFRESH_SECONDS + MARGIN_SECONDS,
+    )
+    assert poll_until(
+        lambda: _is_reaped(factory, jobs),
+        deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
+    )
 
 
 WORKER_JOB_TYPES = (
