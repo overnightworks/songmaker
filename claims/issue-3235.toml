@@ -1,0 +1,8 @@
+claim_id = "8530f7690f724a61bcd3e46379dbccab"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "36bcc521286a544104594ff9caa2e04b0fe3865f"
+branch = "claude/issue-3235-jobs-error-is-stored-as-a-message-token"
+scope = ["docs/acestep.md", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/stores", "frontend/src/lib/words", "scripts/stored_message_keys.txt", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api_models", "src/songmaker_cli/db", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/jobs", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/words.py", "tests/songmaker_cli", "tests/support"]
+opened_commit = "8588e8f17566d437577039b6c48d87cc7d60bd0f"
+whole_reason = "The stored failure crosses database, migration, API, stream and page; the plan cuts it once into 6c1 (writers) and this slice (column, rows, readers)."
