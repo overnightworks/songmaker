@@ -3,5 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "98447b74c980b93ffa4cf2b8b797fa4777c2b035"
 branch = "claude/issue-3248-a-co-writer-tool-edit-checks-its-turn-s"
-scope = ["src/songmaker_cli/agent/tools.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/agent/tools.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cowriter/tools.py", "tests/songmaker_cli/agent/test_tools_edit_after_cancel.py", "tests/songmaker_cli/cowriter/test_tools_ownership.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py"]
 opened_commit = "9d7e37faa3a00e8150623574cec15331febf2063"
+whole_reason = "The edit's job-row check spans the tool layer, the turn that passes its job and the architecture note that named the gap."
