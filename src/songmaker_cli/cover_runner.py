@@ -81,15 +81,15 @@ class _CoverStart:
 
 
 def publish_cover_cancel(redis, job_id: str) -> None:
-    """Tell every web process that a cover job's cancellation has committed.
+    """Tell every web process that a job's cancellation has committed.
 
     Only the id travels. An unreachable Redis leaves the committed cancel standing: the
-    picture then ends on its own and its publication refuses the cancelled job.
+    job then ends on its own and its publication refuses the cancelled job.
     """
     try:
         redis.publish(COVER_CANCEL_CHANNEL, job_id)
     except RedisError:
-        log.warning("A cover job's cancel could not reach the process drawing it")
+        log.warning("A job's cancel could not reach the process running it")
 
 
 def _subscribe_to_cancellations(redis):
@@ -100,7 +100,7 @@ def _subscribe_to_cancellations(redis):
         if pubsub.get_message(timeout=_SUBSCRIPTION_CONFIRMATION_SECONDS) is not None:
             return pubsub
     except RedisError:
-        log.warning("Cover cancel channel unreachable; a cancel will not stop the picture")
+        log.warning("Cancel channel unreachable; a cancel will not stop the running job")
     pubsub.close()
     return None
 
@@ -118,7 +118,7 @@ def _wait_for_cancellation(pubsub, db_factory, job_id: str, stop: threading.Even
             ):
                 return True
     except RedisError:
-        log.warning("Cover cancel channel lost; a cancel will not stop the picture")
+        log.warning("Cancel channel lost; a cancel will not stop the running job")
     finally:
         pubsub.close()
     return False
