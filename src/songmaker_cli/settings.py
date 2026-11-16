@@ -142,13 +142,24 @@ def _split_token_clients(value: str) -> list[str]:
     return [entry.strip() for entry in value.split(",")]
 
 
-# PostgreSQL's connection limit is the postgres image's default, which platform's
-# infrastructure/postgres leaves unset; the last three are kept for superusers.
-POSTGRES_MAX_CONNECTIONS = 100
-POSTGRES_SUPERUSER_RESERVED_CONNECTIONS = 3
-# Pods per process kind the budget covers: two web pods (platform's rolling-update
-# surge), one pod each for the music and scoring workers.
-POD_COUNT_BY_PROCESS_KIND: dict[str, int] = {"web": 2, "music-worker": 1, "scoring-worker": 1}
+@dataclass(frozen=True)
+class ProcessKind:
+    """A process kind that holds a pooled database connection set, and its pod count."""
+
+    name: str
+    pods: int
+
+
+# Pods per process kind that open a pooled engine: two web pods (platform#581 rule
+# 10), one music worker, one scoring worker. Not counted: the `migrate` init
+# container and the probe, inspect and Alembic engines of `init_db`, which run
+# one at a time and close before the same pod opens its pooled engine, so a pod
+# never holds more than its pool; the acestep worker opens no database.
+PROCESS_KINDS = (
+    ProcessKind("web", 2),
+    ProcessKind("music-worker", 1),
+    ProcessKind("scoring-worker", 1),
+)
 
 
 class Settings(BaseSettings):
@@ -245,16 +256,23 @@ class Settings(BaseSettings):
         """Pool, overflow and the one connection a process holds outside its pool."""
         return self.database_pool_size + self.database_max_overflow + 1
 
+    @property
+    def connection_budget_by_process_kind(self) -> dict[str, int]:
+        """The connections all pods of each process kind may hold at once."""
+        return {
+            kind.name: kind.pods * self.connections_per_process for kind in PROCESS_KINDS
+        }
+
     @model_validator(mode="after")
     def validate_connection_budget(self) -> Settings:
         """Refuse a pool that lets all pods together exceed PostgreSQL's connection limit."""
-        budget = self.connections_per_process * sum(POD_COUNT_BY_PROCESS_KIND.values())
-        limit = POSTGRES_MAX_CONNECTIONS - POSTGRES_SUPERUSER_RESERVED_CONNECTIONS
+        by_kind = self.connection_budget_by_process_kind
+        budget = sum(by_kind.values())
+        limit = self.postgres_max_connections - self.postgres_reserved_connections
         if budget > limit:
             raise ValueError(
-                f"Connection budget {budget} (pods {POD_COUNT_BY_PROCESS_KIND} x "
-                f"{self.connections_per_process} connections each) exceeds the "
-                f"{limit} PostgreSQL admits",
+                f"Connection budget {budget} ({by_kind}, {self.connections_per_process} "
+                f"connections per pod) exceeds the {limit} PostgreSQL admits",
             )
         return self
 
@@ -316,6 +334,10 @@ class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────
     database_pool_size: int = 5
     database_max_overflow: int = 10
+    # PostgreSQL's max_connections and superuser_reserved_connections as the server
+    # runs; the defaults are PostgreSQL's own, the connection budget checks against them.
+    postgres_max_connections: int = 100
+    postgres_reserved_connections: int = 3
 
     # ── Sessions / auth ───────────────────────────────────────────────
     session_idle_seconds: int = Field(

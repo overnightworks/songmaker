@@ -527,13 +527,20 @@ def test_defaults_keep_every_pod_within_postgres_connection_limit() -> None:
 
 
 @pytest.mark.parametrize(
-    ("setting", "value"),
-    [("DATABASE_POOL_SIZE", "20"), ("DATABASE_MAX_OVERFLOW", "40")],
+    "override",
+    [{"database_pool_size": 20}, {"database_max_overflow": 40}],
 )
 def test_rejects_a_pool_that_exceeds_postgres_connection_limit(
-    monkeypatch: pytest.MonkeyPatch, setting: str, value: str,
+    override: dict[str, int],
 ) -> None:
-    monkeypatch.setenv(setting, value)
-
     with pytest.raises(ValidationError, match="Connection budget"):
-        Settings(**_required_settings())
+        Settings(**_required_settings(), **override)
+
+
+def test_accepts_a_pool_the_configured_postgres_limit_admits() -> None:
+    Settings(
+        **_required_settings(),
+        database_pool_size=20,
+        database_max_overflow=40,
+        postgres_max_connections=500,
+    )
