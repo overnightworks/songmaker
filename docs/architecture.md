@@ -1054,9 +1054,10 @@ id on the Redis channel `cover_runner.COVER_CANCEL_CHANNEL`, and the runner that
 the picture, subscribed since before the picture reads the job, reads the job from
 PostgreSQL and cancels the picture when it is `cancelled`. Only the id travels and
 delivery is at-most-once; a missed signal leaves the picture to end alone, and its
-publication refuses the cancelled job. A cancel does not stop a co-writer turn: it
-ends the chat job, the turn runs on at the gateway, and its reply is refused as
-"Reply came too late". `covers.decode_cover_image` checks the
+publication refuses the cancelled job. A cancel of a co-writer turn travels the
+same way: the web process running the turn, which `POST /api/chat/turn` started, hears the
+chat job's id, reads the job and cancels the turn's task, which closes the gateway request
+before any further tool edit; edits the turn already committed stay. `covers.decode_cover_image` checks the
 bytes, and the runner writes the decoded picture as PNG. A run that cannot draw
 ends FAILED with the problem as `error_type`, a closed `coverProblem.*` message as `error_message`, and,
 when busy, the wait the gateway named as `retry_after_seconds`; the editor words the problem
@@ -1395,7 +1396,7 @@ close the stream.
 | POST | `/api/generations/{id}/rate` | user | Rate a generation |
 | POST | `/api/generations/{id}/pick` | user | Pick best generation. 409 "Restore this take first." on an archived take; `keep` and the take share and playlist add routes answer the same. |
 | GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position; a running generate job also its `phase`, take counters and `remaining_time_estimate`) |
-| POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. A cover picture stops on whichever web process draws it ("The cover picture"); a chat turn does not stop. |
+| POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. A cover picture stops on whichever web process draws it ("The cover picture"), and a co-writer turn on whichever web process runs it. |
 | POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. Songmaker counts no turns against a limit of its own; the gateway's per-person and per-app budgets bound them. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; a chat job whose web process is gone fails within one tick of a clean stop, or within the lease TTL plus a tick of a crash ("Stale-job recovery"), since no turn survives its process, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. The turn runs through the gateway ("The co-writer turn" above); a refused or failed run emits exactly one error frame with a `problem` (`unavailable` 503, `busy` 429 with `retry_after_seconds`, `not_enabled` 403, `sign_in_again` 401) and never a local provider. |
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
@@ -1589,7 +1590,10 @@ SIGKILLed and even the values the run did produce would be lost.
   disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
   recovery below). Queued work remains in arq for a replacement worker to claim
-  after a deploy.
+  after a deploy. A worker's arq connection retries a refused or lost connection for
+  `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
+  process's arq pool fails fast. A stop signal ends that retry, so a worker
+  stops within seconds during the outage.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
 **Stale-job recovery** (web process — #446, #456): The lifecycle loop is the

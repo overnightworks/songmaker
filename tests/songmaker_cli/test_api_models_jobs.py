@@ -103,7 +103,7 @@ def test_a_queue_wait_whose_key_the_catalog_lacks_fails_that_response_and_logs_j
 def test_response_sentence_of_a_failure_leads_a_partial_with_its_takes(
     completed_takes, take_count, cause, expected,
 ):
-    """L11: An agent reads a partial Generate failure as its takes and then its cause."""
+    """An agent reads a partial Generate failure as its takes and then its cause."""
     job = Job(
         id="partial", type="generate", status="partial", progress=0.5,
         error_message=message(cause), completed_takes=completed_takes, take_count=take_count,

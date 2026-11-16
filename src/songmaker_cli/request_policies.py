@@ -92,7 +92,8 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 
 # Static PWA root assets are fetched by the browser and the service worker
 # outside of user-driven navigation, so they must not compete with `/api/*`
-# calls for any class's budget. The set holds static assets only.
+# calls for any class's budget. The set holds those static assets plus `/health/details`,
+# justified below.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB check and two DB queries, plus Redis reads that grow with
@@ -100,7 +101,16 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 # and CI's E2E are its callers --
 # exempting it would let an anonymous caller hammer the priciest endpoint
 # for free. It stays in the API class.
+#
+# `/health/details` is here: it does its work only for the monitoring token, so
+# an anonymous caller gets a cheap 401, and the budget it spends would make it
+# answer 503 while Redis is down, exactly when its body is needed to name the outage.
+# No budget limits guesses at the monitoring token on this path; the token's entropy
+# (the `monitoring-token` file the platform generates, no minimum length in code) is the bound.
+HEALTH_DETAILS_PATH: Final = "/health/details"
+
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
+    HEALTH_DETAILS_PATH,
     "/manifest.webmanifest",
     "/robots.txt",
     "/favicon.svg",

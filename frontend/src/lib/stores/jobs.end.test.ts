@@ -19,6 +19,7 @@ import {
 } from './jobs';
 import { toasts } from './toast';
 import { resetConnectivityForTests } from './connectivity';
+import { words } from '#lib/words/en.ts';
 import { fetchLastFailedGeneration, type JobStatus } from '#lib/api/client.ts';
 
 class FakeEventSource {
@@ -106,6 +107,19 @@ describe('the sentence a tracked job shows when it ends', () => {
 			const failure = { key: 'jobFailure.workerReported', values: { cause: 'worker said no' } };
 			expect(await endJob({ type: 'score', status, error_message: failure })).toEqual([
 				'The worker reported: worker said no'
+			]);
+		}
+	);
+
+	it.each([
+		['failed', 'jobEnd.generateFailed'],
+		['partial', 'jobEnd.generatePartial']
+	] as const)(
+		'a stored failure with an empty cause shows the sentence of a %s job',
+		async (status, key) => {
+			const empty = { key: 'jobFailure.recorded', values: { cause: '' } };
+			expect(await endJob({ type: 'generate', status, error_message: empty })).toEqual([
+				words[key]
 			]);
 		}
 	);

@@ -139,20 +139,20 @@ type FailureFields = Pick<JobStatus, 'error_message' | 'error_type'> &
 	Partial<PartialFields & Pick<JobStatus, 'status'>>;
 
 function failureMessage(job: FailureFields, type: TrackedJobType): string {
-	return messageText(job.error_message) ?? jobEndText(type, 'failed');
+	return messageText(job.error_message) || jobEndText(type, 'failed');
 }
 
 /** A partial end names the takes that completed before its cause; one that finished no count says only its cause. */
 function partialMessage(job: PartialFields, type: TrackedJobType): string {
 	const cause = messageText(job.error_message);
 	if (job.completed_takes == null || job.take_count == null) {
-		return cause ?? jobEndText(type, 'partial');
+		return cause || jobEndText(type, 'partial');
 	}
 	return pageText('jobFailure.partialTakes', {
 		completed: String(job.completed_takes),
 		count: job.take_count,
 		failed: String(job.take_count - job.completed_takes),
-		cause: cause ?? jobEndText(type, 'partial')
+		cause: cause || jobEndText(type, 'partial')
 	});
 }
 

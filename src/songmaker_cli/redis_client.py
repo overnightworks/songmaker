@@ -78,14 +78,42 @@ def create_async_redis(url: str) -> AsyncRedis:
     )
 
 
-def build_arq_redis_settings(url: str) -> RedisSettings:
-    """arq's pool-creation retry covers at least ``STORE_STARTUP_WAIT_SECONDS``."""
+def build_arq_redis_settings(url: str, *, ride_out_outage: bool = False) -> RedisSettings:
+    """arq's pool-creation retry covers at least ``STORE_STARTUP_WAIT_SECONDS``.
+
+    ``ride_out_outage`` makes a command retry for as long, so a worker's poll loop
+    survives a Redis outage instead of ending on the first lost connection; a web
+    process keeps failing fast.
+    """
+    from redis.asyncio.retry import Retry
+    from redis.backoff import ConstantBackoff
+    from redis.exceptions import ConnectionError, TimeoutError
+
     settings = RedisSettings.from_dsn(url)
     settings.conn_retry_delay = STORE_STARTUP_RETRY_DELAY_SECONDS
     settings.conn_retries = math.ceil(
         STORE_STARTUP_WAIT_SECONDS / STORE_STARTUP_RETRY_DELAY_SECONDS,
     )
+    if ride_out_outage:
+        settings.retry = Retry(
+            ConstantBackoff(STORE_STARTUP_RETRY_DELAY_SECONDS), settings.conn_retries,
+        )
+        # redis-py's connect retry sees a refused connection as the OSError it raises before
+        # wrapping it.
+        settings.retry_on_error = [ConnectionError, TimeoutError, OSError]
     return settings
+
+
+def stop_retrying(client: AsyncRedis) -> None:
+    """Make every later command of ``client`` fail at once, as a stopping worker needs.
+
+    arq deletes its health-check key before it ends a worker; with the retry of
+    ``ride_out_outage`` that wait would outlast a platform's grace period.
+    """
+    from redis.asyncio.retry import Retry
+    from redis.backoff import NoBackoff
+
+    client.set_retry(Retry(NoBackoff(), 0))
 
 
 def redis_health(r: Redis) -> bool:

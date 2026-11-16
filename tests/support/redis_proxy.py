@@ -24,10 +24,8 @@ class RedisProxy:
         self._server_url = server_url
         parts = urlsplit(server_url)
         self._server_address = (parts.hostname, parts.port)
-        self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._listener.bind((LOOPBACK, 0))
-        self._listener.listen()
-        self._listener.settimeout(ACCEPT_POLL_SECONDS)
+        self._listener = self._listen(0)
+        self._port = self._listener.getsockname()[1]
         self._lock = threading.Lock()
         self._connections: list[socket.socket] = []
         self._cut = False
@@ -39,7 +37,7 @@ class RedisProxy:
     def url(self) -> str:
         """The server's URL with the proxy's address."""
         parts = urlsplit(self._server_url)
-        return urlunsplit(parts._replace(netloc=f"{LOOPBACK}:{self._listener.getsockname()[1]}"))
+        return urlunsplit(parts._replace(netloc=f"{LOOPBACK}:{self._port}"))
 
     def start(self) -> None:
         self._acceptor.start()
@@ -55,7 +53,19 @@ class RedisProxy:
         with self._lock:
             self._reply_lost = True
 
+    def refuse(self) -> None:
+        """Drop every connection and stop listening, as a stopped server's address does."""
+        self.cut()
+        self._closing.set()
+        self._acceptor.join()
+        self._listener.close()
+        self._closing.clear()
+
     def restore(self) -> None:
+        if self._listener.fileno() == -1:
+            self._listener = self._listen(self._port)
+            self._acceptor = threading.Thread(target=self._accept_until_closed, daemon=True)
+            self._acceptor.start()
         with self._lock:
             self._cut = False
 
@@ -70,6 +80,15 @@ class RedisProxy:
         self._acceptor.join()
         self._listener.close()
         self._drop_connections()
+
+    @staticmethod
+    def _listen(port: int) -> socket.socket:
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind((LOOPBACK, port))
+        listener.listen()
+        listener.settimeout(ACCEPT_POLL_SECONDS)
+        return listener
 
     def _drop_connections(self) -> None:
         with self._lock:
