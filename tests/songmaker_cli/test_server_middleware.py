@@ -369,12 +369,14 @@ def test_http_metrics_record_each_http_outcome(
     raised = {"error": RuntimeError, "cancel": asyncio.CancelledError}.get(outcome)
     messages: list[dict] = []
 
+    exchange = _metered_exchange(client.app, outcome, started, messages)
+
     with caplog.at_level("ERROR"):
         if raised is None:
-            asyncio.run(_metered_exchange(client.app, outcome, started, messages))
+            asyncio.run(exchange)
         else:
             with pytest.raises(raised):
-                asyncio.run(_metered_exchange(client.app, outcome, started, messages))
+                asyncio.run(exchange)
 
     status = 206 if started or outcome == "success" else 500
     failures = [r for r in caplog.records if r.name == "songmaker_cli.middleware.http_metrics"]
