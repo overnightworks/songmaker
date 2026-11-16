@@ -92,6 +92,7 @@ for (const width of WIDTHS) {
 						...running,
 						status: 'failed',
 						error: UNAVAILABLE,
+						error_message: { key: 'jobFailure.generationUnavailable', values: {} },
 						error_type: 'generation_unavailable'
 					};
 					let ended = false;
