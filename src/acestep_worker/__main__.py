@@ -38,9 +38,6 @@ GRACEFUL_SHUTDOWN_SECONDS = 10
 # A running take's polling thread outlives its cancelled coroutine and holds the interpreter
 # open for the poll timeout, so a requested exit is forced after this long.
 FORCED_EXIT_SECONDS = GRACEFUL_SHUTDOWN_SECONDS + 20.0
-# tandem's GPU holds need a client that rides out a Redis restart and replays a command whose
-# reply a lost connection took (redis-py 5.x retries only the errors named in retry_on_error),
-# and whose timeouts bound a silent Redis.
 REDIS_RETRY_ATTEMPTS = 3
 REDIS_SOCKET_TIMEOUT_SECONDS = 2.0
 
@@ -109,6 +106,20 @@ def prepare_output_root(output_root: Path, shared_audio_root: Path) -> Path:
     return output_root
 
 
+def create_redis(url: str) -> Redis:
+    """The worker's client: it rides out a Redis restart, replays a command whose reply a lost
+    connection took (redis-py 5.x retries only the errors named in ``retry_on_error``) and times
+    out on a silent Redis, as tandem's locks require."""
+    return Redis.from_url(
+        url,
+        decode_responses=False,
+        retry=Retry(ExponentialBackoff(), REDIS_RETRY_ATTEMPTS),
+        retry_on_error=[RedisConnectionError, RedisTimeoutError],
+        socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+    )
+
+
 def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     settings = settings or get_worker_settings()
     worker_id = settings.worker_id
@@ -117,14 +128,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     shared_audio_root = Path(settings.shared_audio_root)
     audio_dir = prepare_output_root(Path(settings.audio_output_dir), shared_audio_root)
 
-    redis_client: Redis = Redis.from_url(
-        settings.redis_url,
-        decode_responses=False,
-        retry=Retry(ExponentialBackoff(), REDIS_RETRY_ATTEMPTS),
-        retry_on_error=[RedisConnectionError, RedisTimeoutError],
-        socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
-        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
-    )
+    redis_client = create_redis(settings.redis_url)
 
     def log_sink(line: str) -> None:
         cache.set_loading_log_line(line)

@@ -13,9 +13,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support.wrapper_deps import gpu_hold_generation
+from support.wrapper_deps import gpu_hold_generation, reserved_gpu_hold
 
-from acestep_worker.heartbeat import reserve_gpu_hold
 from acestep_worker.models import GpuHoldTokenRequest, TrainLoraRequest, TrainLoraTaskResult
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
@@ -256,8 +255,7 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -291,8 +289,7 @@ def test_release_rejects_a_hold_claimed_by_a_training_task(tmp_path: Path, train
     deps = train_lora_deps(tmp_path)
 
     async def scenario() -> None:
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         async with deps.gpu_hold_handover_lock:
             deps.gpu_hold_handover_tokens.add(hold_token)
         endpoint = next(
@@ -327,8 +324,7 @@ def test_handover_claim_cannot_race_a_coordinator_release(
         return True
 
     async def scenario() -> None:
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         release = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -384,8 +380,7 @@ def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -430,8 +425,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -459,8 +453,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
         await spawned[0]
         assert not deps.gpu_hold_handover_tokens
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         renewal_attempts = 0
 
         async def fail_then_renew(*args, **kwargs) -> bool:
@@ -496,8 +489,7 @@ def test_train_lora_releases_handover_claim_after_connection_error(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -541,8 +533,7 @@ def test_train_lora_releases_handover_claim_when_setup_is_cancelled(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes
@@ -585,8 +576,7 @@ def test_train_lora_releases_the_hold_when_the_runner_fails(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         deps.train_lora_runner = failing_runner
         endpoint = next(
             route.endpoint
@@ -627,8 +617,7 @@ def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         deps.train_lora_runner = blocking_runner
         endpoint = next(
             route.endpoint
@@ -686,8 +675,7 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         deps.train_lora_runner = blocking_runner
         endpoint = next(
             route.endpoint
@@ -735,8 +723,7 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
 
     async def scenario() -> None:
         await deps.cache.load("sft")
-        hold_token = await reserve_gpu_hold(deps.redis, deps.worker_id)
-        assert hold_token
+        hold_token = await reserved_gpu_hold(deps.redis, deps.worker_id)
         endpoint = next(
             route.endpoint
             for route in build_router(deps).routes

@@ -27,7 +27,7 @@ from songmaker_cli.redis_client import create_async_redis
 WORKER = "acestep-worker-0"
 
 
-def _settle_the_epoch(redis_url: str) -> None:
+def _settle_the_real_servers_epoch(redis_url: str) -> None:
     """Date the epoch as on a Redis that has run longer than any lock lasts."""
     with Redis.from_url(redis_url) as server:
         server.set(*settled_epoch())
@@ -54,7 +54,7 @@ def _in_two_processes(
 
 
 def test_one_of_two_processes_takes_a_tick_lock(redis_url: str) -> None:
-    _settle_the_epoch(redis_url)
+    _settle_the_real_servers_epoch(redis_url)
 
     async def scenario(first, second) -> list[bool]:
         return [
@@ -66,7 +66,7 @@ def test_one_of_two_processes_takes_a_tick_lock(redis_url: str) -> None:
 
 
 def test_a_download_of_a_mode_runs_in_one_of_two_processes(redis_url: str) -> None:
-    _settle_the_epoch(redis_url)
+    _settle_the_real_servers_epoch(redis_url)
 
     async def scenario(first, second) -> str | None:
         async with single_flight_download(first, "sft", "job-1"):
@@ -79,7 +79,7 @@ def test_a_download_of_a_mode_runs_in_one_of_two_processes(redis_url: str) -> No
 
 
 def test_the_worker_reserve_and_the_web_admission_cannot_both_win(redis_url: str) -> None:
-    _settle_the_epoch(redis_url)
+    _settle_the_real_servers_epoch(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, int]:
         reserved = await reserve_gpu_hold(worker, WORKER) is not None
@@ -90,7 +90,7 @@ def test_the_worker_reserve_and_the_web_admission_cannot_both_win(redis_url: str
 
 
 def test_the_web_admission_wins_against_a_later_worker_reserve(redis_url: str) -> None:
-    _settle_the_epoch(redis_url)
+    _settle_the_real_servers_epoch(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, int]:
         admitted = await admit_generation(web, WORKER)
@@ -101,7 +101,7 @@ def test_the_web_admission_wins_against_a_later_worker_reserve(redis_url: str) -
 
 
 def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: str) -> None:
-    _settle_the_epoch(redis_url)
+    _settle_the_real_servers_epoch(redis_url)
     _lose_everything(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, bool]:
@@ -113,7 +113,7 @@ def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: 
 
     assert _in_two_processes(redis_url, scenario) == (False, False, False)
 
-    _settle_the_epoch(redis_url)
+    _settle_the_real_servers_epoch(redis_url)
 
     async def after_the_span(worker, web) -> tuple[bool, bool]:
         return await gpu_hold_is_free(web, WORKER), await admit_generation(web, WORKER)

@@ -231,25 +231,17 @@ def _binds_loopback_only(host_ip: str) -> bool:
     return bool(host_ip) and ipaddress.ip_address(host_ip).is_loopback
 
 
-def _entrypoint_module(dockerfile: Path) -> str | None:
-    """The module the image's ENTRYPOINT runs with ``python -m``, when it runs one."""
-    for instruction in final_stage_instructions(dockerfile):
-        if instruction.upper().startswith("ENTRYPOINT "):
-            words = json.loads(instruction.split(maxsplit=1)[1])
-            if "-m" in words:
-                return words[words.index("-m") + 1]
-    return None
-
-
 def _startup_modules(service: dict, dockerfile: Path) -> tuple[str, ...]:
-    """The modules a container starts: its worker settings, else the module its image runs with
-    ``python -m``, else the CLI's server."""
+    """The modules a container starts: its worker settings, else the module its image's
+    ENTRYPOINT runs with ``python -m``, else the CLI's server."""
     command = service.get("command")
     if command:
         return (command[0].rpartition(".")[0],)
-    entrypoint_module = _entrypoint_module(dockerfile)
-    if entrypoint_module is not None:
-        return (f"{entrypoint_module}.__main__",)
+    for instruction in final_stage_instructions(dockerfile):
+        if instruction.startswith("ENTRYPOINT ") and "-m" in (
+            words := json.loads(instruction.removeprefix("ENTRYPOINT "))
+        ):
+            return (f"{words[words.index('-m') + 1]}.__main__",)
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
     script_module = pyproject["project"]["scripts"]["songmaker"].partition(":")[0]
     return (script_module, WEB_SERVER_MODULE)

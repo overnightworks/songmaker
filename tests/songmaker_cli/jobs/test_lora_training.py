@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from support.lora_training_world import seed_queued_lora
 from support.web_app import SettledFakeAsyncRedis
+from support.wrapper_deps import reserved_gpu_hold
 
 from songmaker_cli.constants import (
     USER_LORA_DATASET_DIRNAME,
@@ -1328,8 +1329,7 @@ def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
         from songmaker_cli.jobs.lora_training import update_user_lora
 
         redis = SettledFakeAsyncRedis()
-        hold_token = await reserve_gpu_hold(redis, "w0")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w0")
         renew_task = asyncio.create_task(asyncio.Event().wait())
 
         async def start_renewal(*_args, **_kwargs) -> asyncio.Task[None]:
@@ -1384,8 +1384,7 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
         from songmaker_cli.jobs.lora_training import update_user_lora
 
         redis = SettledFakeAsyncRedis()
-        hold_token = await reserve_gpu_hold(redis, "w0")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w0")
         renew_task = asyncio.create_task(asyncio.Event().wait())
 
         async def start_renewal(*_args, **_kwargs) -> asyncio.Task[None]:
@@ -1555,14 +1554,12 @@ def test_cancel_after_worker_handover_propagates_to_the_lora_job() -> None:
 def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory, tmp_path) -> None:
     import httpx
 
-    from acestep_worker.heartbeat import reserve_gpu_hold
     from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
         redis = SettledFakeAsyncRedis()
-        hold_token = await reserve_gpu_hold(redis, "w0")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w0")
         renew_task = asyncio.create_task(asyncio.Event().wait())
         response = MagicMock()
         response.raise_for_status = MagicMock()
@@ -1616,14 +1613,13 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory, t
 def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
     import httpx
 
-    from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold
     from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
         redis = SettledFakeAsyncRedis()
-        hold_token = await reserve_gpu_hold(redis, "w0")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w0")
         worker_renewed = asyncio.Event()
 
         async def worker_renewal() -> None:
@@ -1684,14 +1680,13 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
 def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> None:
     import httpx
 
-    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold
     from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
         redis = SettledFakeAsyncRedis()
-        hold_token = await reserve_gpu_hold(redis, "w0")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w0")
         renew_task = asyncio.create_task(asyncio.Event().wait())
         response = MagicMock()
         response.raise_for_status = MagicMock()

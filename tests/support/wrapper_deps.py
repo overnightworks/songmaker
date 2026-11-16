@@ -11,7 +11,7 @@ import fakeredis.aioredis
 from support.owner_lease_epoch import settled_epoch
 
 from acestep_engine.models import AceStepConfig
-from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks
+from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks, reserve_gpu_hold
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader
 from acestep_worker.models import GenerationTaskResult
 from acestep_worker.task_store import TaskStore
@@ -95,3 +95,10 @@ def make_deps(
 async def gpu_hold_generation(redis: fakeredis.aioredis.FakeRedis, worker_id: str) -> str | None:
     """The generation of the worker's live GPU hold, or None when none is held."""
     return (await gpu_hold_locks(redis).state(worker_id)).generation
+
+
+async def reserved_gpu_hold(redis: fakeredis.aioredis.FakeRedis, worker_id: str) -> str:
+    """The generation of a new GPU hold on the worker; the reserve must have succeeded."""
+    generation = await reserve_gpu_hold(redis, worker_id)
+    assert generation
+    return generation

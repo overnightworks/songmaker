@@ -248,7 +248,7 @@ async def _nothing(_redis) -> None:
     return None
 
 
-def _settle_the_epoch(server: fakeredis.FakeServer) -> None:
+def _settle_the_fake_servers_epoch(server: fakeredis.FakeServer) -> None:
     arrange_fake_async_redis(
         fakeredis.FakeAsyncRedis(server=server),
         lambda redis: redis.set(*aged_epoch(TICK_LOCK_LASTS.total_seconds())),
@@ -263,7 +263,7 @@ def test_one_of_two_processes_runs_a_tick_and_the_other_reads_ok(
     monkeypatch, loop_name: BackgroundLoopName,
 ) -> None:
     server = fakeredis.FakeServer()
-    _settle_the_epoch(server)
+    _settle_the_fake_servers_epoch(server)
     first = _TickingProcess(monkeypatch, server, loop_name)
     second = _TickingProcess(monkeypatch, server, loop_name)
 
@@ -278,14 +278,14 @@ def test_a_tick_waits_out_a_redis_restart_without_a_failure_and_runs_once_it_set
     monkeypatch, loop_name: BackgroundLoopName,
 ) -> None:
     server = fakeredis.FakeServer()
-    _settle_the_epoch(server)
+    _settle_the_fake_servers_epoch(server)
     process = _TickingProcess(monkeypatch, server, loop_name)
     arrange_fake_async_redis(
         fakeredis.FakeAsyncRedis(server=server), lambda redis: redis.flushall(),
     )
 
     ran_just_after_the_restart = process.run_one_tick()
-    _settle_the_epoch(server)
+    _settle_the_fake_servers_epoch(server)
     ran_once_settled = process.run_one_tick()
 
     assert (ran_just_after_the_restart, ran_once_settled) == (False, True)

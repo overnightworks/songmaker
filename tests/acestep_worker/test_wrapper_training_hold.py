@@ -6,11 +6,17 @@ import asyncio
 import time
 from collections.abc import Callable
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
+import fakeredis
 import pytest
+from fastapi.testclient import TestClient
+from support.owner_lease_epoch import settled_epoch
+from support.wrapper_deps import INTERNAL_HEADERS, make_deps
 
 from acestep_worker.heartbeat import GPU_HOLD_LASTS, gpu_hold_locks
+from acestep_worker.wrapper import create_app
 
 _LOWERED_TTL_SECONDS = 3
 _BOUND_SECONDS = 5
@@ -113,3 +119,29 @@ def test_a_training_whose_hold_is_lost_at_handover_is_refused_and_its_renewal_is
     assert renewal_cancelled
     assert spawned == []
     assert created_ids == []
+
+
+def test_a_worker_answers_busy_until_a_redis_restart_is_settled_and_fails_nothing(
+    tmp_path: Path,
+) -> None:
+    """After a restart a hold may have been lost: reserve and generate get the ordinary 409
+    for one span, then the worker serves both again."""
+    deps, redis = make_deps(tmp_path)
+    server = redis.connection_pool.connection_kwargs["server"]
+    restarted_redis = fakeredis.FakeRedis(server=server)
+    app = create_app(deps)
+    generation = {"mode": "sft", "config": {"prompt": "test", "lyrics": ""}}
+    with TestClient(app, headers=INTERNAL_HEADERS) as client:
+        assert client.post("/load_model", json={"mode": "sft"}).status_code == 200
+        restarted_redis.flushall()
+
+        reserved = client.post("/gpu_hold/reserve")
+        generated = client.post("/generate", json=generation)
+        restarted_redis.set(*settled_epoch())
+        reserved_when_settled = client.post("/gpu_hold/reserve")
+
+    assert reserved.status_code == 409
+    assert reserved.json()["detail"] == "GPU is busy or held"
+    assert generated.status_code == 409
+    assert generated.json()["detail"] == "GPU is held for LoRA training"
+    assert reserved_when_settled.status_code == 200

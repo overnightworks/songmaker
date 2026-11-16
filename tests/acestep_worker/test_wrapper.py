@@ -11,19 +11,18 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
-import fakeredis
 import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
-from support.owner_lease_epoch import settled_epoch
 from support.wrapper_deps import (
     INTERNAL_HEADERS,
     INTERNAL_TOKEN,
     INTERNAL_TOKEN_HEADER,
     gpu_hold_generation,
     make_deps,
+    reserved_gpu_hold,
     run,
 )
 
@@ -32,12 +31,7 @@ from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.clock import utcnow
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
-from acestep_worker.heartbeat import (
-    GPU_HOLD_LASTS,
-    gpu_hold_locks,
-    queue_depth_key,
-    reserve_gpu_hold,
-)
+from acestep_worker.heartbeat import GPU_HOLD_LASTS, gpu_hold_locks, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, VramStats
 from acestep_worker.models import (
     GenerateRequest,
@@ -566,32 +560,6 @@ def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> Non
     assert resp.json()["detail"] == "GPU is held for LoRA training"
 
 
-def test_a_worker_answers_busy_until_a_redis_restart_is_settled_and_fails_nothing(
-    tmp_path: Path,
-) -> None:
-    """After a restart a hold may have been lost: reserve and generate get the ordinary 409
-    for one span, then the worker serves both again."""
-    deps, redis = make_deps(tmp_path)
-    server = redis.connection_pool.connection_kwargs["server"]
-    restarted_redis = fakeredis.FakeRedis(server=server)
-    app = create_app(deps)
-    generation = {"mode": "sft", "config": {"prompt": "test", "lyrics": ""}}
-    with _worker_client(app) as client:
-        assert client.post("/load_model", json={"mode": "sft"}).status_code == 200
-        restarted_redis.flushall()
-
-        reserved = client.post("/gpu_hold/reserve")
-        generated = client.post("/generate", json=generation)
-        restarted_redis.set(*settled_epoch())
-        reserved_when_settled = client.post("/gpu_hold/reserve")
-
-    assert reserved.status_code == 409
-    assert reserved.json()["detail"] == "GPU is busy or held"
-    assert generated.status_code == 409
-    assert generated.json()["detail"] == "GPU is held for LoRA training"
-    assert reserved_when_settled.status_code == 200
-
-
 def test_generate_returns_a_task_that_starts_loading_its_model(tmp_path: Path) -> None:
     deps, _ = make_deps(tmp_path)
     app = create_app(deps)
@@ -1012,13 +980,12 @@ def test_build_state_payload(tmp_path: Path) -> None:
 
 
 def test_build_state_payload_projects_the_remaining_training_hold(tmp_path: Path) -> None:
-    from acestep_worker.heartbeat import reserve_gpu_hold
     from acestep_worker.wrapper import build_state_payload
 
     deps, redis = make_deps(tmp_path)
 
     async def go():
-        assert await reserve_gpu_hold(redis, deps.worker_id)
+        await reserved_gpu_hold(redis, deps.worker_id)
         return await build_state_payload(deps)
 
     payload = run(go())
@@ -1443,8 +1410,7 @@ async def _training_finished_at_once(*_args: object, **_kwargs: object) -> None:
 
 async def _renewing_the_training_hold(deps: WorkerDeps) -> None:
     hold_token = await gpu_hold_generation(deps.redis, deps.worker_id)
-    assert hold_token
-    await _renew_gpu_hold_until_done(deps.redis, deps.worker_id, hold_token)
+    await _renew_gpu_hold_until_done(deps.redis, deps.worker_id, str(hold_token))
 
 
 @dataclass
@@ -1479,8 +1445,7 @@ async def _start_training_owner(
     deps, redis = make_deps(tmp_path)
     await deps.cache.load("sft")
     loaded = await deps.cache.acquire_for_use("sft")
-    hold_token = await reserve_gpu_hold(redis, deps.worker_id)
-    assert hold_token
+    hold_token = await reserved_gpu_hold(redis, deps.worker_id)
     task_id = await _create_gpu_hold_handover_task(deps, hold_token, train_epochs=1)
     assert task_id is not None
     renew_task = asyncio.create_task(renewal(deps))

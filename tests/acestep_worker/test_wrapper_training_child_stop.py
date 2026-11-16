@@ -11,10 +11,10 @@ from typing import TypeVar
 import fakeredis.aioredis
 import httpx
 import pytest
-from support.wrapper_deps import settled_fake_redis
+from support.wrapper_deps import reserved_gpu_hold, settled_fake_redis
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
-from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks, reserve_gpu_hold
+from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.models import GenerationTaskResult, TrainLoraRequest, TrainLoraTaskResult
 from acestep_worker.subprocess_runner import SubprocessHandle, make_acestep_runner
@@ -93,8 +93,7 @@ class _Worker:
     async def start_training(self, runner: TrainingRunner, mode: str = "sft") -> asyncio.Task[None]:
         deps = self.deps
         loaded = await deps.cache.acquire_for_use(mode)
-        token = await reserve_gpu_hold(self.redis, deps.worker_id)
-        assert token
+        token = await reserved_gpu_hold(self.redis, deps.worker_id)
         self.hold_token = token
         task_id = await _create_gpu_hold_handover_task(deps, token, train_epochs=1)
         assert task_id is not None

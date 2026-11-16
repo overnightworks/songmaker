@@ -19,6 +19,7 @@ from support.generation_job_world import (
 )
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
+from support.wrapper_deps import reserved_gpu_hold
 
 from acestep_engine.models import TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
@@ -352,15 +353,14 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
 
 
 def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
-    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         redis = SettledFakeAsyncRedis()
         redis.enqueue_job = AsyncMock()
         await _seed_healthy_worker(redis, seeded_db)
-        hold_token = await reserve_gpu_hold(redis, "w1")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w1")
 
         dispatch = AsyncMock(return_value=make_generation_dto())
         with (
@@ -578,8 +578,7 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
 
         assert take_count == 3
         assert await read_queue_depth(redis, "w1") == 0
-        hold_token = await reserve_gpu_hold(redis, "w1")
-        assert hold_token
+        hold_token = await reserved_gpu_hold(redis, "w1")
         assert await release_gpu_hold(redis, "w1", hold_token)
 
     run_async(exercise())
