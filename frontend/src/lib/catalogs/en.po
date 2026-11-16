@@ -5173,7 +5173,11 @@ msgctxt "jobFailure.unexpected"
 msgid "An unexpected error occurred"
 msgstr ""
 
-msgctxt "jobFailure.reported"
+msgctxt "jobFailure.workerReported"
+msgid "The worker reported: {cause}"
+msgstr ""
+
+msgctxt "jobFailure.recorded"
 msgid "{cause}"
 msgstr ""
 
@@ -5311,10 +5315,6 @@ msgstr ""
 
 msgctxt "voiceFailure.recorded"
 msgid "{cause}"
-msgstr ""
-
-msgctxt "jobEnd.serverRestart"
-msgid "Server restarted — please retry"
 msgstr ""
 
 msgctxt "jobEnd.generateCompleted"

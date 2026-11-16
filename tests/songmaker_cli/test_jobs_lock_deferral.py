@@ -57,7 +57,7 @@ def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
         job = get_job(session, "j1")
         assert job.status == "queued"
         assert job.queue_reason_message == message("jobWait.voiceTraining")
-        assert job.error is None
+        assert job.error_message is None
         assert session.query(Generation).count() == completed
 
 

@@ -41,6 +41,7 @@ from songmaker_cli.constants import (
     OIDC_MCP_GROUP,
 )
 from songmaker_cli.db.models import Album, Generation, Job, Song
+from songmaker_cli.messages import message
 from songmaker_cli.settings import Settings, get_settings
 
 MARKED_TOOLS = {
@@ -236,7 +237,8 @@ def test_the_last_failed_generation_tool_names_the_failed_job_until_a_newer_atte
         session.query(Generation).update({"is_archived": True})
         session.add(Job(
             id="job-failed", type="generate", status="failed", song_id="song-alices",
-            error="out of memory", error_type="gpu_out_of_memory",
+            error_message=message("jobFailure.workerReported", cause="out of memory"),
+            error_type="gpu_out_of_memory",
             started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
         ))

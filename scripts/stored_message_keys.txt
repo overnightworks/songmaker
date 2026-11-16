@@ -18,12 +18,11 @@ jobFailure.gpuOutOfMemory
 jobFailure.internal
 jobFailure.noWorkerAlive
 jobFailure.noWorkers
-jobFailure.partialTakes
 jobFailure.queuedFullQueueBound
 jobFailure.queuedTooLong
+jobFailure.recorded
 jobFailure.referenceAudioNotFound
 jobFailure.referenceDeletedDuringTake
-jobFailure.reported
 jobFailure.scoringAudioMissing
 jobFailure.scoringEnqueueFailed
 jobFailure.scoringGenerationMissing
@@ -35,6 +34,7 @@ jobFailure.tookTooLong
 jobFailure.unexpected
 jobFailure.versionNotFound
 jobFailure.voiceUnavailable
+jobFailure.workerReported
 jobRefusal.queueUnavailable
 jobWait.queuedGenerations
 jobWait.voiceTraining

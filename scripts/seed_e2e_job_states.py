@@ -103,6 +103,8 @@ from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.settings import get_settings
 
+GENERATION_ERROR_TYPE = "generation_error"
+
 
 def _resolve_audio_dir() -> Path:
     project_root = find_project_root(Path.cwd()) or Path.cwd()
@@ -289,16 +291,22 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     change to any client still watching it, the same way a real worker crash
     would report it. ``error_type`` matches ``generation.py``'s own failure
     path (``"generation_error"``) unless ``--error-type`` names another, as a
-    cover run's agent problem does, with the wait a busy one was given. The
-    raw worker sentence stays stored; musician reads project it to
-    "Generating failed — try again." (L6/L11).
+    cover run's agent problem does, with the wait a busy one was given. A
+    Generate failure stores ``jobFailure.generationFailed`` and never the raw
+    worker sentence (L6/L11); any other type stores ``--error`` as the cause
+    of ``jobFailure.workerReported``.
     """
+    failure = (
+        message("jobFailure.generationFailed")
+        if args.error_type == GENERATION_ERROR_TYPE
+        else message("jobFailure.workerReported", cause=args.error)
+    )
     updated = update_job_status(
         session,
         args.job_id,
         JobStatusUpdate(
             JobStatus.FAILED,
-            error=message("jobFailure.reported", cause=args.error),
+            error_message=failure,
             error_type=args.error_type,
             retry_after_seconds=args.retry_after_seconds,
         ),
@@ -467,7 +475,7 @@ def _add_transition_parsers(sub) -> None:
     )
     p_failed.add_argument("--job-id", required=True)
     p_failed.add_argument("--error", required=True)
-    p_failed.add_argument("--error-type", default="generation_error")
+    p_failed.add_argument("--error-type", default=GENERATION_ERROR_TYPE)
     p_failed.add_argument("--retry-after-seconds", type=int)
     p_failed.set_defaults(func=cmd_set_failed)
 

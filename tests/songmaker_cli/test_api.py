@@ -12,7 +12,6 @@ import pytest
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.generation_failures import OTHER_GENERATION_ERROR_TYPES, reported_error
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -37,8 +36,9 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs.generation import _load_song_meta
-from songmaker_cli.messages import message
+from songmaker_cli.messages import Message, message
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -1421,9 +1421,10 @@ def test_last_failed_generation_null_when_no_failed_job(client, error_type, has_
 @pytest.mark.parametrize("status", ["failed", "partial"], ids=["failed", "partial-oom"])
 def test_last_failed_generation_returns_latest_failed_job(client, status) -> None:
     """S9-B: Reload preserves the typed failure, completion and musician line."""
-    message = "Too long for the GPU right now — try a shorter duration."
+    failure = message("jobFailure.gpuOutOfMemory")
+    expected_sentence = failure.sentence()
     if status == "partial":
-        message = "1/2 completed, 1 failed: " + message
+        expected_sentence = "1/2 completed, 1 failed: " + expected_sentence
     completed_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -1442,7 +1443,9 @@ def test_last_failed_generation_returns_latest_failed_job(client, status) -> Non
         job = session.query(Job).filter_by(id=job_id).one()
         assert job.song_id == "s1"
         job.status = status
-        job.error = message
+        job.error_message = failure
+        job.completed_takes = 1 if status == "partial" else None
+        job.take_count = 2 if status == "partial" else None
         job.error_type = "gpu_out_of_memory"
         job.completed_at = completed_at
         session.commit()
@@ -1453,7 +1456,8 @@ def test_last_failed_generation_returns_latest_failed_job(client, status) -> Non
     assert body["id"] == job_id
     assert body["status"] == status
     assert body["type"] == "generate"
-    assert body["error"] == message
+    assert body["error"] == expected_sentence
+    assert body["error_message"] == failure.model_dump()
     assert body["error_type"] == "gpu_out_of_memory"
     assert datetime.fromisoformat(body["completed_at"]).replace(tzinfo=timezone.utc) == completed_at
 
@@ -1470,14 +1474,14 @@ def test_last_failed_generation_returns_the_most_recent_of_several(
         )
         session.add(Job(
             id="job-older", type="generate", status="failed", song_id="s1",
-            error="older failure",
+            error_message=message("jobFailure.workerReported", cause="older failure"),
             started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 7, 1, tzinfo=timezone.utc),
         ))
         session.add(Job(
             id="job-newer", type="generate", status=status, song_id="s1",
             error_type="gpu_out_of_memory",
-            error="newer failure",
+            error_message=message("jobFailure.workerReported", cause="newer failure"),
             started_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
         ))
@@ -1506,7 +1510,7 @@ def test_last_failed_generation_suppressed_by_a_newer_attempt_of_any_outcome(
         session.add(Job(
             id="job-failed", type="generate", status="partial", song_id="s1",
             error_type="gpu_out_of_memory",
-            error="stale failure",
+            error_message=message("jobFailure.workerReported", cause="stale failure"),
             started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
         ))
@@ -1544,7 +1548,7 @@ def test_last_failed_generation_recoverable_after_repaint(client: TestClient) ->
         job = session.query(Job).filter_by(id=job_id).one()
         assert job.song_id == "s1"
         job.status = "failed"
-        job.error = "repaint failed"
+        job.error_message = message("jobFailure.workerReported", cause="repaint failed")
         job.completed_at = datetime.now(timezone.utc)
         session.commit()
 
@@ -1575,7 +1579,7 @@ def test_last_failed_generation_recoverable_after_cover(client: TestClient) -> N
         job = session.query(Job).filter_by(id=job_id).one()
         assert job.song_id == "s1"
         job.status = "failed"
-        job.error = "cover failed"
+        job.error_message = message("jobFailure.workerReported", cause="cover failed")
         job.completed_at = datetime.now(timezone.utc)
         session.commit()
 
@@ -2025,15 +2029,21 @@ def test_s6_unavailable_generation_is_persisted(
     assert response.status_code == 503
     body = response.json()
     assert body == {
-        "detail": expected_detail, "error_type": expected_type, "job_id": body["job_id"],
+        "detail": expected_detail,
+        "message": body["message"],
+        "error_type": expected_type,
+        "job_id": body["job_id"],
     }
+    assert text(SOURCE_LANGUAGE, body["message"]["key"], **body["message"]["values"]) == (
+        expected_detail
+    )
     assert list(body)[0] == "detail"
     with client.app.state.ctx.db() as session:
         job = session.get(Job, body["job_id"])
         assert job is not None
         assert job.song_id == "s1"
         assert job.status == JobStatus.FAILED
-        assert job.error == expected_detail
+        assert job.error_message == Message.model_validate(body["message"])
         assert job.error_type == expected_type
         assert job.completed_at is not None
         completed_at = job.completed_at.isoformat()
@@ -2044,6 +2054,7 @@ def test_s6_unavailable_generation_is_persisted(
     assert recovered_job["id"] == body["job_id"]
     assert recovered_job["status"] == JobStatus.FAILED
     assert recovered_job["error"] == expected_detail
+    assert recovered_job["error_message"] == body["message"]
     assert recovered_job["error_type"] == expected_type
     assert recovered_job["completed_at"] == completed_at
     pool.enqueue_job.assert_not_called()
@@ -2665,7 +2676,7 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
             update_job_status(session, job_id, JobStatusUpdate("completed", progress=1.0))
             is False
         )
-        late = JobStatusUpdate("failed", error=message("jobFailure.reported", cause="late"))
+        late = JobStatusUpdate("failed", error_message=message("jobFailure.internal"))
         assert update_job_status(session, job_id, late) is False
         session.commit()
 
@@ -2940,8 +2951,8 @@ def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        failure = message("jobFailure.reported", cause="test error")
-        update_job_status(session, job.id, JobStatusUpdate("failed", error=failure))
+        failure = message("jobFailure.workerReported", cause="test error")
+        update_job_status(session, job.id, JobStatusUpdate("failed", error_message=failure))
         session.commit()
         job_id = job.id
 
@@ -2955,6 +2966,7 @@ def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     assert len(events) == 1
     assert events[0]["status"] == "failed"
     assert events[0]["error"] == "test error"
+    assert events[0]["error_message"] == failure.model_dump()
 
 
 def test_stream_job_not_found(client: TestClient) -> None:
@@ -4101,7 +4113,7 @@ def stored_musician_job(client):
                 progress=0.5,
                 take_index=1,
                 take_count=2,
-                error="need 18.5 GB",
+                error_message=message("jobFailure.generationFailed"),
                 error_type="generation_error",
                 started_at=datetime.now(timezone.utc),
                 completed_at=datetime.now(timezone.utc),
@@ -4156,11 +4168,11 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
         tracker.report(GenerationPhase.WRITING, 0.5)
     elif transition == "saving":
         tracker.start_saving_take()
-    expected = ("Too long for the GPU right now — try a shorter duration.", "gpu_out_of_memory")
+    failure = message("jobFailure.gpuOutOfMemory")
     with factory() as session:
         job = session.get(Job, stored_musician_job)
-        stored_error = (job.error, job.error_type)
-        assert stored_error == expected
+        stored_error = (job.error_message, job.error_type)
+        assert stored_error == (failure, "gpu_out_of_memory")
         assert job.status == "running"
         assert session.query(Generation).count() == 2
 
@@ -4173,21 +4185,44 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
             return response.json()
 
     response = asyncio.run(asyncio.wait_for(read(), timeout=5))
-    response_error = (response["error"], response["error_type"])
-    assert response_error == expected
+    response_error = (response["error"], response["error_message"], response["error_type"])
+    assert response_error == (
+        failure.sentence(), failure.model_dump(), "gpu_out_of_memory",
+    )
     assert (response["status"], response["take_index"]) == ("running", 2)
+
+
+def _reported(fields: dict[str, str]) -> dict[str, object]:
+    """The job columns of a failure a worker reported, with its error type."""
+    return {
+        "error_message": message("jobFailure.workerReported", cause=fields["cause"]),
+        "error_type": fields["error_type"],
+    }
+
+
+def _reported_frame(fields: dict[str, str]) -> dict[str, object]:
+    """The stream frame fields a reported failure is read as."""
+    reported = _reported(fields)
+    return {
+        "error_message": reported["error_message"].model_dump(),
+        "error_type": fields["error_type"],
+    }
+
+
+def _stream_fields(frame: dict[str, object]) -> dict[str, object]:
+    return {"error_message": frame["error_message"], "error_type": frame["error_type"]}
 
 
 @pytest.mark.parametrize(
     ("before", "after"),
     [
         (
-            {"error": "first", "error_type": "gpu_out_of_memory"},
-            {"error": "second", "error_type": "gpu_out_of_memory"},
+            {"cause": "first", "error_type": "gpu_out_of_memory"},
+            {"cause": "second", "error_type": "gpu_out_of_memory"},
         ),
         (
-            {"error": "same", "error_type": "gpu_out_of_memory"},
-            {"error": "same", "error_type": "timeout"},
+            {"cause": "same", "error_type": "gpu_out_of_memory"},
+            {"cause": "same", "error_type": "timeout"},
         ),
     ],
     ids=["error-only", "type-only"],
@@ -4203,7 +4238,7 @@ def test_s8_stream_error_only_changes(client, before, after):
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
         job_id = job.id
-        update_job_status(session, job_id, JobStatusUpdate("running", **reported_error(before)))
+        update_job_status(session, job_id, JobStatusUpdate("running", **_reported(before)))
         session.commit()
     cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
 
@@ -4230,7 +4265,7 @@ def test_s8_stream_error_only_changes(client, before, after):
                                 job_id,
                                 JobStatusUpdate(
                                     "running" if len(frames) == 1 else "cancelled",
-                                    **reported_error(after),
+                                    **_reported(after),
                                 ),
                             )
                             session.commit()
@@ -4241,8 +4276,8 @@ def test_s8_stream_error_only_changes(client, before, after):
             await redis_client.drain_lease_releases()
         assert status == 200
         first, second = frames[:2]
-        assert {key: first[key] for key in before} == before
-        assert {key: second[key] for key in after} == after
+        assert _stream_fields(first) == _reported_frame(before)
+        assert _stream_fields(second) == _reported_frame(after)
         assert first["status"] == second["status"] == "running"
         assert first["progress"] == second["progress"]
 
@@ -4398,23 +4433,22 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
 @pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
 @pytest.mark.parametrize("status", ["failed", "partial"])
 @pytest.mark.parametrize("role", ["user", "admin"])
-def test_get_job_stream_job_last_failed_generation_projects_stored_worker_cause(
+def test_get_job_stream_job_last_failed_generation_carry_the_stored_message(
     client,
     stored_musician_job,
     read_path,
     status,
     role,
 ):
-    """L6 L11 L5: Every musician read hides worker text, including for admins."""
+    """L6 L11 L5: Every read carries the stored token, and agents its one sentence."""
     from songmaker_cli.auth_dependencies import get_current_user
 
     job_id = stored_musician_job
-    prefix = "1/2 completed, 1 failed: " if status == "partial" else ""
-    raw = prefix + "need 18.5 GB"
     with client.app.state.ctx.db() as session:
         job = session.get(Job, job_id)
         job.status = status
-        job.error = raw
+        if status == "partial":
+            job.completed_takes = 1
         session.get(User, _DEFAULT_USER_ID).role = role
         session.commit()
     client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
@@ -4425,7 +4459,11 @@ def test_get_job_stream_job_last_failed_generation_projects_stored_worker_cause(
     if read_path == "reload" and status == "partial":
         assert result is None
     else:
-        assert result["error"] == prefix + "Generating failed — try again."
+        sentence = message("jobFailure.generationFailed").sentence()
+        prefix = "1/2 completed, 1 failed: " if status == "partial" else ""
+        assert result["error"] == prefix + sentence
+        assert result["error_message"] == {"key": "jobFailure.generationFailed", "values": {}}
+        assert result["completed_takes"] == (1 if status == "partial" else None)
         assert result["error_type"] == "generation_error"
         assert result["id"] == job_id
         assert result["status"] == status
@@ -4433,77 +4471,21 @@ def test_get_job_stream_job_last_failed_generation_projects_stored_worker_cause(
         assert (result["take_index"], result["take_count"]) == (1, 2)
         assert result["remaining_time_estimate"] == 0
     with client.app.state.ctx.db() as session:
-        job = session.get(Job, job_id)
-        assert job.error == raw
-        assert job.error_type == "generation_error"
         assert session.query(Generation).count() == 2
 
 
 @pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
-@pytest.mark.parametrize(
-    "error_type",
-    OTHER_GENERATION_ERROR_TYPES,
-)
-def test_get_job_stream_job_last_failed_generation_preserves_other_error_types(
+def test_get_job_stream_job_last_failed_generation_without_a_failure_carry_no_message(
     client,
     stored_musician_job,
     read_path,
-    error_type,
 ):
-    """L11: Other error classifications pass through all read paths untouched."""
+    """L11: A job that holds no failure answers neither a sentence nor a token."""
     with client.app.state.ctx.db() as session:
-        session.get(Job, stored_musician_job).error_type = error_type
+        session.get(Job, stored_musician_job).error_message = None
         session.commit()
     result = _read_musician_job(client, stored_musician_job, read_path)
-    assert result["error"] == "need 18.5 GB"
-    assert result["error_type"] == error_type
-
-
-@pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
-def test_get_job_stream_job_last_failed_generation_preserves_own_causes(
-    client,
-    stored_musician_job,
-    generation_failure_case,
-    read_path,
-):
-    """L11: Shared Songmaker counterexamples remain visible through real routes."""
-    _, expected = generation_failure_case
-    with client.app.state.ctx.db() as session:
-        session.get(Job, stored_musician_job).error = expected
-        session.commit()
-    assert _read_musician_job(client, stored_musician_job, read_path)["error"] == expected
-
-
-@pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
-@pytest.mark.parametrize("error", [None, "", "Generating failed — try again."])
-def test_get_job_stream_job_last_failed_generation_preserves_missing_or_new_line(
-    client,
-    stored_musician_job,
-    read_path,
-    error,
-):
-    """L11: Missing text and newly sanitized failures survive all read paths."""
-    with client.app.state.ctx.db() as session:
-        session.get(Job, stored_musician_job).error = error
-        session.commit()
-    assert _read_musician_job(client, stored_musician_job, read_path)["error"] == error
-
-
-@pytest.mark.parametrize("read_path", ["get", "stream"])
-@pytest.mark.parametrize("job_type", ["lora_training", "cover"])
-def test_get_job_stream_job_preserves_other_job_causes(
-    client,
-    stored_musician_job,
-    read_path,
-    job_type,
-):
-    """L5: The Generate projection does not erase other job diagnostics."""
-    with client.app.state.ctx.db() as session:
-        session.get(Job, stored_musician_job).type = job_type
-        session.commit()
-    result = _read_musician_job(client, stored_musician_job, read_path)
-    assert result["error"] == "need 18.5 GB"
-    assert result["type"] == job_type
+    assert (result["error"], result["error_message"]) == (None, None)
 
 
 @pytest.mark.parametrize("status", ["queued", "running", "failed", "partial"])
@@ -4522,7 +4504,9 @@ def test_cancel_preserves_status_contract_for_stored_errors(client, stored_music
     with client.app.state.ctx.db() as session:
         job = session.get(Job, stored_musician_job)
         assert job.status == ("cancelled" if active else status)
-        assert job.error == (None if active else "need 18.5 GB")
+        assert job.error_message == (
+            None if active else message("jobFailure.generationFailed")
+        )
         assert job.error_type == (None if active else "generation_error")
 
 
@@ -4547,7 +4531,7 @@ def test_get_job_stream_job_cancel_rejects_foreign_job(client, stored_musician_j
     assert response.status_code == 404
 
 
-def test_get_job_preserves_queue_position_with_projected_error(client, stored_musician_job):
+def test_get_job_preserves_queue_position_with_its_failure(client, stored_musician_job):
     """L11: Read projection preserves the queue's calculated position and reason."""
     with client.app.state.ctx.db() as session:
         job = session.get(Job, stored_musician_job)
@@ -4565,6 +4549,6 @@ def test_get_job_preserves_queue_position_with_projected_error(client, stored_mu
         session.commit()
     response = client.get(f"/api/jobs/{stored_musician_job}")
     assert response.status_code == 200
-    assert response.json()["error"] == "Generating failed — try again."
+    assert response.json()["error"] == message("jobFailure.generationFailed").sentence()
     assert response.json()["queue_position"] == 2
     assert response.json()["queue_reason"] == "Waiting for queued generations on this GPU."
