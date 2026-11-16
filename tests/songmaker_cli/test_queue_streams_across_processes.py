@@ -9,6 +9,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from redis import Redis
+from support.owner_lease_epoch import settled_epoch
 from support.web_cluster_world import WebProcess
 
 from songmaker_cli.db.models import Album, Generation, Song, User, Version
@@ -74,9 +76,11 @@ def _ask_for_the_stream(process: WebProcess) -> httpx.Response:
 
 
 def test_a_queue_stream_asked_for_at_once_is_built_once_and_both_processes_serve_it(
-    web_cluster, locked_ffmpeg: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    web_cluster, redis_url: str, locked_ffmpeg: Path, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cluster, factory = web_cluster
+    Redis.from_url(redis_url).set(*settled_epoch())
     builds = tmp_path / "builds.txt"
     builds.touch()
     monkeypatch.setenv(

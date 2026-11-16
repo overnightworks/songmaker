@@ -63,6 +63,14 @@ class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
     def another_process(self) -> fakeredis.FakeAsyncRedis:
         return fakeredis.FakeAsyncRedis(server=self.server)
 
+    async def execute_command(self, *args, **options):
+        """Run the command, then free the idle connection: a request of a ``TestClient`` that is
+        not entered runs on a loop of its own, and a fake's connection serves only its first."""
+        try:
+            return await super().execute_command(*args, **options)
+        finally:
+            await self.connection_pool.disconnect(inuse_connections=False)
+
 
 def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:
     """The asyncio client of a process's leases; it holds nothing the sync fake holds."""
@@ -238,7 +246,7 @@ def make_test_app(
     redis = make_fake_redis()
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
+        signing_key=TEST_SECRET, redis=redis, async_redis=SettledFakeAsyncRedis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})

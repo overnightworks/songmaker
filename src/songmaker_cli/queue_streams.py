@@ -26,9 +26,11 @@ from pathlib import Path
 from stat import S_ISREG
 from typing import Final, Literal
 
+from anyio import from_thread
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
+from tandem import Locks
 from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
@@ -56,12 +58,7 @@ from songmaker_cli.audio_paths import (
     confined_under,
     resolve_audio_path,
 )
-from songmaker_cli.constants import (
-    REDIS_KEY_PREFIX,
-    REDIS_RL_QUEUE_STREAM_PREFIX,
-    LimiterFailurePolicy,
-)
-from songmaker_cli.db.advisory_locks import try_lock_until_transaction_ends
+from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.refusals import Refusal
@@ -87,8 +84,9 @@ def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
 
 FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
 QUEUE_STREAM_DURATION_LIMIT_DETAIL = "Queue duration exceeds the maximum stream duration"
-QUEUE_STREAM_REDIS_PREFIX: Final = f"{REDIS_KEY_PREFIX}:queue-stream"
+QUEUE_STREAM_REDIS_PREFIX: Final = f"{_consts.REDIS_KEY_PREFIX}:queue-stream"
 QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
+QUEUE_STREAM_BUILD_LOCK_LASTS: Final = timedelta(seconds=FFMPEG_TIMEOUT_SECONDS)
 QUEUE_STREAM_MANIFEST_GLOB: Final = "*.json"
 QUEUE_STREAM_MANIFEST_SUFFIX: Final = ".json"
 QUEUE_STREAM_TEMP_AUDIO_SUFFIX: Final = ".tmp.mp3"
@@ -227,9 +225,7 @@ def build_queue_stream_snapshot(
     windowed_by_count = admission.windowed_by_count
     _stream_dir(ctx).mkdir(parents=True, exist_ok=True)
     prepared_sources = admission.prepared_sources
-    content_hash = _content_hash(
-        scope, scope_id, prepared_sources, windowed=windowed_by_count,
-    )
+    content_hash = _content_hash(scope, scope_id, prepared_sources, windowed=windowed_by_count)
     with _build_lock(ctx, content_hash):
         reusable = _find_reusable_snapshot(ctx, content_hash, stream_url)
         if reusable:
@@ -373,15 +369,19 @@ def _render_snapshot_audio(stream_dir: Path, snapshot_id: str, audio_paths: list
 def _build_lock(ctx: AppContext, key: str) -> Iterator[None]:
     """Serialize builds of one content hash or snapshot id across every web process.
 
-    The advisory lock ends with its transaction, so a process that dies mid-build frees it;
-    a waiter polls and returns its connection between polls.
+    Runs in a request's worker thread and takes the lock on the app's event loop. It lasts as long
+    as ffmpeg may run, so a dead builder frees it, and a Redis restart holds builds for that span.
     """
-    while True:
-        with ctx.db() as session:
-            if try_lock_until_transaction_ends(session, int(key[:15], 16)):
-                yield
-                return
+    locks = Locks(
+        ctx.async_redis, key_prefix=_consts.REDIS_KEY_PREFIX, family="queue-stream-build",
+        lasts=QUEUE_STREAM_BUILD_LOCK_LASTS,
+    )
+    while (generation := from_thread.run(locks.acquire, key)) is None:
         time.sleep(QUEUE_STREAM_BUILD_POLL_SECONDS)
+    try:
+        yield
+    finally:
+        from_thread.run(locks.release, key, generation)
 
 
 def queue_stream_manifest_key(snapshot_id: str) -> str:

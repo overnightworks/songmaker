@@ -7,9 +7,11 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
+import anyio
 import pytest
+from anyio.from_thread import BlockingPortal, start_blocking_portal
 from support.queue_stream_audio import stub_audio_build
-from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
+from support.web_app import TEST_SECRET, SettledFakeAsyncRedis, make_fake_redis
 
 from songmaker_cli import queue_streams
 from songmaker_cli.app_context import AppContext
@@ -28,6 +30,24 @@ OTHER_SNAPSHOT_ID = "f" * 32
 PAST_ORPHAN_AGE = QUEUE_STREAM_ORPHAN_MAX_AGE + timedelta(hours=1)
 
 
+_request_loop: BlockingPortal | None = None
+
+
+@pytest.fixture(autouse=True)
+def _event_loop_of_the_requests():
+    """The loop a request's worker thread reaches the build lock on; one per test."""
+    global _request_loop
+    with start_blocking_portal() as portal:
+        _request_loop = portal
+        yield
+    _request_loop = None
+
+
+def _in_a_request_thread(function):
+    assert _request_loop is not None
+    return _request_loop.call(anyio.to_thread.run_sync, function)
+
+
 @pytest.fixture
 def ctx(tmp_path: Path, pg_factory, monkeypatch) -> AppContext:
     stub_audio_build(monkeypatch)
@@ -36,7 +56,7 @@ def ctx(tmp_path: Path, pg_factory, monkeypatch) -> AppContext:
     (audio_dir / "owner" / "take.mp3").write_bytes(b"source")
     return AppContext(
         db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=SettledFakeAsyncRedis(),
     )
 
 
@@ -54,9 +74,9 @@ def _build_snapshot(ctx: AppContext, scope_id: str = "album") -> str:
     source = track_source_from_generation(
         take, key="take", index=0, entry_id=None, audio_url="/audio/owner/take.mp3",
     )
-    manifest = build_queue_stream_snapshot(
+    manifest = _in_a_request_thread(lambda: build_queue_stream_snapshot(
         ctx, [source], scope="shared-album", scope_id=scope_id, stream_url="",
-    )
+    ))
     return manifest.snapshot_id
 
 
@@ -86,9 +106,27 @@ def test_a_build_reuses_a_snapshot_whose_audio_is_gone_and_the_audio_is_rebuilt_
     audio.unlink()
 
     reused = _build_snapshot(ctx)
-    queue_streams.load_queue_stream_manifest(ctx, first)
+    _in_a_request_thread(lambda: queue_streams.load_queue_stream_manifest(ctx, first))
 
     assert (reused, audio.exists()) == (first, True)
+
+
+def test_a_build_holds_no_pooled_database_connection_while_ffmpeg_runs(
+    ctx, stream_dir, pg_factory, monkeypatch
+) -> None:
+    pool = pg_factory.kw["bind"].pool
+    connections_out_during_ffmpeg: list[int] = []
+    original_concat = queue_streams.run_ffmpeg_concat
+
+    def watching_concat(concat_path: Path, output_path: Path) -> None:
+        connections_out_during_ffmpeg.append(pool.checkedout())
+        original_concat(concat_path, output_path)
+
+    monkeypatch.setattr(queue_streams, "run_ffmpeg_concat", watching_concat)
+
+    _build_snapshot(ctx)
+
+    assert connections_out_during_ffmpeg == [0]
 
 
 def test_a_build_passes_over_an_expired_snapshot(ctx, stream_dir) -> None:
