@@ -1,0 +1,7 @@
+claim_id = "b1da7520d22c4785932a9cd58853acfa"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "36bcc521286a544104594ff9caa2e04b0fe3865f"
+branch = "claude/issue-3217-a-cancelled-co-writer-turn-stops-its-gat"
+scope = ["src/songmaker_cli/conversation_api.py", "tests/songmaker_cli/test_server_chat_cancel_across_processes.py"]
+opened_commit = "9088039e3b8150028026e5071845822daa1badc9"
