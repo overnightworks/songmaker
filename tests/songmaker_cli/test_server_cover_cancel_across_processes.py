@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import httpx
 from redis import Redis
-from support.app_processes import poll_until
 from support.web_cluster_world import StandInCluster, start_owner
 
-from songmaker_cli.cover_runner import COVER_PICTURE_CANCELLED_LOG
 from songmaker_cli.db.models import Album, Job
 from songmaker_cli.job_types import JobStatus
 
@@ -46,15 +44,10 @@ def test_a_cancel_sent_to_one_process_stops_the_picture_the_other_draws(
     reached_gateway = gateway.received.wait(DEADLINE_SECONDS)
     with factory() as session:
         drawing_owner = session.get(Job, job_id).owner_id
-    drawing, other = (
-        (process_a, process_b) if drawing_owner == owner_a else (process_b, process_a)
-    )
+    other = process_b if drawing_owner == owner_a else process_a
 
     cancelled = post(other, f"/api/jobs/{job_id}/cancel")
-    stopped = poll_until(
-        lambda: COVER_PICTURE_CANCELLED_LOG % job_id in drawing.log_text(),
-        deadline_seconds=DEADLINE_SECONDS,
-    )
+    stopped = gateway.closed.wait(DEADLINE_SECONDS)
     gateway.released.set()
     with factory() as session:
         final_status = session.get(Job, job_id).status
