@@ -16,7 +16,7 @@ x-web-image-build: &web-image-build
   context: .
   dockerfile: Dockerfile
   args:
-    SONGMAKER_RELEASE:
+    SERVICE_VERSION:
     SONGMAKER_COMMIT:
     # E2E maps the shipped bundle back to source for its coverage report.
     BUILD_SOURCE_MAPS: "true"

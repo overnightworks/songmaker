@@ -200,7 +200,7 @@ def test_a_dotenv_with_a_misspelt_key_still_raises(tmp_path) -> None:
     ("release", "commit", "expected_release", "expected_commit"),
     [
         (None, None, UNRELEASED_TAG, UNKNOWN_COMMIT),
-        ("v2026.10.28.4", "a" * 40, "v2026.10.28.4", "a" * 40),
+        ("2026.10.28.4", "a" * 40, "v2026.10.28.4", "a" * 40),
         ("", "", UNRELEASED_TAG, UNKNOWN_COMMIT),
         ("  ", "  ", UNRELEASED_TAG, UNKNOWN_COMMIT),
     ],
@@ -210,7 +210,7 @@ def test_release_settings_resolve_missing_values_to_named_constants(
     monkeypatch: pytest.MonkeyPatch,
     release: str | None, commit: str | None, expected_release: str, expected_commit: str,
 ) -> None:
-    for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
+    for name, value in (("SERVICE_VERSION", release), ("SONGMAKER_COMMIT", commit)):
         if value is None:
             monkeypatch.delenv(name, raising=False)
         else:
@@ -218,7 +218,7 @@ def test_release_settings_resolve_missing_values_to_named_constants(
 
     settings = Settings(**_required_settings())
 
-    assert settings.songmaker_release == expected_release
+    assert settings.release_tag == expected_release
     assert settings.songmaker_commit == expected_commit
 
 

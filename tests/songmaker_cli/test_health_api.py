@@ -186,7 +186,7 @@ def test_health_preserves_response_bytes(
     # defect:#1590 — health exposes only current service signals.
     import songmaker_cli.arq_pool as arq_mod
 
-    monkeypatch.delenv("SONGMAKER_RELEASE", raising=False)
+    monkeypatch.delenv("SERVICE_VERSION", raising=False)
     monkeypatch.delenv("SONGMAKER_COMMIT", raising=False)
     get_settings.cache_clear()
 
@@ -224,16 +224,16 @@ def test_health_preserves_response_bytes(
 @pytest.mark.parametrize(
     ("release", "commit", "expected"),
     [
-        ("v2026.10.28.4", "a" * 40, {"tag": "v2026.10.28.4", "commit": "a" * 40}),
+        ("2026.10.28.4", "a" * 40, {"tag": "v2026.10.28.4", "commit": "a" * 40}),
         (None, "b" * 40, {"tag": UNRELEASED_TAG, "commit": "b" * 40}),
-        ("v2026.10.28.4", None, {"tag": "v2026.10.28.4", "commit": UNKNOWN_COMMIT}),
+        ("2026.10.28.4", None, {"tag": "v2026.10.28.4", "commit": UNKNOWN_COMMIT}),
     ],
     ids=["release-build", "commit-without-tag", "tag-without-commit"],
 )
 def test_health_reports_the_release_the_image_was_built_for(
     health_client, monitoring_headers, monkeypatch, fresh_settings, release, commit, expected,
 ) -> None:
-    for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
+    for name, value in (("SERVICE_VERSION", release), ("SONGMAKER_COMMIT", commit)):
         if value is None:
             monkeypatch.delenv(name, raising=False)
         else:

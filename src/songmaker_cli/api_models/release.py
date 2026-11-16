@@ -1,4 +1,4 @@
-"""The release a running image was built for."""
+"""The release a running image was built for: `Settings` reads its `SERVICE_VERSION` and commit."""
 
 from __future__ import annotations
 
@@ -13,4 +13,4 @@ class ReleaseInfo(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Settings) -> ReleaseInfo:
-        return cls(tag=settings.songmaker_release, commit=settings.songmaker_commit)
+        return cls(tag=settings.release_tag, commit=settings.songmaker_commit)

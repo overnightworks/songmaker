@@ -17,7 +17,7 @@ def test_release_is_refused_without_a_session(tmp_path, pg_factory) -> None:
 @pytest.mark.parametrize(
     ("release", "commit", "expected"),
     [
-        ("v2026.10.28.4", "a" * 40, {"tag": "v2026.10.28.4", "commit": "a" * 40}),
+        ("2026.10.28.4", "a" * 40, {"tag": "v2026.10.28.4", "commit": "a" * 40}),
         (None, "b" * 40, {"tag": UNRELEASED_TAG, "commit": "b" * 40}),
         (None, None, {"tag": UNRELEASED_TAG, "commit": UNKNOWN_COMMIT}),
     ],
@@ -26,7 +26,7 @@ def test_release_is_refused_without_a_session(tmp_path, pg_factory) -> None:
 def test_release_names_what_the_image_was_built_for(
     tmp_path, monkeypatch, fresh_settings, release, commit, expected, pg_factory,
 ) -> None:
-    for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
+    for name, value in (("SERVICE_VERSION", release), ("SONGMAKER_COMMIT", commit)):
         if value is None:
             monkeypatch.delenv(name, raising=False)
         else:
