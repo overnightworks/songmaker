@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import uvicorn
+from fastapi import FastAPI
 from logline import RequestLineMiddleware, configure
 from redis.asyncio import Redis
 from redis.asyncio.retry import Retry
@@ -159,6 +160,13 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     return deps
 
 
+def build_app(deps: WorkerDeps) -> FastAPI:
+    """The worker's app as it is served: every request writes a request line in its trace."""
+    app = create_app(deps)
+    app.add_middleware(RequestLineMiddleware)
+    return app
+
+
 def serve(
     deps: WorkerDeps,
     host: str,
@@ -173,11 +181,9 @@ def serve(
     A requested exit that the shutdown does not finish within `forced_exit_seconds` ends the
     process through `force_exit`, so a running take cannot delay the restart.
     """
-    app = create_app(deps)
-    app.add_middleware(RequestLineMiddleware)
     server = uvicorn.Server(
         uvicorn.Config(
-            app,
+            build_app(deps),
             host=host,
             port=port,
             log_config=None,
