@@ -661,24 +661,9 @@ def test_download_model_returns_task_id(tmp_path: Path) -> None:
         local_dir.mkdir(parents=True, exist_ok=True)
         (local_dir / "config.json").write_text("{}")
 
-    from acestep_worker import wrapper as wrapper_module
-
-    original_start = wrapper_module.start_download
-
-    async def fake_start(store, *, mode, checkpoint_dir):
-        return await original_start(
-            store,
-            mode=mode,
-            checkpoint_dir=checkpoint_dir,
-            download_fn=fake_download,
-        )
-
-    wrapper_module.start_download = fake_start  # type: ignore[assignment]
-    try:
-        with _worker_client(app) as client:
-            resp = client.post("/download_model", json={"mode": "sft"})
-    finally:
-        wrapper_module.start_download = original_start  # type: ignore[assignment]
+    deps.download_fn = fake_download
+    with _worker_client(app) as client:
+        resp = client.post("/download_model", json={"mode": "sft"})
     assert resp.status_code == 200
     assert resp.json()["task_id"].startswith("dow-")
 
