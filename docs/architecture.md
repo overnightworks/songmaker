@@ -1048,9 +1048,10 @@ id on the Redis channel `cover_runner.COVER_CANCEL_CHANNEL`, and the runner that
 the picture, subscribed since before the picture reads the job, reads the job from
 PostgreSQL and cancels the picture when it is `cancelled`. Only the id travels and
 delivery is at-most-once; a missed signal leaves the picture to end alone, and its
-publication refuses the cancelled job. A cancel does not stop a co-writer turn: it
-ends the chat job, the turn runs on at the gateway, and its reply is refused as
-"Reply came too late". `covers.decode_cover_image` checks the
+publication refuses the cancelled job. A cancel of a co-writer turn travels the
+same way: the web process running the turn, which `POST /api/chat/turn` started, hears the
+chat job's id, reads the job and cancels the turn's task, which closes the gateway request
+before any further tool edit; edits the turn already committed stay. `covers.decode_cover_image` checks the
 bytes, and the runner writes the decoded picture as PNG. A run that cannot draw
 ends FAILED with the problem as `error_type`, a closed sentence as `error`, and,
 when busy, the wait the gateway named as `retry_after_seconds`; the editor words the problem
