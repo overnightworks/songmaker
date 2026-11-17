@@ -1,8 +1,0 @@
-claim_id = "30e585fa22524b3aaf4966b1b802638f"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "8bf13ce6bd8f051ebe9ee4f915810961ed3e4658"
-branch = "claude/issue-3259-every-page-the-server-serves-names-the-r"
-scope = [".importlinter", "docs/architecture.md", "docs/security.md", "frontend/src/app.html", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/page-language.test.ts", "frontend/src/lib/utils/page-language.ts", "frontend/src/lib/utils/recency.test.ts", "frontend/src/lib/words", "frontend/src/lib/words/en.ts", "frontend/src/routes/+layout.ts", "frontend/src/routes/layout.test.ts", "scripts/dead-exports.allow", "scripts/dead-symbols.allow", "src/songmaker_cli/auth_api.py", "src/songmaker_cli/page_language.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/server.py", "src/songmaker_cli/words.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_page_language.py", "tests/songmaker_cli/test_redis_client_metrics.py", "tests/songmaker_cli/test_server.py", "tests/songmaker_cli/test_sharing_api.py", "tests/support/app_processes.py", "tests/support/web_app.py"]
-opened_commit = "4b563e6dc7c3cb2d32e29a466ee554eee2ad7011"
-whole_reason = "One resolver feeds the shell, the page loader, sign-in and sign-out, across server, frontend, catalog and docs."
