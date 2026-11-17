@@ -243,18 +243,8 @@ def test_health_preserves_response_bytes(
     assert response.content == expected
 
 
-@pytest.mark.parametrize(
-    ("begin_shutdown", "expected_status_code"),
-    [(True, 503), (False, 200)],
-    ids=["shutting-down", "serving-without-an-acestep-worker"],
-)
-def test_health_answers_ready_exactly_while_the_process_can_serve(
-    health_client, begin_shutdown, expected_status_code,
-) -> None:
-    if begin_shutdown:
-        health_client.app.state.background_loop_registry.begin_shutdown()
-
-    assert health_client.get("/health").status_code == expected_status_code
+def test_health_answers_ready_while_serving_without_an_acestep_worker(health_client) -> None:
+    assert health_client.get("/health").status_code == 200
 
 
 def test_health_answers_unavailable_while_the_database_refuses_connections(

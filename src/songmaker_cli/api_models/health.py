@@ -34,16 +34,15 @@ class HealthSignals:
     uptime_seconds: int
     background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth]
     release: ReleaseInfo
-    shutting_down: bool
 
     @property
     def ready(self) -> bool:
-        """Whether this process can serve: its stores answer and it is not shutting down.
+        """Whether this process can serve: its stores answer.
 
         No scarce resource counts: a lease, a lock, an ACE-Step worker or a music worker is
         contended for across pods, so a pod that lacks one is still Ready.
         """
-        return self.db_ok and self.redis_ok and not self.shutting_down
+        return self.db_ok and self.redis_ok
 
     @property
     def acestep(self) -> AceStepState:

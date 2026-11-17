@@ -420,7 +420,6 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
         uptime_seconds=uptime,
         background_loops=request.app.state.background_loop_registry.loop_health(),
         release=ReleaseInfo.from_settings(config),
-        shutting_down=request.app.state.background_loop_registry.shutting_down,
     )
 
 
