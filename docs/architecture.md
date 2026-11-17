@@ -1904,7 +1904,7 @@ Album covers live as files on that same audio volume (`covers/{album_id}/` for o
 
 ## Connection budget
 
-A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine of `db/engine.py` plus the one connection a process holds outside its pool. The platform sets both values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
+A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine that `connect_db` opens in `db/engine.py`, plus one connection of headroom for the init-time engines that run before it. `init_db` opens those one at a time and disposes each before the next: the probe engine of `wait_for_database`, the inspect engine of `_run_migrations`, and Alembic's engine for the upgrade or stamp. All of them close before `connect_db` opens the pooled engine, so a process never holds more than its pool plus that one. The `migrate` init container of a Deployment runs the same init-time engines and is counted under the same rule. The acestep-worker opens no database. The platform sets both pool values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
 
 ## Deploy
 
