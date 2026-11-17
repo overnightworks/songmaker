@@ -1,0 +1,7 @@
+claim_id = "38899487c90d47c0920bfdceb3e11958"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "ca746da3242f7a987c67aa416994c0b3b59dcd45"
+branch = "claude/issue-3271-docs-vision-md-carries-the-four-forward"
+scope = ["docs/VISION.md"]
+opened_commit = "b9b23a0734c46a53abe03d66638cb72c08d15b1d"
