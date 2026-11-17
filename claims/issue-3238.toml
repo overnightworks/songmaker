@@ -3,6 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "36bcc521286a544104594ff9caa2e04b0fe3865f"
 branch = "claude/issue-3238-two-web-pods-build-one-queue-stream-snap"
-scope = [".importlinter", "docs/architecture.md", "src/songmaker_cli/queue_stream_build_lock.py", "src/songmaker_cli/queue_streams.py", "tests/songmaker_cli/test_queue_stream_build_lock.py", "tests/songmaker_cli/test_queue_streams.py", "tests/songmaker_cli/test_queue_streams_across_processes.py", "tests/songmaker_cli/test_queue_streams_cache.py", "tests/support/owner_lease_epoch.py", "tests/support/web_app.py"]
+scope = [".importlinter", "docs/architecture.md", "quality/baseline.toml", "src/songmaker_cli/queue_stream_build_lock.py", "src/songmaker_cli/queue_streams.py", "tests/songmaker_cli/test_queue_stream_build_lock.py", "tests/songmaker_cli/test_queue_streams.py", "tests/songmaker_cli/test_queue_streams_across_processes.py", "tests/songmaker_cli/test_queue_streams_cache.py", "tests/support/owner_lease_epoch.py", "tests/support/web_app.py"]
 opened_commit = "aec5cdcddf29f127a905ee6cc3cb4b0d73c4b678"
 whole_reason = "Cross-process snapshot build spans the stream module, its new lock owner, the layer contract, docs and the stream tests."
