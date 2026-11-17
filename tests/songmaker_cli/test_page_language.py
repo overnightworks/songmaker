@@ -19,6 +19,7 @@ from songmaker_cli.page_language import PageShellError
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 SHELL = "<html><head></head><body>Songmaker</body></html>"
+ENGLISH_SHELL = '<html lang="en"><head></head><body>Songmaker</body></html>'
 ENGLISH_AND_GERMAN = AppLanguages(offered=("en", "de"), default="en")
 A_PAGE = "/albums/a-song"
 MEMBER = "/apps/songmaker"
@@ -113,6 +114,46 @@ def test_a_failing_session_store_leaves_the_browser_to_decide_and_is_logged(
     assert (response.status_code, _lang_of(response.text)) == (200, "de")
     assert [record.levelno for record in caplog.records] == [logging.ERROR]
     assert caplog.records[0].exc_info is not None
+
+
+MARKUP = '"><script>alert(1)</script>'
+FORGED_SESSION_VALUES = {
+    "markup as the id": f"{MARKUP}.0123456789abcdef",
+    "no signature": "no-signature-at-all",
+    "a real id with a wrong signature": "REAL.0123456789abcdef",
+}
+
+
+@pytest.mark.parametrize(
+    "accept_language",
+    [MARKUP, f"de{MARKUP}", "de-<script>"],
+)
+def test_a_hostile_accept_language_leaves_the_shell_english_and_free_of_its_markup(
+    tmp_path: Path, pg_factory, offering_german: None, accept_language: str,
+) -> None:
+    client, _ = _shell_app(tmp_path, pg_factory)
+
+    response = client.get(A_PAGE, headers={"Accept-Language": accept_language})
+
+    assert response.status_code == 200
+    assert response.text == ENGLISH_SHELL
+
+
+@pytest.mark.parametrize("forged", FORGED_SESSION_VALUES.values(), ids=FORGED_SESSION_VALUES)
+def test_a_forged_session_cookie_leaves_the_shell_english_and_free_of_its_markup(
+    tmp_path: Path, pg_factory, offering_german: None, forged: str,
+) -> None:
+    client, factory = _shell_app(tmp_path, pg_factory)
+    seed_session(client, "felix")
+    _store_account_language(factory, "de")
+    cookie_name, real_cookie = next(iter(client.cookies.items()))
+    client.cookies.clear()
+    client.cookies.set(cookie_name, forged.replace("REAL", real_cookie.partition(".")[0]))
+
+    response = client.get(A_PAGE)
+
+    assert response.status_code == 200
+    assert response.text == ENGLISH_SHELL
 
 
 @pytest.mark.parametrize(
