@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { compareByCreatedAt, compareTitles, titleComparatorFor } from './recency';
+
+// These tests change `<html lang>` to another language than the catalogs offer; the page language only accepts offered ones.
+vi.mock('#lib/words/index.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/words/index.ts')>()),
+	languages: ['en', 'de', 'sv']
+}));
 
 describe('compareByCreatedAt', () => {
 	const older = { id: 'a', title: 'Beta', created_at: '2026-01-01T00:00:00.000Z' };

@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Final
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from webauth.oidc import OidcRefusal
 from webauth.ports import AuthenticatedUser
 from webauth.sign_in_routes import (
@@ -21,8 +21,10 @@ from songmaker_cli.api_models import AuthMeResponse
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import NO_ACCESS_PATH
+from songmaker_cli.page_language import request_language
 from songmaker_cli.request_policies import SIGN_IN_PATHS
 from songmaker_cli.settings import get_settings
+from songmaker_cli.words import text
 
 if TYPE_CHECKING:
     from webauth.oidc import OidcRelyingParty
@@ -30,8 +32,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 SIGN_IN_FAILED_STATUS: int = 403
-# Shown on the logout page only where no script runs; the account menu words the same button.
-LOGOUT_BUTTON_LABEL: Final[str] = "Log out"
+# The answer of a checkout without a built page; a machine reads it, no person.
+SIGN_IN_FAILED_DETAIL: Final[str] = "Login failed"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -46,10 +48,15 @@ def _refuse_sign_in(request: Request, refusal: SignInRefusal) -> Response:
         return RedirectResponse(NO_ACCESS_PATH, status_code=303)
     cause = refusal.cause
     log.info("Sign-in refused: %s", cause.reason if isinstance(cause, OidcRefusal) else cause)
-    shell = request.app.state.spa_index
-    if shell.exists():
-        return HTMLResponse(shell.read_bytes(), status_code=SIGN_IN_FAILED_STATUS)
-    return JSONResponse({"detail": "Login failed"}, status_code=SIGN_IN_FAILED_STATUS)
+    shell = request.app.state.page_shell
+    if shell is not None:
+        return shell.answer(request, status_code=SIGN_IN_FAILED_STATUS)
+    return JSONResponse({"detail": SIGN_IN_FAILED_DETAIL}, status_code=SIGN_IN_FAILED_STATUS)
+
+
+def _logout_page_text(request: Request) -> LogoutPageText:
+    language = request_language(request)
+    return LogoutPageText(language=language, button_label=text(language, "logoutPage.logOut"))
 
 
 def install_sign_in(app: FastAPI) -> None:
@@ -63,11 +70,9 @@ def install_sign_in(app: FastAPI) -> None:
         transaction=DatabaseSignInTransaction(app.state.ctx.db),
         refused=_refuse_sign_in,
         keeps_id_token=True,
-        ui_language=lambda _request: None,
+        ui_language=request_language,
         max_sessions=settings.max_concurrent_sessions_per_user,
-        logout_page_text=lambda _request: LogoutPageText(
-            language="en", button_label=LOGOUT_BUTTON_LABEL
-        ),
+        logout_page_text=_logout_page_text,
     )
 
 

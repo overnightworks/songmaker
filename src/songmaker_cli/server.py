@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from logline import RequestLineMiddleware, configure, set_route
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -67,10 +67,10 @@ from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
+from songmaker_cli.page_language import PageShell
 from songmaker_cli.refusals import install_refusal_handler, not_found_response
 from songmaker_cli.request_policies import (
     SIGN_IN_PATHS,
-    SPA_SHELL_HEADERS,
     build_body_size_policy,
     build_csrf_origin_policy,
     build_rate_limit_policy,
@@ -389,20 +389,20 @@ def create_app(
         )
 
     _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
-    sk_index = sveltekit_dir / "index.html"
-    app.state.spa_index = sk_index
+    page_shell = PageShell.read(sveltekit_dir / "index.html")
+    app.state.page_shell = page_shell
 
     @app.exception_handler(404)
-    async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse | JSONResponse:
+    def spa_fallback(request: Request, exc: HTTPException) -> HTMLResponse | JSONResponse:
         if request.url.path.startswith(("/api/", "/audio/")):
             return not_found_response(request, exc)
         if (
             not request.url.path.startswith("/_app/")
             and not request.url.path.startswith("/shared/")
             and request.url.path not in _pwa_exact_paths
-            and sk_index.exists()
+            and page_shell is not None
         ):
-            return FileResponse(sk_index, media_type="text/html", headers=SPA_SHELL_HEADERS)
+            return page_shell.answer(request)
         return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
     return app

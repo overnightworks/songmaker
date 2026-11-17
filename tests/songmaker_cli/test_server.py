@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from logline.testing import configured
 from support.request_lines import request_lines
 from support.web_app import (
+    BUILT_SHELL,
     TEST_SECRET,
     make_app_context,
     make_fake_async_redis,
@@ -93,9 +94,8 @@ def test_content_security_policy_is_pinned_on_pages_and_api(
 ) -> None:
     """The build styles inline, so `style-src` carries `'unsafe-inline'`; scripts stay strict."""
     inline_script = "boot()"
-    client, _ = make_test_app(
-        tmp_path, index_html=f"<html><script>{inline_script}</script></html>", factory=pg_factory,
-    )
+    index_html = BUILT_SHELL.replace("</html>", f"<script>{inline_script}</script></html>")
+    client, _ = make_test_app(tmp_path, index_html=index_html, factory=pg_factory)
     policy = client.get(path).headers["Content-Security-Policy"]
     directives = dict(part.split(" ", 1) for part in policy.split("; "))
     assert directives["default-src"] == "'none'"
@@ -150,7 +150,7 @@ def _sveltekit_app_client(tmp_path: Path, factory, assets: dict[str, bytes]) -> 
     sk_app_dir.mkdir(parents=True)
     for name, content in assets.items():
         (sk_app_dir / name).write_bytes(content)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with factory() as session:
         session.commit()
@@ -215,7 +215,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path, pg_factory) -> Non
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(
@@ -255,7 +255,7 @@ def auth_server_app(tmp_path: Path, pg_factory):
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         owner = seed_user(session, "owner")
@@ -318,7 +318,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     from songmaker_cli.db.queries.auth import create_session as create_db_session
 
@@ -511,7 +511,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings, pg_
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(username="admin2", role="admin")
@@ -896,7 +896,7 @@ def test_cors_wildcard_or_list_raises_at_startup(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     ctx = AppContext(
         db=pg_factory,
@@ -919,7 +919,7 @@ def test_cors_specific_origin(tmp_path: Path, pg_factory, fresh_settings) -> Non
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     factory = pg_factory
     with factory() as session:
@@ -971,7 +971,7 @@ def test_wildcard_allowed_host_raises_at_startup(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     ctx = AppContext(
         db=pg_factory,
@@ -1029,7 +1029,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch, pg_factory, fresh_settin
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     factory = pg_factory
     with factory() as session:
@@ -1061,7 +1061,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch, pg_factory
     sk_dir = tmp_path / "frontend" / "build"
     app_dir = sk_dir / "_app" / "immutable"
     app_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
     (app_dir / "test.js").write_text("console.log('ok')")
 
     with pg_factory() as session:
@@ -1097,7 +1097,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path, pg_factory) -> None:
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(username="admin5")
@@ -1144,7 +1144,7 @@ def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers, 
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(username="admin6", role="admin")
@@ -1188,7 +1188,7 @@ def test_health_with_worker_running(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(username="admin7", role="admin")
@@ -1229,7 +1229,7 @@ def test_health_degraded_no_worker(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(username="admin8", role="admin")
@@ -1265,7 +1265,7 @@ def test_health_queue_depth_cap_reached(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         admin = User(username="admincap", role="admin")
@@ -1312,7 +1312,7 @@ def _make_metrics_client(tmp_path: Path, factory, mock_arq_pool=None) -> TestCli
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with factory() as session:
         admin = User(
@@ -1365,7 +1365,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers, pg
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
@@ -1636,7 +1636,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         register_worker(
@@ -1705,7 +1705,7 @@ def test_metrics_endpoint_offline_worker(
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         register_worker(
@@ -1754,7 +1754,7 @@ def _pwa_test_app(tmp_path: Path, factory, *, create_files: bool) -> TestClient:
     data_dir.mkdir()
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     if create_files:
         (sk_dir / "service-worker.js").write_text("self.addEventListener('install', () => {})")

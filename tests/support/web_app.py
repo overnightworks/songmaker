@@ -20,6 +20,7 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
+BUILT_SHELL: Final = f'<html lang="{LANGUAGE_PLACEHOLDER}">Songmaker</html>'
 
 
 def make_fake_redis() -> fakeredis.FakeRedis:
@@ -221,7 +223,7 @@ def seed_user(
 def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
-    index_html: str = "<html>Songmaker</html>",
+    index_html: str = BUILT_SHELL,
     *,
     factory: sessionmaker[Session],
     oidc_sign_in: OidcSignIn | None = None,

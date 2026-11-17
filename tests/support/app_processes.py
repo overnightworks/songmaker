@@ -40,6 +40,7 @@ from tandem.testing import settle_epoch
 
 from acestep_worker.settings import WorkerSettings
 from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import owner_leases
 
@@ -215,7 +216,7 @@ class WebProcesses:
         (directory / "pyproject.toml").write_text("[project]\nname = 'test'\n", encoding="utf-8")
         (directory / "frontend" / "build").mkdir(parents=True)
         (directory / "frontend" / "build" / "index.html").write_text(
-            "<html></html>", encoding="utf-8",
+            f'<html lang="{LANGUAGE_PLACEHOLDER}"></html>', encoding="utf-8",
         )
         log_path = directory / "server.log"
         log = log_path.open("wb")

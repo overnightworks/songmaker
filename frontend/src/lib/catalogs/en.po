@@ -5868,3 +5868,7 @@ msgstr ""
 msgctxt "adminPage.voiceStatusFailed"
 msgid "failed"
 msgstr ""
+
+msgctxt "logoutPage.logOut"
+msgid "Log out"
+msgstr ""

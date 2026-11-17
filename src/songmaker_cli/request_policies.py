@@ -137,8 +137,9 @@ COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 
 RESOURCE_EVENT_STREAM_CACHE_CONTROL: Final = "no-cache, no-store"
 API_CACHE_CONTROL: Final = "no-store"
-# The shell names the current build's hashed files, which a deploy deletes.
-SPA_SHELL_HEADERS: Final = {"Cache-Control": "no-cache"}
+# The shell names the current build's hashed files, which a deploy deletes, and its `<html lang>`
+# follows the session's account and the browser's `Accept-Language`.
+SPA_SHELL_HEADERS: Final = {"Cache-Control": "no-cache", "Vary": "Accept-Language, Cookie"}
 STYLE_SOURCES_ADDED: Final = {CspDirective.STYLE_SRC: ("'unsafe-inline'",)}
 
 

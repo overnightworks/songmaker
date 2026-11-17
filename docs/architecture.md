@@ -725,7 +725,7 @@ root.
 | Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeLine`, `RecipeTabs`, `WriteColumn`, `ListenTabs`, `TakesList`, `TakeMenu`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar/`TransportBarFrame`, `NowPlaying`/`NowPlayingFrame`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, `CollectionHeader`/`CollectionHeaderFrame`/Menu, shell/Rail, CoWriterPanel, `components/share/` (`SharedCollection`, `SharedFooter`), etc. | `src/lib/components/` |
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
-| Words | The interface's texts: `catalogs/en.po` as source, `words/en.ts` and the server's `songmaker_cli/words.py` written by design-catalogs, read through `utils/page-words.ts`. The root layout's `load` decides the language once and loads the app's words and the design kit's words (`utils/kit-words.ts`, passed as `words` to every kit component) before any route renders; the kit's words never enter the catalog | `src/lib/catalogs/`, `src/lib/words/`, `src/lib/utils/page-words.ts`, `src/lib/utils/kit-words.ts`, `src/routes/+layout.ts` |
+| Words | The interface's texts: `catalogs/en.po` as source, `words/en.ts` and the server's `songmaker_cli/words.py` written by design-catalogs, read through `utils/page-words.ts`. The server decides the language and writes it into `<html lang>` (`page_language.py`, below); the root layout's `load` reads it through `utils/page-language.ts` once and loads the app's words and the design kit's words (`utils/kit-words.ts`, passed as `words` to every kit component) before any route renders; the kit's words never enter the catalog | `src/lib/catalogs/`, `src/lib/words/`, `src/lib/utils/page-words.ts`, `src/lib/utils/kit-words.ts`, `src/routes/+layout.ts` |
 
 The API client and `types.ts` are the frontend's contract with the backend.
 `scripts/generate_types.py --check` derives the browser-facing models from the
@@ -1119,6 +1119,21 @@ session under `DatabaseWriteLock`, committed on a clean exit, rolled back when t
 and the library issues the cookies after it; `POST /auth/logout` and the back-channel route
 enter the same transaction. A refusal at the callback is answered with the SPA shell and 403 (the
 path is the marker the SPA reads), except a non-member, who is redirected to `/no-access`.
+
+`songmaker_cli/page_language.py` owns the language of every page the server answers.
+`request_language` gives webauth's resolver the account's tag of the session the request's cookie
+names (`account_language_of_session`, read only, never renewing) and the browser's
+`Accept-Language`, and answers one of the catalogs' languages or the source language; when the
+session store fails it logs the error and the header alone decides. The sign-in start sends it
+as `ui_locales`, the sign-out page carries it as `<html lang>` with the catalog's `logoutPage.logOut`
+label, and `PageShell` writes it into the built page. `PageShell` reads `frontend/build/index.html`
+once at `create_app`, which refuses to start unless the file holds exactly one `%page-language%`, the value of `app.html`'s `<html lang>`;
+both shell answers (`spa_fallback`, a refusal at the callback) replace it with the resolved language.
+The shell answers `Cache-Control: no-cache` and `Vary: Accept-Language, Cookie`; the refused sign-in's
+final header is `no-store`, because the sign-in policy replaces the response's own header on the
+callback path (`docs/security.md`, Security Headers).
+A build is absent only in a checkout that never built the frontend, and then the refusal answers
+the JSON `{"detail": "Login failed"}`.
 
 Songmaker's own data — accounts, sessions, audit entries — reaches the library
 through the `webauth.ports` protocols, implemented in

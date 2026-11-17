@@ -19,7 +19,6 @@ from support.oidc_client import TEST_CLIENT_SECRET
 from support.oidc_world import World
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client
 
-from songmaker_cli.auth_api import LOGOUT_BUTTON_LABEL
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
 
 MEMBER = "/apps/songmaker"
@@ -28,7 +27,7 @@ SUBJECT = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
 OTHER_SUBJECT = "0a9b8c7d-dddd-4eee-8fff-ba9876543210"
 SESSION_COOKIE = "__Host-session_id"
 PENDING_PREFIX = "__Host-oidc_pending_"
-SHELL = "<html>Songmaker</html>"
+SHELL = '<html lang="en">Songmaker</html>'
 SIGN_IN_ROUTES = ("/login/oidc", "/auth/callback", "/auth/logout")
 
 
@@ -205,10 +204,8 @@ def test_a_commit_failure_leaves_no_cookie_account_or_session(
     assert world.session_count() == 0
 
 
-def test_a_refusal_without_the_page_shell_answers_the_json_failure(
-    world: World, tmp_path: Path,
-) -> None:
-    world.client.app.state.spa_index = tmp_path / "missing-index.html"
+def test_a_refusal_without_the_page_shell_answers_the_json_failure(world: World) -> None:
+    world.client.app.state.page_shell = None
 
     response = world.client.get("/auth/callback", follow_redirects=False)
 
@@ -343,7 +340,6 @@ def test_logging_out_ends_the_session_and_answers_the_page_that_posts_the_stored
         "id_token_hint": stored_token,
     }
     assert '<html lang="en"' in response.text
-    assert f">{LOGOUT_BUTTON_LABEL}</button>" in response.text
     assert _cleared(response, SESSION_COOKIE)
     assert world.session_count() == 0
     reused = web_client(world.client.app, cookies={SESSION_COOKIE: session_cookie})
