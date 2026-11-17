@@ -181,7 +181,7 @@ path = "src/songmaker_cli/words.py"
 job = "Backend (Python 3.14)"
 item = "#3097"
 date = 2026-11-13
-reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
+reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and de.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
 
 [[root.allow]]
 entry = "alembic.ini"

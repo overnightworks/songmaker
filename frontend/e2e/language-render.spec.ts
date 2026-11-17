@@ -25,27 +25,28 @@ async function stillLoading(language: Language): Promise<RegExp> {
 interface Surface {
 	name: string;
 	/** Opens the surface; the seeded library is read in the test, since listing the tests runs before any seed. */
-	open: (page: Page, library: SeededLibrary) => Promise<void>;
+	open: (page: Page, library: SeededLibrary, language: Language) => Promise<void>;
+	/** Opened without a session: the page a person meets before signing in. */
+	signedOut?: boolean;
 }
 
 function address(path: (library: SeededLibrary) => string): Surface['open'] {
 	return async (page, library) => void (await page.goto(path(library)));
 }
 
+async function openSong(page: Page, library: SeededLibrary): Promise<void> {
+	await page.goto(`/album/${library.albumId}`);
+	await page
+		.getByRole('link', { name: containing(library.pickedSongTitle) })
+		.first()
+		.click();
+	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}/[^/]+$`));
+}
+
 const surfaces: Surface[] = [
 	...['/', '/library', '/playlists'].map((path) => ({ name: path, open: address(() => path) })),
 	{ name: 'the album page', open: address((library) => `/album/${library.albumId}`) },
-	{
-		name: 'the song page',
-		open: async (page, library) => {
-			await page.goto(`/album/${library.albumId}`);
-			await page
-				.getByRole('link', { name: containing(library.pickedSongTitle) })
-				.first()
-				.click();
-			await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}/[^/]+$`));
-		}
-	},
+	{ name: 'the song page', open: openSong },
 	...[
 		'/settings/generation',
 		'/settings/voices',
@@ -53,8 +54,49 @@ const surfaces: Surface[] = [
 		'/settings/users',
 		'/settings/about'
 	].map((path) => ({ name: path, open: address(() => path) })),
-	{ name: 'the shared album', open: address((library) => library.albumShareUrl) },
-	{ name: 'the shared playlist', open: address((library) => library.playlistShareUrl) }
+	{ name: '/settings', open: address(() => '/settings') },
+	{
+		name: 'the take page',
+		open: async (page, library) => {
+			await openSong(page, library);
+			await page.goto(`${new URL(page.url()).pathname}/take/1`);
+		}
+	},
+	{
+		name: 'Now Playing',
+		open: async (page, library, language) => {
+			const text = await loadWords(language);
+			await page.goto(`/album/${library.albumId}`);
+			await page
+				.getByRole('button', { name: text['collectionHeader.playAlbum'], exact: true })
+				.click();
+			const bar = page.getByRole('contentinfo');
+			await expect(
+				bar.getByRole('button', { name: text['transport.pause'], exact: true })
+			).toBeVisible();
+			const isPhone = (page.viewportSize()?.width ?? 0) <= 768;
+			await bar
+				.getByRole('button', {
+					name: isPhone
+						? text['player.openNowPlaying']({ title: library.albumTracks[0].songTitle })
+						: text['transport.nowPlaying'],
+					exact: true
+				})
+				.click();
+			await expect(page.getByRole('tab', { name: text['nowPlaying.takeTab'] })).toBeVisible();
+		}
+	},
+	{ name: 'an unknown address', open: address(() => '/no-such-page') },
+	{ name: 'the shared album', open: address((library) => library.albumShareUrl), signedOut: true },
+	{ name: 'the shared song', open: address((library) => library.songShareUrl), signedOut: true },
+	{ name: 'the shared take', open: address((library) => library.takeShareUrl), signedOut: true },
+	{
+		name: 'the shared playlist',
+		open: address((library) => library.playlistShareUrl),
+		signedOut: true
+	},
+	{ name: '/login', open: address(() => '/login'), signedOut: true },
+	{ name: '/no-access', open: address(() => '/no-access'), signedOut: true }
 ];
 
 interface RenderFaults {
@@ -118,18 +160,22 @@ for (const language of languages.filter((offered) => offered !== sourceLanguage)
 		});
 
 		for (const surface of surfaces) {
-			test(`${surface.name} renders whole in ${language}`, async ({ page }) => {
-				await surface.open(page, readSeededLibrary());
+			test.describe(surface.name, () => {
+				if (surface.signedOut) test.use({ storageState: { cookies: [], origins: [] } });
 
-				await expect(page.locator('html')).toHaveAttribute('lang', language);
-				await expect(page.getByText(await stillLoading(language))).toHaveCount(0);
-				await expect
-					.poll(() => page.evaluate(renderFaults, Object.keys(words)))
-					.toEqual({
-						keys: [],
-						unrendered: [],
-						overflowing: []
-					});
+				test(`renders whole in ${language}`, async ({ page }) => {
+					await surface.open(page, readSeededLibrary(), language);
+
+					await expect(page.locator('html')).toHaveAttribute('lang', language);
+					await expect(page.getByText(await stillLoading(language))).toHaveCount(0);
+					await expect
+						.poll(() => page.evaluate(renderFaults, Object.keys(words)))
+						.toEqual({
+							keys: [],
+							unrendered: [],
+							overflowing: []
+						});
+				});
 			});
 		}
 	});
