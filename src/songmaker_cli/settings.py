@@ -142,27 +142,6 @@ def _split_token_clients(value: str) -> list[str]:
     return [entry.strip() for entry in value.split(",")]
 
 
-@dataclass(frozen=True)
-class ProcessKind:
-    """A process kind that holds a pooled database connection set, and its pod count."""
-
-    name: str
-    pods: int
-
-
-# Pods per process kind that open a pooled engine: two web pods (the platform
-# requires two for availability), one music worker, one scoring worker. Not
-# counted: the `migrate` init container and the probe, inspect and Alembic
-# engines of `init_db`, which run one at a time and close before the same pod
-# opens its pooled engine, so a pod never holds more than its pool; the acestep
-# worker opens no database.
-PROCESS_KINDS = (
-    ProcessKind("web", 2),
-    ProcessKind("music-worker", 1),
-    ProcessKind("scoring-worker", 1),
-)
-
-
 class Settings(BaseSettings):
     """Validated application settings, loaded from env, .env and the secret files.
 
@@ -252,31 +231,6 @@ class Settings(BaseSettings):
             return frozenset()
         return frozenset(_split_token_clients(self.token_clients))
 
-    @property
-    def connections_per_process(self) -> int:
-        """Pool, overflow and the one connection a process holds outside its pool."""
-        return self.database_pool_size + self.database_max_overflow + 1
-
-    @property
-    def connection_budget_by_process_kind(self) -> dict[str, int]:
-        """The connections all pods of each process kind may hold at once."""
-        return {
-            kind.name: kind.pods * self.connections_per_process for kind in PROCESS_KINDS
-        }
-
-    @model_validator(mode="after")
-    def validate_connection_budget(self) -> Settings:
-        """Refuse a pool that lets all pods together exceed PostgreSQL's connection limit."""
-        by_kind = self.connection_budget_by_process_kind
-        budget = sum(by_kind.values())
-        limit = self.postgres_max_connections - self.postgres_reserved_connections
-        if budget > limit:
-            raise ValueError(
-                f"Connection budget {budget} ({by_kind}, {self.connections_per_process} "
-                f"connections per pod) exceeds the {limit} PostgreSQL admits",
-            )
-        return self
-
     @model_validator(mode="after")
     def validate_job_timeout_orders(self) -> Settings:
         """Keep scheduler, reaper, and arq's silent-worker bounds ordered."""
@@ -335,10 +289,6 @@ class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────
     database_pool_size: int = 5
     database_max_overflow: int = 10
-    # PostgreSQL's max_connections and superuser_reserved_connections as the server
-    # runs; the defaults are PostgreSQL's own, the connection budget checks against them.
-    postgres_max_connections: int = 100
-    postgres_reserved_connections: int = 3
 
     # ── Sessions / auth ───────────────────────────────────────────────
     session_idle_seconds: int = Field(
