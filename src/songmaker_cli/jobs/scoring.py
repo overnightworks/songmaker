@@ -22,6 +22,7 @@ from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import JobOwner
 
 from ._runtime import _job_is_terminal, _sanitize_error, _update_job
 
@@ -43,7 +44,7 @@ def run_scoring_job(
     *,
     db_factory: sessionmaker[Session],
     audio_dir: Path,
-    owner_id: str,
+    owner: JobOwner,
     device: str = "cpu",
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
@@ -60,7 +61,7 @@ def run_scoring_job(
             log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
 
-        _update_job(db_factory, job_id, JobStatus.RUNNING, owner_id=owner_id)
+        _update_job(db_factory, job_id, JobStatus.RUNNING, owner=owner)
         if _job_is_terminal(db_factory, job_id):
             log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return

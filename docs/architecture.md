@@ -674,9 +674,15 @@ ffmpeg and request-session release through the shared builders;
 and scan-window refusals.
 
 Built snapshots live in `queue-streams/` under the data directory as
-`<id>.json` and `<id>.mp3`. A build reuses the newest unexpired snapshot of the
-same content whose manifest is named after the id it records and whose audio
-still exists. A snapshot lives eight hours. The sweep (at startup and in the
+`<id>.json` and `<id>.mp3`, a cache of the process that built them. Every build
+also publishes the manifest to Redis (`songmaker:queue-stream:manifest:<id>` and
+`songmaker:queue-stream:content:<hash>`, eight hours), and builds of one content
+hash are serialised across web processes by a tandem lock that the building process renews while ffmpeg runs, so a dead
+builder frees it within seconds, and whose waiters poll; neither the builder nor a waiter holds a database connection. A build reuses the unexpired snapshot Redis names for
+its content hash, whichever process built it; a process that serves the audio of a
+snapshot it has no file for rebuilds the file from the manifest's tracks under the
+same lock. The audio stays on each process's disk until audio moves to the object
+store. A snapshot lives eight hours. The sweep (at startup and in the
 maintenance loop) removes the files of expired or unreadable manifests, then
 every regular file of no live snapshot older than 24 hours (a running build's
 `.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
@@ -1433,7 +1439,7 @@ close the stream.
 | GET | `/login/oidc` | public | Start the Keycloak sign-in (303); `next` is a path of this app |
 | GET | `/auth/callback` | public | Finish the sign-in: 303 to `next` or `/`, to `/no-access` for a non-member, else 403 with the SPA shell |
 | POST | `/auth/logout` | public | End the session and answer the page that ends the Keycloak session |
-| GET | `/health` | public | The readiness status, `ok` or `degraded`, and nothing else |
+| GET | `/health` | public | The readiness status, `ok` or `degraded`, and nothing else; 503 while the process cannot serve (see `/health/details` below) |
 | GET | `/health/details` | monitoring token | Per-worker status, DB, Redis, ACE-Step, queue depths, background loops, running release and commit |
 | GET | `/metrics` | monitoring token | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |
@@ -1628,8 +1634,10 @@ apply the same queued-job rule.
 (`WorkerBase.owner_id`). A process writes its id on the jobs it runs: a chat job when
 the turn starts, a cover job when it claims it, a worker job (generation, LoRA
 training, scoring, model load and download) when it first marks it running
-(`jobs.owner_id`, nullable; a job that waits in a queue and older rows have none
-and get no owner verdict). Its lease is a holder of tandem's `Leases` in the family `owner`,
+(`jobs.owner_id` and `jobs.owner_generation`, nullable, written together by
+`db.queries.jobs.owner_columns` from the process's `JobOwner`: its id and the generation of its
+lease; a job that waits in a queue has none and gets no owner verdict, and a row written before
+generations were stored has an owner without a generation and is judged by its owner alone). Its lease is a holder of tandem's `Leases` in the family `owner`,
 built by `worker_liveness.owner_leases` for every process from the same spans: a lease lasts
 `OWNER_LEASE_TTL_SECONDS` (15 s) and is renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by
 `worker_liveness.keep_owner_lease` (`Leases.kept`), in a web process from the end of start-up to
@@ -1637,8 +1645,10 @@ the end of `_lifespan`, in a worker from after its database has opened to its `o
 web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
 serves everything else. The `owner_gone_reaper` loop of every web process runs
 `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
-(5 s) and once at start: it reads the owners of active jobs through `Leases.state` (`worker_liveness.owner_lease_liveness`)
-(`alive`, `gone` or `unknown`) and fails the active jobs of every `gone` owner, whether a web
+(5 s) and once at start: it reads the owner stamps of active jobs (`active_job_owner_stamps`: owner and generation) first,
+then their leases through `Leases.state` (`worker_liveness.owner_lease_liveness`)
+(`alive`, `gone` or `unknown`); a stamp whose generation is not the live lease's reads `gone`,
+for that lease lapsed. It fails the active jobs of every `gone` stamp, whether of a web
 process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then
 removes the suggestion and staging directory of the covers it ended. The `owner_lapses` loop
@@ -1660,17 +1670,19 @@ panel shows "Try again" at once; after a crash within 20 s.
 `owner_gone_reaper` loop health shows in `/health/details`, and fails nothing. A
 Redis that lost its data reads an absent lease `unknown` until the lease span has passed
 since the first command after the loss (tandem's epoch), by when the pods have renewed
-their leases; an owner id the reading lacks is `unknown`, and the job pass never asks about
-its own process. A renewal that fails is retried every interval and logged by tandem; the
+their leases; an owner id the reading lacks is `unknown`. The job pass judges this process's own jobs
+like any other's, so a job of a generation its lease lost fails although the process lives on; after an
+empty restart, a live owner's stamped jobs of the lost generation fail on the first pass after its
+renewal, while rows without a generation follow their owner. A renewal that fails is retried every interval and logged by tandem; the
 `owner_gone_reaper` tick reads this process's own lease, not its old key, and the `owner_lease`
 loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
 pass apart). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
 for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
 generation of tandem's `Hold`, logs it as a start and, in a web process, removes what every
-cover whose stored status has ended left behind (`lifecycle.reconcile_ended_covers`). The stored job status is the only fence: a job
-carries no lease generation, so a lapse cleanup that read the old lease may still fail the
-jobs of the new one. For one release every process also writes `<prefix>:owner:<id>` for the
+cover whose stored status has ended left behind (`lifecycle.reconcile_ended_covers`). A job a process wrote under the new
+generation names a stamp the pass that read the old one does not know, so it keeps running, and
+the stored job status still fences every write to a job that was failed. For one release every process also writes `<prefix>:owner:<id>` for the
 previous release's readers and reads an owner whose old key is live as `alive`
 (`owner_lease_old_key`). A cover's staging directory is named by its job id alone, so it
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in
@@ -1822,8 +1834,8 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   release (`songmaker:job_reaper_lock`, `songmaker:score_backfill_lock`) are not staged: with
   one web process and `Recreate` no process of either release runs a tick beside the other.
 - The ACE-Step GPU hold and the model-download single-flight are tandem locks too
-  ([docs/acestep.md](acestep.md), "Locks in Redis"). `queue_streams._build_locks` stays a
-  thread lock: it guards one process's cache build, not a share across pods.
+  ([docs/acestep.md](acestep.md), "Locks in Redis"). A queue-stream build is serialised
+  across processes by a tandem lock keyed by its content hash (see "Built snapshots").
 - A queued job reports `No worker alive for this job type — please retry.`
   when its known-dead execution worker exceeded its grace, or `Queued too long — please retry.`
   when it exceeded the age guard. A running one reports `Took too long to finish — please retry.`
@@ -1901,7 +1913,7 @@ The request line and the HTTP duration metrics are recorded when the full exchan
 - `db`, `redis`, `acestep`: component health. An ACE-Step worker only counts as online (`songmaker_cli.acestep_state.worker_is_online`, the one function every caller — the health routes, `/metrics`, the scheduler's worker picker, the generate/repaint/cover preflight, the admin worker pool and model registry — goes through) if its heartbeat both exists in Redis *and* reports `gpu_healthy: true` — a worker whose GPU has gone away (NVML present but unreachable: a driver/GPU mismatch, a vanished device) keeps heartbeating just fine, so heartbeat presence alone is not enough (issue #367). A heartbeat missing the `gpu_healthy` key entirely counts as **not** online — fail-closed; a lenient default would only ever hide an old or broken worker build forever. A rollout has no ordering guarantee between `songmaker-web` and the acestep-worker: which one starts first is not assured, and the platform owns the rollout (the test stack, `docker compose --project-directory . -f docker/docker-compose.test.yml up -d --wait`, shares no `depends_on` between them either). The worker publishes its first heartbeat immediately on start, so the mixed-version window is normally seconds; the worst case is however long the new worker container takes to start, not a fixed bound. That worst case is acceptable to simply wait out: every caller above honestly reports "no worker online" for as long as the window lasts, rather than guessing. A staged or ordered rollout that shortens the window is a separate concern, owned by the platform.
 - `acestep_reason`: `lm_init_failed` while a registered worker carries the `songmaker:acestep:lm-failure:{id}` key (its language model cannot start and its restart is retrying the load), otherwise `null`. A fixed code read from the key's existence only; the worker id, the mode and the vendor's error text never appear in the body.
 - `release`: `{tag, commit}` of the running image, the full 40-character commit. The root `Dockerfile` takes the build arguments `SERVICE_VERSION` (set by quality's `image.yml` from the release version, never by this repository) and `SONGMAKER_COMMIT` in its backend stage and writes them into the image as `ENV`; `Settings` is their only reader and forms the tag as `v` plus the version and `ReleaseInfo` (`api_models/release.py`) their one shape. Compose passes both to `songmaker-web`, and the CI e2e stack passes the commit. A value that is unset or blank resolves to the named constants `UNRELEASED_TAG` and `UNKNOWN_COMMIT` (`settings.py`); the build is never refused and no tag is invented.
-- `status`: "ok" or "degraded" (degraded if both workers down, DB down, Redis down, or `acestep` is unhealthy). The HTTP status code stays 200 even when degraded or a background loop is dead: a 503 here would fail `songmaker-web`'s own Docker healthcheck over a *different* container's GPU going away, and a deploy's wait for healthy containers would then refuse every deploy for the exact duration of the outage a fix is meant to end. `songmaker_acestep_workers_total{status="online"} == 0` and `songmaker_background_loop_alive == 0 or songmaker_background_loop_consecutive_failures >= 3` carry the platform's alerts instead — the Docker healthcheck answers "is this container alive", not "is the fleet healthy".
+- `status`: "ok" or "degraded" (degraded if both workers down, DB down, Redis down, or `acestep` is unhealthy). Readiness means "this process can serve" (platform's rule that a surge pod turns Ready when it can serve, not when it holds a scarce resource): `GET /health` answers 503 exactly while the database or Redis does not answer, and 200 otherwise, so the platform's readiness probe takes a pod out of rotation for an outage only it has. Redis is part of it because the rate limiter, the sessions' signals and the leases all need it, so a pod without Redis serves nothing; a Redis outage therefore reports every pod not Ready until it answers again, and the pods turn Ready again on their own, with no restart (the platform runs no liveness probe on `songmaker-web`, so the outage never restarts a pod). A lease, a lock, a music or scoring worker or an ACE-Step worker is contended for across pods and never decides readiness: a second pod turns Ready while the first holds every one. A degraded `status` for such a cause stays a 200: a 503 there would fail `songmaker-web`'s own Docker healthcheck over a *different* container's GPU going away, and a deploy's wait for healthy containers would then refuse every deploy for the exact duration of the outage a fix is meant to end. A shutting-down process needs no answer of its own: uvicorn closes the listener on SIGTERM, so a closed connection is its not-Ready answer. `GET /health/details` always answers 200, because its body is what names an outage. `songmaker_acestep_workers_total{status="online"} == 0` and `songmaker_background_loop_alive == 0 or songmaker_background_loop_consecutive_failures >= 3` carry the platform's alerts instead.
 
 ### Alerting
 
@@ -1916,6 +1928,10 @@ The platform owns songmaker's backup: its schedule, retention and restore (platf
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
 
 Album covers live as files on that same audio volume (`covers/{album_id}/` for original plus card and detail derivatives). Song covers live beside them at `song-covers/{song_id}/` — not under `covers/songs/`, because an album slug can be `songs`. They are not stored as Base64 in PostgreSQL; the album or song row only stores `cover_key`. Authenticated song JSON advertises `cover` only from that song's key; display inheritance of album art is a UI concern. Backup/restore of the audio volume therefore includes covers with no extra volume.
+
+## Connection budget
+
+A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine that `connect_db` opens in `db/engine.py`, plus one connection of headroom for the init-time engines that run before it. `init_db` opens those one at a time and disposes each before the next: the probe engine of `wait_for_database`, the inspect engine of `_run_migrations`, and Alembic's engine for the upgrade or stamp. All of them close before `connect_db` opens the pooled engine, so a process never holds more than its pool plus that one. The acestep-worker opens no database. The platform sets both pool values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
 
 ## Deploy
 

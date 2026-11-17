@@ -50,6 +50,7 @@ from songmaker_cli.scheduler import (
     worker_request_headers,
 )
 from songmaker_cli.settings import LoraTrainingJobConfig
+from songmaker_cli.worker_liveness import JobOwner
 
 from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
 
@@ -661,7 +662,7 @@ async def _prepare_and_submit_lora(
     hold_token: str,
     job_id: str,
     lora_id: str,
-    owner_id: str,
+    owner: JobOwner,
     samples: list,
     target_mode: str,
     user_id: str,
@@ -672,7 +673,7 @@ async def _prepare_and_submit_lora(
     handover = _LoraHoldHandover()
     try:
         renew_task = await _start_lora_hold_renewal(worker, hold_token)
-        if not _update_job(db_factory, job_id, JobStatus.RUNNING, owner_id=owner_id):
+        if not _update_job(db_factory, job_id, JobStatus.RUNNING, owner=owner):
             return None
         dataset_dir = await _race_with_renewal(
             asyncio.to_thread(
@@ -1010,9 +1011,7 @@ def _persist_crashed_lora_reconciliation(
             error_message=error_message,
         )
         return
-    storage_rel = str(
-        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-    )
+    storage_rel = str(Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME)
     update_user_lora(
         session,
         lora_id,
@@ -1040,7 +1039,7 @@ async def run_lora_training_job(
     *,
     db_factory: sessionmaker[Session],
     audio_dir: Path,
-    owner_id: str,
+    owner: JobOwner,
     redis: Redis,
     target_mode: str = MODEL_DEFAULT_MODE,
     training_config: LoraTrainingJobConfig,
@@ -1068,7 +1067,7 @@ async def run_lora_training_job(
             db_factory=db_factory,
             job_id=job_id,
             lora_id=lora_id,
-            owner_id=owner_id,
+            owner=owner,
             redis=redis,
             target_mode=target_mode,
             training_config=training_config,
@@ -1095,7 +1094,7 @@ async def _run_lora_training(
     db_factory: sessionmaker[Session],
     job_id: str,
     lora_id: str,
-    owner_id: str,
+    owner: JobOwner,
     redis: Redis,
     target_mode: str,
     training_config: LoraTrainingJobConfig,
@@ -1127,7 +1126,7 @@ async def _run_lora_training(
         hold_token,
         job_id,
         lora_id,
-        owner_id,
+        owner,
         samples,
         target_mode,
         training_config,
@@ -1240,7 +1239,7 @@ async def _submit_lora_training_job(
     hold_token: str,
     job_id: str,
     lora_id: str,
-    owner_id: str,
+    owner: JobOwner,
     samples: list,
     target_mode: str,
     training_config: LoraTrainingJobConfig,
@@ -1254,7 +1253,7 @@ async def _submit_lora_training_job(
             hold_token=hold_token,
             job_id=job_id,
             lora_id=lora_id,
-            owner_id=owner_id,
+            owner=owner,
             samples=samples,
             target_mode=target_mode,
             user_id=user_id,

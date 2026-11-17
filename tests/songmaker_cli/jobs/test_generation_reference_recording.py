@@ -17,6 +17,7 @@ from support.generation_job_world import (
     post_process_with_stubbed_audio,
     run_async,
 )
+from support.job_owner import an_owner
 from support.reference_rows import a_reference
 
 from songmaker_cli.api_models import (
@@ -77,7 +78,7 @@ def _run_job(
                 redis=MagicMock(),
                 target_model="sft",
                 **task,
-                owner_id="o1",
+                owner=an_owner("o1"),
             )
         )
 

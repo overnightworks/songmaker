@@ -11,6 +11,7 @@ from songmaker_cli.acestep_state import DOWNLOAD_LOCK_LASTS
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.lifecycle import TICK_LOCK_LASTS
+from songmaker_cli.queue_stream_build_lock import QUEUE_STREAM_BUILD_LOCK_LASTS
 from songmaker_cli.worker_liveness import OWNER_LEASE_FAMILY
 
 MILLISECONDS_PER_SECOND = 1000
@@ -34,5 +35,6 @@ def settled_epoch() -> tuple[str, int]:
         OWNER_LEASE_TTL_SECONDS,
         TICK_LOCK_LASTS.total_seconds(),
         DOWNLOAD_LOCK_LASTS.total_seconds(),
+        QUEUE_STREAM_BUILD_LOCK_LASTS.total_seconds(),
     )
     return aged_epoch(longest_span)

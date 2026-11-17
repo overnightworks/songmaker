@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from support.generation_job_world import run_async
+from support.job_owner import an_owner
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario
 
@@ -45,7 +46,7 @@ def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
             await run_generation_job(
                 "j1", "s1", "v1", 2, "u1", db_factory=seeded_db,
                 audio_dir=peer.audio_dir, data_dir=peer.data_dir, redis=peer.redis,
-                target_model="sft", owner_id="o1",
+                target_model="sft", owner=an_owner("o1"),
             )
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
 
@@ -92,7 +93,7 @@ def test_a_download_that_lost_its_lock_stops_and_the_next_job_joins_the_running_
 
             peer.deps.download_fn = controllable_transfer
             lost_job = asyncio.create_task(download_model_on_worker(
-                {"redis": redis}, "dl-lost", "sft", db_factory=seeded_db, owner_id="o1",
+                {"redis": redis}, "dl-lost", "sft", db_factory=seeded_db, owner=an_owner("o1"),
             ))
             await transfer_running.wait()
             other_process = redis.another_process()
@@ -104,7 +105,7 @@ def test_a_download_that_lost_its_lock_stops_and_the_next_job_joins_the_running_
             await other_locks.release("sft", generation)
             streams_before = [kind for kind, _ in peer.requests].count("stream")
             next_job = asyncio.create_task(download_model_on_worker(
-                {"redis": redis}, "dl-next", "sft", db_factory=seeded_db, owner_id="o1",
+                {"redis": redis}, "dl-next", "sft", db_factory=seeded_db, owner=an_owner("o1"),
             ))
             while [kind for kind, _ in peer.requests].count("stream") == streams_before:
                 await asyncio.sleep(0.01)

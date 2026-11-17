@@ -11,6 +11,7 @@ from support.generation_job_world import (
     patch_generation_dispatch,
     run_async,
 )
+from support.job_owner import an_owner
 
 from songmaker_cli.config import get_builtin_defaults
 from songmaker_cli.db.models import GenerationPreset, User
@@ -53,7 +54,7 @@ def _steps_sent_to_worker(seeded_db, tmp_path: Path, *, user_id: str = "u1") -> 
                 data_dir=tmp_path / "data",
                 redis=MagicMock(),
                 target_model="sft",
-                owner_id="o1",
+                owner=an_owner("o1"),
             )
         )
     return received[0]

@@ -38,7 +38,7 @@ class ScoringWorker(WorkerBase):
             run_scoring_job,
             job_id, gen_id, scorers,
             db_factory=self.get_db_factory(), audio_dir=self.audio_dir(),
-            owner_id=self.owner_id, device=self._settings.scoring_device,
+            owner=self.owner, device=self._settings.scoring_device,
         )
 
     async def on_startup(self, ctx) -> None:

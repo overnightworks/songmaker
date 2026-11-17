@@ -12,6 +12,7 @@ import pytest
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.job_owner import an_owner
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -47,9 +48,7 @@ _DEFAULT_USER_ID = "u-test"
 def client(tmp_path: Path, pg_factory) -> TestClient:
     factory = pg_factory
     with factory() as session:
-        session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user", role="user",
-        ))
+        session.add(User(id=_DEFAULT_USER_ID, username="test_user", role="user"))
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
 
@@ -4161,7 +4160,7 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
         job.status = "running"
         job.completed_at = None
         session.commit()
-    tracker = GenerationProgressTracker(factory, stored_musician_job, 2, owner_id="o1")
+    tracker = GenerationProgressTracker(factory, stored_musician_job, 2, owner=an_owner("o1"))
     tracker.record_failure(WorkerGpuOutOfMemory("need 18.5 GB"))
     tracker.start_take(1)
     if transition == "report":
@@ -4330,7 +4329,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     audio_dir=peer.audio_dir,
                     data_dir=peer.data_dir,
                     redis=peer.redis,
-                    target_model="sft", owner_id="o1",
+                    target_model="sft", owner=an_owner("o1"),
                 )
             )
             server = LoopbackServer(client.app)
@@ -4407,7 +4406,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
                 await run_generation_job(
                     job_id, "s1", "v1", 2, _DEFAULT_USER_ID,
                     db_factory=ctx.db, audio_dir=peer.audio_dir, data_dir=peer.data_dir,
-                    redis=peer.redis, target_model="sft", owner_id="o1",
+                    redis=peer.redis, target_model="sft", owner=an_owner("o1"),
                 )
         finally:
             await redis_client.drain_lease_releases()

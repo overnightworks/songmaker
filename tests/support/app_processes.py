@@ -21,12 +21,12 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import IO, Final
+from typing import IO, Final, TypeVar
 from unittest.mock import patch
 
 import httpx
@@ -35,6 +35,7 @@ from pydantic_settings import BaseSettings
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
+from tandem import Leases
 from tandem.testing import settle_epoch
 
 from acestep_worker.settings import WorkerSettings
@@ -42,6 +43,8 @@ from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import owner_leases
+
+T = TypeVar("T")
 
 HEALTH_PATH: Final = "/health"
 READY_DEADLINE_SECONDS: Final = 60.0
@@ -312,14 +315,32 @@ def settle_the_epoch(redis: Redis) -> None:
     asyncio.run(settle())
 
 
+def _on_the_owner_leases(redis: Redis, use: Callable[[Leases], Awaitable[T]]) -> T:
+    """Run ``use`` on the production owner leases over the Redis the case's processes share."""
+
+    async def run() -> T:
+        async with _on_the_same_server(redis) as client:
+            return await use(owner_leases(client))
+
+    return asyncio.run(run())
+
+
 def leased_owner_ids(redis: Redis) -> set[str]:
     """The owner ids whose lease Redis holds, as the production roster reads them."""
 
-    async def read_roster() -> set[str]:
-        async with _on_the_same_server(redis) as client:
-            return set((await owner_leases(client).live()).holders)
+    async def read_roster(leases: Leases) -> set[str]:
+        return set((await leases.live()).holders)
 
-    return asyncio.run(read_roster())
+    return _on_the_owner_leases(redis, read_roster)
+
+
+def owner_lease_generation(redis: Redis, owner_id: str) -> str | None:
+    """The generation of ``owner_id``'s live lease, or None while it has none."""
+
+    async def read_state(leases: Leases) -> str | None:
+        return (await leases.state([owner_id]))[owner_id].generation
+
+    return _on_the_owner_leases(redis, read_state)
 
 
 def _wait_until_ready(

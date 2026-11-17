@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from support.job_owner import an_owner
 
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.db.queries.generations import save_scores
@@ -86,7 +87,7 @@ def _score(db_factory, result: SongScores, audio_dir: Path) -> dict[str, object]
     ):
         run_scoring_job(
             JOB_ID, GENERATION_ID, None, db_factory=db_factory, audio_dir=audio_dir,
-            owner_id="o1",
+            owner=an_owner("o1"),
         )
 
     with db_factory() as session:

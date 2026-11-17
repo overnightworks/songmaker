@@ -12,6 +12,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.job_owner import an_owner
 from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
 from tandem.testing import settle_epoch
@@ -68,6 +69,14 @@ class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
 
     def another_process(self) -> fakeredis.FakeAsyncRedis:
         return fakeredis.FakeAsyncRedis(server=self.server)
+
+    async def execute_command(self, *args, **options):
+        """Run the command, then free the idle connection: a request of a ``TestClient`` that is
+        not entered runs on a loop of its own, and a fake's connection serves only its first."""
+        try:
+            return await super().execute_command(*args, **options)
+        finally:
+            await self.connection_pool.disconnect(inuse_connections=False)
 
 
 def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:
@@ -143,10 +152,12 @@ def make_app_context(
     *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis,
 ) -> AppContext:
     """A context on fakes for the asyncio side, over the caller's database and sync Redis."""
-    return AppContext(
+    ctx = AppContext(
         db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
         async_redis=make_fake_async_redis(),
     )
+    ctx.owner = an_owner(ctx.owner_id)
+    return ctx
 
 
 def make_router_ctx(
@@ -165,6 +176,7 @@ def make_router_ctx(
         signing_key=TEST_SECRET,
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
+    ctx.owner = an_owner(ctx.owner_id)
     if seed_db is not None:
         with ctx.db() as session:
             seed_db(session)
@@ -246,7 +258,7 @@ def make_test_app(
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=make_fake_redis() if redis is None else redis,
-        async_redis=make_fake_async_redis(),
+        async_redis=SettledFakeAsyncRedis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})
