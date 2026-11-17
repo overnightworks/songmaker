@@ -186,27 +186,23 @@ class MusicWorkerSettings:
     cron_jobs = [
         cron(
             logged_job("cleanup_files_cron", _music_worker.cleanup_files_cron),
-            name="cleanup_files_cron",
             minute=set(range(0, 60, 2)),
             second={0},
         ),
         cron(
             logged_job("generation_retention_cron", _music_worker.generation_retention_cron),
-            name="generation_retention_cron",
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},
         ),
         cron(
             logged_job("reference_remnant_cron", _music_worker.reference_remnant_cron),
-            name="reference_remnant_cron",
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},
         ),
         cron(
             logged_job("reference_unused_cron", _music_worker.reference_unused_cron),
-            name="reference_unused_cron",
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},

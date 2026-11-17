@@ -387,15 +387,19 @@ def test_a_worker_beyond_the_servers_databases_fails_naming_both():
 
 
 @pytest.mark.parametrize(
-    ("raises", "outcome"),
-    [(None, "ok"), (ValueError("private content"), "failed")],
+    ("raises", "outcome", "arguments", "logged_job_id"),
+    [
+        (None, "ok", ("job-1", "private content"), "job-1"),
+        (ValueError("private content"), "failed", ("job-1", "private content"), "job-1"),
+        (None, "ok", (), None),
+    ],
 )
 def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
-    raises, outcome, redis_url, monkeypatch, caplog
+    raises, outcome, arguments, logged_job_id, redis_url, monkeypatch, caplog
 ):
-    """A job writes one ended line with its id, duration and outcome, never its content."""
+    """A job writes one ended line with its id (a cron job has none), duration and outcome, never its content."""
 
-    async def job(ctx, job_id, content):
+    async def job(ctx, *job_arguments):
         if raises is not None:
             raise raises
 
@@ -406,7 +410,7 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
             )
             try:
                 await pool.enqueue_job(
-                    "probe", "job-1", "private content", _queue_name=MusicWorkerSettings.queue_name
+                    "probe", *arguments, _queue_name=MusicWorkerSettings.queue_name
                 )
                 await worker.async_run()
             finally:
@@ -416,7 +420,9 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
         asyncio.run(asyncio.wait_for(scenario(), timeout=30))
 
     (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
-    assert (ended.job_id, ended.job_function, ended.outcome) == ("job-1", "probe", outcome)
+    assert (getattr(ended, "job_id", None), ended.job_function, ended.outcome) == (
+        logged_job_id, "probe", outcome,
+    )
     assert ended.duration_ms >= 0
     assert "private content" not in "".join(
         str(value) for value in vars(ended).values() if isinstance(value, str)
