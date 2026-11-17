@@ -1902,6 +1902,10 @@ DB and audio must be backed up and restored together — one without the other l
 
 Album covers live as files on that same audio volume (`covers/{album_id}/` for original plus card and detail derivatives). Song covers live beside them at `song-covers/{song_id}/` — not under `covers/songs/`, because an album slug can be `songs`. They are not stored as Base64 in PostgreSQL; the album or song row only stores `cover_key`. Authenticated song JSON advertises `cover` only from that song's key; display inheritance of album art is a UI concern. Backup/restore of the audio volume therefore includes covers with no extra volume.
 
+## Connection budget
+
+A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine that `connect_db` opens in `db/engine.py`, plus one connection of headroom for the init-time engines that run before it. `init_db` opens those one at a time and disposes each before the next: the probe engine of `wait_for_database`, the inspect engine of `_run_migrations`, and Alembic's engine for the upgrade or stamp. All of them close before `connect_db` opens the pooled engine, so a process never holds more than its pool plus that one. The acestep-worker opens no database. The platform sets both pool values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
+
 ## Deploy
 
 The platform deploys songmaker through Flux from a release tag `vYYYY.MM.DD.N`; a merge to `main` alone deploys nothing. The operator dispatches the Release workflow (`.github/workflows/release.yml`) with a version: it gates main's head through quality, pushes the web, music worker, scoring worker and acestep worker images privately to GHCR with a signed provenance, and then sets the tag and the release; a pushed `v*` tag can never be moved or deleted.
