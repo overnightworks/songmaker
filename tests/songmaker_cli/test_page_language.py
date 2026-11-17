@@ -178,6 +178,8 @@ def test_a_failed_sign_in_shows_the_shell_in_the_resolved_language(
     assert _lang_of(response.text) == "de"
     assert "etag" not in response.headers
     assert "accept-language" in response.headers["vary"].lower()
+    # The sign-in policy's `no-store` replaces the shell's own `no-cache` on this path.
+    assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.parametrize(
