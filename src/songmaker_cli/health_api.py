@@ -9,11 +9,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Final
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.exceptions import RedisError
@@ -382,9 +383,13 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
     scoring_queue_depth = await arq_pool.get_scoring_queue_depth()
 
     config = settings.get_settings()
-    with ctx.db() as session:
-        acestep_workers = list_worker_identities(session)
-        active_jobs_count = count_total_queued_jobs(session)
+    acestep_workers = []
+    active_jobs_count = 0
+    if db_ok:
+        # With the database down nothing is readable, and `db_ok` names the outage.
+        with ctx.db() as session:
+            acestep_workers = list_worker_identities(session)
+            active_jobs_count = count_total_queued_jobs(session)
     queue_depth_cap_reached = active_jobs_count >= config.max_queue_depth
     workers_total = len(acestep_workers)
     workers_online = 0
@@ -420,9 +425,15 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
 
 @router.get("/health", openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION))
 async def health_check(
-    request: Request, pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
+    request: Request,
+    response: Response,
+    pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
 ) -> HealthStatusResponse:
-    return HealthStatusResponse.from_signals(await _read_health_signals(request, pool))
+    """The readiness probe's route: 503 while this process cannot serve, 200 otherwise."""
+    signals = await _read_health_signals(request, pool)
+    if not signals.ready:
+        response.status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    return HealthStatusResponse.from_signals(signals)
 
 
 @router.get(

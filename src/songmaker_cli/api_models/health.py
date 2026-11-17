@@ -36,6 +36,15 @@ class HealthSignals:
     release: ReleaseInfo
 
     @property
+    def ready(self) -> bool:
+        """Whether this process can serve: its stores answer.
+
+        No scarce resource counts: a lease, a lock, an ACE-Step worker or a music worker is
+        contended for across pods, so a pod that lacks one is still Ready.
+        """
+        return self.db_ok and self.redis_ok
+
+    @property
     def acestep(self) -> AceStepState:
         if self.workers_online > 0:
             return "healthy"
@@ -46,9 +55,8 @@ class HealthSignals:
     @property
     def status(self) -> HealthVerdict:
         degraded = (
-            not self.db_ok
+            not self.ready
             or (not self.music_running and not self.scoring_running)
-            or not self.redis_ok
             or self.acestep == "unhealthy"
         )
         return "degraded" if degraded else "ok"
