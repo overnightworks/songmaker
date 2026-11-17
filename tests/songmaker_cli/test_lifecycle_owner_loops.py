@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -193,21 +194,51 @@ async def _fail_the_jobs_once(app: SimpleNamespace) -> None:
     await fail_jobs_of_dead_owners(app.state.ctx)
 
 
+async def _run_one_pass(
+    owner_pass, app: SimpleNamespace, monkeypatch, *, pauses_before: int,
+) -> None:
+    """Run ``owner_pass`` through its first pass and stop it at the pause after it.
+
+    A loop that fails its pass records the failure and goes on, so the caller reads its health.
+    """
+    real_sleep = asyncio.sleep
+    pauses_left = pauses_before
+
+    async def sleep_until_the_pause_after_the_pass(seconds: float) -> None:
+        nonlocal pauses_left
+        if seconds != lifecycle.OWNER_GONE_CHECK_INTERVAL_SECONDS:
+            await real_sleep(seconds)
+        elif pauses_left:
+            pauses_left -= 1
+        else:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(asyncio, "sleep", sleep_until_the_pause_after_the_pass)
+    with contextlib.suppress(asyncio.CancelledError):
+        await owner_pass(app)
+
+
 @pytest.mark.parametrize(
-    "owner_pass", [_fail_the_jobs_once, owner_lapse_loop, owner_gone_reaper_loop],
-    ids=["the cleanup call", "the lapse loop", "the reaper loop"],
+    ("owner_pass", "pauses_before", "loop_name"),
+    [
+        pytest.param(_fail_the_jobs_once, 0, None, id="the cleanup call"),
+        pytest.param(owner_lapse_loop, 0, BackgroundLoopName.OWNER_LAPSES, id="the lapse loop"),
+        pytest.param(
+            owner_gone_reaper_loop, 1, BackgroundLoopName.OWNER_GONE_REAPER, id="the reaper loop",
+        ),
+    ],
 )
-def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while_the_old_one_fails(
-    owner_pass, monkeypatch, pg_factory, tmp_path,
+def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while_the_old_ones_fail(
+    owner_pass, pauses_before, loop_name, monkeypatch, pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
-    monkeypatch.setattr(lifecycle, "OWNER_GONE_CHECK_INTERVAL_SECONDS", 0.01)
 
-    async def run_the_pass_while_the_owner_starts_again() -> tuple[tuple, tuple, bool]:
+    async def run_the_pass_while_the_owner_starts_again() -> tuple[tuple, tuple, tuple, bool, bool]:
         await settle_owner_leases(server)
         leases = owner_leases(server)
         lapsed = (await leases.renew(ANOTHER)).generation
         job_of_the_lapsed_generation = _running_job_of(pg_factory, an_owner(ANOTHER, lapsed))
+        job_of_no_generation = _running_job_of(pg_factory, ANOTHER)
         await leases.end(ANOTHER, lapsed)
         new_jobs: list[str] = []
         new_generations: list[str] = []
@@ -220,26 +251,19 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
             server, pg_factory, tmp_path,
             _LeasesThatRunBeforeAnswering(leases, start_again_and_write_a_job),
         )
-        pass_task = asyncio.ensure_future(owner_pass(app))
-        try:
-            async with asyncio.timeout(DEADLINE_SECONDS):
-                while _status_and_error(pg_factory, job_of_the_lapsed_generation)[0] == (
-                    JobStatus.RUNNING
-                ):
-                    await asyncio.sleep(0.01)
-        finally:
-            pass_task.cancel()
-            await asyncio.gather(pass_task, return_exceptions=True)
+        await _run_one_pass(owner_pass, app, monkeypatch, pauses_before=pauses_before)
+        health = app.state.background_loop_registry.loop_health()
         return (
             _status_and_error(pg_factory, job_of_the_lapsed_generation),
+            _status_and_error(pg_factory, job_of_no_generation),
             _status_and_error(pg_factory, new_jobs[0]),
             new_generations[0] != lapsed,
+            loop_name is None or health[loop_name].status is BackgroundLoopStatus.OK,
         )
 
+    failed = (JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type)
     assert asyncio.run(run_the_pass_while_the_owner_starts_again()) == (
-        (JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type),
-        (JobStatus.RUNNING, None),
-        True,
+        failed, failed, (JobStatus.RUNNING, None), True, True,
     )
 
 
