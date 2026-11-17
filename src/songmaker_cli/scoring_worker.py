@@ -17,7 +17,7 @@ from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
-from songmaker_cli.worker_base import WorkerBase
+from songmaker_cli.worker_base import WorkerBase, logged_job
 
 log = logging.getLogger(__name__)
 
@@ -30,9 +30,6 @@ class ScoringWorker(WorkerBase):
     async def score(self, _ctx, job_id, gen_id, scorers):
         if not self.check_job_still_valid(job_id):
             return
-
-        import structlog
-        structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.SCORE)
 
         await asyncio.to_thread(
             run_scoring_job,
@@ -70,7 +67,9 @@ _scoring_worker = ScoringWorker(_settings)
 
 
 class ScoringWorkerSettings:
-    functions = [func(_scoring_worker.score, name=JobFunction.SCORE)]
+    functions = [
+        func(logged_job(JobFunction.SCORE, _scoring_worker.score), name=JobFunction.SCORE),
+    ]
     on_startup = _scoring_worker.on_startup
     on_shutdown = _scoring_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)

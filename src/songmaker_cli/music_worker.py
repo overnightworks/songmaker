@@ -30,7 +30,7 @@ from songmaker_cli.jobs import (
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.worker_base import WorkerBase
+from songmaker_cli.worker_base import WorkerBase, logged_job
 
 log = logging.getLogger(__name__)
 
@@ -49,9 +49,6 @@ class MusicWorker(WorkerBase):
                        requested_model, repaint_params=None, cover_params=None):
         if not self.check_job_still_valid(job_id):
             return
-
-        import structlog
-        structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
 
         task_params = None
         if repaint_params is not None:
@@ -81,11 +78,6 @@ class MusicWorker(WorkerBase):
     ) -> None:
         if not self.check_job_still_valid(job_id):
             return
-
-        import structlog
-        structlog.contextvars.bind_contextvars(
-            job_id=job_id, task=JobType.LORA_TRAINING,
-        )
 
         await run_lora_training_job(
             ctx, job_id, lora_id, user_id,
@@ -160,11 +152,17 @@ _music_worker = MusicWorker(_settings)
 
 def _music_worker_functions(worker: MusicWorker, settings: Settings):
     functions = [
-        func(worker.generate, name=JobFunction.GENERATE),
-        func(worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
-        func(worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),
+        func(logged_job(JobFunction.GENERATE, worker.generate), name=JobFunction.GENERATE),
         func(
-            worker.train_lora,
+            logged_job(JobFunction.LOAD_MODEL_ON_WORKER, worker.load_model_on_worker),
+            name=JobFunction.LOAD_MODEL_ON_WORKER,
+        ),
+        func(
+            logged_job(JobFunction.DOWNLOAD_MODEL_ON_WORKER, worker.download_model_on_worker),
+            name=JobFunction.DOWNLOAD_MODEL_ON_WORKER,
+        ),
+        func(
+            logged_job(JobFunction.LORA_TRAINING, worker.train_lora),
             name=JobFunction.LORA_TRAINING,
             timeout=settings.lora_training_job_timeout,
         ),
@@ -187,24 +185,28 @@ class MusicWorkerSettings:
     timezone = UTC
     cron_jobs = [
         cron(
-            _music_worker.cleanup_files_cron,
+            logged_job("cleanup_files_cron", _music_worker.cleanup_files_cron),
+            name="cleanup_files_cron",
             minute=set(range(0, 60, 2)),
             second={0},
         ),
         cron(
-            _music_worker.generation_retention_cron,
+            logged_job("generation_retention_cron", _music_worker.generation_retention_cron),
+            name="generation_retention_cron",
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},
         ),
         cron(
-            _music_worker.reference_remnant_cron,
+            logged_job("reference_remnant_cron", _music_worker.reference_remnant_cron),
+            name="reference_remnant_cron",
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},
         ),
         cron(
-            _music_worker.reference_unused_cron,
+            logged_job("reference_unused_cron", _music_worker.reference_unused_cron),
+            name="reference_unused_cron",
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},

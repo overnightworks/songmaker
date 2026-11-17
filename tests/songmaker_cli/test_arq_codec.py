@@ -21,6 +21,7 @@ from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.job_types import JobFunction
 from songmaker_cli.music_worker import MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorkerSettings
+from songmaker_cli.worker_base import JOB_ENDED_EVENT, logged_job
 
 
 @asynccontextmanager
@@ -382,3 +383,40 @@ def test_each_worker_selects_its_own_redis_database(worker_id, number):
 def test_a_worker_beyond_the_servers_databases_fails_naming_both():
     with pytest.raises(pytest.fail.Exception, match=r"gw16.*16 databases"):
         database_number("gw16", database_count=16)
+
+
+@pytest.mark.parametrize(
+    ("raises", "outcome"),
+    [(None, "ok"), (ValueError("private content"), "failed")],
+)
+def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
+    raises, outcome, redis_url, monkeypatch, caplog
+):
+    """A job writes one ended line with its id, duration and outcome, never its content."""
+
+    async def job(ctx, job_id, content):
+        if raises is not None:
+            raise raises
+
+    async def scenario():
+        async with codec_pool(redis_url, monkeypatch) as pool:
+            worker = codec_worker(
+                MusicWorkerSettings, redis_url, logged_job("probe", job), "probe"
+            )
+            try:
+                await pool.enqueue_job(
+                    "probe", "job-1", "private content", _queue_name=MusicWorkerSettings.queue_name
+                )
+                await worker.async_run()
+            finally:
+                await worker.close()
+
+    with caplog.at_level("INFO"):
+        asyncio.run(asyncio.wait_for(scenario(), timeout=30))
+
+    (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
+    assert (ended.job_id, ended.job_function, ended.outcome) == ("job-1", "probe", outcome)
+    assert ended.duration_ms >= 0
+    assert "private content" not in "".join(
+        str(value) for value in vars(ended).values() if isinstance(value, str)
+    )
