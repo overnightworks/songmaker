@@ -1904,7 +1904,7 @@ Album covers live as files on that same audio volume (`covers/{album_id}/` for o
 
 ## Connection budget
 
-`settings.py` owns the connection budget: `PROCESS_KINDS` declares the pod count of each process kind that opens a pooled engine, and `Settings` refuses to load when those pods' pool, overflow and one extra connection each exceed what `postgres_max_connections` less `postgres_reserved_connections` admit. The two limits are configuration that must match the running PostgreSQL.
+A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine of `db/engine.py` plus the one connection a process holds outside its pool. The platform sets both values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
 
 ## Deploy
 
