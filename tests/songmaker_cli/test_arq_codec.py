@@ -397,7 +397,7 @@ def test_a_worker_beyond_the_servers_databases_fails_naming_both():
 def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
     raises, outcome, arguments, logged_job_id, redis_url, monkeypatch, caplog
 ):
-    """A job writes one ended line with its id (a cron job has none), duration and outcome, never its content."""
+    """A job ends with one line: its id (a cron job has none), duration and outcome, no content."""
 
     async def job(ctx, *job_arguments):
         if raises is not None:

@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from logline.testing import configured
 from support.job_owner import an_owner
 
-import songmaker_cli.scoring_worker as sw_mod
 from songmaker_cli.scoring_worker import ScoringWorker
 
 
