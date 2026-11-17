@@ -1123,6 +1123,9 @@ as `ui_locales`, the sign-out page carries it as `<html lang>` with the catalog'
 label, and `PageShell` writes it into the built page. `PageShell` reads `frontend/build/index.html`
 once at `create_app`, which refuses to start unless the file holds exactly one bare `<html>`;
 both shell answers (`spa_fallback`, a refusal at the callback) replace it with `<html lang="…">`.
+The shell answers `Cache-Control: no-cache` and `Vary: Accept-Language, Cookie`; the refused sign-in's
+final header is `no-store`, because the sign-in policy replaces the response's own header on the
+callback path (`docs/security.md`, Security Headers).
 A build is absent only in a checkout that never built the frontend, and then the refusal answers
 the JSON `{"detail": "Login failed"}`.
 
