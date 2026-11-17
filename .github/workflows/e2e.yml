@@ -56,6 +56,46 @@ jobs:
       - name: Reset stack
         run: docker compose $COMPOSE_FILES down -v
 
+      - name: Start the stores
+        run: docker compose $COMPOSE_FILES up -d --wait postgres redis
+
+      - name: Build the web image
+        env:
+          SONGMAKER_COMMIT: ${{ github.sha }}
+        run: docker compose $COMPOSE_FILES build songmaker-web
+
+      # The command and inputs of platform's migrate init container (its
+      # apps/songmaker/web.yaml), against the empty database and before any web
+      # process starts: a URL without the password, the password file under
+      # /run/secrets, a writable /tmp on a read-only root, no capabilities, and
+      # none of the web service's other settings or secrets. The web image's own
+      # migration is proven apart from init_db.
+      - name: Migrate the empty database with the web image
+        run: |
+          set -euo pipefail
+          network="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' \
+            "$(docker compose $COMPOSE_FILES ps --quiet postgres)")"
+          image="$(docker compose $COMPOSE_FILES config --images | grep -- '-songmaker-web$')"
+          alembic() {
+            docker run --rm --network "$network" \
+              --env DATABASE_URL="postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}" \
+              --volume "$SONGMAKER_SECRETS_DIR/postgres-password:/run/secrets/postgres_password:ro" \
+              --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+              --entrypoint /app/.venv/bin/alembic "$image" "$@"
+          }
+          alembic upgrade head
+          heads="$(alembic heads | awk '{print $1}')"
+          [ "$(wc -l <<<"$heads")" = 1 ] || {
+            echo "expected one alembic head in the image, got: $heads" >&2
+            exit 1
+          }
+          stored="$(docker compose $COMPOSE_FILES exec -T postgres sh -c \
+            'psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select version_num from alembic_version"')"
+          [ "$stored" = "$heads" ] || {
+            echo "alembic_version holds '$stored', not the image's head '$heads'" >&2
+            exit 1
+          }
+
       - name: Boot stack
         id: boot
         env:
@@ -65,11 +105,9 @@ jobs:
           # the smoke test and Playwright drive it through below.
           PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
           SONGMAKER_COMMIT: ${{ github.sha }}
-        # Two steps: this stack has no restart policy, so the apps start only
-        # once the stores are healthy.
-        run: |
-          docker compose $COMPOSE_FILES up -d --wait postgres redis
-          docker compose $COMPOSE_FILES up -d --build --wait songmaker-music-worker songmaker-web
+        # This stack has no restart policy, so the apps start only once the
+        # stores are healthy and migrated.
+        run: docker compose $COMPOSE_FILES up -d --build --wait songmaker-music-worker songmaker-web
 
       - name: Smoke test
         run: |
@@ -80,6 +118,13 @@ jobs:
           anonymous="$(curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health")"
           [ "$(jq -c 'keys' <<<"$anonymous")" = '["status"]' ] || {
             echo "expected anonymous /health to carry only status, got $anonymous" >&2
+            exit 1
+          }
+
+          # A Host outside the allowed hosts is refused.
+          unknown_host_status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: unknown.invalid' "$base/health")"
+          [[ $unknown_host_status =~ ^4[0-9]{2}$ ]] || {
+            echo "expected a 4xx for /health with Host unknown.invalid, got $unknown_host_status" >&2
             exit 1
           }
 
