@@ -233,7 +233,7 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
 ) -> None:
     server = make_fake_async_redis()
 
-    async def run_the_pass_while_the_owner_starts_again() -> tuple[tuple, tuple, tuple, bool, tuple]:
+    async def run_the_pass_while_the_owner_starts_again() -> tuple:
         await settle_owner_leases(server)
         leases = owner_leases(server)
         lapsed = (await leases.renew(ANOTHER)).generation
