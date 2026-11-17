@@ -7,7 +7,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from support.fake_oidc_issuer import Person
 from support.oidc_world import World
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, seed_user
@@ -101,13 +102,10 @@ def test_the_account_language_of_the_session_beats_the_browser(
 def test_a_failing_session_store_leaves_the_browser_to_decide_and_is_logged(
     tmp_path: Path, pg_factory, offering_german: None, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    client, _ = _shell_app(tmp_path, pg_factory)
+    client, factory = _shell_app(tmp_path, pg_factory)
     seed_session(client, "felix")
-
-    def unreachable_store():
-        raise OperationalError("connect", {}, ConnectionError("store down"))
-
-    client.app.state.ctx.db = unreachable_store
+    unreachable_engine = create_engine(factory.kw["bind"].url.set(port=1))
+    client.app.state.ctx.db = sessionmaker(bind=unreachable_engine)
     with caplog.at_level(logging.ERROR, logger=page_language.__name__):
         response = client.get(A_PAGE, headers={"Accept-Language": "de"})
 
@@ -195,7 +193,7 @@ def test_the_sign_in_start_names_the_resolved_language_to_the_issuer(
     assert parse_qs(urlsplit(response.headers["location"]).query)["ui_locales"] == [expected]
 
 
-def test_the_sign_out_page_carries_the_resolved_language_and_its_catalog_label(
+def test_the_sign_out_page_carries_the_source_language_and_its_catalog_label(
     world: World,
 ) -> None:
     world.sign_in(Person("6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab", "felix", (MEMBER,)))
