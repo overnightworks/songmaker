@@ -8,18 +8,12 @@ describe('pageLanguage', () => {
 		expect(pageLanguage()).toBe(sourceLanguage);
 	});
 
-	it('a page without a language fails loud', () => {
-		document.documentElement.lang = '';
-		expect(() => pageLanguage()).toThrow(/language/i);
-	});
-
-	it('a language the app does not offer fails loud', () => {
-		document.documentElement.lang = 'tlh';
-		expect(() => pageLanguage()).toThrow(/language/i);
-	});
-
-	it('a malformed language tag fails loud', () => {
-		document.documentElement.lang = 'not a tag';
+	it.each([
+		['a page without a language', ''],
+		['a language the app does not offer', 'tlh'],
+		['a malformed language tag', 'not a tag']
+	])('%s fails loud', (_case, tag) => {
+		document.documentElement.lang = tag;
 		expect(() => pageLanguage()).toThrow(/language/i);
 	});
 });
