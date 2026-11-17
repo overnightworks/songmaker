@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           network="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' \
             "$(docker compose $COMPOSE_FILES ps --quiet postgres)")"
-          image="$(docker compose $COMPOSE_FILES images --quiet songmaker-web)"
+          image="$(docker compose $COMPOSE_FILES config --images | grep -- '-songmaker-web$')"
           alembic() {
             docker run --rm --network "$network" \
               --env DATABASE_URL="postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}" \
