@@ -240,3 +240,11 @@ reason = "a structural rule over tests/conftest.py, which mirrors no production 
 path = "tests/test_shard_selection.py"
 rule = "test-layout"
 reason = "proves the shard selection of tests/conftest.py, which lies outside every package"
+
+[[advisories.allow]]
+id = "GHSA-fc5q-39xc-vjpf"
+lock = "frontend/pnpm-lock.yaml"
+until = 2027-01-31
+date = 2026-11-17
+item = "overnightworks/quality#879"
+reason = "picomatch comes only through dev and build tools (fdir, tinyglobby via svelte-check, typescript-eslint, vite); no fix released"
