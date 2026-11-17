@@ -1,0 +1,7 @@
+claim_id = "251b47814b814758993961e9ccbaec97"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "8bf13ce6bd8f051ebe9ee4f915810961ed3e4658"
+branch = "claude/issue-3260-songmaker-allows-ghsa-fc5q-39xc-vjpf-pic"
+scope = ["quality/config.toml"]
+opened_commit = "a3b1d1a1648c47cdfe5dd5bd04428324e1fcc70f"
