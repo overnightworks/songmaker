@@ -59,18 +59,32 @@ jobs:
       - name: Start the stores
         run: docker compose $COMPOSE_FILES up -d --wait postgres redis
 
-      # The command platform's migrate init container runs, against the empty
-      # database and before any web process starts, so the web image's own
+      - name: Build the web image
+        env:
+          SONGMAKER_COMMIT: ${{ github.sha }}
+        run: docker compose $COMPOSE_FILES build songmaker-web
+
+      # The command and inputs of platform's migrate init container (its
+      # apps/songmaker/web.yaml), against the empty database and before any web
+      # process starts: a URL without the password, the password file under
+      # /run/secrets, a writable /tmp on a read-only root, no capabilities, and
+      # none of the web service's other settings or secrets. The web image's own
       # migration is proven apart from init_db.
       - name: Migrate the empty database with the web image
-        env:
-          PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
-          SONGMAKER_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
-          alembic="docker compose $COMPOSE_FILES run --rm --no-deps --build -T --entrypoint /app/.venv/bin/alembic songmaker-web"
-          $alembic upgrade head
-          heads="$($alembic heads | awk '{print $1}')"
+          network="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' \
+            "$(docker compose $COMPOSE_FILES ps --quiet postgres)")"
+          image="$(docker compose $COMPOSE_FILES images --quiet songmaker-web)"
+          alembic() {
+            docker run --rm --network "$network" \
+              --env DATABASE_URL="postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}" \
+              --volume "$SONGMAKER_SECRETS_DIR/postgres-password:/run/secrets/postgres_password:ro" \
+              --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+              --entrypoint /app/.venv/bin/alembic "$image" "$@"
+          }
+          alembic upgrade head
+          heads="$(alembic heads | awk '{print $1}')"
           [ "$(wc -l <<<"$heads")" = 1 ] || {
             echo "expected one alembic head in the image, got: $heads" >&2
             exit 1
