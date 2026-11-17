@@ -13,6 +13,12 @@ import {
 	titleInitials
 } from './format.ts';
 
+// These tests change `<html lang>` to another language than the catalogs offer; the page language only accepts offered ones.
+vi.mock('#lib/words/index.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/words/index.ts')>()),
+	languages: ['en', 'de', 'sv']
+}));
+
 describe('formatTime', () => {
 	it('formats zero seconds', () => {
 		expect(formatTime(0)).toBe('0:00');

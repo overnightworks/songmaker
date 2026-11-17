@@ -1430,6 +1430,7 @@ export type Words = {
     readonly "adminPage.voiceStatusExporting": string;
     readonly "adminPage.voiceStatusReady": string;
     readonly "adminPage.voiceStatusFailed": string;
+    readonly "logoutPage.logOut": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -3145,5 +3146,6 @@ export const words: Words = {
     "adminPage.voiceStatusExporting": "exporting",
     "adminPage.voiceStatusReady": "ready",
     "adminPage.voiceStatusFailed": "failed",
+    "logoutPage.logOut": "Log out",
 };
 export type Key = keyof Words;

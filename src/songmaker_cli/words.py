@@ -1432,6 +1432,7 @@ type Key = Literal[
     'adminPage.voiceStatusExporting',
     'adminPage.voiceStatusReady',
     'adminPage.voiceStatusFailed',
+    'logoutPage.logOut',
 ]
 type Language = Literal[
     'en',
@@ -2999,6 +3000,7 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'adminPage.voiceStatusExporting': 'exporting',
         'adminPage.voiceStatusReady': 'ready',
         'adminPage.voiceStatusFailed': 'failed',
+        'logoutPage.logOut': 'Log out',
     },
 }
 

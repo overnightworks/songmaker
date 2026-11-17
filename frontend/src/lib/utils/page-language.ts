@@ -1,20 +1,17 @@
-/** The page's language is required configuration: `<html lang>` names it, and nothing stands in for a missing one. */
+import { languages, type Language } from '#lib/words/index.ts';
+
+/** The page's language is required configuration: the server writes one of the app's languages into `<html lang>`, and nothing stands in for a missing or foreign one. */
 class PageLanguageError extends Error {
 	constructor(tag: string) {
-		super(`The page language must be a valid language tag in <html lang>, got "${tag}".`);
+		super(`The page language must be one of ${languages.join(', ')} in <html lang>, got "${tag}".`);
 		this.name = 'PageLanguageError';
 	}
 }
 
-/** The canonical tag of the language `<html lang>` names. */
-export function pageLanguage(): string {
+/** The language the server wrote into `<html lang>`. */
+export function pageLanguage(): Language {
 	const tag = document.documentElement.lang;
-	try {
-		const [canonical] = Intl.getCanonicalLocales(tag);
-		if (canonical === undefined) throw new PageLanguageError(tag);
-		return canonical;
-	} catch (error) {
-		if (error instanceof PageLanguageError) throw error;
-		throw new PageLanguageError(tag);
-	}
+	const language = languages.find((offered) => offered === tag);
+	if (language === undefined) throw new PageLanguageError(tag);
+	return language;
 }
