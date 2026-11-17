@@ -1,0 +1,7 @@
+claim_id = "388af4674dde45349f4f244aecf4790c"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "8bf13ce6bd8f051ebe9ee4f915810961ed3e4658"
+branch = "claude/issue-3257-the-e2e-boot-migrates-an-empty-database"
+scope = [".github/workflows/e2e.yml"]
+opened_commit = "71e97a2a4e4b1aa0acc4a502fe99658238a5d847"
