@@ -20,11 +20,15 @@ from pathlib import Path
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import psycopg2
 import pytest
 import redis
 import redis.asyncio
 from redis.backoff import NoBackoff
 from redis.retry import Retry
+from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import sessionmaker
 from support.web_app import make_test_app
 
 from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
@@ -162,7 +166,7 @@ def health_client(tmp_path, mock_arq_pool, pg_factory):
 
 
 @pytest.fixture
-def refused_redis_port():
+def refused_port():
     """A port nothing listens on; the bound socket stays open so no process can take it."""
     with socket.socket() as reserved:
         reserved.bind(("127.0.0.1", 0))
@@ -239,11 +243,40 @@ def test_health_preserves_response_bytes(
     assert response.content == expected
 
 
+def test_health_answers_ready_while_serving_without_an_acestep_worker(health_client) -> None:
+    assert health_client.get("/health").status_code == 200
+
+
+def test_health_answers_unavailable_while_the_database_refuses_connections(
+    tmp_path, mock_arq_pool, postgresql_url, refused_port,
+) -> None:
+    served_url = make_url(postgresql_url).set(drivername="postgresql")
+    refused_url = served_url.set(host="127.0.0.1", port=refused_port)
+    database_lost = False
+    opened = []
+
+    def connect():
+        url = refused_url if database_lost else served_url
+        opened.append(psycopg2.connect(url.render_as_string(hide_password=False)))
+        return opened[-1]
+
+    engine = create_engine("postgresql+psycopg2://", creator=connect)
+    client, _ = make_test_app(tmp_path, factory=sessionmaker(bind=engine))
+    with client:
+        database_lost = True
+        engine.dispose()
+        response = client.get("/health")
+    for connection in opened:
+        connection.close()
+
+    assert response.status_code == 503
+
+
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
-    tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers,
+    tmp_path, mock_arq_pool, pg_factory, refused_port, monitoring_headers,
 ) -> None:
     retry_never = Retry(NoBackoff(), 0)
-    refused = {"host": "127.0.0.1", "port": refused_redis_port, "retry": retry_never}
+    refused = {"host": "127.0.0.1", "port": refused_port, "retry": retry_never}
     client, _ = make_test_app(
         tmp_path, factory=pg_factory, seed_db=_seed_one_worker, redis=redis.Redis(**refused),
     )
