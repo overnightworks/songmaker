@@ -205,12 +205,12 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
 
 
 def test_a_worker_names_itself_on_its_jobs_with_the_generation_of_its_lease(
-    monkeypatch: pytest.MonkeyPatch, redis_url: str,
+    restored_logging: None, redis_url: str,
 ) -> None:
-    worker = _worker_on(redis_url, monkeypatch)
+    worker = _worker_on(redis_url)
 
     async def read_the_lease_while_running() -> str | None:
-        await worker.on_startup({})
+        await worker.on_startup(_ARQ_CTX)
         reader = create_async_redis(redis_url)
         try:
             return (await owner_leases(reader).state([worker.owner_id]))[
