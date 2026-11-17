@@ -1,0 +1,8 @@
+claim_id = "79d2ca54ccfa4ac59e9d7c69abd20e08"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "a078a0f08742fb87226efc66bb270b7052ba1478"
+branch = "claude/issue-3278-songmaker-s-interface-speaks-german-for"
+scope = [".github/workflows", "frontend/src/lib/catalogs", "frontend/src/lib/utils/page-words.ts", "frontend/src/lib/words", "frontend/tests", "pyproject.toml", "src/songmaker_cli/page_language.py", "src/songmaker_cli/words.py"]
+opened_commit = "f755418a34df5409b4faabdea607ec5394e41e51"
+whole_reason = "a language is one catalog plus its declaration, generated modules and the render pass job"
