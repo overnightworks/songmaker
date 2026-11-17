@@ -1121,8 +1121,8 @@ names (`account_language_of_session`, read only, never renewing) and the browser
 session store fails it logs the error and the header alone decides. The sign-in start sends it
 as `ui_locales`, the sign-out page carries it as `<html lang>` with the catalog's `logoutPage.logOut`
 label, and `PageShell` writes it into the built page. `PageShell` reads `frontend/build/index.html`
-once at `create_app`, which refuses to start unless the file holds exactly one bare `<html>`;
-both shell answers (`spa_fallback`, a refusal at the callback) replace it with `<html lang="…">`.
+once at `create_app`, which refuses to start unless the file holds exactly one `%page-language%`, the value of `app.html`'s `<html lang>`;
+both shell answers (`spa_fallback`, a refusal at the callback) replace it with the resolved language.
 The shell answers `Cache-Control: no-cache` and `Vary: Accept-Language, Cookie`; the refused sign-in's
 final header is `no-store`, because the sign-in policy replaces the response's own header on the
 callback path (`docs/security.md`, Security Headers).

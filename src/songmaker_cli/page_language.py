@@ -33,11 +33,11 @@ log = logging.getLogger(__name__)
 
 APP_LANGUAGES: Final = AppLanguages(offered=LANGUAGES, default=SOURCE_LANGUAGE)
 
-_BARE_HTML_ELEMENT: Final = "<html>"
+LANGUAGE_PLACEHOLDER: Final = "%page-language%"
 
 
 class PageShellError(ValueError):
-    """The built page cannot take a language: its `<html>` element is not one bare tag."""
+    """The built page cannot take a language: it does not hold its placeholder exactly once."""
 
 
 def request_language(request: Request) -> Language:
@@ -70,14 +70,14 @@ def _account_language(request: Request) -> str | None:
 
 @dataclass(frozen=True)
 class PageShell:
-    """The built page, read once; every answer writes its language into `<html>`."""
+    """The built page, read once; every answer writes its language into `<html lang>`."""
 
     html: str
 
     def __post_init__(self) -> None:
-        if self.html.count(_BARE_HTML_ELEMENT) != 1:
+        if self.html.count(LANGUAGE_PLACEHOLDER) != 1:
             raise PageShellError(
-                f"the built page must hold exactly one bare {_BARE_HTML_ELEMENT} to take a language"
+                f"the built page must hold exactly one {LANGUAGE_PLACEHOLDER} to take a language"
             )
 
     @classmethod
@@ -89,5 +89,5 @@ class PageShell:
 
     def answer(self, request: Request, *, status_code: int = 200) -> HTMLResponse:
         language = request_language(request)
-        html = self.html.replace(_BARE_HTML_ELEMENT, f'<html lang="{language}">', 1)
+        html = self.html.replace(LANGUAGE_PLACEHOLDER, language, 1)
         return HTMLResponse(html, status_code=status_code, headers=SPA_SHELL_HEADERS)

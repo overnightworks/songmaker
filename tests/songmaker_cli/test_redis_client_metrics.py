@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import fakeredis
 import pytest
 from support.redis_proxy import redis_proxy
-from support.web_app import TEST_SECRET, make_fake_async_redis, web_client
+from support.web_app import BUILT_SHELL, TEST_SECRET, make_fake_async_redis, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import User
@@ -111,7 +111,7 @@ def _make_server_project(tmp_path: Path):
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
     return audio_dir, data_dir, project_root
 
 

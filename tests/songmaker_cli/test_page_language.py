@@ -16,10 +16,10 @@ from webauth.languages import AppLanguages
 
 from songmaker_cli import page_language
 from songmaker_cli.db.models import UserSession
-from songmaker_cli.page_language import PageShellError
+from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER, PageShell, PageShellError
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
-SHELL = "<html><head></head><body>Songmaker</body></html>"
+SHELL = f'<html lang="{LANGUAGE_PLACEHOLDER}"><head></head><body>Songmaker</body></html>'
 ENGLISH_SHELL = '<html lang="en"><head></head><body>Songmaker</body></html>'
 ENGLISH_AND_GERMAN = AppLanguages(offered=("en", "de"), default="en")
 A_PAGE = "/albums/a-song"
@@ -157,11 +157,21 @@ def test_a_forged_session_cookie_leaves_the_shell_english_and_free_of_its_markup
     assert response.text == ENGLISH_SHELL
 
 
+def test_the_frontends_page_template_takes_the_servers_language() -> None:
+    template = Path(__file__).parents[2] / "frontend" / "src" / "app.html"
+
+    PageShell(template.read_text(encoding="utf-8"))
+
+
 @pytest.mark.parametrize(
     "index_html",
-    ['<html lang="en"><body></body></html>', "<body>no root</body>", "<html><html></html>"],
+    [
+        '<html lang="en"><body></body></html>',
+        "<body>no root</body>",
+        f"<html lang='{LANGUAGE_PLACEHOLDER}'><body>{LANGUAGE_PLACEHOLDER}</body></html>",
+    ],
 )
-def test_a_built_page_without_one_bare_html_element_stops_the_start(
+def test_a_built_page_without_one_language_placeholder_stops_the_start(
     tmp_path: Path, pg_factory, index_html: str,
 ) -> None:
     with pytest.raises(PageShellError):

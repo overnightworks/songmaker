@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from support.web_app import (
+    BUILT_SHELL,
     TEST_ORIGIN,
     TEST_SECRET,
     make_fake_async_redis,
@@ -2041,11 +2042,10 @@ def test_share_album_ownership_enforced(tmp_path: Path, pg_factory) -> None:
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)
-    project_root = tmp_path
-    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = project_root / "frontend" / "build"
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+    (sk_dir / "index.html").write_text(BUILT_SHELL)
 
     with pg_factory() as session:
         owner = seed_user(session, "owner")
@@ -2060,7 +2060,7 @@ def test_share_album_ownership_enforced(tmp_path: Path, pg_factory) -> None:
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
     from songmaker_cli.server import create_app
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app, cookies={})
     seed_session(client, "other_user")
 
