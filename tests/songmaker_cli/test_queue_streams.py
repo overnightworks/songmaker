@@ -25,14 +25,12 @@ from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, 
 from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
     QueueStreamSource,
-    build_queue_stream_snapshot,
     check_queue_stream_rate_limit,
     collect_library_pool_generations,
     generation_matches_pool,
     probe_audio_duration,
     run_ffmpeg_concat,
     shuffle_library_sources,
-    track_source_from_generation,
 )
 
 
@@ -321,6 +319,7 @@ def test_queue_stream_audio_reports_missing_snapshot_audio(
     stream = _shared_playlist_snapshot(client, ["g1"])
     snapshot_id = stream.json()["snapshot_id"]
     (tmp_path / "data" / "queue-streams" / f"{snapshot_id}.mp3").unlink()
+    (tmp_path / "audio" / "owner-id" / "g1.mp3").unlink()
 
     audio = web_client(client.app, cookies={}).get(stream.json()["stream_url"])
     assert audio.status_code == 404
@@ -410,106 +409,6 @@ def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
 
     assert resp.status_code == 200
     assert stale_manifest.exists(), "the request path must no longer sweep expired snapshots"
-
-
-def test_build_lock_entries_do_not_accumulate_across_builds(
-    tmp_path: Path,
-    monkeypatch, pg_factory,
-) -> None:
-    """_build_locks must not grow without bound -- each per-content-hash lock
-    entry is removed once the build (or cache hit) using it has finished."""
-    import songmaker_cli.queue_streams as qs
-
-    stub_audio_build(monkeypatch)
-    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-
-    with factory() as session:
-        for gen_id in ("g1", "g2"):
-            gen = session.get(Generation, gen_id)
-            source = track_source_from_generation(
-                gen, key=gen_id, index=0, entry_id=None,
-                audio_url=f"/audio/{gen.mp3_path}",
-            )
-            build_queue_stream_snapshot(
-                client.app.state.ctx, [source],
-                scope="shared-album", scope_id="test-album", stream_url="",
-            )
-
-    assert qs._build_locks == {}, "lock table must not grow with each distinct build"
-
-
-def test_concurrent_builds_for_same_content_hash_do_not_race_lock_removal(
-    tmp_path: Path,
-    monkeypatch, pg_factory,
-) -> None:
-    """Two threads racing to build the same content hash must not corrupt the
-    lock table: the second thread reuses the first's result instead of
-    rebuilding, and the lock entry is removed exactly once, after both are
-    done -- never dropped out from under a still-waiting thread."""
-    import threading
-    import time
-
-    import songmaker_cli.queue_streams as qs
-
-    build_started = threading.Event()
-    release_build = threading.Event()
-    build_count = 0
-    build_count_lock = threading.Lock()
-
-    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
-
-    def _slow_concat(_concat_path: Path, output_path: Path) -> None:
-        nonlocal build_count
-        with build_count_lock:
-            build_count += 1
-        build_started.set()
-        assert release_build.wait(timeout=5), "test setup did not release the build in time"
-        output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
-
-    monkeypatch.setattr(qs, "run_ffmpeg_concat", _slow_concat)
-
-    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-
-    with factory() as session:
-        gen = session.get(Generation, "g1")
-        source = track_source_from_generation(
-            gen, key="g1", index=0, entry_id=None, audio_url=f"/audio/{gen.mp3_path}",
-        )
-
-        results: list[object] = []
-
-        def _build() -> None:
-            results.append(
-                build_queue_stream_snapshot(
-                    client.app.state.ctx, [source],
-                    scope="shared-album", scope_id="test-album", stream_url="",
-                )
-            )
-
-        first = threading.Thread(target=_build)
-        second = threading.Thread(target=_build)
-        first.start()
-        assert build_started.wait(timeout=5), "first builder never started"
-        second.start()
-
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            entries = list(qs._build_locks.values())
-            if entries and entries[0].waiters == 2:
-                break
-            time.sleep(0.01)
-        else:
-            pytest.fail("second builder never registered as a waiter on the shared lock")
-
-        release_build.set()
-        first.join(timeout=5)
-        second.join(timeout=5)
-
-    assert build_count == 1, "the second builder must reuse the cached snapshot, not rebuild"
-    assert results[0].snapshot_id == results[1].snapshot_id
-    assert qs._build_locks == {}, "lock entry must be removed once both builders are done"
 
 
 def test_shared_playlist_queue_stream_snapshot_and_audio(
