@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, User, Version
 
 OWNER_ID = "owner"
+SONG_TITLE = "Private working title"
 LINKED_TAKE_ID = "linked-take"
 DETACHED_TAKE_ID = "detached-take"
 OTHER_VERSION_ID = "other-version"
@@ -28,7 +30,7 @@ def _seed_two_versions_two_takes(session: Session) -> None:
     session.add(User(id=OWNER_ID, username="owner", role="user"))
     session.flush()
     session.add(Album(id="album", title="Album", artist="X", created_by=OWNER_ID))
-    session.add(Song(id="song", title="Song", album_id="album", track_number=1, slug="song"))
+    session.add(Song(id="song", title=SONG_TITLE, album_id="album", track_number=1, slug="song"))
     session.add(Version(id="version", song_id="song", version_number=1, lyrics="l", prompt="p"))
     session.add(Version(
         id=OTHER_VERSION_ID, song_id="song", version_number=2, lyrics="l", prompt="p",
@@ -91,3 +93,13 @@ def test_a_repaint_of_a_take_without_a_version_is_refused_as_invalid(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Generation has no linked version"
+
+
+def test_a_generate_request_logs_ids_and_never_the_song_title(
+    client: TestClient, caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.INFO):
+        response = _post_for_take(client, GENERATE, LINKED_TAKE_ID)
+
+    assert response.status_code == 200
+    assert SONG_TITLE not in caplog.text

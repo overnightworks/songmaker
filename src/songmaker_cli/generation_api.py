@@ -305,8 +305,8 @@ async def api_generate_song(
         song_id, f"count={req.count}",
     )
     session.commit()
-    log.info("Generate: song='%s', count=%d, job=%s, model=%s",
-             song.title, req.count, job.id, req.model)
+    log.info("Generate: song=%s, count=%d, job=%s, model=%s",
+             song_id, req.count, job.id, req.model)
 
     try:
         pool = get_arq_pool()
