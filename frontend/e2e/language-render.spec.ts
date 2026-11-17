@@ -7,7 +7,7 @@ import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { languages, loadWords, sourceLanguage, type Language } from '../src/lib/words/index';
 import { containing, escapeForRegExp, shellOf } from './helpers';
-import { readSeededLibrary, type SeededLibrary } from './seed';
+import { readSeededLibrary, seedPlaylist, type SeededLibrary } from './seed';
 
 /** A desktop width narrower than the desktop project's own, so a longer translation meets less room. */
 const RENDER_PASS_DESKTOP_VIEWPORT = { width: 1280, height: 800 };
@@ -86,6 +86,13 @@ const surfaces: Surface[] = [
 			await expect(page.getByRole('tab', { name: text['nowPlaying.takeTab'] })).toBeVisible();
 		}
 	},
+	{
+		name: 'the opened playlist',
+		open: async (page, library) => {
+			const playlist = await seedPlaylist(page.request, library);
+			await page.goto(`/playlist/${playlist.slug}`);
+		}
+	},
 	{ name: 'an unknown address', open: address(() => '/no-such-page') },
 	{ name: 'the shared album', open: address((library) => library.albumShareUrl), signedOut: true },
 	{ name: 'the shared song', open: address((library) => library.songShareUrl), signedOut: true },
@@ -96,7 +103,12 @@ const surfaces: Surface[] = [
 		signedOut: true
 	},
 	{ name: '/login', open: address(() => '/login'), signedOut: true },
-	{ name: '/no-access', open: address(() => '/no-access'), signedOut: true }
+	{ name: '/no-access', open: address(() => '/no-access'), signedOut: true },
+	{
+		name: 'the failed sign-in page',
+		open: address(() => '/auth/callback?error=access_denied&state=forged'),
+		signedOut: true
+	}
 ];
 
 interface RenderFaults {
