@@ -106,8 +106,11 @@ def test_a_failing_session_store_leaves_the_browser_to_decide_and_is_logged(
     seed_session(client, "felix")
     unreachable_engine = create_engine(factory.kw["bind"].url.set(port=1))
     client.app.state.ctx.db = sessionmaker(bind=unreachable_engine)
-    with caplog.at_level(logging.ERROR, logger=page_language.__name__):
-        response = client.get(A_PAGE, headers={"Accept-Language": "de"})
+    try:
+        with caplog.at_level(logging.ERROR, logger=page_language.__name__):
+            response = client.get(A_PAGE, headers={"Accept-Language": "de"})
+    finally:
+        unreachable_engine.dispose()
 
     assert (response.status_code, _lang_of(response.text)) == (200, "de")
     assert [record.levelno for record in caplog.records] == [logging.ERROR]
@@ -124,7 +127,7 @@ FORGED_SESSION_VALUES = {
 
 @pytest.mark.parametrize(
     "accept_language",
-    [MARKUP, f"de{MARKUP}", "de-<script>"],
+    [MARKUP, f"de{MARKUP}", "de-<script>", "de-" + "x" * 500],
 )
 def test_a_hostile_accept_language_leaves_the_shell_english_and_free_of_its_markup(
     tmp_path: Path, pg_factory, offering_german: None, accept_language: str,
