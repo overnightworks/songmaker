@@ -11,7 +11,8 @@ describe('pageLanguage', () => {
 	it.each([
 		['a page without a language', ''],
 		['a language the app does not offer', 'tlh'],
-		['a malformed language tag', 'not a tag']
+		['a malformed language tag', 'not a tag'],
+		['the unfilled placeholder', '%page-language%']
 	])('%s fails loud', (_case, tag) => {
 		document.documentElement.lang = tag;
 		expect(() => pageLanguage()).toThrow(/language/i);
