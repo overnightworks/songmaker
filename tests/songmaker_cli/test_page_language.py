@@ -14,7 +14,6 @@ from support.web_app import TEST_ORIGIN, make_test_app, seed_session, seed_user
 from webauth.languages import AppLanguages
 
 from songmaker_cli import page_language
-from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.db.models import UserSession
 from songmaker_cli.page_language import PageShellError
 from songmaker_cli.words import SOURCE_LANGUAGE, text
@@ -99,16 +98,15 @@ def test_the_account_language_of_the_session_beats_the_browser(
 
 
 def test_a_failing_session_store_leaves_the_browser_to_decide_and_is_logged(
-    tmp_path: Path, pg_factory, offering_german: None,
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path, pg_factory, offering_german: None, caplog: pytest.LogCaptureFixture,
 ) -> None:
     client, _ = _shell_app(tmp_path, pg_factory)
     seed_session(client, "felix")
 
-    def fail(_self, _session_id):
-        raise OperationalError("select", {}, ConnectionError("store down"))
+    def unreachable_store():
+        raise OperationalError("connect", {}, ConnectionError("store down"))
 
-    monkeypatch.setattr(DatabaseSessionRecordStore, "load", fail)
+    client.app.state.ctx.db = unreachable_store
     with caplog.at_level(logging.ERROR, logger=page_language.__name__):
         response = client.get(A_PAGE, headers={"Accept-Language": "de"})
 
