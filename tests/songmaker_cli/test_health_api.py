@@ -166,7 +166,7 @@ def health_client(tmp_path, mock_arq_pool, pg_factory):
 
 
 @pytest.fixture
-def refused_redis_port():
+def refused_port():
     """A port nothing listens on; the bound socket stays open so no process can take it."""
     with socket.socket() as reserved:
         reserved.bind(("127.0.0.1", 0))
@@ -248,10 +248,10 @@ def test_health_answers_ready_while_serving_without_an_acestep_worker(health_cli
 
 
 def test_health_answers_unavailable_while_the_database_refuses_connections(
-    tmp_path, mock_arq_pool, postgresql_url, refused_redis_port,
+    tmp_path, mock_arq_pool, postgresql_url, refused_port,
 ) -> None:
     served_url = make_url(postgresql_url).set(drivername="postgresql")
-    refused_url = served_url.set(host="127.0.0.1", port=refused_redis_port)
+    refused_url = served_url.set(host="127.0.0.1", port=refused_port)
     database_lost = False
     opened = []
 
@@ -273,10 +273,10 @@ def test_health_answers_unavailable_while_the_database_refuses_connections(
 
 
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
-    tmp_path, mock_arq_pool, pg_factory, refused_redis_port, monitoring_headers,
+    tmp_path, mock_arq_pool, pg_factory, refused_port, monitoring_headers,
 ) -> None:
     retry_never = Retry(NoBackoff(), 0)
-    refused = {"host": "127.0.0.1", "port": refused_redis_port, "retry": retry_never}
+    refused = {"host": "127.0.0.1", "port": refused_port, "retry": retry_never}
     client, _ = make_test_app(
         tmp_path, factory=pg_factory, seed_db=_seed_one_worker, redis=redis.Redis(**refused),
     )
