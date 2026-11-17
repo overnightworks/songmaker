@@ -1,0 +1,136 @@
+// The render pass of every further language (design's languages standard, LANG-7): each surface
+// opens once per language a browser asks for, at the phone width and at a desktop width, and the
+// page names that language, shows no catalog key and no unrendered value, and no text runs out of
+// its box. Behaviour stays with the other specs, which run in the source language.
+
+import { expect, test, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
+import { languages, loadWords, sourceLanguage, type Language } from '../src/lib/words/index';
+import { containing, escapeForRegExp, shellOf } from './helpers';
+import { readSeededLibrary, type SeededLibrary } from './seed';
+
+/** A desktop width narrower than the desktop project's own, so a longer translation meets less room. */
+const RENDER_PASS_DESKTOP_VIEWPORT = { width: 1280, height: 800 };
+
+/** What a page shows while it loads, in the language's own words: the pass reads a page once it has loaded. */
+async function stillLoading(language: Language): Promise<RegExp> {
+	const loadingTexts = Object.entries(await loadWords(language))
+		.filter(
+			([key, text]) => /loading/i.test(key) && typeof text === 'string' && /(…|\.\.\.)$/.test(text)
+		)
+		.map(([, text]) => escapeForRegExp(text as string));
+	return new RegExp(`^(${loadingTexts.join('|')})$`);
+}
+
+interface Surface {
+	name: string;
+	/** Opens the surface; the seeded library is read in the test, since listing the tests runs before any seed. */
+	open: (page: Page, library: SeededLibrary) => Promise<void>;
+}
+
+function address(path: (library: SeededLibrary) => string): Surface['open'] {
+	return async (page, library) => void (await page.goto(path(library)));
+}
+
+const surfaces: Surface[] = [
+	...['/', '/library', '/playlists'].map((path) => ({ name: path, open: address(() => path) })),
+	{ name: 'the album page', open: address((library) => `/album/${library.albumId}`) },
+	{
+		name: 'the song page',
+		open: async (page, library) => {
+			await page.goto(`/album/${library.albumId}`);
+			await page
+				.getByRole('link', { name: containing(library.pickedSongTitle) })
+				.first()
+				.click();
+			await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}/[^/]+$`));
+		}
+	},
+	...[
+		'/settings/generation',
+		'/settings/voices',
+		'/settings/references',
+		'/settings/users',
+		'/settings/about'
+	].map((path) => ({ name: path, open: address(() => path) })),
+	{ name: 'the shared album', open: address((library) => library.albumShareUrl) },
+	{ name: 'the shared playlist', open: address((library) => library.playlistShareUrl) }
+];
+
+interface RenderFaults {
+	keys: string[];
+	unrendered: string[];
+	overflowing: string[];
+}
+
+/** Every catalog key shown as text or in a human-readable attribute, every unrendered value, and every text element wider than its box. */
+function renderFaults(keys: string[]): RenderFaults {
+	const readable = (element: Element) =>
+		[
+			...Array.from(element.childNodes)
+				.filter((node) => node.nodeType === Node.TEXT_NODE)
+				.map((node) => node.textContent ?? ''),
+			...['aria-label', 'title', 'placeholder', 'alt'].map(
+				(name) => element.getAttribute(name) ?? ''
+			)
+		]
+			.join(' ')
+			.trim();
+	const describe = (element: Element) =>
+		`<${element.localName}> "${readable(element).slice(0, 60)}"`;
+	const shown = Array.from(document.body.querySelectorAll('*')).filter(
+		(element) =>
+			element.getClientRects().length > 0 &&
+			getComputedStyle(element).visibility !== 'hidden' &&
+			readable(element) !== ''
+	);
+	const keySet = new Set(keys);
+	const faults: RenderFaults = { keys: [], unrendered: [], overflowing: [] };
+	for (const element of shown) {
+		const text = readable(element);
+		for (const token of text.split(/[\s"“”„',:;()]+/)) {
+			if (keySet.has(token)) faults.keys.push(`${token} in ${describe(element)}`);
+		}
+		if (/\[object \w+\]|=>|function\s*\(/.test(text)) faults.unrendered.push(describe(element));
+		const style = getComputedStyle(element);
+		const scrollsByDesign = ['auto', 'scroll'].includes(style.overflowX);
+		const truncatesByDesign = style.textOverflow === 'ellipsis';
+		if (
+			!scrollsByDesign &&
+			!truncatesByDesign &&
+			element.clientWidth > 1 &&
+			element.scrollWidth > element.clientWidth + 1
+		) {
+			faults.overflowing.push(
+				`${describe(element)} ${element.scrollWidth}px in ${element.clientWidth}px`
+			);
+		}
+	}
+	return faults;
+}
+
+for (const language of languages.filter((offered) => offered !== sourceLanguage)) {
+	test.describe(`the interface in ${language}`, () => {
+		test.use({ locale: language });
+
+		test.beforeEach(async ({ page }, testInfo) => {
+			if (shellOf(testInfo) === 'desktop') await page.setViewportSize(RENDER_PASS_DESKTOP_VIEWPORT);
+		});
+
+		for (const surface of surfaces) {
+			test(`${surface.name} renders whole in ${language}`, async ({ page }) => {
+				await surface.open(page, readSeededLibrary());
+
+				await expect(page.locator('html')).toHaveAttribute('lang', language);
+				await expect(page.getByText(await stillLoading(language))).toHaveCount(0);
+				await expect
+					.poll(() => page.evaluate(renderFaults, Object.keys(words)))
+					.toEqual({
+						keys: [],
+						unrendered: [],
+						overflowing: []
+					});
+			});
+		}
+	});
+}
