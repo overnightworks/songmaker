@@ -115,10 +115,12 @@ _LAST_FAILED_GENERATION_DESCRIPTION: Final = (
 )
 
 
-def _check_model_active(session: Session, model: str) -> None:
-    active_ids = {m.id for m in list_active_models(session)}
+def _check_model_active(session: Session, model: str) -> str:
+    """Return the stored id of the active model the request names."""
+    active_ids = {m.id: m.id for m in list_active_models(session)}
     if model not in active_ids:
         raise Refusal(400, "modelRefusal.unavailable", model=model)
+    return active_ids[model]
 
 
 def _check_version_lora_ready(
@@ -293,7 +295,7 @@ async def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise Refusal(400, "generationRefusal.needsLyricsAndPrompt")
 
-    _check_model_active(session, req.model)
+    active_model_id = _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
     job = await create_job_with_rate_limit(
@@ -306,7 +308,7 @@ async def api_generate_song(
     )
     session.commit()
     log.info("Generate: song=%s, count=%d, job=%s, model=%s",
-             song_id, req.count, job.id, req.model)
+             song.id, req.count, job.id, active_model_id)
 
     try:
         pool = get_arq_pool()
