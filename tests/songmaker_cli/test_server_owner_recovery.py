@@ -14,12 +14,10 @@ from support.app_processes import (
     MusicWorkerProcess,
     WebProcess,
     WebProcesses,
-    end_the_owner_lease,
     leased_owner_ids,
     owner_lease_generation,
     poll_until,
     settle_the_epoch,
-    start_the_owner_lease,
 )
 from support.job_owner import an_owner, create_job_of_owner
 from support.web_cluster_world import start_owner
@@ -27,14 +25,12 @@ from support.web_cluster_world import start_owner
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
     REDIS_KEY_PREFIX,
-    REDIS_SOCKET_TIMEOUT_SECONDS,
 )
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
     JOB_ERROR_SERVER_RESTARTED,
     JobStatusUpdate,
-    create_job,
     update_job_status,
 )
 from songmaker_cli.job_timing import (
@@ -192,60 +188,6 @@ def test_a_clean_stop_of_one_process_ends_its_jobs_on_the_other_within_one_tick(
         lambda: _is_reaped(factory, jobs),
         deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
     )
-
-
-def _running_job_of_generation(session, owner_id: str, generation: str) -> str:
-    job = create_job(session, JobType.CHAT, owner=an_owner(owner_id, generation))
-    assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
-    return job.id
-
-
-def test_a_job_written_after_the_cleanup_read_its_owner_gone_keeps_running_while_the_old_one_fails(
-    cluster_with_a_redis_line_each, redis_client,
-) -> None:
-    cluster, factory, line_of_a, line_of_b = cluster_with_a_redis_line_each
-    _, owner_a = start_owner(cluster, redis_client, "a", redis_url=line_of_a.url)
-    start_owner(cluster, redis_client, "b", redis_url=line_of_b.url)
-    lapsed_generation = owner_lease_generation(redis_client, owner_a)
-    assert lapsed_generation is not None
-    with factory() as session:
-        job_of_the_lapsed_generation = _running_job_of_generation(
-            session, owner_a, lapsed_generation,
-        )
-        session.commit()
-
-    # Both passes of B (its lapse loop and its reaper loop) have read the stamps of the old
-    # generation when their reply is held, so every pass that can fail it is held here. The
-    # process's Redis client gives up on a reply after its socket timeout, so the new generation
-    # follows at once and the replies are released before that.
-    line_of_b.hold_replies_to(
-        old_owner_key(REDIS_KEY_PREFIX, owner_a).encode(),
-        client_timeout_seconds=REDIS_SOCKET_TIMEOUT_SECONDS,
-    )
-    line_of_a.cut()
-    end_the_owner_lease(redis_client, owner_a, lapsed_generation)
-    assert line_of_b.wait_until_replies_are_held(
-        2, deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
-    )
-    with factory() as session:
-        job_of_the_new_generation = _running_job_of_generation(
-            session, owner_a, start_the_owner_lease(redis_client, owner_a),
-        )
-        session.commit()
-    line_of_b.release_held_replies()
-
-    # Only the held passes can fail the old job, and each judges the new one in the same
-    # transaction. Both held reads must reach their passes: a read that expired is retried, and
-    # a later pass reading the new generation would fail the old job without the held one.
-    assert line_of_b.wait_until_held_replies_are_delivered(
-        2, deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
-    )
-    assert line_of_b.expired_held_replies == 0
-    assert poll_until(
-        lambda: _failed_with_the_restart_verdict(factory, [job_of_the_lapsed_generation]),
-        deadline_seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS + MARGIN_SECONDS,
-    )
-    assert _statuses(factory, [job_of_the_new_generation]) == [JobStatus.RUNNING]
 
 
 def test_a_crash_of_one_process_ends_its_jobs_on_the_other_once_the_lease_has_lapsed(

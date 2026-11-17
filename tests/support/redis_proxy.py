@@ -1,19 +1,15 @@
 """A TCP hop between web processes and the case's Redis that can cut the line or lose every key.
 
 The processes connect to the proxy; the proxy forwards bytes to the real server, so every
-command is the real server's answer. It can also hold the replies to one kind of request back
-after the server has run the command, so a test acts between a process's read and what the
-process does with it.
+command is the real server's answer.
 """
 
 from __future__ import annotations
 
 import socket
 import threading
-import time
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
-from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
 from redis import Redis
@@ -21,14 +17,6 @@ from redis import Redis
 LOOPBACK = "127.0.0.1"
 CHUNK_BYTES = 65536
 ACCEPT_POLL_SECONDS = 0.2
-HELD_REPLY_LIMIT_SECONDS = 10.0
-
-
-@dataclass
-class _HeldRequest:
-    """When the request whose reply is to be held reached the proxy; ``None`` while none did."""
-
-    received_at: float | None = None
 
 
 class RedisProxy:
@@ -42,13 +30,6 @@ class RedisProxy:
         self._connections: list[socket.socket] = []
         self._cut = False
         self._reply_lost = False
-        self._holding_for: bytes | None = None
-        self._client_timeout_seconds = 0.0
-        self._replies_held = 0
-        self._replies_delivered = 0
-        self._replies_expired = 0
-        self._reply_was_held = threading.Condition(self._lock)
-        self._reply_released = threading.Event()
         self._closing = threading.Event()
         self._acceptor = threading.Thread(target=self._accept_until_closed, daemon=True)
 
@@ -71,46 +52,6 @@ class RedisProxy:
         """Run the next command on the server but drop its reply and the line, as a reset does."""
         with self._lock:
             self._reply_lost = True
-
-    def hold_replies_to(self, request_part: bytes, *, client_timeout_seconds: float) -> None:
-        """Run every command that contains ``request_part`` but hold its reply back.
-
-        The replies go out when ``release_held_replies`` is called, which also stops holding. A
-        client waits at most ``client_timeout_seconds`` for a reply, so a reply held that long
-        is counted by ``expired_held_replies`` whatever the client did with it, as is one whose
-        client had hung up.
-        """
-        with self._lock:
-            self._holding_for = request_part
-            self._client_timeout_seconds = client_timeout_seconds
-            self._replies_held = 0
-            self._replies_delivered = 0
-            self._replies_expired = 0
-        self._reply_released.clear()
-
-    def wait_until_replies_are_held(self, count: int, *, deadline_seconds: float) -> bool:
-        with self._reply_was_held:
-            return self._reply_was_held.wait_for(
-                lambda: self._replies_held >= count, deadline_seconds,
-            )
-
-    def wait_until_held_replies_are_delivered(self, count: int, *, deadline_seconds: float) -> bool:
-        """Whether ``count`` held replies reached the client that was waiting for them."""
-        with self._reply_was_held:
-            return self._reply_was_held.wait_for(
-                lambda: self._replies_delivered >= count, deadline_seconds,
-            )
-
-    @property
-    def expired_held_replies(self) -> int:
-        """The held replies whose client had given up waiting when they were released."""
-        with self._lock:
-            return self._replies_expired
-
-    def release_held_replies(self) -> None:
-        with self._lock:
-            self._holding_for = None
-        self._reply_released.set()
 
     def refuse(self) -> None:
         """Drop every connection and stop listening, as a stopped server's address does."""
@@ -135,7 +76,6 @@ class RedisProxy:
         self._drop_connections()
 
     def close(self) -> None:
-        self._reply_released.set()
         self._closing.set()
         self._acceptor.join()
         self._listener.close()
@@ -172,75 +112,33 @@ class RedisProxy:
             server = socket.create_connection(self._server_address)
             with self._lock:
                 self._connections.extend((client, server))
-            held_request = _HeldRequest()
-            client_hung_up = threading.Event()
-            threading.Thread(
-                target=self._pump_requests,
-                args=(client, server, held_request, client_hung_up),
-                daemon=True,
-            ).start()
-            threading.Thread(
-                target=self._pump_replies,
-                args=(server, client, held_request, client_hung_up),
-                daemon=True,
-            ).start()
+            threading.Thread(target=_pump, args=(client, server), daemon=True).start()
+            threading.Thread(target=self._pump_replies, args=(server, client), daemon=True).start()
 
-    def _pump_requests(
-        self,
-        client: socket.socket,
-        server: socket.socket,
-        held_request: _HeldRequest,
-        client_hung_up: threading.Event,
-    ) -> None:
-        try:
-            while data := client.recv(CHUNK_BYTES):
-                with self._lock:
-                    if self._holding_for is not None and self._holding_for in data:
-                        held_request.received_at = time.monotonic()
-                server.sendall(data)
-        except OSError:
-            pass
-        finally:
-            client_hung_up.set()
-            _shut(client)
-            _shut(server)
-
-    def _pump_replies(
-        self,
-        server: socket.socket,
-        client: socket.socket,
-        held_request: _HeldRequest,
-        client_hung_up: threading.Event,
-    ) -> None:
+    def _pump_replies(self, server: socket.socket, client: socket.socket) -> None:
         try:
             while data := server.recv(CHUNK_BYTES):
                 with self._lock:
                     lost, self._reply_lost = self._reply_lost, False
                 if lost:
                     return
-                requested_at, held_request.received_at = held_request.received_at, None
-                if requested_at is not None:
-                    with self._reply_was_held:
-                        self._replies_held += 1
-                        self._reply_was_held.notify_all()
-                    self._reply_released.wait(HELD_REPLY_LIMIT_SECONDS)
-                    with self._lock:
-                        client_timeout = self._client_timeout_seconds
-                    waited = time.monotonic() - requested_at
-                    if client_hung_up.is_set() or waited >= client_timeout:
-                        with self._reply_was_held:
-                            self._replies_expired += 1
-                        return
                 client.sendall(data)
-                if requested_at is not None:
-                    with self._reply_was_held:
-                        self._replies_delivered += 1
-                        self._reply_was_held.notify_all()
         except OSError:
             pass
         finally:
             _shut(server)
             _shut(client)
+
+
+def _pump(source: socket.socket, sink: socket.socket) -> None:
+    try:
+        while data := source.recv(CHUNK_BYTES):
+            sink.sendall(data)
+    except OSError:
+        pass
+    finally:
+        _shut(source)
+        _shut(sink)
 
 
 def _shut(connection: socket.socket) -> None:

@@ -33,12 +33,10 @@ from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 SCRIPTED_REPLY = "The reply the gateway stand-in scripted."
 
 
-def start_owner(
-    cluster: WebProcesses, redis_client: Redis, name: str, *, redis_url: str | None = None,
-) -> tuple[WebProcess, str]:
+def start_owner(cluster: WebProcesses, redis_client: Redis, name: str) -> tuple[WebProcess, str]:
     """Start a process and return it with the owner id its lease names."""
     before = leased_owner_ids(redis_client)
-    process = cluster.start(name, redis_url=redis_url)
+    process = cluster.start(name)
     [owner_id] = leased_owner_ids(redis_client) - before
     return process, owner_id
 
@@ -114,14 +112,6 @@ def proxied_cluster(tmp_path: Path, case_factory, database_url: str, redis_url: 
     with redis_proxy(redis_url) as proxy:
         with web_processes(tmp_path, database_url=database_url, redis_url=proxy.url) as cluster:
             yield cluster, case_factory, proxy
-
-
-@pytest.fixture
-def cluster_with_a_redis_line_each(tmp_path: Path, case_factory, database_url: str, redis_url: str):
-    """No process is started; give each a proxy from here with ``start(..., redis_url=...)``."""
-    with redis_proxy(redis_url) as line_of_a, redis_proxy(redis_url) as line_of_b:
-        with web_processes(tmp_path, database_url=database_url, redis_url=redis_url) as cluster:
-            yield cluster, case_factory, line_of_a, line_of_b
 
 
 @dataclass(frozen=True)

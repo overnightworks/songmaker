@@ -13,6 +13,7 @@ from support.job_owner import an_owner, create_job_of_owner
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import arrange_fake_async_redis, make_fake_async_redis, settle_owner_leases
 
+from songmaker_cli import lifecycle
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
@@ -46,10 +47,12 @@ class _UnreachableRedis(fakeredis.FakeAsyncRedis):
         raise RedisConnectionError("down")
 
 
-def _loop_app(async_redis, db, audio_dir: Path) -> SimpleNamespace:
+def _loop_app(async_redis, db, audio_dir: Path, leases=None) -> SimpleNamespace:
+    """An app over ``async_redis``, its owner leases being ``leases`` when given."""
     return SimpleNamespace(state=SimpleNamespace(
         ctx=SimpleNamespace(
-            owner_leases=owner_leases(async_redis), owner_id=OWNER, db=db, audio_dir=audio_dir,
+            owner_leases=leases or owner_leases(async_redis),
+            owner_id=OWNER, db=db, audio_dir=audio_dir,
         ),
         background_loop_registry=BackgroundLoopRegistry(tuple(BackgroundLoopName)),
     ))
@@ -169,24 +172,38 @@ def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
 
 
 class _LeasesThatRunBeforeAnswering:
-    """The owner leases, whose ``state`` runs ``between`` after reading and before answering."""
+    """The owner leases, whose first ``state`` runs ``between`` after reading, before answering."""
 
     def __init__(self, leases, between) -> None:
         self._leases = leases
         self._between = between
 
+    def __getattr__(self, name):
+        return getattr(self._leases, name)
+
     async def state(self, holders):
         states = await self._leases.state(holders)
-        await self._between()
+        between, self._between = self._between, None
+        if between is not None:
+            await between()
         return states
 
 
+async def _fail_the_jobs_once(app: SimpleNamespace) -> None:
+    await fail_jobs_of_dead_owners(app.state.ctx)
+
+
+@pytest.mark.parametrize(
+    "owner_pass", [_fail_the_jobs_once, owner_lapse_loop, owner_gone_reaper_loop],
+    ids=["the cleanup call", "the lapse loop", "the reaper loop"],
+)
 def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while_the_old_one_fails(
-    pg_factory, tmp_path,
+    owner_pass, monkeypatch, pg_factory, tmp_path,
 ) -> None:
     server = make_fake_async_redis()
+    monkeypatch.setattr(lifecycle, "OWNER_GONE_CHECK_INTERVAL_SECONDS", 0.01)
 
-    async def fail_the_jobs_while_the_owner_starts_again() -> tuple[tuple, tuple, bool]:
+    async def run_the_pass_while_the_owner_starts_again() -> tuple[tuple, tuple, bool]:
         await settle_owner_leases(server)
         leases = owner_leases(server)
         lapsed = (await leases.renew(ANOTHER)).generation
@@ -199,18 +216,27 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
             new_generations.append((await leases.renew(ANOTHER)).generation)
             new_jobs.append(_running_job_of(pg_factory, an_owner(ANOTHER, new_generations[0])))
 
-        ctx = SimpleNamespace(
-            owner_leases=_LeasesThatRunBeforeAnswering(leases, start_again_and_write_a_job),
-            owner_id=OWNER, db=pg_factory, audio_dir=tmp_path,
+        app = _loop_app(
+            server, pg_factory, tmp_path,
+            _LeasesThatRunBeforeAnswering(leases, start_again_and_write_a_job),
         )
-        await fail_jobs_of_dead_owners(ctx)
+        pass_task = asyncio.ensure_future(owner_pass(app))
+        try:
+            async with asyncio.timeout(DEADLINE_SECONDS):
+                while _status_and_error(pg_factory, job_of_the_lapsed_generation)[0] == (
+                    JobStatus.RUNNING
+                ):
+                    await asyncio.sleep(0.01)
+        finally:
+            pass_task.cancel()
+            await asyncio.gather(pass_task, return_exceptions=True)
         return (
             _status_and_error(pg_factory, job_of_the_lapsed_generation),
             _status_and_error(pg_factory, new_jobs[0]),
             new_generations[0] != lapsed,
         )
 
-    assert asyncio.run(fail_the_jobs_while_the_owner_starts_again()) == (
+    assert asyncio.run(run_the_pass_while_the_owner_starts_again()) == (
         (JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type),
         (JobStatus.RUNNING, None),
         True,

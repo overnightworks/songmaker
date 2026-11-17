@@ -233,23 +233,17 @@ class WebProcesses:
         )
         return process, log, log_path
 
-    def start(self, name: str, *, redis_url: str | None = None) -> WebProcess:
-        """Start one web process and return it once `/health` answers.
-
-        ``redis_url`` gives it a Redis address of its own instead of the case's.
-        """
+    def start(self, name: str) -> WebProcess:
+        """Start one web process and return it once `/health` answers."""
         worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
         port = _free_port()
-        environment = {environment_name(WorkerSettings, "worker_id"): worker_id}
-        if redis_url is not None:
-            environment[environment_name(Settings, "redis_url")] = redis_url
         process, log, log_path = self._launch(
             name,
             [
                 "-m", "songmaker_cli.main", "server",
                 "--port", str(port), "--root", str(self.root / name),
             ],
-            environment=environment,
+            environment={environment_name(WorkerSettings, "worker_id"): worker_id},
         )
         web_process = WebProcess(name, process, log, log_path, port, worker_id)
         self._processes.append(web_process)
@@ -346,24 +340,6 @@ def owner_lease_generation(redis: Redis, owner_id: str) -> str | None:
         return (await leases.state([owner_id]))[owner_id].generation
 
     return _on_the_owner_leases(redis, read_state)
-
-
-def start_the_owner_lease(redis: Redis, owner_id: str) -> str:
-    """Start ``owner_id``'s lease anew and return its generation, as a renewal after a lapse."""
-
-    async def start(leases: Leases) -> str:
-        return (await leases.renew(owner_id)).generation
-
-    return _on_the_owner_leases(redis, start)
-
-
-def end_the_owner_lease(redis: Redis, owner_id: str, generation: str) -> None:
-    """End ``owner_id``'s lease of ``generation``, as a lapse of it does; the process renews."""
-
-    async def end(leases: Leases) -> bool:
-        return await leases.end(owner_id, generation)
-
-    assert _on_the_owner_leases(redis, end)
 
 
 def _wait_until_ready(
