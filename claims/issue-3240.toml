@@ -3,5 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "8bf13ce6bd8f051ebe9ee4f915810961ed3e4658"
 branch = "claude/issue-3240-songmaker-declares-its-connection-budget"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/settings.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/settings.py", "tests/songmaker_cli/test_db_connection_ceiling_postgres.py"]
 opened_commit = "55bc0af07c17eff2690958b7497bbb578ea5c008"
+whole_reason = "The per-process connection maximum spans its settings, engine, architecture note and its PostgreSQL proof."
