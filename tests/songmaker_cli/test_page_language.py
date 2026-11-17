@@ -50,7 +50,7 @@ def test_the_shell_names_its_language_and_is_otherwise_the_built_page(
     response = client.get(A_PAGE)
 
     assert response.status_code == 200
-    assert response.text == SHELL.replace("<html>", f'<html lang="{SOURCE_LANGUAGE}">')
+    assert response.text == ENGLISH_SHELL
 
 
 def test_the_shell_is_revalidated_and_differs_by_what_picks_its_language(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 
     from fastapi import Request
 
+    from songmaker_cli.words import Language
+
 log = logging.getLogger(__name__)
 
 APP_LANGUAGES: Final = AppLanguages(offered=LANGUAGES, default=SOURCE_LANGUAGE)
@@ -38,12 +40,16 @@ class PageShellError(ValueError):
     """The built page cannot take a language: its `<html>` element is not one bare tag."""
 
 
-def request_language(request: Request) -> str:
+def request_language(request: Request) -> Language:
     """One of the app's languages for this request."""
-    return resolve_language(
-        APP_LANGUAGES,
-        account_tag=_account_language(request),
-        accept_language=request.headers.get("accept-language"),
+    # The resolver answers only a tag `APP_LANGUAGES` offers, and it offers `LANGUAGES`.
+    return cast(
+        "Language",
+        resolve_language(
+            APP_LANGUAGES,
+            account_tag=_account_language(request),
+            accept_language=request.headers.get("accept-language"),
+        ),
     )
 
 
