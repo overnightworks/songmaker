@@ -233,7 +233,7 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
 ) -> None:
     server = make_fake_async_redis()
 
-    async def run_the_pass_while_the_owner_starts_again() -> tuple[tuple, tuple, tuple, bool, bool]:
+    async def run_the_pass_while_the_owner_starts_again() -> tuple[tuple, tuple, tuple, bool, tuple]:
         await settle_owner_leases(server)
         leases = owner_leases(server)
         lapsed = (await leases.renew(ANOTHER)).generation
@@ -252,18 +252,22 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
             _LeasesThatRunBeforeAnswering(leases, start_again_and_write_a_job),
         )
         await _run_one_pass(owner_pass, app, monkeypatch, pauses_before=pauses_before)
-        health = app.state.background_loop_registry.loop_health()
+        loop_health = app.state.background_loop_registry.loop_health()
+        pass_failure = (
+            (0, None) if loop_name is None
+            else (loop_health[loop_name].consecutive_failures, loop_health[loop_name].last_error)
+        )
         return (
             _status_and_error(pg_factory, job_of_the_lapsed_generation),
             _status_and_error(pg_factory, job_of_no_generation),
             _status_and_error(pg_factory, new_jobs[0]),
             new_generations[0] != lapsed,
-            loop_name is None or health[loop_name].status is BackgroundLoopStatus.OK,
+            pass_failure,
         )
 
     failed = (JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type)
     assert asyncio.run(run_the_pass_while_the_owner_starts_again()) == (
-        failed, failed, (JobStatus.RUNNING, None), True, True,
+        failed, failed, (JobStatus.RUNNING, None), True, (0, None),
     )
 
 
