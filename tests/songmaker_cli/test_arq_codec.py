@@ -13,6 +13,7 @@ from arq.connections import RedisSettings
 from arq.constants import in_progress_key_prefix, job_key_prefix, result_key_prefix
 from arq.jobs import DeserializationError, Job, JobStatus, SerializationError
 from arq.worker import create_worker
+from logline import current_traceparent, unit_trace
 from support.redis_server import configured_redis_url, database_number
 
 from songmaker_cli import arq_pool
@@ -420,3 +421,42 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
     assert "private content" not in "".join(
         str(value) for value in vars(ended).values() if isinstance(value, str)
     )
+
+
+def test_a_job_runs_in_its_enqueuers_trace_and_a_failed_job_leaves_none_behind(
+    redis_url, monkeypatch
+):
+    seen_traceparents = {}
+
+    async def job(ctx, name, fails):
+        seen_traceparents[name] = current_traceparent()
+        if fails:
+            raise ValueError("deliberate failure")
+
+    async def scenario():
+        async with codec_pool(redis_url, monkeypatch) as pool:
+            worker = codec_worker(
+                MusicWorkerSettings, redis_url, logged_job("probe", job), "probe"
+            )
+            try:
+                with unit_trace(None):
+                    enqueuer_traceparent = current_traceparent()
+                    await pool.enqueue_job(
+                        "probe", "failing", True, _queue_name=MusicWorkerSettings.queue_name
+                    )
+                await pool.enqueue_job(
+                    "probe", "good", False, _queue_name=MusicWorkerSettings.queue_name
+                )
+                await worker.async_run()
+            finally:
+                await worker.close()
+        return enqueuer_traceparent
+
+    enqueuer_traceparent = asyncio.run(asyncio.wait_for(scenario(), timeout=30))
+
+    def trace_id_of(traceparent):
+        return traceparent.split("-")[1]
+
+    assert trace_id_of(seen_traceparents["failing"]) == trace_id_of(enqueuer_traceparent)
+    assert trace_id_of(seen_traceparents["good"]) != trace_id_of(enqueuer_traceparent)
+    assert current_traceparent() is None
