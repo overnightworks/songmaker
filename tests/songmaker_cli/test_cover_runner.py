@@ -33,6 +33,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.worker_liveness import JobOwnerStamp
 
 HANG_GUARD_SECONDS: Final = 30
 OWNER: Final = "u1"
@@ -184,7 +185,9 @@ def test_recovering_a_dead_owner_fails_its_cover_and_leaves_the_queue_for_the_ru
     _queue(factory, stack, "queued")
 
     with factory() as session:
-        assert recover_jobs_of_dead_owners(session, {DEAD_OWNER: Liveness.GONE}) == {
+        assert recover_jobs_of_dead_owners(
+            session, {JobOwnerStamp(DEAD_OWNER, None): Liveness.GONE},
+        ) == {
             JobType.COVER: 1,
         }
         session.commit()
@@ -248,7 +251,9 @@ def test_a_dead_owners_cover_leaves_no_suggestion_and_no_staging_directory_even_
         session.commit()
 
     with factory() as session:
-        recover_jobs_of_dead_owners(session, {DEAD_OWNER: Liveness.GONE})
+        recover_jobs_of_dead_owners(
+            session, {JobOwnerStamp(DEAD_OWNER, None): Liveness.GONE},
+        )
         session.commit()
     cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir)
 

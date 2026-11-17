@@ -166,7 +166,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         async with keep_owner_lease(
             ctx.owner_leases, ctx.owner_id,
             on_new_start=partial(reconcile_ended_covers, ctx),
-        ):
+        ) as ctx.owner:
             loop_tasks = _start_background_loops(app, registry)
             try:
                 async with running_mcp_front(app):

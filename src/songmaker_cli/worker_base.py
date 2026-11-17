@@ -26,7 +26,7 @@ from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
-from songmaker_cli.worker_liveness import keep_owner_lease, owner_leases
+from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ class WorkerBase:
         self._db_factory = None
         self._db_lock = threading.Lock()
         self.owner_id = str(uuid.uuid4())
+        self.owner: JobOwner
         self._owner_redis: AsyncRedis | None = None
         self._lease_stack: AsyncExitStack | None = None
 
@@ -108,7 +109,7 @@ class WorkerBase:
         self._owner_redis = create_async_redis(self._settings.redis_url)
         self._lease_stack = AsyncExitStack()
         try:
-            await self._lease_stack.enter_async_context(
+            self.owner = await self._lease_stack.enter_async_context(
                 keep_owner_lease(owner_leases(self._owner_redis), self.owner_id),
             )
         except BaseException:

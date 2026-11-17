@@ -8,6 +8,7 @@ import fakeredis
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import event, text
+from support.job_owner import an_owner, create_job_of_unstamped_owner
 from support.web_app import (
     arrange_fake_async_redis,
     make_authenticated_user,
@@ -23,7 +24,7 @@ from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
     JOB_ERROR_SERVER_RESTARTED,
     JobStatusUpdate,
-    active_job_owner_ids,
+    active_job_owner_stamps,
     claim_next_cover_job,
     create_job,
     recover_jobs_of_dead_owners,
@@ -34,7 +35,7 @@ from songmaker_cli.db.queries.rate_limits import upsert_rate_limit_setting
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_liveness import JobOwnerStamp, owner_leases
 
 GONE = "owner-gone"
 HERE = "owner-here"
@@ -44,10 +45,22 @@ PERSON = make_authenticated_user("person", username="person")
 
 def _running_job(
     session, job_type: JobType, owner_id: str | None, user_id: str | None = None,
+    *, generation: str | None = None,
 ) -> str:
-    job = create_job(session, job_type, owner_id=owner_id, user_id=user_id)
+    if owner_id is None:
+        job = create_job(session, job_type, user_id=user_id)
+    elif generation is None:
+        job = create_job_of_unstamped_owner(session, job_type, owner_id, user_id=user_id)
+    else:
+        job = create_job(
+            session, job_type, owner=an_owner(owner_id, generation), user_id=user_id,
+        )
     assert update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
     return job.id
+
+
+def _unstamped(owner_id: str) -> JobOwnerStamp:
+    return JobOwnerStamp(owner_id, None)
 
 
 def _outcome(session, job_id: str) -> tuple[str, str | None]:
@@ -66,7 +79,9 @@ def test_only_the_jobs_of_a_dead_owner_fail_with_the_restart_verdict(pg_factory)
         unowned = _running_job(session, JobType.CHAT, None)
 
         recovered = recover_jobs_of_dead_owners(session, {
-            GONE: Liveness.GONE, HERE: Liveness.ALIVE, UNREAD: Liveness.UNKNOWN,
+            _unstamped(GONE): Liveness.GONE,
+            _unstamped(HERE): Liveness.ALIVE,
+            _unstamped(UNREAD): Liveness.UNKNOWN,
         })
 
         assert recovered == {JobType.CHAT: 1, JobType.COVER: 1}
@@ -92,17 +107,17 @@ def test_a_failed_job_stores_its_message(pg_factory) -> None:
 def test_a_job_of_a_dead_owner_stores_the_restart_message(pg_factory) -> None:
     with pg_factory() as session:
         gone = _running_job(session, JobType.CHAT, GONE)
-        recover_jobs_of_dead_owners(session, {GONE: Liveness.GONE})
+        recover_jobs_of_dead_owners(session, {_unstamped(GONE): Liveness.GONE})
         assert session.get(Job, gone).error_message == JOB_ERROR_SERVER_RESTARTED.error_message
 
 
 def test_a_queued_job_of_a_dead_owner_fails_too_and_a_finished_one_is_left(pg_factory) -> None:
     with pg_factory() as session:
-        queued = create_job(session, JobType.CHAT, owner_id=GONE).id
+        queued = create_job_of_unstamped_owner(session, JobType.CHAT, GONE).id
         finished = _running_job(session, JobType.CHAT, GONE)
         update_job_status(session, finished, JobStatusUpdate(JobStatus.COMPLETED))
 
-        recover_jobs_of_dead_owners(session, {GONE: Liveness.GONE})
+        recover_jobs_of_dead_owners(session, {_unstamped(GONE): Liveness.GONE})
 
         assert (_outcome(session, queued)[0], _outcome(session, finished)[0]) == (
             JobStatus.FAILED, JobStatus.COMPLETED,
@@ -116,7 +131,38 @@ def test_the_owners_asked_about_are_those_of_active_jobs_only(pg_factory) -> Non
         done = _running_job(session, JobType.CHAT, GONE)
         update_job_status(session, done, JobStatusUpdate(JobStatus.COMPLETED))
 
-        assert active_job_owner_ids(session) == {HERE}
+        assert active_job_owner_stamps(session) == {_unstamped(HERE)}
+
+
+def test_only_the_jobs_of_a_lapsed_generation_fail_and_a_later_start_keeps_its_jobs(
+    pg_factory,
+) -> None:
+    with pg_factory() as session:
+        lapsed = _running_job(session, JobType.CHAT, HERE, generation="first")
+        current = _running_job(session, JobType.COVER, HERE, generation="second")
+        written_after_the_read = _running_job(session, JobType.CHAT, HERE, generation="third")
+
+        recovered = recover_jobs_of_dead_owners(session, {
+            JobOwnerStamp(HERE, "first"): Liveness.GONE,
+            JobOwnerStamp(HERE, "second"): Liveness.ALIVE,
+        })
+
+        assert recovered == {JobType.CHAT: 1}
+        assert [
+            _outcome(session, job_id)[0]
+            for job_id in (lapsed, current, written_after_the_read)
+        ] == [JobStatus.FAILED, JobStatus.RUNNING, JobStatus.RUNNING]
+
+
+def test_the_stamps_asked_about_name_the_generation_of_each_active_job(pg_factory) -> None:
+    with pg_factory() as session:
+        _running_job(session, JobType.CHAT, HERE, generation="first")
+        _running_job(session, JobType.COVER, HERE, generation="second")
+        _running_job(session, JobType.CHAT, UNREAD)
+
+        assert active_job_owner_stamps(session) == {
+            JobOwnerStamp(HERE, "first"), JobOwnerStamp(HERE, "second"), _unstamped(UNREAD),
+        }
 
 
 def test_the_age_recovery_fails_the_job_of_an_owner_the_given_liveness_reads_dead(
@@ -125,7 +171,9 @@ def test_the_age_recovery_fails_the_job_of_an_owner_the_given_liveness_reads_dea
     with pg_factory() as session:
         gone = _running_job(session, JobType.CHAT, GONE)
 
-        recover_stale_jobs_by_age_and_type(session, owner_liveness={GONE: Liveness.GONE})
+        recover_stale_jobs_by_age_and_type(
+            session, owner_liveness={_unstamped(GONE): Liveness.GONE},
+        )
 
         assert _outcome(session, gone) == (
             JobStatus.FAILED, JOB_ERROR_SERVER_RESTARTED.error_type,
@@ -210,7 +258,7 @@ def test_a_submission_that_cannot_read_owner_liveness_leaves_the_job_and_is_refu
         assert _outcome(session, person_at_the_queue_limit)[0] == JobStatus.RUNNING
 
 
-@pytest.mark.parametrize("owner_liveness", [None, {GONE: Liveness.UNKNOWN}])
+@pytest.mark.parametrize("owner_liveness", [None, {JobOwnerStamp(GONE, None): Liveness.UNKNOWN}])
 def test_the_age_reaper_without_a_dead_owner_leaves_a_fresh_job_alone(
     pg_factory, owner_liveness,
 ) -> None:
@@ -226,6 +274,8 @@ def test_claiming_a_cover_job_names_the_claimer_as_its_owner(pg_factory) -> None
     with pg_factory() as session:
         queued = create_job(session, JobType.COVER)
 
-        claimed = claim_next_cover_job(session, HERE)
+        claimed = claim_next_cover_job(session, an_owner(HERE, "claimer-generation"))
 
-        assert (claimed.id, claimed.owner_id) == (queued.id, HERE)
+        assert (claimed.id, claimed.owner_id, claimed.owner_generation) == (
+            queued.id, HERE, "claimer-generation",
+        )

@@ -15,7 +15,7 @@ from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -40,6 +40,8 @@ class AppContext:
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     """Names this process on the jobs it runs; its lease in Redis says whether it lives."""
     owner_leases: Leases = field(init=False)
+    owner: JobOwner = field(init=False)
+    """This process as the owner of its jobs, set once its lease is held."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)

@@ -1619,8 +1619,10 @@ apply the same queued-job rule.
 (`WorkerBase.owner_id`). A process writes its id on the jobs it runs: a chat job when
 the turn starts, a cover job when it claims it, a worker job (generation, LoRA
 training, scoring, model load and download) when it first marks it running
-(`jobs.owner_id`, nullable; a job that waits in a queue and older rows have none
-and get no owner verdict). Its lease is a holder of tandem's `Leases` in the family `owner`,
+(`jobs.owner_id` and `jobs.owner_generation`, nullable, written together by
+`db.queries.jobs.owner_columns` from the process's `JobOwner`: its id and the generation of its
+lease; a job that waits in a queue has none and gets no owner verdict, and a row written before
+generations were stored has an owner without a generation and is judged by its owner alone). Its lease is a holder of tandem's `Leases` in the family `owner`,
 built by `worker_liveness.owner_leases` for every process from the same spans: a lease lasts
 `OWNER_LEASE_TTL_SECONDS` (15 s) and is renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by
 `worker_liveness.keep_owner_lease` (`Leases.kept`), in a web process from the end of start-up to
@@ -1628,8 +1630,10 @@ the end of `_lifespan`, in a worker from after its database has opened to its `o
 web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
 serves everything else. The `owner_gone_reaper` loop of every web process runs
 `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
-(5 s) and once at start: it reads the owners of active jobs through `Leases.state` (`worker_liveness.owner_lease_liveness`)
-(`alive`, `gone` or `unknown`) and fails the active jobs of every `gone` owner, whether a web
+(5 s) and once at start: it reads the owner stamps of active jobs (`active_job_owner_stamps`: owner and generation) first,
+then their leases through `Leases.state` (`worker_liveness.owner_lease_liveness`)
+(`alive`, `gone` or `unknown`); a stamp whose generation is not the live lease's reads `gone`,
+for that lease lapsed. It fails the active jobs of every `gone` stamp, whether of a web
 process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then
 removes the suggestion and staging directory of the covers it ended. The `owner_lapses` loop
@@ -1651,17 +1655,19 @@ panel shows "Try again" at once; after a crash within 20 s.
 `owner_gone_reaper` loop health shows in `/health/details`, and fails nothing. A
 Redis that lost its data reads an absent lease `unknown` until the lease span has passed
 since the first command after the loss (tandem's epoch), by when the pods have renewed
-their leases; an owner id the reading lacks is `unknown`, and the job pass never asks about
-its own process. A renewal that fails is retried every interval and logged by tandem; the
+their leases; an owner id the reading lacks is `unknown`. The job pass judges this process's own jobs
+like any other's, so a job of a generation its lease lost fails although the process lives on; after an
+empty restart, a live owner's stamped jobs of the lost generation fail on the first pass after its
+renewal, while rows without a generation follow their owner. A renewal that fails is retried every interval and logged by tandem; the
 `owner_gone_reaper` tick reads this process's own lease, not its old key, and the `owner_lease`
 loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
 pass apart). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
 for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
 generation of tandem's `Hold`, logs it as a start and, in a web process, removes what every
-cover whose stored status has ended left behind (`lifecycle.reconcile_ended_covers`). The stored job status is the only fence: a job
-carries no lease generation, so a lapse cleanup that read the old lease may still fail the
-jobs of the new one. For one release every process also writes `<prefix>:owner:<id>` for the
+cover whose stored status has ended left behind (`lifecycle.reconcile_ended_covers`). A job a process wrote under the new
+generation names a stamp the pass that read the old one does not know, so it keeps running, and
+the stored job status still fences every write to a job that was failed. For one release every process also writes `<prefix>:owner:<id>` for the
 previous release's readers and reads an owner whose old key is live as `alive`
 (`owner_lease_old_key`). A cover's staging directory is named by its job id alone, so it
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in

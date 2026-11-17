@@ -14,12 +14,22 @@ from tandem import Liveness, StoreError
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.redis_client import create_async_redis
-from songmaker_cli.worker_liveness import keep_owner_lease, owner_lease_liveness, owner_leases
+from songmaker_cli.worker_liveness import (
+    JobOwnerStamp,
+    keep_owner_lease,
+    owner_lease_liveness,
+    owner_leases,
+)
 
 LEASED = "leased-owner"
 ABSENT = "absent-owner"
 DEADLINE_SECONDS = 5
 FAST_RENEWAL = timedelta(seconds=0.01)
+
+
+async def _liveness_of(server, owner_id: str, generation: str | None = None) -> Liveness:
+    stamp = JobOwnerStamp(owner_id, generation)
+    return (await owner_lease_liveness(owner_leases(server), [stamp]))[stamp]
 
 
 def test_a_kept_lease_reads_alive_to_another_process_until_its_block_ends() -> None:
@@ -29,8 +39,8 @@ def test_a_kept_lease_reads_alive_to_another_process_until_its_block_ends() -> N
         await settle_owner_leases(server)
         readings = []
         async with keep_owner_lease(owner_leases(server), LEASED):
-            readings.append((await owner_lease_liveness(owner_leases(server), [LEASED]))[LEASED])
-        readings.append((await owner_lease_liveness(owner_leases(server), [LEASED]))[LEASED])
+            readings.append(await _liveness_of(server, LEASED))
+        readings.append(await _liveness_of(server, LEASED))
         return readings
 
     assert asyncio.run(read_before_during_and_after()) == [Liveness.ALIVE, Liveness.GONE]
@@ -43,9 +53,9 @@ def test_an_owner_that_renews_only_the_old_key_reads_alive_until_that_key_lapses
         await settle_owner_leases(server)
         key = old_owner_key(REDIS_KEY_PREFIX, ABSENT)
         await server.set(key, "1")
-        readings = [(await owner_lease_liveness(owner_leases(server), [ABSENT]))[ABSENT]]
+        readings = [await _liveness_of(server, ABSENT)]
         await server.delete(key)
-        readings.append((await owner_lease_liveness(owner_leases(server), [ABSENT]))[ABSENT])
+        readings.append(await _liveness_of(server, ABSENT))
         return readings
 
     assert asyncio.run(read_while_the_old_key_is_live_and_after()) == [
@@ -65,6 +75,27 @@ def test_a_kept_lease_shows_the_old_key_to_an_old_reader_until_its_block_ends() 
     assert asyncio.run(read_the_old_key_during_and_after()) == [True, False]
 
 
+def test_a_stamp_of_a_lapsed_generation_reads_gone_while_its_owner_lives_on() -> None:
+    server = make_fake_async_redis()
+
+    async def read_the_stamps_after_the_lease_started_anew() -> list[Liveness]:
+        await settle_owner_leases(server)
+        leases = owner_leases(server)
+        async with keep_owner_lease(leases, LEASED) as owner:
+            lapsed = owner.generation
+            await leases.end(LEASED, lapsed)
+            started_anew = (await leases.renew(LEASED)).generation
+            return [
+                await _liveness_of(server, LEASED, lapsed),
+                await _liveness_of(server, LEASED, started_anew),
+                await _liveness_of(server, LEASED),
+            ]
+
+    assert asyncio.run(read_the_stamps_after_the_lease_started_anew()) == [
+        Liveness.GONE, Liveness.ALIVE, Liveness.ALIVE,
+    ]
+
+
 def test_a_lease_that_lapsed_and_started_again_counts_as_a_start() -> None:
     server = make_fake_async_redis()
 
@@ -79,8 +110,8 @@ def test_a_lease_that_lapsed_and_started_again_counts_as_a_start() -> None:
         leases = owner_leases(server)
         async with keep_owner_lease(
             leases, LEASED, on_new_start=on_new_start, every=FAST_RENEWAL,
-        ) as hold:
-            await leases.end(LEASED, hold.generation)
+        ) as owner:
+            await leases.end(LEASED, owner.generation)
             await asyncio.wait_for(started.wait(), timeout=DEADLINE_SECONDS)
         return len(starts)
 
@@ -117,7 +148,7 @@ def test_an_exit_cancelled_during_a_renewal_still_ends_the_lease_and_its_old_key
         running.cancel()
         cancellation_delivered.set()
         await asyncio.gather(running, return_exceptions=True)
-        reading = (await owner_lease_liveness(owner_leases(server), [LEASED]))[LEASED]
+        reading = await _liveness_of(server, LEASED)
         return reading, bool(await server.exists(old_owner_key(REDIS_KEY_PREFIX, LEASED)))
 
     assert asyncio.run(cancel_the_block_twice_while_a_renewal_is_in_flight()) == (
@@ -156,7 +187,7 @@ def test_an_absent_lease_reads_gone_only_once_the_lease_span_has_passed_on_the_s
     async def read_the_absent_owner() -> Liveness:
         if settled:
             await settle_owner_leases(server)
-        return (await owner_lease_liveness(owner_leases(server), [ABSENT]))[ABSENT]
+        return await _liveness_of(server, ABSENT)
 
     assert asyncio.run(read_the_absent_owner()) is expected
 

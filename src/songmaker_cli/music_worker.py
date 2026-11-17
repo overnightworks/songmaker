@@ -64,7 +64,7 @@ class MusicWorker(WorkerBase):
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
             data_dir=self.data_dir(),
-            owner_id=self.owner_id,
+            owner=self.owner,
             seed=seed,
             task_params=task_params,
             target_model=requested_model,
@@ -91,7 +91,7 @@ class MusicWorker(WorkerBase):
             ctx, job_id, lora_id, user_id,
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
-            owner_id=self.owner_id,
+            owner=self.owner,
             redis=ctx["redis"],
             target_mode=target_mode,
             training_config=self._settings.lora_training_config,
@@ -102,13 +102,13 @@ class MusicWorker(WorkerBase):
     ) -> None:
         await _load_model_on_worker_impl(
             ctx, job_id, worker_id, mode,
-            db_factory=self.get_db_factory(), owner_id=self.owner_id,
+            db_factory=self.get_db_factory(), owner=self.owner,
         )
 
     async def download_model_on_worker(self, ctx, job_id: str, mode: str) -> None:
         await _download_model_on_worker_impl(
             ctx, job_id, mode,
-            db_factory=self.get_db_factory(), owner_id=self.owner_id,
+            db_factory=self.get_db_factory(), owner=self.owner,
         )
 
     async def cleanup_files_cron(self, _ctx) -> None:

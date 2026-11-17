@@ -57,7 +57,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.generations import get_generation, get_generations
 from songmaker_cli.db.queries.jobs import (
-    active_job_owner_ids,
+    active_job_owner_stamps,
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
@@ -75,6 +75,8 @@ from songmaker_cli.job_types import JobType
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
+    JobOwner,
+    JobOwnerStamp,
     WorkerLiveness,
     owner_lease_liveness,
     read_worker_liveness,
@@ -233,7 +235,7 @@ def _enforce_job_limits(
     user: AuthenticatedUser,
     job_type: JobType,
     worker_liveness: WorkerLiveness,
-    owner_liveness: Mapping[str, Liveness],
+    owner_liveness: Mapping[JobOwnerStamp, Liveness],
 ) -> None:
     """Recover stale jobs, then roll back with 429 when a queue or rate limit is reached."""
     settings = get_settings()
@@ -270,11 +272,11 @@ def _enforce_job_limits(
 
 
 async def _read_owner_liveness_or_unknown(
-    owner_leases: Leases, owner_ids: set[str],
-) -> Mapping[str, Liveness]:
+    owner_leases: Leases, stamps: set[JobOwnerStamp],
+) -> Mapping[JobOwnerStamp, Liveness]:
     """A Redis that cannot be read leaves every owner UNKNOWN, which fails no job."""
     try:
-        return await owner_lease_liveness(owner_leases, owner_ids)
+        return await owner_lease_liveness(owner_leases, stamps)
     except StoreError:
         _log.warning("Could not read owner liveness", exc_info=True)
         return {}
@@ -287,7 +289,7 @@ async def create_job_with_rate_limit(
     song_id: str | None = None,
     *,
     version_id: str | None = None,
-    owner_id: str | None = None,
+    owner: JobOwner | None = None,
     redis: Redis,
     owner_leases: Leases,
 ) -> Job:
@@ -309,7 +311,7 @@ async def create_job_with_rate_limit(
     worker_ids = [worker.id for worker in list_worker_identities(session)]
     worker_liveness = read_worker_liveness(redis, worker_ids)
     owner_liveness = await _read_owner_liveness_or_unknown(
-        owner_leases, active_job_owner_ids(session),
+        owner_leases, active_job_owner_stamps(session),
     )
     session.commit()
     lock_until_transaction_ends(session, AdvisoryLock.RATE_LIMIT)
@@ -326,7 +328,7 @@ async def create_job_with_rate_limit(
 
     return create_job(
         session, job_type, user_id=user.id, song_id=song_id, version_id=version_id,
-        owner_id=owner_id,
+        owner=owner,
     )
 
 

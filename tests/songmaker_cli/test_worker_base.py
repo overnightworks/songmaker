@@ -204,6 +204,27 @@ def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
     assert _run(start_and_stop()) == ({worker.owner_id}, set())
 
 
+def test_a_worker_names_itself_on_its_jobs_with_the_generation_of_its_lease(
+    restored_logging: None, redis_url: str,
+) -> None:
+    worker = _worker_on(redis_url)
+
+    async def read_the_lease_while_running() -> str | None:
+        await worker.on_startup(_ARQ_CTX)
+        reader = create_async_redis(redis_url)
+        try:
+            return (await owner_leases(reader).state([worker.owner_id]))[
+                worker.owner_id
+            ].generation
+        finally:
+            await reader.aclose()
+            await worker.on_shutdown({})
+
+    generation = _run(read_the_lease_while_running())
+
+    assert (worker.owner.owner_id, worker.owner.generation) == (worker.owner_id, generation)
+
+
 def test_a_worker_whose_database_cannot_open_holds_no_lease(
     restored_logging: None, redis_url: str,
 ) -> None:

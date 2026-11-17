@@ -27,11 +27,7 @@ from songmaker_cli.api_models import (
     StoredGenerationParams,
 )
 from songmaker_cli.arq_pool import is_scoring_worker_healthy
-from songmaker_cli.config import (
-    audio_file_path,
-    build_ace_config,
-    resolve_model_mode,
-)
+from songmaker_cli.config import audio_file_path, build_ace_config, resolve_model_mode
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
@@ -65,6 +61,7 @@ from songmaker_cli.scheduler import (
     WorkerHeld,
     WorkerTaskFailed,
 )
+from songmaker_cli.worker_liveness import JobOwner
 
 from ._runtime import (
     REFERENCE_AUDIO_NOT_FOUND,
@@ -147,7 +144,7 @@ class GenerationProgressTracker:
     db_factory: sessionmaker[Session]
     job_id: str
     take_count: int
-    owner_id: str
+    owner: JobOwner
     clock: Callable[[], float] = time.monotonic
     take_index: int = field(default=0, init=False)
     phase: GenerationPhase | None = field(default=None, init=False)
@@ -159,7 +156,7 @@ class GenerationProgressTracker:
         self.failure = select_generation_failure(self.failure, exc, self.job_id)
 
     def mark_running(self) -> None:
-        self._write(owner_id=self.owner_id)
+        self._write(owner=self.owner)
 
     def start_take(self, index: int) -> None:
         self.take_index = index
@@ -852,7 +849,7 @@ async def run_generation_job(
     db_factory: sessionmaker[Session],
     audio_dir: Path,
     data_dir: Path,
-    owner_id: str,
+    owner: JobOwner,
     redis: ArqRedis,
     seed: int | None = None,
     task_params: RepaintTaskParams | CoverTaskParams | None = None,
@@ -895,7 +892,7 @@ async def run_generation_job(
         if ctx is None:
             return
 
-        progress = GenerationProgressTracker(db_factory, job_id, count, owner_id)
+        progress = GenerationProgressTracker(db_factory, job_id, count, owner)
         progress.mark_running()
         if _job_is_terminal(db_factory, job_id):
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)

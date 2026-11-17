@@ -12,6 +12,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
+from support.job_owner import an_owner
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import LoopbackServer
 
@@ -159,7 +160,7 @@ def test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch(
                         audio_dir=tmp_path,
                         redis=redis,
                         target_mode="sft",
-                        training_config=get_settings().lora_training_config, owner_id="o1",
+                        training_config=get_settings().lora_training_config, owner=an_owner("o1"),
                     )
                     with lora_auth_db() as session:
                         lora = get_user_lora(session, "lora")
