@@ -45,7 +45,7 @@ def build_lock(
     )
     while (generation := from_thread.run(locks.acquire, key)) is None:
         time.sleep(QUEUE_STREAM_BUILD_POLL_SECONDS)
-    renewal = from_thread.run(_start_renewing, locks, key, generation, lasts)
+    renewal = from_thread.run_sync(_start_renewing, locks, key, generation, lasts)
     try:
         yield
     finally:
@@ -53,7 +53,7 @@ def build_lock(
         from_thread.run(locks.release, key, generation)
 
 
-async def _start_renewing(
+def _start_renewing(
     locks: Locks, key: str, generation: str, lasts: timedelta,
 ) -> asyncio.Task[None]:
     async def renew() -> None:
