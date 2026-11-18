@@ -199,7 +199,8 @@ def claim_next_queued_job(session: Session, owner: JobOwner, *job_types: JobType
     ``run_after`` and is never due. A queued job without one (written before rows carried
     their arguments) is due for a type that has no queue message to run it, and its claimer
     fails it as having no payload; a score job without one is left to its arq message, which
-    runs it from its own arguments. SKIP LOCKED makes competing workers take different rows instead of waiting on each other's.
+    runs it from its own arguments. SKIP LOCKED makes competing workers take different rows
+    instead of waiting on each other's.
     """
     due = Job.run_after <= datetime.now(timezone.utc)
     without_message = [t for t in job_types if t not in _TYPES_WITH_QUEUE_MESSAGE]
