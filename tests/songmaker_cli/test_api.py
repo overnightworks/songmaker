@@ -2147,15 +2147,9 @@ def test_worker_preflight_reports_an_unavailable_worker(
     health_check: str,
 ) -> None:
     """S6-E: score keeps "Worker not running", and no row a live worker could claim is left."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    with (
-        patch(
-            f"songmaker_cli.generation_api.{health_check}",
-            AsyncMock(return_value=False),
-        ),
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=MagicMock()),
-    ):
+    with patch(f"songmaker_cli.generation_api.{health_check}", AsyncMock(return_value=False)):
         response = client.post(path, json=payload)
 
     assert response.status_code == 503

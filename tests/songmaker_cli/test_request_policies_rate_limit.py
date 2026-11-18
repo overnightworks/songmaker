@@ -148,7 +148,8 @@ def test_score_rate_limit_for_user(client: TestClient, monkeypatch) -> None:
             session.add(Job(type="score", user_id=user_id, status="completed"))
         session.commit()
 
-    resp = client.post("/api/generations/g1/score", json={})
+    with _mock_arq():
+        resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 429
 
