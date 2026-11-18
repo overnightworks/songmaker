@@ -37,6 +37,12 @@ from songmaker_cli.worker_base import WorkerBase, logged_job
 log = logging.getLogger(__name__)
 
 
+def stop_claiming(queue_task: asyncio.Task[None]) -> None:
+    """Cancel the claiming loop once; a second cancel would cut the drain of its running jobs."""
+    if not queue_task.cancelling():
+        queue_task.cancel()
+
+
 class ScoringWorker(WorkerBase):
     service_name = SCORING_SERVICE_NAME
     job_types = (JobType.SCORE,)
@@ -119,7 +125,7 @@ class ScoringWorker(WorkerBase):
         loop = asyncio.get_running_loop()
 
         def stop(_signal_number: int, _frame: FrameType | None) -> None:
-            loop.call_soon_threadsafe(queue_task.cancel)
+            loop.call_soon_threadsafe(stop_claiming, queue_task)
 
         for stop_signal in (signal.SIGINT, signal.SIGTERM):
             signal.signal(stop_signal, stop)
@@ -128,7 +134,7 @@ class ScoringWorker(WorkerBase):
         from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
         if self._queue_task is not None:
-            self._queue_task.cancel()
+            stop_claiming(self._queue_task)
             await asyncio.gather(self._queue_task, return_exceptions=True)
 
         try:

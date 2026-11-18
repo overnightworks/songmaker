@@ -12,9 +12,11 @@ from logline.testing import configured
 from support.job_owner import an_owner
 from tandem.testing import FakeWakeBus
 
+from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.scoring_worker import ScoringWorker
 
 STOP_WITHIN_SECONDS = 5
+SETTLING_LOOP_TURNS = 20
 
 
 def _run(coro):
@@ -215,3 +217,41 @@ def test_a_stop_signal_ends_the_claiming_though_the_loops_own_handler_still_gets
         return arq_was_told.is_set(), queue_task.cancelled()
 
     assert _run(scenario()) == (True, True)
+
+
+def test_a_stop_signal_lets_a_running_job_finish_before_the_worker_shuts_down(
+    stop_signal_handlers,
+) -> None:
+    worker = ScoringWorker()
+    worker.wake_channel = FakeWakeBus().pod()
+    worker.claim_next_job = MagicMock(side_effect=[ClaimedJob("j1", None), None])
+    job_started, job_may_finish, job_finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def run_claimed(_claimed: ClaimedJob) -> None:
+        job_started.set()
+        await job_may_finish.wait()
+        job_finished.set()
+
+    worker.run_claimed = run_claimed
+
+    async def scenario() -> tuple[bool, bool]:
+        loop = asyncio.get_running_loop()
+        arq_was_told = asyncio.Event()
+        loop.add_signal_handler(signal.SIGTERM, arq_was_told.set)
+        queue_task = asyncio.create_task(worker.serve_queued_jobs())
+        worker._queue_task = queue_task
+        worker.stop_claiming_on_stop_signal(queue_task)
+        async with asyncio.timeout(STOP_WITHIN_SECONDS):
+            await job_started.wait()
+            os.kill(os.getpid(), signal.SIGTERM)
+            await arq_was_told.wait()
+            shutting_down = asyncio.create_task(worker.on_shutdown({}))
+            for _ in range(SETTLING_LOOP_TURNS):
+                await asyncio.sleep(0)
+            ended_with_job_running = shutting_down.done()
+            job_may_finish.set()
+            await shutting_down
+        loop.remove_signal_handler(signal.SIGTERM)
+        return ended_with_job_running, job_finished.is_set()
+
+    assert _run(scenario()) == (False, True)
