@@ -46,6 +46,8 @@ server = [
     "psycopg2-binary>=2.9,<3",
     "arq>=0.26,<1",
     "mutagen>=1.47,<2",
+    # The object store's S3 client (object_store.py); botocore reads the platform's endpoint, region and credentials file.
+    "boto3>=1.36,<2",
     "python-multipart>=0.0.7,<1",
     # The auth layer lives in its own repository. The first-party libraries are
     # git pins by tag: a release-asset wheel in the resolved tree makes a uv Dependabot
@@ -170,8 +172,8 @@ pythonpath = ["src"]
 files = ["src/songmaker_cli"]
 plugins = ["pydantic.mypy"]
 
-# Extras absent from the CI venv (audiobox_aesthetics, faster_whisper, torch) and scipy,
-# which ships no stubs, do not resolve.
+# Extras absent from the CI venv (audiobox_aesthetics, faster_whisper, torch) and scipy and
+# boto3, which ship no stubs, do not resolve.
 [[tool.mypy.overrides]]
-module = ["audiobox_aesthetics.infer", "faster_whisper", "torch", "scipy", "scipy.signal"]
+module = ["audiobox_aesthetics.infer", "faster_whisper", "torch", "scipy", "scipy.signal", "boto3", "botocore.*"]
 ignore_missing_imports = true

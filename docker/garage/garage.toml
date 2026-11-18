@@ -1,0 +1,18 @@
+# The test stack's object store: the shape platform's infrastructure/objectstore runs (one node, one copy,
+# read-after-write, region "garage"), without the fsyncs a throwaway store does not need. The RPC secret and
+# the admin token come from GARAGE_RPC_SECRET and GARAGE_ADMIN_TOKEN.
+replication_factor = 1
+consistency_mode = "consistent"
+db_engine = "sqlite"
+metadata_dir = "/data/meta"
+data_dir = "/data/data"
+
+rpc_bind_addr = "127.0.0.1:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"
+
+[admin]
+api_bind_addr = "0.0.0.0:3903"

@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from support.object_store import an_object_store
 from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 
 import songmaker_cli.lifecycle as lifecycle
@@ -26,6 +27,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     return AppContext(
+        object_store=an_object_store(),
         db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
         signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )

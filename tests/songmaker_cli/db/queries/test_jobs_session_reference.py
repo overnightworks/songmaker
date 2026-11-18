@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from support.object_store import an_object_store
 from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 from tandem import Liveness
 
@@ -43,6 +44,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
         )
         session.commit()
     return AppContext(
+        object_store=an_object_store(),
         db=pg_factory,
         audio_dir=audio_dir,
         data_dir=tmp_path / "data",

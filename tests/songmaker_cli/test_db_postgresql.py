@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, event, insert, inspect, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.object_store import an_object_store
 from support.postgresql import upgrade_to_head
 from support.repository_root import REPOSITORY_ROOT
 from support.web_app import make_authenticated_user, make_fake_async_redis, seed_user
@@ -430,8 +431,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         session.commit()
 
     ctx = AppContext(
-        db=pg_factory,
-        audio_dir=tmp_path / "audio",
+        object_store=an_object_store(), db=pg_factory, audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=b"test",
         redis=None, async_redis=make_fake_async_redis(),  # type: ignore[arg-type]

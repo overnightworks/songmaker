@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.job_owner import an_owner
+from support.object_store import an_object_store
 from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
 from tandem.testing import settle_epoch
@@ -153,6 +154,7 @@ def make_app_context(
 ) -> AppContext:
     """A context on fakes for the asyncio side, over the caller's database and sync Redis."""
     ctx = AppContext(
+        object_store=an_object_store(),
         db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
         async_redis=make_fake_async_redis(),
     )
@@ -170,6 +172,7 @@ def make_router_ctx(
 
     The caller passes its database; no default builds one."""
     ctx = AppContext(
+        object_store=an_object_store(),
         db=db,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
@@ -256,6 +259,7 @@ def make_test_app(
         session.commit()
 
     ctx = AppContext(
+        object_store=an_object_store(),
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=make_fake_redis() if redis is None else redis,
         async_redis=SettledFakeAsyncRedis(),

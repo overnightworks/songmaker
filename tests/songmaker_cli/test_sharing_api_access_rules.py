@@ -126,6 +126,14 @@ def test_another_musician_cannot_end_a_share_and_it_stays_public(
     assert _listener_of(library_app).get(page_path).status_code == 200
 
 
+def test_shared_queue_stream_audio_documents_an_unsatisfiable_range(
+    library_app: TestClient,
+) -> None:
+    paths = library_app.app.openapi()["paths"]
+
+    assert "416" in paths["/shared/queue-streams/{snapshot_id}/audio"]["get"]["responses"]
+
+
 def test_ending_a_share_is_offered_only_on_the_four_resources(
     library_app: TestClient,
 ) -> None:

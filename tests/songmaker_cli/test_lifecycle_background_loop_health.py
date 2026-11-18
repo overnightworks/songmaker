@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 import fakeredis
 import pytest
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
+from support.object_store import an_object_store
 from support.owner_lease_epoch import aged_epoch
 from support.web_app import (
     TEST_SECRET,
@@ -294,6 +295,7 @@ class _TickingProcess:
         self._factory = factory
         self._work_numbers = work_numbers
         self._ctx = AppContext(
+            object_store=an_object_store(),
             db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
             signing_key=TEST_SECRET, redis=make_fake_redis(),
             async_redis=fakeredis.FakeAsyncRedis(server=server),

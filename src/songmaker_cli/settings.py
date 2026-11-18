@@ -13,6 +13,7 @@ Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -138,6 +139,14 @@ def _find_env_file() -> Path | None:
     return None
 
 
+def process_environment_variable(name: str) -> str | None:
+    """A variable of the process environment, which the env file does not feed.
+
+    botocore reads the platform's store variables from here alone, so the web checks it too.
+    """
+    return os.environ.get(name) or None
+
+
 def _split_token_clients(value: str) -> list[str]:
     return [entry.strip() for entry in value.split(",")]
 
@@ -171,6 +180,8 @@ class Settings(BaseSettings):
     songmaker_internal_token: Annotated[SecretStr, Field(min_length=1)]
     # Optional so direct runs and tests start; /metrics answers 503 while unset.
     songmaker_monitoring_token: SecretStr | None = None
+    # The object store's bucket; only the web uses the store and refuses to start without one.
+    songmaker_s3_bucket: str | None = None
 
     @field_validator("songmaker_commit", mode="before")
     @classmethod

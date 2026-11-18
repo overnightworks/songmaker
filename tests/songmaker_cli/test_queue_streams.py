@@ -20,7 +20,7 @@ from support.web_app import (
     web_client,
 )
 
-from songmaker_cli import audio_files
+from songmaker_cli import audio_files, queue_streams
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
@@ -29,9 +29,29 @@ from songmaker_cli.queue_streams import (
     collect_library_pool_generations,
     generation_matches_pool,
     probe_audio_duration,
+    queue_stream_audio_object_key,
+    queue_stream_manifest_object_key,
     run_ffmpeg_concat,
     shuffle_library_sources,
 )
+
+
+def _stored_manifest(client: TestClient, snapshot_id: str) -> dict:
+    store = client.app.state.ctx.object_store
+    return json.loads(store.get_bytes(queue_stream_manifest_object_key(snapshot_id)))
+
+
+def _store_manifest(client: TestClient, snapshot_id: str, content: dict | str) -> None:
+    text = content if isinstance(content, str) else json.dumps(content)
+    client.app.state.ctx.object_store.put_bytes(
+        queue_stream_manifest_object_key(snapshot_id), text.encode("utf-8"),
+        content_type="application/json",
+    )
+
+
+def _stored_keys(client: TestClient) -> set[str]:
+    store = client.app.state.ctx.object_store
+    return {entry.key for entry in store.list(queue_streams.QUEUE_STREAM_KEY_PREFIX)}
 
 
 def _seed_queue_data(session) -> None:
@@ -318,11 +338,36 @@ def test_queue_stream_audio_reports_missing_snapshot_audio(
 
     stream = _shared_playlist_snapshot(client, ["g1"])
     snapshot_id = stream.json()["snapshot_id"]
-    (tmp_path / "data" / "queue-streams" / f"{snapshot_id}.mp3").unlink()
-    (tmp_path / "audio" / "owner-id" / "g1.mp3").unlink()
+    client.app.state.ctx.object_store.delete([queue_stream_audio_object_key(snapshot_id)])
 
     audio = web_client(client.app, cookies={}).get(stream.json()["stream_url"])
     assert audio.status_code == 404
+
+
+def test_queue_stream_audio_is_served_whole_or_by_range_and_never_cached(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
+) -> None:
+    stub_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    seed_session(client, "owner")
+    public = web_client(client.app, cookies={})
+    url = _shared_playlist_snapshot(client, ["g1"]).json()["stream_url"]
+
+    whole = public.get(url)
+    ranged = public.get(url, headers={"Range": "bytes=4-7"})
+    beyond = public.get(url, headers={"Range": f"bytes={len(whole.content)}-"})
+
+    assert (
+        whole.status_code, whole.headers["cache-control"], whole.headers["content-type"],
+        ranged.status_code, ranged.content, ranged.headers["content-range"],
+        beyond.status_code,
+    ) == (
+        200, "no-store", "audio/mpeg",
+        206, whole.content[4:8], f"bytes 4-7/{len(whole.content)}",
+        416,
+    )
 
 
 # ── DB session / build lifecycle tests ──────────────────────────────────────
@@ -385,30 +430,31 @@ def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
 
-    stream_dir = tmp_path / "data" / "queue-streams"
-    stream_dir.mkdir(parents=True, exist_ok=True)
     stale_id = "0" * 32
-    stale_manifest = stream_dir / f"{stale_id}.json"
-    stale_manifest.write_text(
-        json.dumps(
-            {
-                "snapshot_id": stale_id,
-                "scope": "shared-album",
-                "scope_id": "test-album",
-                "content_hash": "unrelated",
-                "expires_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
-                "total_duration": 1.0,
-                "windowed": False,
-                "tracks": [],
-            }
-        )
+    _store_manifest(
+        client, stale_id,
+        {
+            "snapshot_id": stale_id,
+            "scope": "shared-album",
+            "scope_id": "test-album",
+            "content_hash": "unrelated",
+            "expires_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+            "total_duration": 1.0,
+            "windowed": False,
+            "tracks": [],
+        },
     )
-    (stream_dir / f"{stale_id}.mp3").write_bytes(b"stale")
+    client.app.state.ctx.object_store.put_bytes(
+        queue_stream_audio_object_key(stale_id), b"stale", content_type="audio/mpeg",
+    )
 
     resp = _shared_playlist_snapshot(client, ["g1"])
 
     assert resp.status_code == 200
-    assert stale_manifest.exists(), "the request path must no longer sweep expired snapshots"
+    stale_keys = {
+        queue_stream_manifest_object_key(stale_id), queue_stream_audio_object_key(stale_id),
+    }
+    assert stale_keys <= _stored_keys(client), "the request path must no longer sweep snapshots"
 
 
 def test_shared_playlist_queue_stream_snapshot_and_audio(
@@ -757,10 +803,9 @@ def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
     assert first.status_code == 200
     snapshot_id = first.json()["snapshot_id"]
 
-    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = _stored_manifest(client, snapshot_id)
     manifest.pop("windowed", None)
-    manifest_path.write_text(json.dumps(manifest))
+    _store_manifest(client, snapshot_id, manifest)
 
     second = _shared_playlist_snapshot(client, ["g1"])
     assert second.status_code == 200
@@ -1244,10 +1289,9 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch, 
     seed_session(client, "owner")
     resp = _shared_playlist_snapshot(client, ["g1"])
     data = resp.json()
-    manifest_path = tmp_path / "data" / "queue-streams" / f"{data['snapshot_id']}.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = _stored_manifest(client, data["snapshot_id"])
     manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
+    _store_manifest(client, data["snapshot_id"], manifest)
 
     audio = client.get(data["stream_url"])
 
@@ -1274,61 +1318,14 @@ def test_queue_stream_audio_rejects_unknown_snapshot_ids(
     assert audio.status_code == 404
 
 
-def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path, monkeypatch, pg_factory) -> None:
-    """A leftover .json.tmp file from a crashed QueueStreamManifest.save must be
-    recognised as belonging to its (orphaned) snapshot and removed by the sweep.
+def test_unreadable_manifest_is_ignored() -> None:
+    parse = queue_streams.QueueStreamManifest.parse
+    snapshot_id = "0" * 32
 
-    The real scenario: QueueStreamManifest.save crashed before the rename, so
-    the .json manifest was never written. The snapshot_id is therefore not
-    live and the .json.tmp file is a plain orphan.
-    """
-    import os
-    import time
-    import uuid
-
-    from songmaker_cli.queue_streams import (
-        QUEUE_STREAM_ORPHAN_MAX_AGE,
-        cleanup_expired_queue_streams,
-    )
-
-    stub_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-
-    # Plant a .json.tmp file for a snapshot that was never fully written (no .json exists)
-    orphan_id = uuid.uuid4().hex
-    stream_dir = tmp_path / "data" / "queue-streams"
-    stream_dir.mkdir(parents=True, exist_ok=True)
-    stale_tmp = stream_dir / f"{orphan_id}.json.tmp"
-    stale_tmp.write_text("{}", encoding="utf-8")
-    old_mtime = time.time() - QUEUE_STREAM_ORPHAN_MAX_AGE.total_seconds() - 1
-    os.utime(stale_tmp, (old_mtime, old_mtime))
-
-    cleanup_expired_queue_streams(client.app.state.ctx)
-
-    assert not stale_tmp.exists(), ".json.tmp orphan must be removed by the sweep"
-
-
-def test_unreadable_manifest_json_is_ignored(tmp_path: Path) -> None:
-    from songmaker_cli.queue_streams import QueueStreamManifest
-
-    missing = tmp_path / "missing.json"
-    assert QueueStreamManifest.load(missing) is None
-
-    garbage = tmp_path / "garbage.json"
-    garbage.write_text("{not-json", encoding="utf-8")
-    assert QueueStreamManifest.load(garbage) is None
-
-    not_object = tmp_path / "list.json"
-    not_object.write_text("[]", encoding="utf-8")
-    assert QueueStreamManifest.load(not_object) is None
-
-    bad_expiry = tmp_path / "expiry.json"
-    bad_expiry.write_text('{"expires_at": "not-a-date"}', encoding="utf-8")
-    assert QueueStreamManifest.load(bad_expiry) is None, (
-        "an unparseable expires_at alongside other missing required fields "
-        "must fail validation, not silently produce a partial manifest"
-    )
+    assert (
+        parse(snapshot_id, b"{not-json"), parse(snapshot_id, b"[]"),
+        parse(snapshot_id, b'{"expires_at": "not-a-date"}'),
+    ) == (None, None, None)
 
 
 @pytest.mark.parametrize(
@@ -1352,8 +1349,7 @@ def test_corrupt_manifest_file_returns_404_not_500(
     resp = _shared_playlist_snapshot(client, ["g1"])
     assert resp.status_code == 200
     snapshot_id = resp.json()["snapshot_id"]
-    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-    manifest_path.write_text(corrupt_manifest_text, encoding="utf-8")
+    _store_manifest(client, snapshot_id, corrupt_manifest_text)
 
     audio = client.get(f"/shared/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
 
@@ -1367,19 +1363,17 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch, pg_factor
 
     stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
-    stream_dir = tmp_path / "data" / "queue-streams"
-    stream_dir.mkdir(parents=True, exist_ok=True)
-    corrupt = stream_dir / f"{uuid.uuid4().hex}.json"
-    corrupt.write_text("{not-json", encoding="utf-8")
+    corrupt_id = uuid.uuid4().hex
+    _store_manifest(client, corrupt_id, "{not-json")
 
     cleanup_expired_queue_streams(client.app.state.ctx)
 
-    assert not corrupt.exists()
+    assert queue_stream_manifest_object_key(corrupt_id) not in _stored_keys(client)
 
 
 def _expired_shared_snapshot_with_pin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory
-) -> tuple[TestClient, Path]:
+) -> tuple[TestClient, str]:
     stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
@@ -1389,14 +1383,13 @@ def _expired_shared_snapshot_with_pin(
     stream = public.post(f"/shared/playlist/{slug}/stream")
     assert stream.status_code == 200
     snapshot_id = stream.json()["snapshot_id"]
-    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = _stored_manifest(client, snapshot_id)
     now = datetime.now(timezone.utc)
     manifest["expires_at"] = (now - timedelta(seconds=1)).isoformat()
     manifest["pinned"] = True
     manifest["pinned_at"] = now.isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-    return public, manifest_path
+    _store_manifest(client, snapshot_id, manifest)
+    return public, snapshot_id
 
 
 def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
@@ -1405,21 +1398,20 @@ def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
     """1859_R1 -- an expired manifest that still says pinned is swept like any other."""
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
-    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch, pg_factory)
+    public, snapshot_id = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch, pg_factory)
 
     cleanup_expired_queue_streams(public.app.state.ctx)
 
-    assert not manifest_path.exists()
-    assert not manifest_path.with_suffix(".mp3").exists()
+    assert _stored_keys(public) == set()
 
 
 def test_expired_snapshot_whose_manifest_still_says_pinned_is_not_served(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory
 ) -> None:
     """1859_R1 -- an expired manifest that still says pinned is not served."""
-    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch, pg_factory)
+    public, snapshot_id = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch, pg_factory)
 
-    assert public.get(f"/shared/queue-streams/{manifest_path.stem}/audio").status_code == 404
+    assert public.get(f"/shared/queue-streams/{snapshot_id}/audio").status_code == 404
 
 
 @pytest.mark.parametrize("method", [pytest.param("post"), pytest.param("delete")])

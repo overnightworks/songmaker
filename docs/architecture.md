@@ -673,22 +673,26 @@ ffmpeg and request-session release through the shared builders;
 `tests/songmaker_cli/test_queue_streams_refusals.py` proves the unreadable-duration
 and scan-window refusals.
 
-Built snapshots live in `queue-streams/` under the data directory as
-`<id>.json` and `<id>.mp3`, a cache of the process that built them. Every build
-also publishes the manifest to Redis (`songmaker:queue-stream:manifest:<id>` and
-`songmaker:queue-stream:content:<hash>`, eight hours), and builds of one content
-hash are serialised across web processes by a tandem lock that the building process renews while ffmpeg runs, so a dead
-builder frees it within seconds, and whose waiters poll; neither the builder nor a waiter holds a database connection. A build reuses the unexpired snapshot Redis names for
-its content hash, whichever process built it; a process that serves the audio of a
-snapshot it has no file for rebuilds the file from the manifest's tracks under the
-same lock. The audio stays on each process's disk until audio moves to the object
-store. A snapshot lives eight hours. The sweep (at startup and in the
-maintenance loop) removes the files of expired or unreadable manifests, then
-every regular file of no live snapshot older than 24 hours (a running build's
-`.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
-snapshots once their audio exceeds 1 GiB; a build's own new snapshot is never
-evicted, and a running build's files never count or go.
-`tests/songmaker_cli/test_queue_streams_cache.py` proves each rule.
+Built snapshots live in the object store's bucket (`SONGMAKER_S3_BUCKET`, reached
+through `object_store.py`, the one module that owns boto3) under `queue-streams/` as
+`<id>.json` and `<id>.mp3`, so every web process serves a snapshot whichever process
+built it, and nothing of a snapshot touches the claim. A build renders the takes in a
+temporary directory and puts the mp3, then the manifest, in the bucket; the web refuses
+to start without the bucket name. The audio route streams the object from the bucket
+with `Cache-Control: no-store` and forwards the player's `Range` header, answering
+`206` or `416` as the store does. Redis keeps only
+`songmaker:queue-stream:content:<hash>` (eight hours), which names the snapshot to reuse,
+and builds of one content hash are serialised across web processes by a tandem lock that
+the building process renews while ffmpeg runs, so a dead builder frees it within
+seconds, and whose waiters poll; neither the builder nor a waiter holds a database
+connection. A build reuses the unexpired snapshot Redis names for its content hash. A
+snapshot lives eight hours. The sweep (at startup and in the maintenance loop) removes
+the objects of expired or unreadable manifests, then every object under the prefix of no
+live snapshot older than 24 hours, then evicts the oldest snapshots once their audio
+exceeds 1 GiB; a build's own new snapshot is never evicted. The bucket has no backup:
+a snapshot is rebuilt by the next request for its queue.
+`tests/songmaker_cli/test_queue_streams_cache.py` proves each rule against a real
+Garage, as `tests/songmaker_cli/test_object_store.py` does the adapter.
 
 Escape and Back close the same thing (#1182): the topmost open layer — a
 menu, picker, sheet, dialog, full Now Playing, the album

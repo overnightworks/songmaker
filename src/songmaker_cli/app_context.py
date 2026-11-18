@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis as AsyncRedis
     from tandem import Leases
 
+    from songmaker_cli.object_store import ObjectStore
     from songmaker_cli.settings import Settings
 
 
@@ -38,6 +39,8 @@ class AppContext:
     redis: Redis
     async_redis: AsyncRedis
     """The asyncio client of the leases; the sync ``redis`` serves everything else."""
+    object_store: ObjectStore
+    """The bucket that holds what more than one web process needs."""
     trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     """Names this process on the jobs it runs; its lease in Redis says whether it lives."""

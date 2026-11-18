@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from support.object_store import an_object_store
 from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
 from webauth.proxies import TrustedProxies
 
@@ -23,6 +24,7 @@ from songmaker_cli.settings import get_settings
 @pytest.fixture
 def ctx(tmp_path: Path, pg_factory) -> AppContext:
     return AppContext(
+        object_store=an_object_store(),
         db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",

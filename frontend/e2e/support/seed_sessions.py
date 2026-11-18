@@ -41,6 +41,7 @@ from songmaker_cli.app_context import AppContext, build_web_auth_config, parse_t
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore, DatabaseSubjectUserStore
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.queries.auth import get_user_by_username
+from songmaker_cli.object_store import object_store_of
 from songmaker_cli.redis_client import create_async_redis, create_redis
 from songmaker_cli.settings import get_settings
 
@@ -62,6 +63,7 @@ def _auth_config(session_factory, async_redis: AsyncRedis) -> WebAuthConfig:
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=create_redis(settings.redis_url),
         async_redis=async_redis,
+        object_store=object_store_of(settings),
         trusted_proxies=parse_trusted_proxies(settings),
     )
     return build_web_auth_config(context, settings)

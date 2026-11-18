@@ -23,6 +23,7 @@ from support.cowriter_gateway import MEMBER_GROUPS, HeldGateway
 from support.fake_oidc_issuer import Person
 from support.gateway_server import serve_gateway
 from support.https_issuer import HttpsIssuer, serve_issuer
+from support.object_store import an_object_store
 from support.redis_proxy import redis_proxy
 from support.session_ids import a_session_id
 from support.web_app import issued_cookies, seed_user
@@ -70,6 +71,7 @@ def sign_in_person(
         session.commit()
         session_id, user_id = record.id, person.id
     context = AppContext(
+        object_store=an_object_store(),
         db=factory,
         audio_dir=cluster.audio_dir,
         data_dir=cluster.root,

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.object_store import an_object_store
 from support.web_app import make_fake_async_redis, seed_user
 
 from songmaker_cli.app_context import AppContext
@@ -178,6 +179,7 @@ def test_lifecycle_cleanup_enforces_retention(db_factory, tmp_path: Path) -> Non
         session.commit()
 
     ctx = AppContext(
+        object_store=an_object_store(),
         db=db_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",

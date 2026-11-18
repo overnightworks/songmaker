@@ -10,18 +10,17 @@ conservative ffmpeg budget.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import random
 import shutil
 import subprocess
+import tempfile
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
-from stat import S_ISREG
 from typing import Final, Literal
 
 from fastapi import HTTPException, Request
@@ -51,18 +50,18 @@ from songmaker_cli.audio_paths import (
     AudioFileNotFoundError,
     AudioPathRejectedError,
     canonical_audio_path,
-    confined_under,
     resolve_audio_path,
 )
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
+from songmaker_cli.object_store import ObjectMissingError, StoredObject
 from songmaker_cli.queue_stream_build_lock import build_lock as _build_lock
 from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
 
-QUEUE_STREAM_DIRNAME = "queue-streams"
+QUEUE_STREAM_KEY_PREFIX = "queue-streams/"
 QUEUE_STREAM_TTL = timedelta(hours=8)
 QUEUE_STREAM_ORPHAN_MAX_AGE = timedelta(hours=24)
 QUEUE_STREAM_MAX_TRACKS = 200
@@ -82,17 +81,10 @@ def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
 FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
 QUEUE_STREAM_DURATION_LIMIT_DETAIL = "Queue duration exceeds the maximum stream duration"
 QUEUE_STREAM_REDIS_PREFIX: Final = f"{_consts.REDIS_KEY_PREFIX}:queue-stream"
-QUEUE_STREAM_MANIFEST_GLOB: Final = "*.json"
 QUEUE_STREAM_MANIFEST_SUFFIX: Final = ".json"
-QUEUE_STREAM_TEMP_AUDIO_SUFFIX: Final = ".tmp.mp3"
-QUEUE_STREAM_CONCAT_SUFFIX: Final = ".concat.txt"
-# Longer suffixes first: ".tmp.mp3" also ends with ".mp3".
-_SNAPSHOT_FILE_SUFFIXES: Final = (
-    QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
-    QUEUE_STREAM_CONCAT_SUFFIX,
-    QUEUE_STREAM_MANIFEST_SUFFIX,
-    ".mp3",
-)
+QUEUE_STREAM_AUDIO_SUFFIX: Final = ".mp3"
+QUEUE_STREAM_AUDIO_CONTENT_TYPE: Final = "audio/mpeg"
+QUEUE_STREAM_MANIFEST_CONTENT_TYPE: Final = "application/json"
 QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
 QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL: Final = "Queue stream audio not found"
 
@@ -101,12 +93,10 @@ SnapshotScope = Literal["auth", "shared-playlist", "shared-album"]
 
 
 class QueueStreamManifest(BaseModel):
-    """The on-disk record for one queue-stream snapshot.
+    """The record of one queue-stream snapshot, stored beside its audio in the bucket.
 
-    ``load``/``save`` are the only (de)serializers for the manifest file --
-    every read or write of a snapshot's ``.json`` file goes through this
-    model, so a truncated or field-missing file fails validation once, in
-    one place, instead of raising a raw ``KeyError`` deep in a caller.
+    ``parse`` is the only deserializer, so a truncated or field-missing object fails
+    validation once, in one place, instead of raising a raw ``KeyError`` deep in a caller.
     """
 
     snapshot_id: str
@@ -119,16 +109,11 @@ class QueueStreamManifest(BaseModel):
     windowed: bool = False
 
     @classmethod
-    def load(cls, manifest_path: Path) -> QueueStreamManifest | None:
+    def parse(cls, snapshot_id: str, raw: bytes) -> QueueStreamManifest | None:
         try:
-            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            log.warning("Queue stream manifest %s unreadable: %s", manifest_path, exc)
-            return None
-        try:
-            return cls.model_validate(payload)
+            return cls.model_validate_json(raw)
         except ValidationError as exc:
-            log.warning("Queue stream manifest %s failed validation: %s", manifest_path, exc)
+            log.warning("Queue stream manifest %s failed validation: %s", snapshot_id, exc)
             return None
 
     def response(self, stream_url: str) -> QueueStreamManifestResponse:
@@ -140,15 +125,6 @@ class QueueStreamManifest(BaseModel):
             windowed=self.windowed,
             tracks=self.tracks,
         )
-
-    def save(self, manifest_path: Path) -> None:
-        """Write the manifest atomically via a temp file, then rename into place."""
-        tmp_path = manifest_path.with_name(f"{manifest_path.name}.tmp")
-        try:
-            tmp_path.write_text(self.model_dump_json(), encoding="utf-8")
-            tmp_path.replace(manifest_path)
-        finally:
-            tmp_path.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True)
@@ -218,7 +194,6 @@ def build_queue_stream_snapshot(
 ) -> QueueStreamManifestResponse:
     admission = prepare_queue_stream_admission(ctx, sources)
     windowed_by_count = admission.windowed_by_count
-    _stream_dir(ctx).mkdir(parents=True, exist_ok=True)
     prepared_sources = admission.prepared_sources
     content_hash = _content_hash(scope, scope_id, prepared_sources, windowed=windowed_by_count)
     with _build_lock(ctx, content_hash):
@@ -246,7 +221,6 @@ def _build_queue_stream_snapshot(
     content_hash: str,
     windowed_by_count: bool = False,
 ) -> QueueStreamManifestResponse:
-    stream_dir = _stream_dir(ctx)
     snapshot_id = uuid.uuid4().hex
     audio_paths: list[Path] = []
     tracks: list[QueueStreamTrackResponse] = []
@@ -257,7 +231,7 @@ def _build_queue_stream_snapshot(
         tracks.append(_track_response(source, source.generation, prepared.duration, offset, end))
         audio_paths.append(prepared.audio_path)
         offset = end
-    _render_snapshot_audio(stream_dir, snapshot_id, audio_paths)
+    _render_and_store_snapshot_audio(ctx, snapshot_id, audio_paths)
 
     manifest = QueueStreamManifest(
         snapshot_id=snapshot_id,
@@ -269,9 +243,13 @@ def _build_queue_stream_snapshot(
         windowed=windowed_by_count,
         tracks=tracks,
     )
-    manifest.save(stream_dir / f"{snapshot_id}{QUEUE_STREAM_MANIFEST_SUFFIX}")
-    _publish_manifest(ctx, manifest)
-    _enforce_cache_quota(stream_dir, protected_snapshot_ids={snapshot_id})
+    ctx.object_store.put_bytes(
+        queue_stream_manifest_object_key(snapshot_id),
+        manifest.model_dump_json().encode("utf-8"),
+        content_type=QUEUE_STREAM_MANIFEST_CONTENT_TYPE,
+    )
+    _publish_content_hash(ctx, manifest)
+    _enforce_cache_quota(ctx, protected_snapshot_ids={snapshot_id})
 
     return manifest.response(stream_url)
 
@@ -347,141 +325,110 @@ def _content_hash(
     return hasher.hexdigest()
 
 
-def _render_snapshot_audio(stream_dir: Path, snapshot_id: str, audio_paths: list[Path]) -> None:
-    output_path = stream_dir / f"{snapshot_id}.mp3"
-    output_tmp_path = stream_dir / f"{snapshot_id}.tmp.mp3"
-    concat_path = stream_dir / f"{snapshot_id}.concat.txt"
-    try:
+def _render_and_store_snapshot_audio(
+    ctx: AppContext, snapshot_id: str, audio_paths: list[Path],
+) -> None:
+    """Concatenate the takes in a temporary directory and put the result in the bucket."""
+    with tempfile.TemporaryDirectory(prefix="queue-stream-") as work_dir:
+        concat_path = Path(work_dir) / "concat.txt"
+        output_path = Path(work_dir) / "stream.mp3"
         write_concat_file(concat_path, audio_paths)
-        run_ffmpeg_concat(concat_path, output_tmp_path)
-        output_tmp_path.replace(output_path)
-    finally:
-        concat_path.unlink(missing_ok=True)
-        output_tmp_path.unlink(missing_ok=True)
-
-
-def queue_stream_manifest_key(snapshot_id: str) -> str:
-    return f"{QUEUE_STREAM_REDIS_PREFIX}:manifest:{snapshot_id}"
-
-
-def _publish_manifest(ctx: AppContext, manifest: QueueStreamManifest) -> None:
-    content_key = f"{QUEUE_STREAM_REDIS_PREFIX}:content:{manifest.content_hash}"
-    with ctx.redis.pipeline() as pipeline:
-        pipeline.set(
-            queue_stream_manifest_key(manifest.snapshot_id), manifest.model_dump_json(),
-            ex=QUEUE_STREAM_TTL,
+        run_ffmpeg_concat(concat_path, output_path)
+        ctx.object_store.put_file(
+            queue_stream_audio_object_key(snapshot_id), output_path,
+            content_type=QUEUE_STREAM_AUDIO_CONTENT_TYPE,
         )
-        pipeline.set(content_key, manifest.snapshot_id, ex=QUEUE_STREAM_TTL)
-        pipeline.execute()
 
 
-def _published_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest | None:
-    raw = ctx.redis.get(queue_stream_manifest_key(snapshot_id))
+def queue_stream_audio_object_key(snapshot_id: str) -> str:
+    return f"{QUEUE_STREAM_KEY_PREFIX}{snapshot_id}{QUEUE_STREAM_AUDIO_SUFFIX}"
+
+
+def queue_stream_manifest_object_key(snapshot_id: str) -> str:
+    return f"{QUEUE_STREAM_KEY_PREFIX}{snapshot_id}{QUEUE_STREAM_MANIFEST_SUFFIX}"
+
+
+def _content_hash_key(content_hash: str) -> str:
+    return f"{QUEUE_STREAM_REDIS_PREFIX}:content:{content_hash}"
+
+
+def _publish_content_hash(ctx: AppContext, manifest: QueueStreamManifest) -> None:
+    ctx.redis.set(
+        _content_hash_key(manifest.content_hash), manifest.snapshot_id, ex=QUEUE_STREAM_TTL,
+    )
+
+
+def _stored_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest | None:
+    """The snapshot's record in the bucket; None when it is absent or unreadable."""
     try:
-        return None if raw is None else QueueStreamManifest.model_validate_json(raw)
-    except ValidationError as exc:
-        log.warning("Queue stream record %s failed validation: %s", snapshot_id, exc)
+        raw = ctx.object_store.get_bytes(queue_stream_manifest_object_key(snapshot_id))
+    except ObjectMissingError:
         return None
+    return QueueStreamManifest.parse(snapshot_id, raw)
 
 
 def _find_reusable_snapshot(
     ctx: AppContext, content_hash: str, stream_url: str,
 ) -> QueueStreamManifestResponse | None:
-    snapshot_id = ctx.redis.get(f"{QUEUE_STREAM_REDIS_PREFIX}:content:{content_hash}")
-    manifest = None if snapshot_id is None else _published_manifest(ctx, snapshot_id)
+    snapshot_id = ctx.redis.get(_content_hash_key(content_hash))
+    manifest = None if snapshot_id is None else _stored_manifest(ctx, snapshot_id)
     if manifest is None or manifest.expires_at < datetime.now(timezone.utc):
         return None
     return manifest.response(stream_url)
 
 
 def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
-    """The snapshot's record, its audio rebuilt here when another process built the snapshot."""
     if not _valid_snapshot_id(snapshot_id):
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
-    manifest_path = _stream_dir(ctx) / f"{snapshot_id}.json"
-    manifest = (
-        QueueStreamManifest.load(manifest_path)
-        if manifest_path.exists()
-        else _published_manifest(ctx, snapshot_id)
-    )
+    manifest = _stored_manifest(ctx, snapshot_id)
     if manifest is None:
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
     if manifest.expires_at < datetime.now(timezone.utc):
         delete_snapshot_files(ctx, snapshot_id)
         raise HTTPException(404, "Queue stream expired")  # unread: share
-    if not queue_stream_audio_path(ctx, snapshot_id).exists():
-        _rebuild_snapshot_audio(ctx, manifest)
     return manifest
 
 
-def _rebuild_snapshot_audio(ctx: AppContext, manifest: QueueStreamManifest) -> None:
-    stream_dir = _stream_dir(ctx)
-    with _build_lock(ctx, manifest.snapshot_id):
-        if queue_stream_audio_path(ctx, manifest.snapshot_id).exists():
-            return
-        try:
-            paths = [resolve_audio_path(ctx.audio_dir, track.mp3_path) for track in manifest.tracks]
-        except (AudioFileNotFoundError, AudioPathRejectedError) as exc:
-            raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL) from exc  # unread: share
-        stream_dir.mkdir(parents=True, exist_ok=True)
-        _render_snapshot_audio(stream_dir, manifest.snapshot_id, paths)
-        manifest.save(stream_dir / f"{manifest.snapshot_id}{QUEUE_STREAM_MANIFEST_SUFFIX}")
-
-
-def queue_stream_audio_path(ctx: AppContext, snapshot_id: str) -> Path:
-    stream_dir = _stream_dir(ctx)
-    path = confined_under(stream_dir, stream_dir / f"{snapshot_id}.mp3")
-    if path is None:
-        raise HTTPException(403, "Path traversal denied")  # unread: share
-    return path
-
-
 def cleanup_expired_queue_streams(ctx: AppContext) -> None:
-    stream_dir = _stream_dir(ctx)
-    if not stream_dir.exists():
-        return
     now = datetime.now(timezone.utc)
-    live_snapshot_ids = _remove_expired_queue_stream_snapshots(ctx, stream_dir, now)
-    _remove_expired_queue_stream_orphans(stream_dir, live_snapshot_ids, now)
-    _enforce_cache_quota(stream_dir)
+    stored = list(ctx.object_store.list(QUEUE_STREAM_KEY_PREFIX))
+    live_snapshot_ids = _remove_expired_queue_stream_snapshots(ctx, stored, now)
+    _remove_expired_queue_stream_orphans(ctx, stored, live_snapshot_ids, now)
+    _enforce_cache_quota(ctx)
 
 
 def _remove_expired_queue_stream_snapshots(
-    ctx: AppContext,
-    stream_dir: Path,
-    now: datetime,
+    ctx: AppContext, stored: list[StoredObject], now: datetime,
 ) -> set[str]:
     live_snapshot_ids: set[str] = set()
-    for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
-        snapshot_id = manifest_path.stem
-        manifest = QueueStreamManifest.load(manifest_path)
+    for entry in stored:
+        snapshot_id = _snapshot_id_of_object(entry.key, QUEUE_STREAM_MANIFEST_SUFFIX)
+        if snapshot_id is None:
+            continue
+        manifest = _stored_manifest(ctx, snapshot_id)
         if manifest is not None and manifest.expires_at >= now:
             live_snapshot_ids.add(snapshot_id)
-            continue
-        delete_snapshot_files(ctx, snapshot_id)
+        else:
+            delete_snapshot_files(ctx, snapshot_id)
     return live_snapshot_ids
 
 
 def _remove_expired_queue_stream_orphans(
-    stream_dir: Path,
-    live_snapshot_ids: set[str],
-    now: datetime,
+    ctx: AppContext, stored: list[StoredObject], live_snapshot_ids: set[str], now: datetime,
 ) -> None:
+    """Delete objects no live snapshot owns, once too old for a build to still be writing them."""
     orphan_cutoff = now - QUEUE_STREAM_ORPHAN_MAX_AGE
-    for cache_file in stream_dir.iterdir():
-        if _snapshot_id_from_cache_file(cache_file) in live_snapshot_ids:
-            continue
-        try:
-            file_stat = cache_file.stat()
-        except OSError:
-            continue
-        modified_at = datetime.fromtimestamp(file_stat.st_mtime, tz=timezone.utc)
-        if S_ISREG(file_stat.st_mode) and modified_at < orphan_cutoff:
-            cache_file.unlink(missing_ok=True)
+    ctx.object_store.delete([
+        entry.key for entry in stored
+        if entry.last_modified < orphan_cutoff
+        and _owner_snapshot_id(entry.key) not in live_snapshot_ids
+    ])
 
 
 def delete_snapshot_files(ctx: AppContext, snapshot_id: str) -> None:
-    delete_snapshot_files_from_dir(_stream_dir(ctx), snapshot_id)
+    """Delete the record before the audio, so a record never outlives the audio it names."""
+    ctx.object_store.delete([queue_stream_manifest_object_key(snapshot_id)])
+    ctx.object_store.delete([queue_stream_audio_object_key(snapshot_id)])
 
 
 def probe_audio_duration(audio_path: Path) -> float:
@@ -521,7 +468,7 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
         str(output_path),
     ]
     try:
-        subprocess.run(  # noqa: S603 - ffmpeg argv without a shell and both paths lie under the server stream directory
+        subprocess.run(  # noqa: S603 - ffmpeg argv without a shell and both paths lie in the build's temporary directory
             cmd,
             check=True,
             capture_output=True,
@@ -549,10 +496,6 @@ def public_queue_stream_manifest(
             ]
         }
     )
-
-
-def _stream_dir(ctx: AppContext) -> Path:
-    return ctx.data_dir / QUEUE_STREAM_DIRNAME
 
 
 def _track_response(
@@ -586,47 +529,42 @@ def _track_response(
 
 
 def _enforce_cache_quota(
-    stream_dir: Path,
+    ctx: AppContext,
     *,
     protected_snapshot_ids: set[str] | None = None,
 ) -> None:
-    # Only finished snapshots count: a running build's ".tmp.mp3" stays out of the total.
     # Just-built snapshots (protected_snapshot_ids) are counted but never evicted.
     eviction_protected = protected_snapshot_ids or set()
 
     total_bytes = 0
-    sized_snapshots: list[tuple[float, int, str]] = []
-    for path in stream_dir.glob("*.mp3"):
-        if not _valid_snapshot_id(path.stem):
+    sized_snapshots: list[tuple[datetime, int, str]] = []
+    for entry in ctx.object_store.list(QUEUE_STREAM_KEY_PREFIX):
+        snapshot_id = _snapshot_id_of_object(entry.key, QUEUE_STREAM_AUDIO_SUFFIX)
+        if snapshot_id is None:
             continue
-        try:
-            file_stat = path.stat()
-        except OSError:
-            continue
-        total_bytes += file_stat.st_size
-        sized_snapshots.append((file_stat.st_mtime, file_stat.st_size, path.stem))
+        total_bytes += entry.size
+        sized_snapshots.append((entry.last_modified, entry.size, snapshot_id))
 
     for _, size, snapshot_id in sorted(sized_snapshots):
         if total_bytes <= QUEUE_STREAM_MAX_CACHE_BYTES:
             break
         if snapshot_id in eviction_protected:
             continue
-        delete_snapshot_files_from_dir(stream_dir, snapshot_id)
+        delete_snapshot_files(ctx, snapshot_id)
         total_bytes -= size
 
 
-def delete_snapshot_files_from_dir(stream_dir: Path, snapshot_id: str) -> None:
-    for suffix in _SNAPSHOT_FILE_SUFFIXES:
-        (stream_dir / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
+def _snapshot_id_of_object(key: str, suffix: str) -> str | None:
+    """The snapshot id a key of this kind names, or None for any other object."""
+    name = key.removeprefix(QUEUE_STREAM_KEY_PREFIX)
+    snapshot_id = name.removesuffix(suffix)
+    return snapshot_id if name.endswith(suffix) and _valid_snapshot_id(snapshot_id) else None
 
 
-def _snapshot_id_from_cache_file(path: Path) -> str | None:
-    for suffix in (*_SNAPSHOT_FILE_SUFFIXES, ".json.tmp"):
-        if not path.name.endswith(suffix):
-            continue
-        snapshot_id = path.name[: -len(suffix)]
-        return snapshot_id if _valid_snapshot_id(snapshot_id) else None
-    return None
+def _owner_snapshot_id(key: str) -> str | None:
+    return _snapshot_id_of_object(key, QUEUE_STREAM_AUDIO_SUFFIX) or _snapshot_id_of_object(
+        key, QUEUE_STREAM_MANIFEST_SUFFIX,
+    )
 
 
 def _valid_snapshot_id(snapshot_id: str) -> bool:
