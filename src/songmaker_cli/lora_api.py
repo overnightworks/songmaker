@@ -6,7 +6,6 @@ import logging
 import os
 import shutil
 from pathlib import Path, PurePosixPath
-from typing import Final
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -36,7 +35,6 @@ from songmaker_cli.api_models import (
     UserLoraSampleResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import get_arq_pool
 from songmaker_cli.audio_paths import (
     AudioFileNotFoundError,
     AudioPathRejectedError,
@@ -45,7 +43,6 @@ from songmaker_cli.audio_paths import (
 )
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
     LORA_ACTIVE_STATUSES,
     MODEL_DEFAULT_MODE,
     USER_LORA_AUDIO_EXTENSIONS,
@@ -61,10 +58,8 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import list_own_playable_generations
 from songmaker_cli.db.queries.jobs import (
-    JobStatusUpdate,
     count_queued_lora_training_jobs,
     create_job,
-    update_job_status,
 )
 from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
@@ -81,16 +76,14 @@ from songmaker_cli.db.queries.loras import (
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.job_payloads import LoraTrainingPayload
-from songmaker_cli.job_types import JobFunction, JobStatus, JobType
-from songmaker_cli.messages import message
+from songmaker_cli.job_queue import JobQueue, publish_queue_wake
+from songmaker_cli.job_types import JobType
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-QUEUE_UNAVAILABLE: Final = message("jobRefusal.queueUnavailable")
 
 
 def _sample_relative_path(user_id: str, lora_id: str, sample_id: str, suffix: str) -> str:
@@ -454,7 +447,6 @@ def api_delete_sample(
     responses={
         409: {"description": "LoRA capacity is unavailable", "model": RefusalResponse},
         422: {"description": "LoRA training request is invalid"},
-        503: {"description": "Training worker or job queue is unavailable"},
     },
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
@@ -506,34 +498,7 @@ async def api_train_lora(
     record_audit(session, user.id, AuditAction.TRAIN_LORA, ResourceType.LORA, lora_id)
     session.commit()
 
-    try:
-        await get_arq_pool().enqueue_job(
-            JobFunction.LORA_TRAINING, job.id, lora_id, user.id,
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except ConnectionError:
-        _fail_training_job(ctx, job.id, lora_id)
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+    await publish_queue_wake(ctx.wake_channel, JobQueue.MUSIC)
 
     refreshed = get_user_lora(session, lora_id)
     return UserLoraResponse.from_orm(refreshed)
-
-
-def _fail_training_job(ctx: AppContext, job_id: str, lora_id: str) -> None:
-    try:
-        with ctx.db() as session:
-            update_job_status(
-                session,
-                job_id,
-                JobStatusUpdate(JobStatus.FAILED, error_message=QUEUE_UNAVAILABLE),
-            )
-            update_user_lora(
-                session, lora_id,
-                status=LoraStatus.FAILED, error_message=QUEUE_UNAVAILABLE,
-            )
-            session.commit()
-    except Exception:
-        log.exception(
-            "Failed to mark LoRA training job %s as failed after enqueue error",
-            job_id,
-        )

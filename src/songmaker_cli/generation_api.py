@@ -52,12 +52,11 @@ from songmaker_cli.arq_pool import (
 )
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
     MODEL_AVAILABLE_MODES,
     AuditAction,
     ResourceType,
 )
-from songmaker_cli.db.models import Generation, Version
+from songmaker_cli.db.models import Generation, Job, Version
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import (
     ArchivedTakeError,
@@ -78,12 +77,11 @@ from songmaker_cli.db.queries.settings import list_active_models
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.job_payloads import GeneratePayload, ScorePayload
 from songmaker_cli.job_queue import JobQueue, publish_queue_wake
-from songmaker_cli.job_types import JobFunction, JobStatus, JobType
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
     is_visible_generation_failure,
 )
-from songmaker_cli.messages import Message, message
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
@@ -299,6 +297,7 @@ async def api_generate_song(
     active_model_id = _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
+    shortfall = await _capacity_shortfall(session)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song_id, version_id=version.id,
         payload=GeneratePayload(
@@ -311,23 +310,13 @@ async def api_generate_song(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
         song_id, f"count={req.count}",
     )
-    session.commit()
+    rejection = _commit_job_or_fail_it(session, job, shortfall)
     log.info("Generate: song=%s, count=%d, job=%s, model=%s",
              song.id, req.count, job.id, active_model_id)
+    if rejection is not None:
+        return rejection
 
-    try:
-        pool = get_arq_pool()
-        rejection = await _generation_capacity_error(ctx, session, job.id)
-        if rejection is not None:
-            return rejection
-        await pool.enqueue_job(
-            JobFunction.GENERATE, job.id, song_id, version.id, req.count, user.id, req.seed,
-            req.model,
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except ConnectionError:
-        raise _queue_unavailable_refusal(ctx, job.id)
-
+    await publish_queue_wake(ctx.wake_channel, JobQueue.MUSIC)
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
@@ -438,6 +427,7 @@ async def api_repaint_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     repaint_task = _repaint_task(req, gen_id, wav_path, lyrics, prompt)
+    shortfall = await _capacity_shortfall(session)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
         payload=GeneratePayload(
@@ -451,22 +441,12 @@ async def api_repaint_generation(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
     )
-    session.commit()
+    rejection = _commit_job_or_fail_it(session, job, shortfall)
     log.info("Repaint generation job enqueued")
+    if rejection is not None:
+        return rejection
 
-    try:
-        pool = get_arq_pool()
-        rejection = await _generation_capacity_error(ctx, session, job.id)
-        if rejection is not None:
-            return rejection
-        await pool.enqueue_job(
-            JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
-            req.seed, req.model, repaint_task.model_dump(),
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except ConnectionError:
-        raise _queue_unavailable_refusal(ctx, job.id)
-
+    await publish_queue_wake(ctx.wake_channel, JobQueue.MUSIC)
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
@@ -516,6 +496,7 @@ async def api_cover_generation(
         prompt=prompt,
         cover_noise_strength=req.cover_noise_strength,
     )
+    shortfall = await _capacity_shortfall(session)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
         payload=GeneratePayload(
@@ -529,22 +510,12 @@ async def api_cover_generation(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
         f"strength={req.audio_cover_strength:.2f}",
     )
-    session.commit()
+    rejection = _commit_job_or_fail_it(session, job, shortfall)
     log.info("Cover generation job enqueued")
+    if rejection is not None:
+        return rejection
 
-    try:
-        pool = get_arq_pool()
-        rejection = await _generation_capacity_error(ctx, session, job.id)
-        if rejection is not None:
-            return rejection
-        await pool.enqueue_job(
-            JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
-            req.seed, req.model, None, cover_task.model_dump(),
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except ConnectionError:
-        raise _queue_unavailable_refusal(ctx, job.id)
-
+    await publish_queue_wake(ctx.wake_channel, JobQueue.MUSIC)
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
@@ -641,52 +612,40 @@ def api_unshare_generation(
     return StatusResponse()
 
 
-async def _generation_capacity_error(
-    ctx: AppContext, session: Session, job_id: str,
-) -> JSONResponse | None:
-    try:
-        if not await is_music_worker_healthy():
-            raise NoCapacityError(WORKER_NOT_RUNNING_DETAIL)
-        if not await _has_online_acestep_worker(session):
-            raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
-    except NoCapacityError as exc:
-        failure = generation_failure(exc, job_id)
-        _fail_job(ctx, job_id, error_message=failure.message, error_type=failure.error_type)
-        response = GenerationUnavailableResponse(
-            detail=failure.message.sentence(),
-            message=failure.message,
-            error_type=failure.error_type,
-            job_id=job_id,
-        )
-        return JSONResponse(status_code=503, content=response.model_dump())
+async def _capacity_shortfall(session: Session) -> NoCapacityError | None:
+    """What keeps a generation from running now, or none.
+
+    It is read before the job's row exists: a committed row is claimable at once.
+    """
+    if not await is_music_worker_healthy():
+        return NoCapacityError(WORKER_NOT_RUNNING_DETAIL)
+    if not await _has_online_acestep_worker(session):
+        return NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     return None
 
 
-def _queue_unavailable_refusal(ctx: AppContext, job_id: str) -> Refusal:
-    _fail_job(ctx, job_id)
-    return Refusal(503, "jobRefusal.queueUnavailable")
+def _commit_job_or_fail_it(
+    session: Session, job: Job, shortfall: NoCapacityError | None,
+) -> JSONResponse | None:
+    """Commit the job's row; one that nothing can run commits failed and is answered with 503.
 
-
-def _fail_job(
-    ctx: AppContext,
-    job_id: str,
-    error_message: Message | None = None,
-    error_type: str | None = None,
-) -> None:
-    error_message = error_message or message("jobRefusal.queueUnavailable")
-    try:
-        with ctx.db() as session:
-            update_job_status(
-                session,
-                job_id,
-                JobStatusUpdate(
-                    JobStatus.FAILED, error_message=error_message, error_type=error_type,
-                ),
-            )
-            session.commit()
-    except Exception:
-        log.exception(
-            "Failed to mark job %s as failed after enqueue error — "
-            "job will remain in 'queued' until stale-job recovery picks it up",
-            job_id,
-        )
+    The failure is written before the commit, so no worker ever claims the row.
+    """
+    if shortfall is None:
+        session.commit()
+        return None
+    failure = generation_failure(shortfall, job.id)
+    update_job_status(
+        session, job.id,
+        JobStatusUpdate(
+            JobStatus.FAILED, error_message=failure.message, error_type=failure.error_type,
+        ),
+    )
+    session.commit()
+    response = GenerationUnavailableResponse(
+        detail=failure.message.sentence(),
+        message=failure.message,
+        error_type=failure.error_type,
+        job_id=job.id,
+    )
+    return JSONResponse(status_code=503, content=response.model_dump())

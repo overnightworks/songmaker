@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from support.generation_job_world import (
     make_generation_dto,
@@ -171,21 +171,20 @@ def test_a_songs_settings_reach_the_worker_through_the_generate_request(
     )
     client = web_client(app)
     assert client.put("/api/songs/s1", json={"generation_params": settings}).status_code == 200
-    pool = AsyncMock()
-    with worker_up(), patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool):
+    with worker_up():
         response = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
     assert response.status_code == 200
-    _function, job_id, song_id, version_id, count, user_id, seed, model = (
-        pool.enqueue_job.call_args.args
-    )
+    job_id = response.json()["id"]
+    with seeded_db() as session:
+        queued = get_job(session, job_id).payload
 
     dispatch = AsyncMock(return_value=make_generation_dto())
     dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch)
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
-            job_id, song_id, version_id, count, user_id, db_factory=seeded_db,
-            audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=MagicMock(),
-            seed=seed, target_model=model,
+            job_id, queued.song_id, queued.version_id, queued.count, queued.user_id,
+            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+            redis=MagicMock(), seed=queued.seed, target_model=queued.target_model,
             owner=an_owner("o1"),
         ))
 

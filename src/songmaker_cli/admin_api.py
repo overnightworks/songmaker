@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Final, NoReturn
+from typing import Final
 
 import httpx
 from arq.connections import ArqRedis
@@ -49,8 +49,8 @@ from songmaker_cli.db.queries.auth import (
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 from songmaker_cli.job_payloads import DownloadModelPayload, LoadModelPayload
-from songmaker_cli.job_types import JobFunction, JobStatus
-from songmaker_cli.messages import message
+from songmaker_cli.job_queue import JobQueue, publish_queue_wake
+from songmaker_cli.job_types import JobFunction
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 from songmaker_cli.settings import get_settings
@@ -208,25 +208,11 @@ def _registry_model(
     )
 
 
-def _fail_unqueued_job(db: Session, job_id: str) -> NoReturn:
-    """End a job the queue would not take as failed and refuse the admin's request."""
-    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
-
-    update_job_status(
-        db,
-        job_id,
-        JobStatusUpdate(JobStatus.FAILED, error_message=message("jobRefusal.queueUnavailable")),
-    )
-    db.commit()
-    raise Refusal(503, "jobRefusal.queueUnavailable")
-
-
 @router.post(
     "/workers/{worker_id}/load_model",
     responses={
         400: {"description": "Model load request is invalid"},
         404: {"description": "Worker does not exist"},
-        503: {"description": "Worker is unavailable"},
     },
     openapi_extra=exclude_route(Exclusion.ADMIN),
 )
@@ -235,9 +221,8 @@ async def load_model_on_worker_endpoint(
     req: LoadModelOnWorkerRequest,
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    from songmaker_cli.arq_pool import get_arq_pool
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     from songmaker_cli.db.queries.jobs import (
         create_job,
         get_queue_position,
@@ -254,15 +239,7 @@ async def load_model_on_worker_endpoint(
     )
     db.commit()
 
-    try:
-        pool = get_arq_pool()
-        await pool.enqueue_job(
-            JobFunction.LOAD_MODEL_ON_WORKER, job.id, worker_id, req.mode,
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except ConnectionError:
-        _fail_unqueued_job(db, job.id)
-
+    await publish_queue_wake(ctx.wake_channel, JobQueue.MUSIC)
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
 
@@ -386,9 +363,8 @@ async def download_model_endpoint(
     admin: AuthenticatedUser = Depends(require_admin),
     db: Session = Depends(get_db_session),
     pool: ArqRedis = Depends(get_arq_pool_dep),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    from songmaker_cli.arq_pool import get_arq_pool
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     from songmaker_cli.db.queries.jobs import (
         create_job,
         get_queue_position,
@@ -421,15 +397,7 @@ async def download_model_endpoint(
     )
     db.commit()
 
-    try:
-        arq_pool = get_arq_pool()
-        await arq_pool.enqueue_job(
-            JobFunction.DOWNLOAD_MODEL_ON_WORKER, job.id, mode,
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except ConnectionError:
-        _fail_unqueued_job(db, job.id)
-
+    await publish_queue_wake(ctx.wake_channel, JobQueue.MUSIC)
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
 

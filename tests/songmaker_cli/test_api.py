@@ -1243,9 +1243,22 @@ def _register_worker_with_gpu_health(
     mock_pool.get = AsyncMock(return_value=json.dumps(heartbeat).encode())
 
 
+def _stored_payload(client: TestClient, response):
+    """The arguments the answered job's row holds: what a worker runs the job with."""
+    from songmaker_cli.db.queries.jobs import get_job
+
+    with client.app.state.ctx.db() as session:
+        return get_job(session, response.json()["id"]).payload
+
+
 def test_generate_song_submits_job(client: TestClient) -> None:
-    """Spec: REQ-CREATE-01 -- generating for a song enqueues a generate job."""
-    with _mock_worker() as mock_pool:
+    """Spec: REQ-CREATE-01 -- generating for a song queues a generate job."""
+    from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.job_queue import JobQueue
+
+    publish = AsyncMock()
+    with _mock_worker(), patch.object(client.app.state.ctx.wake_channel, "publish", publish):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 2, "model": "sft"},
@@ -1253,32 +1266,33 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    mock_pool.enqueue_job.assert_called_once()
+    assert (_stored_payload(client, resp).song_id, _stored_payload(client, resp).count) == ("s1", 2)
+    publish.assert_awaited_once_with(JobQueue.MUSIC)
 
 
-def test_generate_song_model_accepted(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+def test_a_generate_job_is_queued_though_its_wake_cannot_be_sent(client: TestClient) -> None:
+    """The committed row is the queue entry: a Redis that is down only costs the wake."""
+    from unittest.mock import AsyncMock, patch
+
+    from tandem import StoreError
+
+    refused = AsyncMock(side_effect=StoreError("redis down", outage=True))
+    with _mock_worker(), patch.object(client.app.state.ctx.wake_channel, "publish", refused):
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
+
+    assert (resp.status_code, resp.json()["status"]) == (200, "queued")
+
+
+@pytest.mark.parametrize("model", ["sft", "turbo"])
+def test_generate_song_stores_the_model_for_the_worker(client: TestClient, model: str) -> None:
+    with _mock_worker():
         resp = client.post(
             "/api/songs/s1/generate",
-            json={"count": 1, "model": "sft"},
+            json={"count": 1, "model": model},
         )
 
     assert resp.status_code == 200
-    mock_pool.enqueue_job.assert_called_once()
-    args = mock_pool.enqueue_job.call_args
-    assert args[0][-1] == "sft"
-
-
-def test_generate_song_passes_model_to_worker(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
-        resp = client.post(
-            "/api/songs/s1/generate",
-            json={"count": 1, "model": "turbo"},
-        )
-
-    assert resp.status_code == 200
-    args = mock_pool.enqueue_job.call_args
-    assert args[0][-1] == "turbo"
+    assert _stored_payload(client, resp).target_model == model
 
 
 def test_generate_song_missing_model_rejected(client: TestClient) -> None:
@@ -1310,16 +1324,14 @@ def test_generate_song_invalid_model(client: TestClient, path: str, payload: dic
 
 
 def test_generate_song_seed_accepted(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+    with _mock_worker():
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1, "seed": 42, "model": "turbo"},
         )
     assert resp.status_code == 200
-    mock_pool.enqueue_job.assert_called_once()
-    call_args = mock_pool.enqueue_job.call_args[0]
-    assert call_args[-2] == 42
-    assert call_args[-1] == "turbo"
+    payload = _stored_payload(client, resp)
+    assert (payload.seed, payload.target_model) == (42, "turbo")
 
 
 def test_generate_song_seed_invalid(client: TestClient) -> None:
@@ -1664,7 +1676,12 @@ def test_song_generation_job_song_not_found(client: TestClient, endpoint: str) -
 
 
 def test_repaint_submits_job(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+    from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.job_queue import JobQueue
+
+    publish = AsyncMock()
+    with _mock_worker(), patch.object(client.app.state.ctx.wake_channel, "publish", publish):
         resp = client.post("/api/generations/g1/repaint", json={
             "src_generation_id": "g1",
             "repainting_start": 0.2,
@@ -1674,11 +1691,10 @@ def test_repaint_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    mock_pool.enqueue_job.assert_called_once()
-    args = mock_pool.enqueue_job.call_args[0]
-    repaint = args[-1]
-    assert repaint["repainting_start"] == 0.2
-    assert repaint["repainting_end"] == 0.8
+    repaint = _stored_payload(client, resp).task_params
+    assert repaint.repainting_start == 0.2
+    assert repaint.repainting_end == 0.8
+    publish.assert_awaited_once_with(JobQueue.MUSIC)
 
 
 def test_repaint_invalid_range(client: TestClient) -> None:
@@ -1717,7 +1733,7 @@ def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
         return subprocess.CompletedProcess(cmd, 0)
 
     with (
-        _mock_worker() as mock_pool,
+        _mock_worker(),
         patch("songmaker_cli.generation_api.shutil.which", return_value="/usr/bin/ffmpeg"),
         patch("songmaker_cli.generation_api.subprocess.run", side_effect=fake_ffmpeg),
     ):
@@ -1729,9 +1745,7 @@ def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
         })
 
     assert resp.status_code == 200
-    mock_pool.enqueue_job.assert_called_once()
-    repaint = mock_pool.enqueue_job.call_args[0][-1]
-    assert repaint["src_wav_path"].endswith(".wav")
+    assert _stored_payload(client, resp).task_params.src_wav_path.endswith(".wav")
 
 
 def test_repaint_without_ffmpeg_is_unavailable(client: TestClient) -> None:
@@ -1815,7 +1829,7 @@ def test_repaint_not_found(client: TestClient) -> None:
 
 
 def test_repaint_with_lyrics_override(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+    with _mock_worker():
         resp = client.post("/api/generations/g1/repaint", json={
             "src_generation_id": "g1",
             "repainting_start": 0.3,
@@ -1826,17 +1840,21 @@ def test_repaint_with_lyrics_override(client: TestClient) -> None:
         })
 
     assert resp.status_code == 200
-    args = mock_pool.enqueue_job.call_args[0]
-    repaint = args[-1]
-    assert repaint["lyrics"] == "new lyrics here"
-    assert repaint["prompt"] == "jazz ballad"
+    repaint = _stored_payload(client, resp).task_params
+    assert repaint.lyrics == "new lyrics here"
+    assert repaint.prompt == "jazz ballad"
 
 
 # ── Cover ───────────────────────────────────────────────────────────
 
 
 def test_cover_submits_job(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+    from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.job_queue import JobQueue
+
+    publish = AsyncMock()
+    with _mock_worker(), patch.object(client.app.state.ctx.wake_channel, "publish", publish):
         resp = client.post("/api/generations/g1/cover", json={
             "src_generation_id": "g1",
             "audio_cover_strength": 0.7,
@@ -1846,11 +1864,10 @@ def test_cover_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    mock_pool.enqueue_job.assert_called_once()
-    args = mock_pool.enqueue_job.call_args[0]
-    cover = args[-1]
-    assert cover["audio_cover_strength"] == 0.7
-    assert cover["prompt"] == "jazz version"
+    cover = _stored_payload(client, resp).task_params
+    assert cover.audio_cover_strength == 0.7
+    assert cover.prompt == "jazz version"
+    publish.assert_awaited_once_with(JobQueue.MUSIC)
 
 
 def test_cover_no_audio(client: TestClient) -> None:
@@ -1873,16 +1890,14 @@ def test_cover_not_found(client: TestClient) -> None:
 
 
 def test_cover_default_strength(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+    with _mock_worker():
         resp = client.post("/api/generations/g1/cover", json={
             "src_generation_id": "g1",
             "model": "sft",
         })
 
     assert resp.status_code == 200
-    args = mock_pool.enqueue_job.call_args[0]
-    cover = args[-1]
-    assert cover["audio_cover_strength"] == 0.8
+    assert _stored_payload(client, resp).task_params.audio_cover_strength == 0.8
 
 
 # ── No silent fallbacks: model required across all three endpoints ──
@@ -2013,8 +2028,8 @@ def test_s6_unavailable_generation_is_persisted(
     expected_detail: str,
     expected_type: str,
 ) -> None:
-    """S6-A–D: refusal is safe, committed, recoverable, and never enqueued."""
-    from unittest.mock import AsyncMock
+    """S6-A–D: refusal is safe, committed, recoverable, and never woken."""
+    from unittest.mock import AsyncMock, patch
 
     pool = AsyncMock()
     if cause != "no-registered-worker":
@@ -2022,7 +2037,11 @@ def test_s6_unavailable_generation_is_persisted(
             client, pool, gpu_healthy=cause == "music-absent",
         )
 
-    with _mock_worker_process_health(pool, music_healthy=cause != "music-absent"):
+    publish = AsyncMock()
+    with (
+        _mock_worker_process_health(pool, music_healthy=cause != "music-absent"),
+        patch.object(client.app.state.ctx.wake_channel, "publish", publish),
+    ):
         response = client.post(path, json=payload)
 
     assert response.status_code == 503
@@ -2056,7 +2075,7 @@ def test_s6_unavailable_generation_is_persisted(
     assert recovered_job["error_message"] == body["message"]
     assert recovered_job["error_type"] == expected_type
     assert recovered_job["completed_at"] == completed_at
-    pool.enqueue_job.assert_not_called()
+    publish.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -2079,37 +2098,6 @@ def test_s6_generation_openapi(
     assert responses["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/JobResponse",
     }
-
-
-def test_generate_song_redis_down(client: TestClient) -> None:
-    """S6-E: queue failure retains its existing response."""
-    from unittest.mock import AsyncMock, patch
-
-    with (
-        patch(
-            "songmaker_cli.generation_api.is_music_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api.is_scoring_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api._has_online_acestep_worker",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api.get_arq_pool",
-            side_effect=ConnectionError("redis down"),
-        ),
-    ):
-        resp = client.post(
-            "/api/songs/s1/generate",
-            json={"count": 1, "model": "sft"},
-        )
-
-    assert resp.status_code == 503
-    assert "Job queue unavailable" in resp.json()["detail"]
 
 
 def test_a_score_job_is_queued_though_its_wake_cannot_be_sent(client: TestClient) -> None:
@@ -2156,52 +2144,6 @@ def test_worker_preflight_reports_an_unavailable_worker(
     assert response.json()["detail"] == "Worker not running"
     with client.app.state.ctx.db() as session:
         assert session.query(Job).filter_by(type="score").count() == 0
-
-
-@pytest.mark.parametrize(
-    ("path", "payload"),
-    [
-        pytest.param(
-            "/api/generations/g1/repaint",
-            {
-                "src_generation_id": "g1",
-                "repainting_start": 0.2,
-                "repainting_end": 0.8,
-                "model": "sft",
-            },
-            id="repaint",
-        ),
-        pytest.param(
-            "/api/generations/g1/cover",
-            {"src_generation_id": "g1", "audio_cover_strength": 0.7, "model": "sft"},
-            id="cover",
-        ),
-    ],
-)
-def test_repaint_and_cover_report_an_unavailable_job_queue(
-    client: TestClient,
-    path: str,
-    payload: dict,
-) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    pool = MagicMock()
-    pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
-    with (
-        patch(
-            "songmaker_cli.generation_api.is_music_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api._has_online_acestep_worker",
-            AsyncMock(return_value=True),
-        ),
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool),
-    ):
-        response = client.post(path, json=payload)
-
-    assert response.status_code == 503
-    assert response.json()["detail"] == "Job queue unavailable"
 
 
 def test_score_generation_not_found(client: TestClient) -> None:

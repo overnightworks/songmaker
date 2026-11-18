@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import fakeredis
 import pytest
@@ -137,8 +136,7 @@ def test_training_a_voice_stores_its_arguments(client_and_ctx) -> None:
         session.commit()
         lora_id = lora.id
 
-    with patch("songmaker_cli.lora_api.get_arq_pool", return_value=AsyncMock()):
-        response = client.post(f"/api/loras/{lora_id}/train")
+    response = client.post(f"/api/loras/{lora_id}/train")
 
     assert _stored_payload(ctx, response.json()["training_job_id"]) == LoraTrainingPayload(
         lora_id=lora_id, user_id=USER_A, target_mode=MODEL_DEFAULT_MODE,
@@ -157,10 +155,9 @@ def test_loading_a_model_on_a_worker_stores_its_arguments(admin_client: TestClie
     ctx = admin_client.app.state.ctx
     _register_worker(ctx)
 
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=AsyncMock()):
-        response = admin_client.post(
-            f"/api/admin/workers/{WORKER_ID}/load_model", json={"mode": MODE},
-        )
+    response = admin_client.post(
+        f"/api/admin/workers/{WORKER_ID}/load_model", json={"mode": MODE},
+    )
 
     assert _stored_payload(ctx, response.json()["id"]) == LoadModelPayload(
         worker_id=WORKER_ID, mode=MODE,
@@ -175,7 +172,6 @@ def test_downloading_a_model_stores_its_arguments(admin_client: TestClient) -> N
     arrange_fake_async_redis(pool, lambda redis: redis.set(worker_state_key(WORKER_ID), heartbeat))
     admin_client.app.dependency_overrides[get_arq_pool_dep] = lambda: pool
 
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=AsyncMock()):
-        response = admin_client.post(f"/api/admin/registry/{MODE}/download")
+    response = admin_client.post(f"/api/admin/registry/{MODE}/download")
 
     assert _stored_payload(ctx, response.json()["id"]) == DownloadModelPayload(mode=MODE)

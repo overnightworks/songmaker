@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from support.job_owner import an_owner
 
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
+from songmaker_cli.job_payloads import LoraTrainingPayload
+from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
-from songmaker_cli.music_worker import MusicWorker, MusicWorkerSettings
+from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.scoring_worker import ScoringWorker, ScoringWorkerSettings
 from songmaker_cli.worker_base import JOB_ENDED_EVENT
 
-REGISTERED_ARGUMENTS = {
-    JobFunction.GENERATE: ("song", "version", 1, "user", None, "turbo"),
-    JobFunction.LOAD_MODEL_ON_WORKER: ("no-such-worker", "turbo"),
-    JobFunction.DOWNLOAD_MODEL_ON_WORKER: ("no-such-mode",),
-    JobFunction.LORA_TRAINING: ("lora", "user"),
-    JobFunction.SCORE: ("generation", ["scorer"]),
-}
+REGISTERED_ARGUMENTS = {JobFunction.SCORE: ("generation", ["scorer"])}
 
 
 @pytest.fixture
@@ -56,7 +53,7 @@ def test_job_status_is_none_for_a_job_without_a_row(pg_factory, job_rows) -> Non
 
 @pytest.mark.parametrize(
     "function",
-    [*MusicWorkerSettings.functions, *ScoringWorkerSettings.functions],
+    ScoringWorkerSettings.functions,
     ids=lambda function: function.name,
 )
 def test_every_registered_job_ends_its_line_failed_when_its_row_failed(
@@ -69,3 +66,22 @@ def test_every_registered_job_ends_its_line_failed_when_its_row_failed(
 
     (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
     assert (ended.job_function, ended.outcome) == (function.name, "failed")
+
+
+def test_a_music_job_ends_its_line_failed_when_its_row_failed(job_rows, caplog) -> None:
+    job_id = job_rows(JobStatus.FAILED)
+    claimed = ClaimedJob(
+        job_id, JobType.LORA_TRAINING,
+        LoraTrainingPayload(lora_id="lora", user_id="user", target_mode="turbo"),
+    )
+    worker = MusicWorker()
+    worker._arq_context = {"redis": AsyncMock()}
+
+    with (
+        caplog.at_level("INFO"),
+        patch("songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock),
+    ):
+        asyncio.run(worker.run_claimed(claimed))
+
+    (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
+    assert (ended.job_function, ended.outcome) == (JobFunction.LORA_TRAINING, "failed")
