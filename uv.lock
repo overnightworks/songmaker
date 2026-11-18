@@ -1198,8 +1198,8 @@ wheels = [
 
 [[package]]
 name = "overnightworks-agents"
-version = "0.44.0"
-source = { git = "https://github.com/overnightworks/agents?rev=v0.44.0#fb279b26852f654ba9919b222343964056d31c90" }
+version = "0.57.0"
+source = { git = "https://github.com/overnightworks/agents?rev=v0.57.0#6ac097a14afa301e8b2b555d9925164bd760f631" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
@@ -1208,10 +1208,12 @@ dependencies = [
 [package.optional-dependencies]
 backend = [
     { name = "httpx2" },
+    { name = "overnightworks-logline" },
 ]
 mcp-server = [
     { name = "anyio" },
     { name = "mcp" },
+    { name = "overnightworks-logline" },
 ]
 
 [[package]]
@@ -1233,8 +1235,8 @@ provides-extras = ["catalogs"]
 
 [[package]]
 name = "overnightworks-logline"
-version = "0.4.0"
-source = { git = "https://github.com/overnightworks/logline?rev=v0.4.0#24a7a6077f3bd0c382fde62e149946c70a9ced31" }
+version = "0.7.0"
+source = { git = "https://github.com/overnightworks/logline?rev=v0.7.0#4897df98b14d3f974a3fc99b65ea596874ac86ba" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "structlog" },
@@ -1242,8 +1244,8 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-tandem"
-version = "0.8.0"
-source = { git = "https://github.com/overnightworks/tandem?rev=v0.8.0#8790769c1681b7b28fee7ad4d7399b5cff4e5a48" }
+version = "0.9.1"
+source = { git = "https://github.com/overnightworks/tandem?rev=v0.9.1#1e48aef19b0a407bdbf1fede850a6f51bb2e1380" }
 dependencies = [
     { name = "overnightworks-logline" },
     { name = "redis" },
@@ -2047,13 +2049,13 @@ requires-dist = [
     { name = "numba", marker = "extra == 'whisper'" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
-    { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
-    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.44.0" },
+    { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.57.0" },
+    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.57.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" },
-    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v0.4.0" },
-    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v0.4.0" },
-    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.8.0" },
-    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.8.0" },
+    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
+    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.9.1" },
+    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.9.1" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
