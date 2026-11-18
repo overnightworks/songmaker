@@ -24,7 +24,7 @@ from agents.agent_file import TurnRequest
 from agents.backend import AgentBackend, TurnEvent, TurnPerson, TurnStopped
 from agents.backend.fake_gateway import FakeGateway, Reply, completion
 from agents.backend.gateway import GatewayBackend
-from agents.config import BackendKind, ChatGateway
+from agents.config import ChatGateway
 from agents.turn_events import AssistantTextEvent, FinalEvent
 from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
 from support.session_ids import a_session_id
@@ -51,7 +51,6 @@ def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentSetti
     key_file = directory / _KEY_FILE_NAME
     key_file.write_text(_DUMMY_KEY + "\n", encoding="ascii")
     return AgentSettings(
-        backend=BackendKind.LITELLM,
         gateway=ChatGateway(origin=origin, key_file=key_file),
         api_group=API_GROUP,
     )

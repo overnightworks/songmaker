@@ -438,7 +438,6 @@ async def owner_lapse_loop(app: FastAPI) -> None:
 
     await ctx.owner_leases.serve_lapses(
         fail_jobs_of_lapsed_owner,
-        claimer=ctx.owner_id,
         every=timedelta(seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS),
     )
 
