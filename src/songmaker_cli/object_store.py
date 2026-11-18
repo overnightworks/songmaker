@@ -113,7 +113,7 @@ class ObjectStore:
                 yield StoredObject(entry["Key"], entry["Size"], entry["LastModified"])
 
 
-def _store_error(exc: ClientError) -> Exception:
+def _store_error(exc: ClientError) -> ObjectMissingError | ObjectRangeError | ClientError:
     code = exc.response.get("Error", {}).get("Code")
     if code in _MISSING_KEY_CODES:
         return ObjectMissingError()
