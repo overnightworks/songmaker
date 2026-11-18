@@ -14,9 +14,10 @@ from tandem.testing import FakeWakeBus
 
 from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.scoring_worker import ScoringWorker
+from songmaker_cli.settings import get_settings
 
 STOP_WITHIN_SECONDS = 5
-SETTLING_LOOP_TURNS = 20
+SHUTDOWN_HOLD_SECONDS = 0.5
 
 
 def _run(coro):
@@ -220,10 +221,12 @@ def test_a_stop_signal_ends_the_claiming_though_the_loops_own_handler_still_gets
 
 
 def test_a_stop_signal_lets_a_running_job_finish_before_the_worker_shuts_down(
-    stop_signal_handlers,
+    stop_signal_handlers, scorer_requests, postgresql_url, redis_url,
 ) -> None:
-    worker = ScoringWorker()
-    worker.wake_channel = FakeWakeBus().pod()
+    settings = get_settings().model_copy(
+        update={"database_url": postgresql_url, "redis_url": redis_url},
+    )
+    worker = ScoringWorker(settings)
     worker.claim_next_job = MagicMock(side_effect=[ClaimedJob("j1", None), None])
     job_started, job_may_finish, job_finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
@@ -238,17 +241,14 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_worker_shuts_down(
         loop = asyncio.get_running_loop()
         arq_was_told = asyncio.Event()
         loop.add_signal_handler(signal.SIGTERM, arq_was_told.set)
-        queue_task = asyncio.create_task(worker.serve_queued_jobs())
-        worker._queue_task = queue_task
-        worker.stop_claiming_on_stop_signal(queue_task)
+        await worker.on_startup(_mock_ctx())
         async with asyncio.timeout(STOP_WITHIN_SECONDS):
             await job_started.wait()
             os.kill(os.getpid(), signal.SIGTERM)
             await arq_was_told.wait()
             shutting_down = asyncio.create_task(worker.on_shutdown({}))
-            for _ in range(SETTLING_LOOP_TURNS):
-                await asyncio.sleep(0)
-            ended_with_job_running = shutting_down.done()
+            ended, _ = await asyncio.wait([shutting_down], timeout=SHUTDOWN_HOLD_SECONDS)
+            ended_with_job_running = bool(ended)
             job_may_finish.set()
             await shutting_down
         loop.remove_signal_handler(signal.SIGTERM)
