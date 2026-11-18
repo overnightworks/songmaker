@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import signal
@@ -405,6 +406,29 @@ def test_scorer_process_score_empty_scorers(tmp_path: Path) -> None:
         assert isinstance(result, SongScores)
     finally:
         sp.shutdown()
+
+
+def test_a_scorer_failing_in_the_child_is_one_json_line_with_its_exception(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+    monkeypatch.delenv("SCORING_AUDIOBOX_CHECKPOINT", raising=False)
+
+    sp = ScorerProcess()
+    try:
+        sp.score(
+            mp3, scorers=["audiobox"], config=PipelineConfig(device="cpu"),
+            on_progress=_ignore_progress,
+        )
+    finally:
+        sp.shutdown()
+
+    lines = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    (failure,) = [line for line in lines if line["level"] == "error"]
+    assert "SCORING_AUDIOBOX_CHECKPOINT" in failure["exception"]
 
 
 def _slow_child_main(conn):
