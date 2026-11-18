@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.job_owner import an_owner
+from support.score_jobs import queued_score_job
 
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
@@ -120,9 +121,9 @@ def scoring_worker(job_rows):
     return ScoringWorker()
 
 
-def _a_score_job(pg_factory, payload: ScorePayload | None) -> str:
+def _score_job_with_payload(pg_factory, payload: ScorePayload | None) -> str:
     with pg_factory() as session:
-        job = create_job(session, JobType.SCORE, payload=payload)
+        job = queued_score_job(session, payload=payload)
         session.commit()
         return job.id
 
@@ -131,7 +132,7 @@ def test_a_worker_claims_the_next_due_job_for_itself_with_the_payload_of_its_row
     scoring_worker, pg_factory,
 ) -> None:
     payload = ScorePayload(gen_id="take", scorers=("silence",))
-    job_id = _a_score_job(pg_factory, payload)
+    job_id = _score_job_with_payload(pg_factory, payload)
 
     claimed = scoring_worker.claim_next_job(JobType.SCORE)
 
@@ -158,7 +159,7 @@ def test_a_claimed_score_job_runs_the_take_and_scorers_its_row_names(scoring_wor
 def test_a_claimed_score_job_without_a_score_payload_fails_and_runs_nothing(
     scoring_worker, pg_factory,
 ) -> None:
-    job_id = _a_score_job(pg_factory, None)
+    job_id = _score_job_with_payload(pg_factory, None)
 
     with patch("songmaker_cli.scoring_worker.run_scoring_job") as work:
         asyncio.run(scoring_worker.run_claimed(ClaimedJob(job_id, None)))

@@ -69,6 +69,7 @@ pytest_plugins = [
     "support.database_case_record",
     "support.ffmpeg_binary",
     "support.node_id_record",
+    "support.score_jobs",
     "support.web_cluster_world",
     "pytester",
 ]

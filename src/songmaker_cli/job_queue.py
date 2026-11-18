@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 from datetime import timedelta
@@ -87,7 +87,7 @@ async def serve_queue[Claimed](
     queue: JobQueue,
     *,
     claim: Callable[[], Claimed | None],
-    run: Callable[[Claimed], Awaitable[None]],
+    run: Callable[[Claimed], Coroutine[None, None, None]],
     capacity: int,
     drain_seconds: float,
 ) -> None:
@@ -117,7 +117,7 @@ class _ClaimLoop[Claimed]:
         self,
         queue: JobQueue,
         claim: Callable[[], Claimed | None],
-        run: Callable[[Claimed], Awaitable[None]],
+        run: Callable[[Claimed], Coroutine[None, None, None]],
         capacity: int,
     ) -> None:
         self.wakeup = _Wakeup(queue)

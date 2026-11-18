@@ -5,17 +5,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
-from datetime import timedelta
 
 import pytest
 from support.job_owner import an_owner
+from support.score_jobs import queued_score_job
 from tandem.testing import FakeWakeBus
 
 from songmaker_cli import job_queue
-from songmaker_cli.db.queries.jobs import claim_next_queued_job, create_job, get_job
+from songmaker_cli.db.queries.jobs import claim_next_queued_job, get_job
 from songmaker_cli.job_queue import JobQueue, publish_queue_wake, serve_queue
 from songmaker_cli.job_types import JobStatus, JobType
-from songmaker_cli.timestamps import utcnow
 
 OWNER = an_owner("queue-worker")
 REACHED_WITHIN_SECONDS = 10
@@ -40,10 +39,9 @@ def poll_every(monkeypatch) -> Callable[[float], None]:
     return lambda seconds: monkeypatch.setattr(job_queue, "QUEUE_POLL_INTERVAL_SECONDS", seconds)
 
 
-def _a_score_job(factory, *, due_in: float = 0) -> str:
+def _queue_score_job(factory, *, due_in: float = 0) -> str:
     with factory() as session:
-        job = create_job(session, JobType.SCORE)
-        job.run_after = utcnow() + timedelta(seconds=due_in)
+        job = queued_score_job(session, due_in=due_in)
         session.commit()
         return job.id
 
@@ -89,7 +87,7 @@ def test_a_wake_makes_the_loop_claim_a_job_before_its_poll(pg_factory, poll_ever
     async def scenario() -> tuple[str, str]:
         async with _serving(pg_factory, server) as served:
             await asyncio.sleep(0)
-            job_id = _a_score_job(pg_factory)
+            job_id = _queue_score_job(pg_factory)
             await publish_queue_wake(sender, JobQueue.SCORE)
             return job_id, await served.next_run()
 
@@ -104,7 +102,7 @@ def test_a_job_whose_wake_was_lost_is_claimed_by_the_poll(pg_factory, poll_every
 
     async def scenario() -> tuple[str, str]:
         async with _serving(pg_factory, server) as served:
-            job_id = _a_score_job(pg_factory)
+            job_id = _queue_score_job(pg_factory)
             return job_id, await served.next_run()
 
     queued, ran = asyncio.run(scenario())
@@ -121,7 +119,7 @@ def test_a_job_queued_while_the_subscription_was_down_is_claimed_when_it_is_back
     async def scenario() -> tuple[str, str]:
         async with _serving(pg_factory, server) as served:
             await asyncio.sleep(0)
-            job_id = _a_score_job(pg_factory)
+            job_id = _queue_score_job(pg_factory)
             server.resync()
             return job_id, await served.next_run()
 
@@ -137,7 +135,7 @@ def test_a_loop_whose_channel_is_refused_still_claims_by_poll(pg_factory, poll_e
 
     async def scenario() -> tuple[str, str]:
         async with _serving(pg_factory, server) as served:
-            job_id = _a_score_job(pg_factory)
+            job_id = _queue_score_job(pg_factory)
             return job_id, await served.next_run()
 
     queued, ran = asyncio.run(scenario())
@@ -153,7 +151,7 @@ def test_a_job_whose_wait_is_running_is_claimed_only_after_the_wait(pg_factory, 
     async def scenario() -> tuple[float, float]:
         async with _serving(pg_factory, server) as served:
             started = asyncio.get_running_loop().time()
-            _a_score_job(pg_factory, due_in=wait)
+            _queue_score_job(pg_factory, due_in=wait)
             await served.next_run()
             return wait, asyncio.get_running_loop().time() - started
 
@@ -169,7 +167,7 @@ def test_a_loop_at_capacity_claims_no_further_job_until_one_ends(pg_factory, pol
     async def scenario() -> tuple[JobStatus, str, str]:
         async with _serving(pg_factory, server) as served:
             served.finish.clear()
-            first, second = _a_score_job(pg_factory), _a_score_job(pg_factory)
+            first, second = _queue_score_job(pg_factory), _queue_score_job(pg_factory)
             running = await served.next_run()
             await asyncio.sleep(0.3)
             with pg_factory() as session:
@@ -202,7 +200,7 @@ def test_a_stopping_loop_lets_its_running_job_end_and_claims_no_more(
             capacity=1, drain_seconds=DRAIN_SECONDS,
         ))
         served.finish.clear()
-        first, second = _a_score_job(pg_factory), _a_score_job(pg_factory)
+        first, second = _queue_score_job(pg_factory), _queue_score_job(pg_factory)
         running = await served.next_run()
         loop.cancel()
         await asyncio.sleep(0)

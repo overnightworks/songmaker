@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 from redis import Redis
 from support.app_processes import WorkerProcess, poll_until
+from support.score_jobs import queued_score_job
 
 from songmaker_cli.db.models import Job
-from songmaker_cli.db.queries.jobs import create_job
-from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
-from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.job_types import JobStatus
 
 JOB_COUNT = 8
 START_MARGIN_SECONDS = 20.0
@@ -26,14 +23,9 @@ def redis_client(redis_url: str):
         yield client
 
 
-def _a_score_job(session) -> Job:
-    """A queued score job of a take that does not exist, so that a run ends at once, failed."""
-    return create_job(session, JobType.SCORE, payload=ScorePayload(gen_id=str(uuid.uuid4())))
-
-
 def _queue_score_jobs(factory, count: int) -> list[str]:
     with factory() as session:
-        jobs = [_a_score_job(session) for _ in range(count)]
+        jobs = [queued_score_job(session) for _ in range(count)]
         session.commit()
         return [job.id for job in jobs]
 
@@ -99,7 +91,7 @@ def test_a_cancelled_score_job_is_never_run(web_cluster) -> None:
     cluster, factory = web_cluster
     worker = cluster.start_scoring_worker("scoring")
     with factory() as session:
-        cancelled_job, later_job = _a_score_job(session), _a_score_job(session)
+        cancelled_job, later_job = queued_score_job(session), queued_score_job(session)
         cancelled_job.status = JobStatus.CANCELLED
         session.commit()
         cancelled, later = cancelled_job.id, later_job.id

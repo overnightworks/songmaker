@@ -1079,18 +1079,6 @@ def _healthy_scoring_redis() -> MagicMock:
     return redis
 
 
-@pytest.fixture
-def score_queue_wakes():
-    """The wakes of the scoring queue that jobs publish, in place of a Redis to publish to."""
-    woken: list[JobQueue] = []
-
-    async def publish(_channel, queue: JobQueue) -> None:
-        woken.append(queue)
-
-    with patch("songmaker_cli.jobs.generation.publish_queue_wake", publish):
-        yield woken
-
-
 def test_generation_job_auto_scores_the_new_generation(
     seeded_db, tmp_path: Path, score_queue_wakes,
 ) -> None:
