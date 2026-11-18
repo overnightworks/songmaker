@@ -12,7 +12,7 @@ import logging
 from arq import func
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
-from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, SCORING_SERVICE_NAME
 from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.redis_client import build_arq_redis_settings
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class ScoringWorker(WorkerBase):
-    service_name = "songmaker-scoring-worker"
+    service_name = SCORING_SERVICE_NAME
     job_types = (JobType.SCORE,)
     queue_name = ARQ_SCORING_QUEUE_NAME
 
@@ -68,7 +68,12 @@ _scoring_worker = ScoringWorker(_settings)
 
 class ScoringWorkerSettings:
     functions = [
-        func(logged_job(JobFunction.SCORE, _scoring_worker.score), name=JobFunction.SCORE),
+        func(
+            logged_job(
+                JobFunction.SCORE, _scoring_worker.score, status_of=_scoring_worker.job_status,
+            ),
+            name=JobFunction.SCORE,
+        ),
     ]
     on_startup = _scoring_worker.on_startup
     on_shutdown = _scoring_worker.on_shutdown

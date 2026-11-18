@@ -214,6 +214,7 @@ ARQ_SCORING_QUEUE_NAME = "arq:queue:scoring"
 ARQ_MUSIC_HEALTH_KEY = f"{ARQ_MUSIC_QUEUE_NAME}:health-check"
 ARQ_SCORING_HEALTH_KEY = f"{ARQ_SCORING_QUEUE_NAME}:health-check"
 ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
+SCORING_SERVICE_NAME: Final = "songmaker-scoring-worker"
 WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
 
 # Score backfill (issue #222): catches up generations that predate

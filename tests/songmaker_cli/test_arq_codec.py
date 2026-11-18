@@ -20,6 +20,7 @@ from songmaker_cli import arq_pool
 from songmaker_cli.arq_codec import deserialize_arq
 from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.job_types import JobFunction
+from songmaker_cli.job_types import JobStatus as RowStatus
 from songmaker_cli.music_worker import MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorkerSettings
 from songmaker_cli.worker_base import JOB_ENDED_EVENT, logged_job
@@ -387,17 +388,20 @@ def test_a_worker_beyond_the_servers_databases_fails_naming_both():
 
 
 @pytest.mark.parametrize(
-    ("raises", "outcome", "arguments", "logged_job_id"),
+    ("raises", "row_status", "outcome", "arguments", "logged_job_id"),
     [
-        (None, "ok", ("job-1", "private content"), "job-1"),
-        (ValueError("private content"), "failed", ("job-1", "private content"), "job-1"),
-        (None, "ok", (), None),
+        (None, RowStatus.COMPLETED, "ok", ("job-1", "private content"), "job-1"),
+        (ValueError("private content"), None, "failed", ("job-1", "private content"), "job-1"),
+        (None, None, "ok", (), None),
+        (None, RowStatus.FAILED, "failed", ("job-1", "private content"), "job-1"),
+        (None, RowStatus.CANCELLED, "cancelled", ("job-1", "private content"), "job-1"),
     ],
+    ids=["completed", "raised", "cron", "row-failed", "row-cancelled"],
 )
 def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
-    raises, outcome, arguments, logged_job_id, redis_url, monkeypatch, caplog
+    raises, row_status, outcome, arguments, logged_job_id, redis_url, monkeypatch, caplog
 ):
-    """A job ends with one line: its id (a cron job has none), duration and outcome, no content."""
+    """One line per job: its id (a cron job has none), duration and the outcome its row shows."""
 
     async def job(ctx, *job_arguments):
         if raises is not None:
@@ -406,7 +410,10 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
             worker = codec_worker(
-                MusicWorkerSettings, redis_url, logged_job("probe", job), "probe"
+                MusicWorkerSettings,
+                redis_url,
+                logged_job("probe", job, status_of=lambda _job_id: row_status),
+                "probe",
             )
             try:
                 await pool.enqueue_job(

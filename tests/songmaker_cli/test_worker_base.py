@@ -21,6 +21,7 @@ from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS, OWNER_LEASE_TTL_SECONDS
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import build_arq_redis_settings, create_async_redis
 from songmaker_cli.scoring import subprocess_runner
@@ -90,6 +91,17 @@ def test_check_job_still_valid_returns_false_for_cancelled() -> None:
     worker = _make_worker_with_db(MagicMock())
     with patch("songmaker_cli.worker_base.get_job", return_value=mock_job):
         assert worker.check_job_still_valid("j1") is False
+
+
+@pytest.mark.parametrize(
+    ("row_status", "expected"),
+    [("failed", JobStatus.FAILED), ("completed", JobStatus.COMPLETED), (None, None)],
+)
+def test_job_status_reads_the_row_or_none_without_one(row_status, expected) -> None:
+    mock_job = None if row_status is None else MagicMock(status=row_status)
+    worker = _make_worker_with_db(MagicMock())
+    with patch("songmaker_cli.worker_base.get_job", return_value=mock_job):
+        assert worker.job_status("j1") is expected
 
 
 # ── get_db_factory caches per instance ────────────────────────────
