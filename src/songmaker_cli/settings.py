@@ -173,11 +173,6 @@ class Settings(BaseSettings):
     songmaker_monitoring_token: SecretStr | None = None
     # The object store's bucket; only the web uses the store and refuses to start without one.
     songmaker_s3_bucket: str | None = None
-    # The platform's store address, region and credentials file; botocore reads them itself, the
-    # web checks them at start.
-    aws_endpoint_url_s3: str | None = None
-    aws_default_region: str | None = None
-    aws_shared_credentials_file: Path | None = None
 
     @field_validator("songmaker_commit", mode="before")
     @classmethod
