@@ -187,13 +187,15 @@ def test_a_handler_that_raises_gives_the_model_a_fixed_sentence_and_logs_the_cla
         completion("That failed."),
     )
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         events = world.turn("read s1")
 
     result = _frame(events, "tool_result")
     assert result["is_error"] is True
     assert "secret detail" not in result["content"]
-    assert "RuntimeError" in caplog.text
+    assert [record.error_type for record in caplog.records if hasattr(record, "error_type")] == [
+        "RuntimeError"
+    ]
     assert "secret detail" not in caplog.text
     assert _frame(events, "final")["assistant_message"]["content"] == "That failed."
 
