@@ -6,7 +6,7 @@
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { languages, loadWords, sourceLanguage, type Language } from '../src/lib/words/index';
-import { containing, escapeForRegExp, shellOf } from './helpers';
+import { escapeForRegExp, shellOf, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist, type SeededLibrary } from './seed';
 
 /** A desktop width narrower than the desktop project's own, so a longer translation meets less room. */
@@ -34,11 +34,11 @@ function address(path: (library: SeededLibrary) => string): Surface['open'] {
 	return async (page, library) => void (await page.goto(path(library)));
 }
 
-async function openSong(page: Page, library: SeededLibrary): Promise<void> {
+async function openSong(page: Page, library: SeededLibrary, language: Language): Promise<void> {
+	const text = await loadWords(language);
 	await page.goto(`/album/${library.albumId}`);
-	await page
-		.getByRole('link', { name: containing(library.pickedSongTitle) })
-		.first()
+	await workspace(page)
+		.getByRole('button', { name: text['songRow.openInEditor']({ title: library.pickedSongTitle }) })
 		.click();
 	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}/[^/]+$`));
 }
@@ -57,8 +57,8 @@ const surfaces: Surface[] = [
 	{ name: '/settings', open: address(() => '/settings') },
 	{
 		name: 'the take page',
-		open: async (page, library) => {
-			await openSong(page, library);
+		open: async (page, library, language) => {
+			await openSong(page, library, language);
 			await page.goto(`${new URL(page.url()).pathname}/take/1`);
 		}
 	},
@@ -83,7 +83,16 @@ const surfaces: Surface[] = [
 					exact: true
 				})
 				.click();
-			await expect(page.getByRole('tab', { name: text['nowPlaying.takeTab'] })).toBeVisible();
+			// The phone keeps the right panel shut behind a trigger named for the queue tab.
+			await expect(
+				isPhone
+					? page
+							.getByRole('dialog')
+							.getByRole('button', {
+								name: new RegExp(`${escapeForRegExp(text['nowPlaying.queueTab'])}$`)
+							})
+					: page.getByRole('tab', { name: text['nowPlaying.takeTab'] })
+			).toBeVisible();
 		}
 	},
 	{
@@ -149,7 +158,12 @@ function renderFaults(keys: string[]): RenderFaults {
 		const style = getComputedStyle(element);
 		const scrollsByDesign = ['auto', 'scroll'].includes(style.overflowX);
 		const truncatesByDesign = style.textOverflow === 'ellipsis';
+		// A container whose child hangs out by design (the rail's resize handle) is no text that runs out.
+		const holdsText = Array.from(element.childNodes).some(
+			(node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== ''
+		);
 		if (
+			holdsText &&
 			!scrollsByDesign &&
 			!truncatesByDesign &&
 			element.clientWidth > 1 &&
