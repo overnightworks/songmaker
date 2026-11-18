@@ -20,13 +20,15 @@ from typing import ClassVar
 
 from logline import StepTimer, configure, unit_trace
 from redis.asyncio import Redis as AsyncRedis
+from tandem import WakeChannel
 
 from songmaker_cli.arq_codec import TRACEPARENT_KWARG
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
-from songmaker_cli.db.queries.jobs import claim_queued_job, get_job
-from songmaker_cli.job_types import JobStatus
+from songmaker_cli.db.queries.jobs import claim_next_queued_job, claim_queued_job, get_job
+from songmaker_cli.job_queue import ClaimedJob, app_wake_channel
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
@@ -120,6 +122,7 @@ class WorkerBase:
         self.owner_id = str(uuid.uuid4())
         self.owner: JobOwner
         self._owner_redis: AsyncRedis | None = None
+        self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
 
     def worker_name(self) -> str:
@@ -158,6 +161,17 @@ class WorkerBase:
             log.info("Job %s is not queued; this delivery runs nothing", job_id)
         return claimed
 
+    def claim_next_job(self, job_type: JobType) -> ClaimedJob | None:
+        """Claim the job of ``job_type`` that is due first for this process, or none.
+
+        The row's arguments are read before the claim commits, so the caller needs no session.
+        """
+        with self.get_db_factory()() as session:
+            job = claim_next_queued_job(session, self.owner, job_type)
+            claimed = None if job is None else ClaimedJob(job.id, job.payload)
+            session.commit()
+        return claimed
+
     async def on_startup(self, ctx) -> None:
         configure(self.service_name)
 
@@ -178,15 +192,23 @@ class WorkerBase:
             log.info("Database connection pool disposed")
 
     async def _start_owner_lease(self) -> None:
-        """Say this process lives, on a client of its own: arq's has no retry and no timeouts."""
+        """Say this process lives, on a client of its own: arq's has no retry and no timeouts.
+
+        The wake channel gets a second client: its quiet subscription must not end on the
+        owner client's socket timeout.
+        """
         self._owner_redis = create_async_redis(self._settings.redis_url)
+        wake_redis = create_async_redis(self._settings.redis_url, follows_wakes=True)
+        self.wake_channel = app_wake_channel(wake_redis)
         self._lease_stack = AsyncExitStack()
+        self._lease_stack.push_async_callback(wake_redis.aclose)
         try:
             self.owner = await self._lease_stack.enter_async_context(
                 keep_owner_lease(owner_leases(self._owner_redis), self.owner_id),
             )
         except BaseException:
             await self._owner_redis.aclose()
+            await self._lease_stack.aclose()
             raise
 
     async def _release_owner_lease(self) -> None:

@@ -9,12 +9,14 @@ from support.job_owner import an_owner
 
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
+    claim_next_queued_job,
     claim_queued_job,
     create_job,
     get_job,
     update_job_status,
 )
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.timestamps import utcnow
 
 FIRST = an_owner("first-owner", "first-generation")
 SECOND = an_owner("second-owner", "second-generation")
@@ -77,3 +79,99 @@ def test_a_job_put_back_in_the_queue_with_a_wait_can_be_claimed_again(pg_factory
         assert (waiting, claimed, row.owner_id, row.run_after) == (
             (JobStatus.QUEUED, None, None, wait_ends), True, "second-owner", None,
         )
+
+
+def _a_job_due_in(session, seconds: float, job_type: str = JobType.SCORE):
+    job = create_job(session, job_type)
+    job.run_after = utcnow() + timedelta(seconds=seconds)
+    session.flush()
+    return job
+
+
+def test_the_next_queued_job_of_a_type_runs_for_the_claimer_with_its_generation(pg_factory) -> None:
+    with pg_factory() as session:
+        job = _a_job_due_in(session, -1)
+
+        claimed = claim_next_queued_job(session, FIRST, JobType.SCORE)
+
+        assert (claimed.id, claimed.status, claimed.owner_id, claimed.owner_generation) == (
+            job.id, JobStatus.RUNNING, "first-owner", "first-generation",
+        )
+
+
+def test_the_job_due_first_is_claimed_first(pg_factory) -> None:
+    with pg_factory() as session:
+        later = _a_job_due_in(session, -1)
+        earlier = _a_job_due_in(session, -60)
+
+        order = [claim_next_queued_job(session, FIRST, JobType.SCORE).id for _ in range(2)]
+
+        assert order == [earlier.id, later.id]
+
+
+def test_a_job_whose_wait_has_not_ended_is_not_claimed_until_it_has(pg_factory) -> None:
+    with pg_factory() as session:
+        job = _a_job_due_in(session, 3600)
+
+        before = claim_next_queued_job(session, FIRST, JobType.SCORE)
+        job.run_after = utcnow() - timedelta(seconds=1)
+        session.flush()
+        after = claim_next_queued_job(session, FIRST, JobType.SCORE)
+
+        assert (before, after.id) == (None, job.id)
+
+
+def test_a_cancelled_job_is_never_claimed_though_its_wait_has_ended(pg_factory) -> None:
+    with pg_factory() as session:
+        job = _a_job_due_in(session, -1)
+        update_job_status(session, job.id, JobStatusUpdate(JobStatus.CANCELLED))
+
+        assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
+        assert get_job(session, job.id).status == JobStatus.CANCELLED
+
+
+def test_a_job_without_a_wait_is_left_to_its_queue_message(pg_factory) -> None:
+    with pg_factory() as session:
+        job = _a_job_due_in(session, 0)
+        job.run_after = None
+        session.flush()
+
+        assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
+
+
+def test_a_cover_job_without_a_wait_is_claimed_as_no_queue_message_runs_it(pg_factory) -> None:
+    with pg_factory() as session:
+        job = _a_job_due_in(session, 0, JobType.COVER)
+        job.run_after = None
+        session.flush()
+
+        claimed = claim_next_queued_job(session, FIRST, JobType.COVER)
+
+        assert (claimed.id, claimed.status) == (job.id, JobStatus.RUNNING)
+
+
+def test_only_the_asked_type_is_claimed(pg_factory) -> None:
+    with pg_factory() as session:
+        _a_job_due_in(session, -1, JobType.GENERATE)
+
+        assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
+
+
+def test_a_running_job_is_not_claimed_again(pg_factory) -> None:
+    with pg_factory() as session:
+        _a_job_due_in(session, -1)
+        claim_next_queued_job(session, FIRST, JobType.SCORE)
+
+        assert claim_next_queued_job(session, SECOND, JobType.SCORE) is None
+
+
+def test_two_claimers_that_have_not_committed_get_different_jobs(pg_factory) -> None:
+    with pg_factory() as setup:
+        ids = {_a_job_due_in(setup, -1).id, _a_job_due_in(setup, -1).id}
+        setup.commit()
+    with pg_factory() as first_session, pg_factory() as second_session:
+        first = claim_next_queued_job(first_session, FIRST, JobType.SCORE)
+
+        second = claim_next_queued_job(second_session, SECOND, JobType.SCORE)
+
+        assert ids == {first.id, second.id}

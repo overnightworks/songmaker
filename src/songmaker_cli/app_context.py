@@ -15,7 +15,8 @@ from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
-from songmaker_cli.constants import REDIS_KEY_PREFIX, REDIS_RL_IP_PREFIX
+from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+from songmaker_cli.job_queue import app_wake_channel
 from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 if TYPE_CHECKING:
@@ -43,12 +44,12 @@ class AppContext:
     owner_leases: Leases = field(init=False)
     owner: JobOwner = field(init=False)
     """This process as the owner of its jobs, set once its lease is held."""
-    cancel_wake: WakeChannel = field(init=False)
-    """Tells every web process that a job's cancel committed."""
+    wake_channel: WakeChannel = field(init=False)
+    """The app's wake channel: a job's cancel, and a queue's due row."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)
-        self.cancel_wake = WakeChannel(self.async_redis, key_prefix=REDIS_KEY_PREFIX)
+        self.wake_channel = app_wake_channel(self.async_redis)
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:

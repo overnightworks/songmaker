@@ -502,9 +502,9 @@ def _redis_loses_the_channel_after_subscribing(wake_channel, monkeypatch) -> Non
 
 def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(world, monkeypatch, caplog):
     forged_id = "job\nforged log line"
-    _redis_refuses_every_wake_publication(world.app.state.ctx.cancel_wake, monkeypatch)
+    _redis_refuses_every_wake_publication(world.app.state.ctx.wake_channel, monkeypatch)
 
-    asyncio.run(cover_runner.publish_cover_cancel(world.app.state.ctx.cancel_wake, forged_id))
+    asyncio.run(cover_runner.publish_cover_cancel(world.app.state.ctx.wake_channel, forged_id))
 
     assert "forged" not in caplog.text
 
@@ -523,7 +523,7 @@ def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
 ):
     held = HeldGateway(picture(_image_bytes("PNG")))
     world.stack.uses(held)
-    break_redis(world.app.state.ctx.cancel_wake, monkeypatch)
+    break_redis(world.app.state.ctx.wake_channel, monkeypatch)
     job_id = world.queue()
 
     async def scenario() -> bool:
@@ -553,7 +553,7 @@ def test_a_cancel_the_channel_cannot_carry_is_logged_as_a_warning(
     world, monkeypatch, caplog, break_redis,
 ):
     ctx = world.app.state.ctx
-    break_redis(ctx.cancel_wake, monkeypatch)
+    break_redis(ctx.wake_channel, monkeypatch)
 
     async def work() -> str:
         return "picture"
@@ -569,10 +569,10 @@ def test_a_cancel_the_database_cannot_confirm_is_logged_as_an_error(world, caplo
     def unreachable_database():
         raise RuntimeError("database unreachable")
 
-    ctx = SimpleNamespace(db=unreachable_database, cancel_wake=world.app.state.ctx.cancel_wake)
+    ctx = SimpleNamespace(db=unreachable_database, wake_channel=world.app.state.ctx.wake_channel)
 
     async def work() -> str:
-        await ctx.cancel_wake.publish("job")
+        await ctx.wake_channel.publish("job")
         while logging.ERROR not in _the_cover_runner_records(caplog):
             await asyncio.sleep(0)
         return "picture"

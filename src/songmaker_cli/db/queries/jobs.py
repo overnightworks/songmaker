@@ -149,39 +149,54 @@ def count_total_queued_jobs(session: Session) -> int:
     )
 
 
-def count_queued_generation_jobs(session: Session) -> int:
+def count_queued_jobs(session: Session, job_type: JobType) -> int:
+    """Count the waiting jobs of one type, running jobs excluded."""
     return (
         session.query(Job)
-        .filter(Job.status == JobStatus.QUEUED, Job.type == JobType.GENERATE)
+        .filter(Job.status == JobStatus.QUEUED, Job.type == job_type)
         .count()
     )
+
+
+def count_queued_generation_jobs(session: Session) -> int:
+    return count_queued_jobs(session, JobType.GENERATE)
 
 
 def count_queued_lora_training_jobs(session: Session) -> int:
     """Count globally waiting LoRA trainings, excluding running jobs."""
-    return (
-        session.query(Job)
-        .filter(Job.status == JobStatus.QUEUED, Job.type == JobType.LORA_TRAINING)
-        .count()
-    )
+    return count_queued_jobs(session, JobType.LORA_TRAINING)
+
+
+# A row of these types has no arq message behind it: only a claim can run it.
+_TYPES_WITHOUT_QUEUE_MESSAGE: Final = frozenset({JobType.COVER})
 
 
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
-    """Atomically move the oldest queued cover job to running, owned by ``owner``.
+    """Atomically move the oldest queued cover job to running, owned by ``owner``."""
+    return claim_next_queued_job(session, owner, JobType.COVER)
 
-    Competing web processes may select the same candidate, but only one can change its
-    queued row and receive it through RETURNING.
+
+def claim_next_queued_job(session: Session, owner: JobOwner, job_type: JobType) -> Job | None:
+    """Atomically move the job of ``job_type`` that is due first to running, owned by ``owner``.
+
+    Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
+    ``run_after`` and is never due. A queued job without one (written before rows carried
+    their arguments) is due for a type that has no queue message to run it; a score job
+    without one is left to its arq message, which runs it from its own arguments. SKIP
+    LOCKED makes competing workers take different rows instead of waiting on each other's.
     """
+    due = Job.run_after <= datetime.now(timezone.utc)
+    if job_type in _TYPES_WITHOUT_QUEUE_MESSAGE:
+        due = or_(Job.run_after.is_(None), due)
     candidate_id = (
         session.query(Job.id)
-        .filter(Job.type == JobType.COVER, Job.status == JobStatus.QUEUED)
-        .order_by(Job.started_at.asc(), Job.id.asc())
+        .filter(Job.type == job_type, Job.status == JobStatus.QUEUED, due)
+        .order_by(Job.run_after.asc(), Job.id.asc())
         .limit(1)
+        .with_for_update(skip_locked=True)
         .scalar_subquery()
     )
-    claimed_id = _claim_queued_row(
-        session, owner, Job.id == candidate_id, Job.type == JobType.COVER,
-    )
+    claimed_id = _claim_queued_row(session, owner, Job.id == candidate_id, Job.type == job_type)
     return None if claimed_id is None else session.get(Job, claimed_id)
 
 

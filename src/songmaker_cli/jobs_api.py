@@ -299,7 +299,7 @@ def api_cancel_job(
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
     if job.type in _SIGNALLED_JOB_TYPES:
-        from_thread.run(publish_cover_cancel, ctx.cancel_wake, job_id)
+        from_thread.run(publish_cover_cancel, ctx.wake_channel, job_id)
     job = get_job(session, job_id)
     return JobResponse.from_orm(job)
 

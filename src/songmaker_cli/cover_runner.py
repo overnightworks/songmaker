@@ -258,7 +258,7 @@ async def run_until_cancelled(ctx, job_id: str, work: Callable[[], Coroutine]) -
     listener = _CancelListener(ctx.db, job_id)
     async with AsyncExitStack() as following:
         try:
-            await following.enter_async_context(ctx.cancel_wake.following(
+            await following.enter_async_context(ctx.wake_channel.following(
                 on_resync=listener.on_resync,
                 on_wake=listener.on_wake,
                 on_failed=listener.on_failed,

@@ -60,6 +60,7 @@ INHERITED_PREFIX: Final = "COVERAGE_"
 OIDC_CLIENT_ID: Final = "songmaker-test"
 TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
 MUSIC_WORKER_SETTINGS: Final = "songmaker_cli.music_worker.MusicWorkerSettings"
+SCORING_WORKER_SETTINGS: Final = "songmaker_cli.scoring_worker.ScoringWorkerSettings"
 
 
 def environment_name(settings_class: type[BaseSettings], field_name: str) -> str:
@@ -139,8 +140,8 @@ class WebProcess(ChildProcess):
 
 
 @dataclass
-class MusicWorkerProcess(ChildProcess):
-    """One running music worker and the owner id its lease names."""
+class WorkerProcess(ChildProcess):
+    """One running arq-hosted worker and the owner id its lease names."""
 
     owner_id: str
 
@@ -254,13 +255,20 @@ class WebProcesses:
         )
         return web_process
 
-    def start_music_worker(self, name: str) -> MusicWorkerProcess:
+    def start_music_worker(self, name: str) -> WorkerProcess:
         """Start one music worker and return it once its lease names its owner id."""
+        return self._start_worker(name, MUSIC_WORKER_SETTINGS)
+
+    def start_scoring_worker(self, name: str) -> WorkerProcess:
+        """Start one scoring worker and return it once its lease names its owner id."""
+        return self._start_worker(name, SCORING_WORKER_SETTINGS)
+
+    def _start_worker(self, name: str, settings_path: str) -> WorkerProcess:
         known_owner_ids = leased_owner_ids(self._redis)
         process, log, log_path = self._launch(
-            name, ["-m", "songmaker_cli.arq_worker", MUSIC_WORKER_SETTINGS], environment={},
+            name, ["-m", "songmaker_cli.arq_worker", settings_path], environment={},
         )
-        worker = MusicWorkerProcess(name, process, log, log_path, owner_id="")
+        worker = WorkerProcess(name, process, log, log_path, owner_id="")
         self._processes.append(worker)
         _wait_until_ready(
             worker, "hold an owner lease",
