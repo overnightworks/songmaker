@@ -3,6 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "11d319aaea919ddd8b1c78d1c2e725c22ece0bf6"
 branch = "claude/issue-3276-songmaker-pins-logline-v0-7-0-and-keeps"
-scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli", "tests", "uv.lock"]
+scope = ["docker/docker-compose.test.yml", "docs/architecture.md", "docs/security.md", "pyproject.toml", "src/songmaker_cli", "tests", "uv.lock"]
 opened_commit = "6b6d9adec728d5db6d6555d5bb310592cb221d2d"
 whole_reason = "the logline bump renames denied fields across log call sites and documents the job lines"
