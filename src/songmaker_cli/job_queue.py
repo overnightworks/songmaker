@@ -149,7 +149,8 @@ class _ClaimLoop[Claimed]:
         try:
             return await asyncio.shield(claiming)
         except asyncio.CancelledError:
-            if (claimed := await claiming) is not None:
+            claimed = await claiming
+            if claimed is not None:
                 self._start(claimed)
             raise
         except Exception:
