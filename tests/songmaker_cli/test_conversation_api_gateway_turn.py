@@ -692,7 +692,7 @@ def test_a_turns_cover_keeps_its_session_when_another_session_of_the_person_ends
 class _ContextWhoseCancelsAreLost:
     """A context whose wake channel delivers no cancel, so the cancelled turn runs on."""
 
-    class cancel_wake:  # noqa: N801
+    class wake_channel:  # noqa: N801
         @staticmethod
         async def publish(_address: str) -> None:
             return None

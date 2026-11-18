@@ -27,7 +27,7 @@ from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
-from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, INTERNAL_TOKEN_HEADER
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.models import (
     Generation,
     Job,
@@ -44,6 +44,8 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.workers import register_worker
+from songmaker_cli.job_payloads import ScorePayload
+from songmaker_cli.job_queue import JobQueue
 from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.jobs import (
     _finalize_generation_job,
@@ -1077,7 +1079,21 @@ def _healthy_scoring_redis() -> MagicMock:
     return redis
 
 
-def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path) -> None:
+@pytest.fixture
+def score_queue_wakes():
+    """The wakes of the scoring queue that jobs publish, in place of a Redis to publish to."""
+    woken: list[JobQueue] = []
+
+    async def publish(_channel, queue: JobQueue) -> None:
+        woken.append(queue)
+
+    with patch("songmaker_cli.jobs.generation.publish_queue_wake", publish):
+        yield woken
+
+
+def test_generation_job_auto_scores_the_new_generation(
+    seeded_db, tmp_path: Path, score_queue_wakes,
+) -> None:
     dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
     redis = _healthy_scoring_redis()
     with dispatch, post_process, defaults:
@@ -1100,15 +1116,10 @@ def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path
         score_job = session.query(Job).filter_by(type="score", song_id="s1").one()
         assert score_job.user_id is None
         assert score_job.status == "queued"
-        gen_id = gen.id
-        score_job_id = score_job.id
+        assert score_job.payload == ScorePayload(gen_id=gen.id)
 
-    redis.enqueue_job.assert_awaited_once()
-    args, kwargs = redis.enqueue_job.await_args
-    assert args[0] == JobFunction.SCORE
-    assert args[1] == score_job_id
-    assert args[2] == gen_id
-    assert kwargs["_queue_name"] == ARQ_SCORING_QUEUE_NAME
+    redis.enqueue_job.assert_not_awaited()
+    assert score_queue_wakes == [JobQueue.SCORE]
 
 
 def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
@@ -1142,6 +1153,7 @@ def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
 def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
     seeded_db,
     tmp_path: Path,
+    score_queue_wakes,
 ) -> None:
     dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
     redis = MagicMock()
@@ -1162,7 +1174,7 @@ def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
             )
         )
 
-    redis.enqueue_job.assert_not_awaited()
+    assert score_queue_wakes == []
     with seeded_db() as session:
         score_job = session.query(Job).filter_by(type="score", song_id="s1").one()
         assert score_job.status == "failed"

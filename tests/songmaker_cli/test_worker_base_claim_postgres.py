@@ -15,6 +15,8 @@ from songmaker_cli.db.queries.jobs import (
     get_job,
     update_job_status,
 )
+from songmaker_cli.job_payloads import ScorePayload
+from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker, MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorker, ScoringWorkerSettings
@@ -110,3 +112,57 @@ def test_a_job_another_process_runs_is_left_to_it(function, job_rows, pg_factory
     work.assert_not_called()
     with pg_factory() as session:
         assert get_job(session, job_id).owner_id == "other-worker"
+
+
+@pytest.fixture
+def scoring_worker(job_rows):
+    """A scoring worker on this test's database; ``job_rows`` binds the class to it."""
+    return ScoringWorker()
+
+
+def _a_score_job(pg_factory, payload: ScorePayload | None) -> str:
+    with pg_factory() as session:
+        job = create_job(session, JobType.SCORE, payload=payload)
+        session.commit()
+        return job.id
+
+
+def test_a_worker_claims_the_next_due_job_for_itself_with_the_payload_of_its_row(
+    scoring_worker, pg_factory,
+) -> None:
+    payload = ScorePayload(gen_id="take", scorers=("silence",))
+    job_id = _a_score_job(pg_factory, payload)
+
+    claimed = scoring_worker.claim_next_job(JobType.SCORE)
+
+    with pg_factory() as session:
+        row = get_job(session, job_id)
+        assert (claimed, row.status, row.owner_id) == (
+            ClaimedJob(job_id, payload), JobStatus.RUNNING, "worker",
+        )
+
+
+def test_a_worker_with_no_due_job_claims_nothing(scoring_worker) -> None:
+    assert scoring_worker.claim_next_job(JobType.SCORE) is None
+
+
+def test_a_claimed_score_job_runs_the_take_and_scorers_its_row_names(scoring_worker) -> None:
+    claimed = ClaimedJob("job", ScorePayload(gen_id="take", scorers=("silence", "bpm")))
+
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as work:
+        asyncio.run(scoring_worker.run_claimed(claimed))
+
+    assert work.call_args.args == ("job", "take", ["silence", "bpm"])
+
+
+def test_a_claimed_score_job_without_a_score_payload_fails_and_runs_nothing(
+    scoring_worker, pg_factory,
+) -> None:
+    job_id = _a_score_job(pg_factory, None)
+
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as work:
+        asyncio.run(scoring_worker.run_claimed(ClaimedJob(job_id, None)))
+
+    work.assert_not_called()
+    with pg_factory() as session:
+        assert get_job(session, job_id).status == JobStatus.FAILED

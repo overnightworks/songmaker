@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 from redis import Redis
 from support.app_processes import (
-    MusicWorkerProcess,
     WebProcess,
     WebProcesses,
+    WorkerProcess,
     leased_owner_ids,
     owner_lease_generation,
     poll_until,
@@ -306,8 +306,8 @@ class MusicWorkers:
     """Two music workers, a web process that reaps for them, and the jobs each is running."""
 
     factory: object
-    worker_a: MusicWorkerProcess
-    worker_b: MusicWorkerProcess
+    worker_a: WorkerProcess
+    worker_b: WorkerProcess
     jobs_of_a: tuple[str, ...]
     jobs_of_b: tuple[str, ...]
 

@@ -53,7 +53,6 @@ from songmaker_cli.arq_pool import (
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
-    ARQ_SCORING_QUEUE_NAME,
     MODEL_AVAILABLE_MODES,
     AuditAction,
     ResourceType,
@@ -78,6 +77,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.settings import list_active_models
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.job_payloads import GeneratePayload, ScorePayload
+from songmaker_cli.job_queue import JobQueue, publish_queue_wake
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
@@ -577,16 +577,10 @@ async def api_score_generation(
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
 
-    try:
-        if not await is_scoring_worker_healthy():
-            _fail_job(ctx, job.id)
-            raise Refusal(503, "generationRefusal.workerNotRunning")
-        await get_arq_pool().enqueue_job(
-            JobFunction.SCORE, job.id, gen_id, req.scorers,
-            _queue_name=ARQ_SCORING_QUEUE_NAME,
-        )
-    except ConnectionError:
-        raise _queue_unavailable_refusal(ctx, job.id)
+    if not await is_scoring_worker_healthy():
+        _fail_job(ctx, job.id)
+        raise Refusal(503, "generationRefusal.workerNotRunning")
+    await publish_queue_wake(ctx.wake_channel, JobQueue.SCORE)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
