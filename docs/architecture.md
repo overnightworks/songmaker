@@ -1504,8 +1504,9 @@ and the worker stores what came back; no scoring run makes a coherence verdict.
 
 ```
 POST /api/generations/{id}/score
-  → rate limit check (per-user, advisory lock)
   → ownership check
+  → scoring worker health check (503 before any row exists: a committed row is claimable at once)
+  → rate limit check (per-user, advisory lock)
   → create Job record (with its payload) + audit log entry, committed
   → publish a wake on `queue/score` (no job travels in it)
   → scoring worker: claim the due queued row (`claim_next_queued_job`), then
@@ -1635,8 +1636,9 @@ SIGKILLed and even the values the run did produce would be lost.
 Redis key holds a score job, so a flush of Redis or a web process that dies after its commit
 loses none.
 
-1. The web process (or the music worker, for an auto-score) commits the `queued` row with its
-   `ScorePayload` and `run_after = now`, then publishes a wake on the app's wake channel
+1. The web process (or the music worker, for an auto-score) first checks that the scoring worker
+   lives (a committed row is claimable at once, so a refusal never follows it), then commits the
+   `queued` row with its `ScorePayload` and `run_after = now`, then publishes a wake on the app's wake channel
    (tandem `WakeChannel`, address `queue/score`, built by `job_queue.app_wake_channel`). A wake that
    cannot be sent is logged and costs nothing but the poll's delay.
 2. The scoring worker's `serve_queue` loop claims one due row at a time while it has a free

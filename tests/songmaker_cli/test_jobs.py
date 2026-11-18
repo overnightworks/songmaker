@@ -18,6 +18,7 @@ from support.generation_job_world import (
     run_async,
 )
 from support.job_owner import an_owner
+from support.score_jobs import ScoringRedis
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 from support.wrapper_deps import reserved_gpu_hold
@@ -27,7 +28,7 @@ from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
-from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.models import (
     Generation,
     Job,
@@ -1072,18 +1073,9 @@ def test_generation_event_failure_rolls_back_generation(
 # ── Auto-score trigger (issue #222) ────────────────────────────────
 
 
-def _healthy_scoring_redis() -> MagicMock:
-    redis = MagicMock()
-    redis.exists = AsyncMock(return_value=1)
-    redis.enqueue_job = AsyncMock()
-    return redis
-
-
-def test_generation_job_auto_scores_the_new_generation(
-    seeded_db, tmp_path: Path, score_queue_wakes,
-) -> None:
+def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path) -> None:
     dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
-    redis = _healthy_scoring_redis()
+    redis = ScoringRedis()
     with dispatch, post_process, defaults:
         run_async(
             run_generation_job(
@@ -1106,8 +1098,8 @@ def test_generation_job_auto_scores_the_new_generation(
         assert score_job.status == "queued"
         assert score_job.payload == ScorePayload(gen_id=gen.id)
 
-    redis.enqueue_job.assert_not_awaited()
-    assert score_queue_wakes == [JobQueue.SCORE]
+    assert ARQ_SCORING_QUEUE_NAME not in redis.store
+    assert redis.woken_queues() == [JobQueue.SCORE]
 
 
 def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
@@ -1126,7 +1118,7 @@ def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=_healthy_scoring_redis(), target_model="sft", owner=an_owner("o1"),
+                redis=ScoringRedis(), target_model="sft", owner=an_owner("o1"),
             )
         )
 
@@ -1138,15 +1130,11 @@ def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
         assert count_user_jobs_in_window(session, "u1", JobType.SCORE, 3600) == 0
 
 
-def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
-    seeded_db,
-    tmp_path: Path,
-    score_queue_wakes,
+def test_generation_job_queues_no_auto_score_when_scoring_worker_is_down(
+    seeded_db, tmp_path: Path,
 ) -> None:
     dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
-    redis = MagicMock()
-    redis.exists = AsyncMock(return_value=0)
-    redis.enqueue_job = AsyncMock()
+    redis = ScoringRedis(worker_running=False)
     with dispatch, post_process, defaults:
         run_async(
             run_generation_job(
@@ -1162,13 +1150,11 @@ def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
             )
         )
 
-    assert score_queue_wakes == []
+    assert redis.woken_queues() == []
     with seeded_db() as session:
-        score_job = session.query(Job).filter_by(type="score", song_id="s1").one()
-        assert score_job.status == "failed"
-        assert score_job.error_type == "setup_error"
-        # The generation itself is unaffected by the down scoring worker —
-        # only the follow-up auto-score job failed.
+        # A row would be claimable by a worker that comes up a moment later; the generation
+        # keeps no score and is left to the backfill. The generation itself is unaffected.
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == 0
         assert get_job(session, "j1").status == "completed"
         assert session.query(Generation).filter_by(song_id="s1").count() == 1
 

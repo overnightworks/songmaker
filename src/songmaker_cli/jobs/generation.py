@@ -633,20 +633,24 @@ def _create_auto_score_job(
         return job.id
 
 
-async def _dispatch_auto_score(
+async def _auto_score_generation(
     redis: ArqRedis,
     db_factory: sessionmaker[Session],
-    job_id: str,
+    gen_id: str,
+    song_id: str,
 ) -> None:
-    """Wake the scoring queue for an auto-score job, or fail the job cleanly.
+    """Queue this generation's auto-score job and wake the scoring queue, or do nothing.
 
-    The job's row is already committed: the row is the queue entry, the wake only makes the
-    scoring worker look at once, and a wake that is lost is found by its poll. This runs right
-    after a generation has already succeeded, and a scoring hiccup must not turn that success
-    into a failure, so a wake that cannot be sent raises nothing. A scoring worker that is down
-    when we check leaves this job FAILED with a clear reason instead of queuing indefinitely —
-    the generation still has no score row, so ``lifecycle.py``'s throttled backfill loop picks
-    it up once a worker comes back.
+    Never raises: called from the generation job's own success path, right
+    after ``completed`` is already counted, so a problem here must stay a
+    scoring-side concern and never turn a successful generation into a
+    reported failure.
+
+    The scoring worker's health is checked before the row exists: the committed row is the queue
+    entry, a live worker may claim it at once, and the wake only makes it look sooner (a wake
+    that is lost is found by its poll). A worker that is down when we check gets no row; the
+    generation still has no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
+    once a worker comes back.
 
     Health is checked via the passed-in ``redis`` connection, not the
     process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
@@ -654,37 +658,15 @@ async def _dispatch_auto_score(
     ``init_arq_pool()``.
     """
     if not await is_scoring_worker_healthy(redis):
-        _update_job(
-            db_factory,
-            job_id,
-            JobStatus.FAILED,
-            error_message=message("jobFailure.scoringWorkerDown"),
-            error_type="setup_error",
-        )
+        log.warning("Scoring worker not running; generation %s is left to the backfill", gen_id)
         return
-    await publish_queue_wake(app_wake_channel(redis), JobQueue.SCORE)
-
-
-async def _auto_score_generation(
-    redis: ArqRedis,
-    db_factory: sessionmaker[Session],
-    gen_id: str,
-    song_id: str,
-) -> None:
-    """Create and dispatch this generation's auto-score job, or do nothing.
-
-    Never raises: called from the generation job's own success path, right
-    after ``completed`` is already counted, so a problem here must stay a
-    scoring-side concern and never turn a successful generation into a
-    reported failure.
-    """
     try:
         job_id = await asyncio.to_thread(_create_auto_score_job, db_factory, gen_id, song_id)
     except Exception:
         log.exception("Auto-score job creation failed for generation %s", gen_id)
         return
     if job_id:
-        await _dispatch_auto_score(redis, db_factory, job_id)
+        await publish_queue_wake(app_wake_channel(redis), JobQueue.SCORE)
 
 
 def _make_generation_progress_callback(

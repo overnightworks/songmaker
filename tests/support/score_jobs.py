@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import timedelta
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock
 
+import fakeredis
 import pytest
+from support.web_app import SettledFakeAsyncRedis
+from tandem.keys import wake_channel
 
-from songmaker_cli.db.models import Job
+from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, REDIS_KEY_PREFIX
+from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import JobQueue
 from songmaker_cli.job_types import JobType
+from songmaker_cli.scoring import subprocess_runner
+from songmaker_cli.scoring.models import SongScores
+from songmaker_cli.scoring.subprocess_runner import set_scorer_process
 from songmaker_cli.timestamps import utcnow
 
+SUBSCRIBED_WITHIN_SECONDS = 5
 A_TAKE_THAT_DOES_NOT_EXIST = ScorePayload(gen_id="no-such-take")
 
 
@@ -34,13 +42,57 @@ def queued_score_job(
     return job
 
 
+class ScoringRedis(SettledFakeAsyncRedis):
+    """The Redis a generation job dispatches an auto-score job through.
+
+    The scoring worker's health key is set while it runs; ``woken_queues`` reads what was
+    published on the app's wake channel since this Redis was made.
+    """
+
+    def __init__(self, *, worker_running: bool = True) -> None:
+        super().__init__()
+        if worker_running:
+            self.store[ARQ_SCORING_HEALTH_KEY] = "1"
+        self._listener = fakeredis.FakeRedis(server=self.server).pubsub(
+            ignore_subscribe_messages=False,
+        )
+        self._listener.subscribe(wake_channel(REDIS_KEY_PREFIX))
+        self._listener.get_message(timeout=SUBSCRIBED_WITHIN_SECONDS)  # the confirmation
+
+    def woken_queues(self) -> list[JobQueue]:
+        woken: list[JobQueue] = []
+        while (wake := self._listener.get_message()) is not None:
+            woken += [queue for queue in JobQueue if wake["data"].endswith(queue.encode())]
+        return woken
+
+
+def a_scoreable_take(factory, audio_dir: Path) -> str:
+    """Store a take with an audio file; returns its id."""
+    with factory() as session:
+        session.add(User(id="u1", username="user1", role="user"))
+        session.flush()
+        session.add(Album(id="alb1", title="Rock", artist="Band", created_by="u1"))
+        session.add(Song(id="s1", title="Song One", album_id="alb1", track_number=1))
+        session.add(Version(id="v1", song_id="s1", version_number=1, prompt="rock", bpm=120))
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="user1/g1.mp3", seed=42,
+        ))
+        session.commit()
+    mp3 = audio_dir / "user1" / "g1.mp3"
+    mp3.parent.mkdir(parents=True, exist_ok=True)
+    mp3.write_bytes(b"audio")
+    return "g1"
+
+
 @pytest.fixture
-def score_queue_wakes() -> Iterator[list[JobQueue]]:
-    """The wakes a generation job publishes for the scoring queue, in place of a Redis."""
-    woken: list[JobQueue] = []
+def scorer_requests(monkeypatch) -> MagicMock:
+    """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
 
-    async def publish(_channel, queue: JobQueue) -> None:
-        woken.append(queue)
-
-    with patch("songmaker_cli.jobs.generation.publish_queue_wake", publish):
-        yield woken
+    It answers every request with an empty result.
+    """
+    monkeypatch.setattr(subprocess_runner, "_scorer_process", None)  # restored at teardown
+    scorer = MagicMock()
+    scorer.score.return_value = SongScores()
+    set_scorer_process(scorer)
+    return scorer.score

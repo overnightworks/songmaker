@@ -2146,7 +2146,7 @@ def test_worker_preflight_reports_an_unavailable_worker(
     payload: dict,
     health_check: str,
 ) -> None:
-    """S6-E: score keeps "Worker not running"."""
+    """S6-E: score keeps "Worker not running", and no row a live worker could claim is left."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     with (
@@ -2160,6 +2160,8 @@ def test_worker_preflight_reports_an_unavailable_worker(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Worker not running"
+    with client.app.state.ctx.db() as session:
+        assert session.query(Job).filter_by(type="score").count() == 0
 
 
 @pytest.mark.parametrize(

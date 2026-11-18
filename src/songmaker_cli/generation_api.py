@@ -569,6 +569,10 @@ async def api_score_generation(
 ) -> JobResponse:
     take = check_generation_access(session, gen_id, user)
 
+    # Before the row exists: once committed, the row is the queue entry and a live scoring
+    # worker may claim it at once, so a refusal after the commit would fail a running job.
+    if not await is_scoring_worker_healthy():
+        raise Refusal(503, "generationRefusal.workerNotRunning")
     job = await create_job_with_rate_limit(
         session, user, JobType.SCORE, take.song_id,
         payload=ScorePayload(gen_id=gen_id, scorers=req.scorers),
@@ -577,9 +581,6 @@ async def api_score_generation(
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
 
-    if not await is_scoring_worker_healthy():
-        _fail_job(ctx, job.id)
-        raise Refusal(503, "generationRefusal.workerNotRunning")
     await publish_queue_wake(ctx.wake_channel, JobQueue.SCORE)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
