@@ -48,3 +48,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # The upgrade only refuses; it changes no schema or data, so there is nothing to undo.
+    pass
