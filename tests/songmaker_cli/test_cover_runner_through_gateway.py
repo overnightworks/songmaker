@@ -539,6 +539,61 @@ def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
     assert world.suggestions() == []
 
 
+def _the_cover_runner_records(caplog) -> list[int]:
+    return [record.levelno for record in caplog.records if record.name == cover_runner.log.name]
+
+
+@pytest.mark.parametrize(
+    "break_redis",
+    [_redis_does_not_confirm_the_subscription, _redis_loses_the_channel_after_subscribing],
+    ids=["subscription_unconfirmed", "channel_lost"],
+)
+def test_a_cancel_the_channel_cannot_carry_is_logged_as_a_warning(
+    world, monkeypatch, caplog, break_redis,
+):
+    ctx = world.app.state.ctx
+    break_redis(ctx.cancel_wake, monkeypatch)
+
+    async def work() -> str:
+        return "picture"
+
+    with caplog.at_level(logging.INFO, logger=cover_runner.log.name):
+        task = asyncio.run(cover_runner.run_until_cancelled(ctx, "job", work))
+
+    assert task.result() == "picture"
+    assert _the_cover_runner_records(caplog) == [logging.WARNING]
+
+
+def test_a_cancel_the_database_cannot_confirm_is_logged_as_an_error(world, monkeypatch, caplog):
+    ctx = world.app.state.ctx
+
+    @asynccontextmanager
+    async def resync_once(*, on_resync, **_handlers):
+        on_resync()
+        yield
+
+    monkeypatch.setattr(ctx.cancel_wake, "following", resync_once)
+    monkeypatch.setattr(cover_runner, "_is_cancelled", _raise_database_unreachable)
+
+    async def work() -> str:
+        while logging.ERROR not in _the_cover_runner_records(caplog):
+            await asyncio.sleep(0)
+        return "picture"
+
+    async def scenario() -> asyncio.Task:
+        return await asyncio.wait_for(cover_runner.run_until_cancelled(ctx, "job", work), 10)
+
+    with caplog.at_level(logging.INFO, logger=cover_runner.log.name):
+        task = asyncio.run(scenario())
+
+    assert task.result() == "picture"
+    assert _the_cover_runner_records(caplog) == [logging.ERROR]
+
+
+def _raise_database_unreachable(_db_factory, _job_id: str) -> bool:
+    raise RuntimeError("database unreachable")
+
+
 def test_a_cancel_between_the_start_and_the_picture_sends_no_request(world, monkeypatch):
     job_id = world.queue()
     load_cover_start = cover_runner._load_cover_start
