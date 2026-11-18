@@ -8,6 +8,7 @@ async caller runs them in a worker thread.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -119,8 +120,21 @@ def _store_error(exc: ClientError) -> Exception:
     return exc
 
 
+_PLATFORM_STORE_VARIABLES: Final = ("AWS_ENDPOINT_URL_S3", "AWS_DEFAULT_REGION")
+_CREDENTIALS_FILE_VARIABLE: Final = "AWS_SHARED_CREDENTIALS_FILE"
+
+
 def object_store_of(settings: Settings) -> ObjectStore:
-    """The store a web process uses; refuses to start without its bucket."""
+    """The store a web process uses; refuses to start without its bucket or the platform's address.
+
+    botocore falls back to real AWS when its variables are unset, so each is checked here.
+    """
     if not settings.songmaker_s3_bucket:
         raise ValueError("SONGMAKER_S3_BUCKET names the object store's bucket and is required")
+    for variable in _PLATFORM_STORE_VARIABLES:
+        if not os.environ.get(variable):
+            raise ValueError(f"{variable} is set by the platform and is required")
+    credentials_file = os.environ.get(_CREDENTIALS_FILE_VARIABLE)
+    if not credentials_file or not os.access(credentials_file, os.R_OK):
+        raise ValueError(f"{_CREDENTIALS_FILE_VARIABLE} must name a readable credentials file")
     return ObjectStore(settings.songmaker_s3_bucket)
