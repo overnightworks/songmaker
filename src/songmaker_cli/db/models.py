@@ -34,11 +34,13 @@ from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
 )
+from songmaker_cli.db.job_payload_column import JobPayloadColumn
 from songmaker_cli.db.message_column import MessageColumn
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
+from songmaker_cli.job_payloads import JobPayload
 from songmaker_cli.job_types import JobStatus
 from songmaker_cli.messages import Message
 from songmaker_cli.theme_types import ThemeChoice
@@ -221,9 +223,7 @@ class Generation(ShareMixin, Base):
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=JobStatus.COMPLETED)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        TZDateTime, nullable=True, index=True,
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True, index=True)
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
     model_mode: Mapped[str] = mapped_column(
@@ -387,6 +387,8 @@ class Job(Base):
     error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     retry_after_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_reason_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)
+    payload: Mapped[JobPayload | None] = mapped_column(JobPayloadColumn, nullable=True)
+    run_after: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
@@ -750,9 +752,7 @@ class UserLora(Base):
     error_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        TZDateTime, nullable=True, index=True,
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True, index=True)
 
     samples: Mapped[list[UserLoraSample]] = relationship(
         back_populates="user_lora",

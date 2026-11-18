@@ -50,48 +50,6 @@ class _DummyWorker(WorkerBase):
     max_jobs = 1
 
 
-def _make_worker_with_db(mock_session: MagicMock) -> _DummyWorker:
-    worker = _DummyWorker()
-    mock_factory = MagicMock()
-    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
-    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
-    worker.get_db_factory = MagicMock(return_value=mock_factory)
-    return worker
-
-
-# ── check_job_still_valid ─────────────────────────────────────────
-
-
-def test_check_job_still_valid_returns_false_for_completed() -> None:
-    mock_job = MagicMock()
-    mock_job.status = "completed"
-    worker = _make_worker_with_db(MagicMock())
-    with patch("songmaker_cli.worker_base.get_job", return_value=mock_job):
-        assert worker.check_job_still_valid("j1") is False
-
-
-def test_check_job_still_valid_returns_false_for_missing() -> None:
-    worker = _make_worker_with_db(MagicMock())
-    with patch("songmaker_cli.worker_base.get_job", return_value=None):
-        assert worker.check_job_still_valid("j1") is False
-
-
-def test_check_job_still_valid_returns_true_for_queued() -> None:
-    mock_job = MagicMock()
-    mock_job.status = "queued"
-    worker = _make_worker_with_db(MagicMock())
-    with patch("songmaker_cli.worker_base.get_job", return_value=mock_job):
-        assert worker.check_job_still_valid("j1") is True
-
-
-def test_check_job_still_valid_returns_false_for_cancelled() -> None:
-    mock_job = MagicMock()
-    mock_job.status = "cancelled"
-    worker = _make_worker_with_db(MagicMock())
-    with patch("songmaker_cli.worker_base.get_job", return_value=mock_job):
-        assert worker.check_job_still_valid("j1") is False
-
-
 # ── get_db_factory caches per instance ────────────────────────────
 
 

@@ -47,7 +47,7 @@ class MusicWorker(WorkerBase):
 
     async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
                        requested_model, repaint_params=None, cover_params=None):
-        if not self.check_job_still_valid(job_id):
+        if not self.claim_job(job_id):
             return
 
         task_params = None
@@ -76,7 +76,7 @@ class MusicWorker(WorkerBase):
         user_id: str,
         target_mode: str = MODEL_DEFAULT_MODE,
     ) -> None:
-        if not self.check_job_still_valid(job_id):
+        if not self.claim_job(job_id):
             return
 
         await run_lora_training_job(
@@ -92,12 +92,18 @@ class MusicWorker(WorkerBase):
     async def load_model_on_worker(
         self, ctx, job_id: str, worker_id: str, mode: str,
     ) -> None:
+        if not self.claim_job(job_id):
+            return
+
         await _load_model_on_worker_impl(
             ctx, job_id, worker_id, mode,
             db_factory=self.get_db_factory(), owner=self.owner,
         )
 
     async def download_model_on_worker(self, ctx, job_id: str, mode: str) -> None:
+        if not self.claim_job(job_id):
+            return
+
         await _download_model_on_worker_impl(
             ctx, job_id, mode,
             db_factory=self.get_db_factory(), owner=self.owner,

@@ -49,6 +49,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.messages import message
@@ -71,6 +72,7 @@ from ._runtime import (
     VERSION_NOT_FOUND,
     GenerationSetupError,
     ReferenceDeletedDuringTake,
+    _defer_job,
     _job_is_terminal,
     _sanitize_error,
     _touch_heartbeat,
@@ -82,6 +84,7 @@ from .generation_failure import (
     running_failure_pair,
     select_generation_failure,
 )
+from .generation_request import GenerationJobRequest
 
 log = logging.getLogger(__name__)
 
@@ -200,41 +203,6 @@ class GenerationProgressTracker:
             **fields,
         )
         self.last_write = self.clock()
-
-
-@dataclass(frozen=True)
-class GenerationJobRequest:
-    """Keep audio_dir/data_dir out of queue_args() because the worker supplies its local paths."""
-
-    job_id: str
-    song_id: str
-    version_id: str
-    count: int
-    user_id: str
-    audio_dir: Path
-    data_dir: Path
-    seed: int | None
-    target_model: str
-    repaint_params: RepaintTaskParams | None
-    cover_params: CoverTaskParams | None
-
-    def with_takes_left(self, count: int) -> GenerationJobRequest:
-        return cast(GenerationJobRequest, replace(self, count=count))
-
-    def queue_args(
-        self,
-    ) -> tuple[str, str, str, int, str, int | None, str, dict | None, dict | None]:
-        return (
-            self.job_id,
-            self.song_id,
-            self.version_id,
-            self.count,
-            self.user_id,
-            self.seed,
-            self.target_model,
-            self.repaint_params.model_dump() if self.repaint_params is not None else None,
-            self.cover_params.model_dump() if self.cover_params is not None else None,
-        )
 
 
 @dataclass
@@ -659,7 +627,8 @@ def _create_auto_score_job(
     with db_factory() as session:
         if get_generation(session, gen_id) is None:
             return None
-        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id)
+        score = ScorePayload(gen_id=gen_id)
+        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id, payload=score)
         session.commit()
         return job.id
 
@@ -942,9 +911,8 @@ async def _admit_generation_worker_or_requeue(
 async def _requeue_generation(
     request: GenerationJobRequest, redis: ArqRedis, db_factory: sessionmaker[Session],
 ) -> None:
-    _update_job(
-        db_factory, request.job_id, JobStatus.QUEUED,
-        queue_reason_message=message("jobWait.voiceTraining"),
+    _defer_job(
+        db_factory, request.job_id, message("jobWait.voiceTraining"), request.payload(),
     )
     await redis.enqueue_job(
         JobFunction.GENERATE, *request.queue_args(),

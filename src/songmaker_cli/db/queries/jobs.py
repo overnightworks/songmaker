@@ -14,6 +14,7 @@ from tandem import Liveness
 
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
+from songmaker_cli.job_payloads import JobPayload
 from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS, JobStaleThresholds
 from songmaker_cli.job_types import (
     JOB_ACTIVE_STATUSES,
@@ -25,7 +26,7 @@ from songmaker_cli.job_types import (
 )
 from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
-from songmaker_cli.timestamps import aware_timestamp
+from songmaker_cli.timestamps import aware_timestamp, utcnow
 from songmaker_cli.worker_liveness import (
     JobOwner,
     JobOwnerStamp,
@@ -49,10 +50,13 @@ def create_job(
     version_id: str | None = None,
     session_id: str | None = None,
     owner: JobOwner | None = None,
+    payload: JobPayload | None = None,
 ) -> Job:
+    """Add the job's row; the payload is stored with it, in the transaction that creates it."""
     job = Job(
         type=job_type, user_id=user_id, song_id=song_id, album_id=album_id,
-        version_id=version_id, session_id=session_id, **owner_columns(owner),
+        version_id=version_id, session_id=session_id, payload=payload, run_after=utcnow(),
+        **owner_columns(owner),
     )
     session.add(job)
     session.flush()
@@ -165,8 +169,7 @@ def count_queued_lora_training_jobs(session: Session) -> int:
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
     """Atomically move the oldest queued cover job to running, owned by ``owner``.
 
-    The status predicate is deliberately repeated on the UPDATE.  Competing
-    web processes may select the same candidate, but only one can change its
+    Competing web processes may select the same candidate, but only one can change its
     queued row and receive it through RETURNING.
     """
     candidate_id = (
@@ -176,26 +179,46 @@ def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
         .limit(1)
         .scalar_subquery()
     )
-    now = datetime.now(timezone.utc)
+    claimed_id = _claim_queued_row(
+        session, owner, Job.id == candidate_id, Job.type == JobType.COVER,
+    )
+    return None if claimed_id is None else session.get(Job, claimed_id)
+
+
+def claim_queued_job(session: Session, job_id: str, owner: JobOwner) -> bool:
+    """Atomically move the queued job to running, owned by ``owner``; false when it is not queued.
+
+    Of several handlers delivered the same job, one gets true; a job that ended, was cancelled
+    or already runs under another owner gives false, and its handler runs nothing.
+    """
+    return _claim_queued_row(session, owner, Job.id == job_id) is not None
+
+
+def _claim_queued_row(session: Session, owner: JobOwner, *conditions) -> str | None:
+    """The id of the row this call moved from queued to running, or none.
+
+    The status predicate is deliberately part of the UPDATE: a row changed by another claimer
+    after the caller chose it no longer matches, so only one claimer receives it through RETURNING.
+    """
     claimed_id = session.execute(
         update(Job)
-        .where(
-            Job.id == candidate_id,
-            Job.type == JobType.COVER,
-            Job.status == JobStatus.QUEUED,
+        .where(*conditions, Job.status == JobStatus.QUEUED)
+        .values(
+            status=JobStatus.RUNNING, heartbeat_at=datetime.now(timezone.utc), run_after=None,
+            **owner_columns(owner),
         )
-        .values(status=JobStatus.RUNNING, heartbeat_at=now, **owner_columns(owner))
         .returning(Job.id),
     ).scalar_one_or_none()
-    if claimed_id is None:
-        return None
-    session.flush()
-    return session.get(Job, claimed_id)
+    if claimed_id is not None:
+        session.flush()
+    return claimed_id
 
 
 @dataclass(frozen=True)
 class JobStatusUpdate:
     """One status write for a job; each field names the job column it writes.
+
+    A job put back in the queue has no owner, whatever ``owner`` says.
 
     Progress, error, error type, the wait a busy refusal named, queue reason and the takes that
     completed describe the job at this write, so leaving them out resets them. The remaining
@@ -211,6 +234,8 @@ class JobStatusUpdate:
     retry_after_seconds: int | None = None
     queue_reason_message: Message | None = None
     owner: JobOwner | _Unset = UNSET
+    run_after: datetime | None | _Unset = UNSET
+    payload: JobPayload | None | _Unset = UNSET
     current_epoch: int | _Unset = UNSET
     train_epochs: int | _Unset = UNSET
     training_started_at: datetime | _Unset = UNSET
@@ -241,8 +266,9 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
         value = getattr(update, column.name)
         if value is not UNSET and column.name != "owner":
             setattr(job, column.name, value)
-    if update.owner is not UNSET:
-        for column_name, value in owner_columns(update.owner).items():
+    owner = None if status == JobStatus.QUEUED else update.owner
+    if not isinstance(owner, _Unset):
+        for column_name, value in owner_columns(owner).items():
             setattr(job, column_name, value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now

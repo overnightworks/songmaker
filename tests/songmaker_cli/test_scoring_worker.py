@@ -22,15 +22,15 @@ def _mock_ctx():
 def _make_worker() -> ScoringWorker:
     worker = ScoringWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker.check_job_still_valid = MagicMock(return_value=True)
+    worker.claim_job = MagicMock(return_value=True)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
     return worker
 
 
-def test_score_skips_completed_job() -> None:
+def test_score_skips_a_job_it_cannot_claim() -> None:
     worker = _make_worker()
-    worker.check_job_still_valid = MagicMock(return_value=False)
+    worker.claim_job = MagicMock(return_value=False)
 
     with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
         _run(worker.score(_mock_ctx(), "j1", "g1", None))

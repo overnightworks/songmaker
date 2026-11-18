@@ -52,7 +52,7 @@ from songmaker_cli.scheduler import (
 from songmaker_cli.settings import LoraTrainingJobConfig
 from songmaker_cli.worker_liveness import JobOwner
 
-from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
+from ._runtime import _defer_job, _sanitize_error, _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -1195,12 +1195,7 @@ async def _defer_lora_training_for_generation(
             error_type="generation_queue_timeout",
         )
         return
-    _update_job(
-        db_factory,
-        job_id,
-        JobStatus.QUEUED,
-        queue_reason_message=message("jobWait.queuedGenerations"),
-    )
+    _defer_job(db_factory, job_id, message("jobWait.queuedGenerations"))
     await redis.enqueue_job(
         JobFunction.LORA_TRAINING,
         job_id,

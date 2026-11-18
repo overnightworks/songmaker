@@ -77,6 +77,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.settings import list_active_models
 from songmaker_cli.generation_params import BaseGenerationParams
+from songmaker_cli.job_payloads import GeneratePayload, ScorePayload
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
@@ -300,6 +301,10 @@ async def api_generate_song(
 
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song_id, version_id=version.id,
+        payload=GeneratePayload(
+            song_id=song_id, version_id=version.id, count=req.count, user_id=user.id,
+            seed=req.seed, target_model=req.model, task_params=None,
+        ),
         redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     record_audit(
@@ -376,6 +381,23 @@ def api_last_failed_generation(
     return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
 
 
+def _repaint_task(
+    req: RepaintRequest, gen_id: str, source_wav: Path, lyrics: str, prompt: str,
+) -> RepaintTaskParams:
+    return RepaintTaskParams(
+        src_wav_path=str(source_wav),
+        src_generation_id=gen_id,
+        repainting_start=req.repainting_start,
+        repainting_end=req.repainting_end,
+        lyrics=lyrics,
+        prompt=prompt,
+        repaint_mode=req.repaint_mode,
+        repaint_strength=req.repaint_strength,
+        repaint_latent_crossfade_frames=req.repaint_latent_crossfade_frames,
+        repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
+    )
+
+
 _REPAINT_TAKE_DESCRIPTION = (
     "Queue a job that repaints a time span of one of the person's own takes as a new take. "
     "Counts against the generation limit."
@@ -415,8 +437,13 @@ async def api_repaint_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
+    repaint_task = _repaint_task(req, gen_id, wav_path, lyrics, prompt)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
+        payload=GeneratePayload(
+            song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
+            seed=req.seed, target_model=req.model, task_params=repaint_task,
+        ),
         redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     gen.wav_path = wav_name
@@ -432,18 +459,6 @@ async def api_repaint_generation(
         rejection = await _generation_capacity_error(ctx, session, job.id)
         if rejection is not None:
             return rejection
-        repaint_task = RepaintTaskParams(
-            src_wav_path=str(wav_path),
-            src_generation_id=gen_id,
-            repainting_start=req.repainting_start,
-            repainting_end=req.repainting_end,
-            lyrics=lyrics,
-            prompt=prompt,
-            repaint_mode=req.repaint_mode,
-            repaint_strength=req.repaint_strength,
-            repaint_latent_crossfade_frames=req.repaint_latent_crossfade_frames,
-            repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
-        )
         await pool.enqueue_job(
             JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
             req.seed, req.model, repaint_task.model_dump(),
@@ -493,8 +508,20 @@ async def api_cover_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
+    cover_task = CoverTaskParams(
+        src_wav_path=str(wav_path),
+        src_generation_id=gen_id,
+        audio_cover_strength=req.audio_cover_strength,
+        lyrics=lyrics,
+        prompt=prompt,
+        cover_noise_strength=req.cover_noise_strength,
+    )
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
+        payload=GeneratePayload(
+            song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
+            seed=req.seed, target_model=req.model, task_params=cover_task,
+        ),
         redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     gen.wav_path = wav_name
@@ -510,14 +537,6 @@ async def api_cover_generation(
         rejection = await _generation_capacity_error(ctx, session, job.id)
         if rejection is not None:
             return rejection
-        cover_task = CoverTaskParams(
-            src_wav_path=str(wav_path),
-            src_generation_id=gen_id,
-            audio_cover_strength=req.audio_cover_strength,
-            lyrics=lyrics,
-            prompt=prompt,
-            cover_noise_strength=req.cover_noise_strength,
-        )
         await pool.enqueue_job(
             JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
             req.seed, req.model, None, cover_task.model_dump(),
@@ -552,6 +571,7 @@ async def api_score_generation(
 
     job = await create_job_with_rate_limit(
         session, user, JobType.SCORE, take.song_id,
+        payload=ScorePayload(gen_id=gen_id, scorers=req.scorers),
         redis=ctx.redis, owner_leases=ctx.owner_leases,
     )
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)

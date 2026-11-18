@@ -25,8 +25,8 @@ from songmaker_cli.arq_codec import TRACEPARENT_KWARG
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
-from songmaker_cli.db.queries.jobs import get_job
-from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.db.queries.jobs import claim_queued_job, get_job
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
@@ -145,12 +145,18 @@ class WorkerBase:
             job = get_job(session, job_id)
             return None if job is None else JobStatus(job.status)
 
-    def check_job_still_valid(self, job_id: str) -> bool:
+    def claim_job(self, job_id: str) -> bool:
+        """Claim the job's queued row for this process; false means another delivery owns it.
+
+        A job delivered twice, retried by the queue or already ended finds no queued row, and
+        its handler returns without running it.
+        """
         with self.get_db_factory()() as session:
-            job = get_job(session, job_id)
-            if not job or job.status in JOB_TERMINAL_STATUSES:
-                return False
-        return True
+            claimed = claim_queued_job(session, job_id, self.owner)
+            session.commit()
+        if not claimed:
+            log.info("Job %s is not queued; this delivery runs nothing", job_id)
+        return claimed
 
     async def on_startup(self, ctx) -> None:
         configure(self.service_name)
