@@ -93,8 +93,7 @@ def test_init_db_connects_as_a_role_with_a_kept_apart_password(empty_postgresql_
     try:
         upgrade_to_head(url)
         factory = init_db(url)
-        tables = inspect(factory.kw["bind"]).get_table_names(schema=name)
-        assert "albums" in tables
+        assert "albums" in inspect(factory.kw["bind"]).get_table_names(schema=name)
     finally:
         if factory is not None:
             factory.kw["bind"].dispose()
