@@ -17,12 +17,7 @@ from arq import func
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, SCORING_SERVICE_NAME
 from songmaker_cli.job_payloads import ScorePayload
-from songmaker_cli.job_queue import (
-    QUEUE_POLL_INTERVAL_SECONDS,
-    ClaimedJob,
-    JobQueue,
-    serve_queue,
-)
+from songmaker_cli.job_queue import ClaimedJob, JobQueue
 from songmaker_cli.job_types import JobFunction
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.redis_client import build_arq_redis_settings
@@ -34,7 +29,8 @@ log = logging.getLogger(__name__)
 
 class ScoringWorker(WorkerBase):
     service_name = SCORING_SERVICE_NAME
-    job_types = JobQueue.SCORE.job_types
+    queue = JobQueue.SCORE
+    job_types = queue.job_types
     queue_name = ARQ_SCORING_QUEUE_NAME
 
     def __init__(self, settings=None) -> None:
@@ -68,15 +64,6 @@ class ScoringWorker(WorkerBase):
             job_id, gen_id, scorers,
             db_factory=self.get_db_factory(), audio_dir=self.audio_dir(),
             owner=self.owner, device=self._settings.scoring_device,
-        )
-
-    async def serve_queued_jobs(self) -> None:
-        """Claim and run the queued score jobs until cancelled."""
-        await serve_queue(
-            self.wake_channel, JobQueue.SCORE,
-            claim=self.claim_next_job, run=self.run_claimed,
-            places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
-            drain_seconds=self._settings.arq_drain_timeout,
         )
 
     async def on_startup(self, ctx) -> None:

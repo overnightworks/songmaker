@@ -35,7 +35,13 @@ from songmaker_cli.db.queries.jobs import (
     get_job,
     update_job_status,
 )
-from songmaker_cli.job_queue import ClaimedJob, app_wake_channel
+from songmaker_cli.job_queue import (
+    QUEUE_POLL_INTERVAL_SECONDS,
+    ClaimedJob,
+    JobQueue,
+    app_wake_channel,
+    serve_queue,
+)
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
@@ -124,6 +130,7 @@ class WorkerBase:
     """
 
     service_name: ClassVar[str]
+    queue: ClassVar[JobQueue]
     job_types: ClassVar[tuple[JobType, ...]]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
@@ -140,6 +147,7 @@ class WorkerBase:
         self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
         self._queue_task: asyncio.Task[None] | None = None
+        self._places: asyncio.Semaphore
 
     def worker_name(self) -> str:
         """Return the stable, human-readable name derived from owned job types."""
@@ -197,6 +205,18 @@ class WorkerBase:
             claimed = None if job is None else ClaimedJob(job.id, JobType(job.type), job.payload)
             session.commit()
         return claimed
+
+    async def run_claimed(self, claimed: ClaimedJob) -> None:
+        raise NotImplementedError
+
+    async def serve_queued_jobs(self) -> None:
+        """Claim and run the jobs queued for this worker until cancelled."""
+        await serve_queue(
+            self.wake_channel, self.queue,
+            claim=self.claim_next_job, run=self.run_claimed,
+            places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
+            drain_seconds=self._settings.arq_drain_timeout,
+        )
 
     def start_serving(self, serving: Coroutine[None, None, None]) -> None:
         """Run the claiming loop beside arq's own work until a stop signal or ``stop_serving``."""

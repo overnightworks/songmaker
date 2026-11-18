@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -11,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from support.fake_oidc_issuer import a_fake_issuer
+from support.mcp_world import worker_ready
 from support.web_app import make_test_app, seed_user, web_client
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.middleware import IpRateLimitMiddleware
@@ -80,23 +80,6 @@ def _get_user_id(client: TestClient) -> str:
     return client.get("/api/auth/me").json()["id"]
 
 
-@contextmanager
-def _mock_arq():
-    with (
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
-        patch("songmaker_cli.generation_api.is_music_worker_healthy", AsyncMock(return_value=True)),
-        patch(
-            "songmaker_cli.generation_api.is_scoring_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api._has_online_acestep_worker",
-            AsyncMock(return_value=True),
-        ),
-    ):
-        yield
-
-
 # ── Generation rate limit ───────────────────────────────────────────
 
 
@@ -148,7 +131,7 @@ def test_score_rate_limit_for_user(client: TestClient, monkeypatch) -> None:
             session.add(Job(type="score", user_id=user_id, status="completed"))
         session.commit()
 
-    with _mock_arq():
+    with worker_ready():
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 429
@@ -205,7 +188,7 @@ def test_stale_own_job_does_not_block_generate_at_active_job_limit(
         session.commit()
         own_job_id, other_job_id = own_job.id, other_job.id
 
-    with _mock_arq():
+    with worker_ready():
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
@@ -226,7 +209,7 @@ def test_score_job_does_not_block_generate(client: TestClient) -> None:
         session.add(Job(type="score", user_id=user_id, status="running"))
         session.commit()
 
-    with _mock_arq():
+    with worker_ready():
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
@@ -241,7 +224,7 @@ def test_generate_job_does_not_block_score(client: TestClient) -> None:
         session.add(Job(type="generate", user_id=user_id, status="running"))
         session.commit()
 
-    with _mock_arq():
+    with worker_ready():
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 200
@@ -739,7 +722,7 @@ def test_generate_job_gets_user_id(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
-    with _mock_arq():
+    with worker_ready():
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
@@ -755,7 +738,7 @@ def test_score_job_gets_user_id(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
-    with _mock_arq():
+    with worker_ready():
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 200

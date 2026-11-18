@@ -1006,16 +1006,15 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
     assert not dataset_dir.exists()
 
 
-def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db_factory) -> None:
+@pytest.mark.parametrize("generation_status", [JobStatus.QUEUED, JobStatus.RUNNING])
+def test_a_generation_that_has_not_started_a_take_defers_lora_before_running(
+    seeded, db_factory, generation_status,
+) -> None:
     from songmaker_cli.job_types import JobFunction
 
     with db_factory() as session:
         session.add(
-            Job(
-                id="generation-waiting",
-                type=JobFunction.GENERATE,
-                status=JobStatus.QUEUED,
-            )
+            Job(id="generation-waiting", type=JobFunction.GENERATE, status=generation_status)
         )
         session.commit()
 
@@ -1042,33 +1041,6 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
         assert job.status == JobStatus.QUEUED
         assert job.queue_reason_message == message("jobWait.queuedGenerations")
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.QUEUED
-
-
-def test_a_claimed_generation_that_has_not_started_a_take_defers_lora_training(
-    seeded, db_factory,
-) -> None:
-    with db_factory() as session:
-        session.add(Job(id="generation-claimed", type=JobType.GENERATE, status=JobStatus.RUNNING))
-        session.commit()
-    materialize = MagicMock()
-    with (
-        patch(
-            "songmaker_cli.jobs.lora_training.pick_worker",
-            AsyncMock(return_value=_FakeWorker()),
-        ),
-        patch("songmaker_cli.jobs.lora_training._materialize_dataset", materialize),
-    ):
-        _run(
-            run_lora_training_job(
-                {}, "job-1", seeded["lora_id"], seeded["user_id"],
-                db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
-                owner=an_owner("o1"),
-            )
-        )
-
-    materialize.assert_not_called()
-    with db_factory() as session:
-        assert get_job(session, "job-1").status == JobStatus.QUEUED
 
 
 def test_lora_defer_passes_do_not_sleep_in_their_place(seeded, db_factory) -> None:

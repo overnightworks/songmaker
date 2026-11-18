@@ -973,7 +973,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
-| Worker | arq-based job queues (music + scoring), scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
+| Worker | Job queues in PostgreSQL rows (music + scoring), hosted by arq processes, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/acestep_worker/` (top-level package, separate from `songmaker_cli`) |
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
@@ -1951,7 +1951,7 @@ its current usage via heartbeat. The music-worker has no GPU access at all.
 |----------|--------|-----|
 | Single code path | CLI → API → DB | No duplication between CLI and web |
 | Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
-| Worker split | Separate arq queues per job type | Independent scaling, device config per worker |
+| Worker split | Separate job queues (music, scoring), one worker process each | Independent scaling, device config per worker |
 | Scoring subprocess | Long-lived child process, killed on timeout | Real cleanup via SIGKILL, GPU memory freed immediately |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Keycloak sign-in, then signed cookies + DB sessions | Revocable, HttpOnly; DB idle expiry and absolute age checked on every authenticated request; Keycloak is consulted at sign-in and sign-out only. See [Authentication](security.md#authentication) |

@@ -26,12 +26,7 @@ from songmaker_cli.job_payloads import (
     LoadModelPayload,
     LoraTrainingPayload,
 )
-from songmaker_cli.job_queue import (
-    QUEUE_POLL_INTERVAL_SECONDS,
-    ClaimedJob,
-    JobQueue,
-    serve_queue,
-)
+from songmaker_cli.job_queue import ClaimedJob, JobQueue
 from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
@@ -53,7 +48,8 @@ log = logging.getLogger(__name__)
 
 class MusicWorker(WorkerBase):
     service_name = "songmaker-music-worker"
-    job_types = JobQueue.MUSIC.job_types
+    queue = JobQueue.MUSIC
+    job_types = queue.job_types
     queue_name = ARQ_MUSIC_QUEUE_NAME
 
     def __init__(self, settings=None) -> None:
@@ -115,15 +111,6 @@ class MusicWorker(WorkerBase):
                 )
             case _:
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
-
-    async def serve_queued_jobs(self) -> None:
-        """Claim and run the queued music jobs until cancelled."""
-        await serve_queue(
-            self.wake_channel, JobQueue.MUSIC,
-            claim=self.claim_next_job, run=self.run_claimed,
-            places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
-            drain_seconds=self._settings.arq_drain_timeout,
-        )
 
     async def on_startup(self, ctx) -> None:
         await super().on_startup(ctx)
