@@ -1,0 +1,8 @@
+claim_id = "0cc2a59697a2417792c18fe478248a80"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "fb6e44199a97d399629f77c643c74ab22813e1f9"
+branch = "claude/issue-3294-the-scoring-worker-claims-its-jobs-from"
+scope = ["docs/architecture.md", "src/songmaker_cli", "tests"]
+opened_commit = "75c3723a9750cc54616c89421268c0f22a9648dd"
+whole_reason = "the claim, the worker loop, the wake and the enqueue sites change together across queries, worker and API modules"
