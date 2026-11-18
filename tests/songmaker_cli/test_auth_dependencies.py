@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from logline import REQUEST_EVENT, RequestLineMiddleware
+from logline.testing import configured
 from sqlalchemy.orm import Session
 from support.session_ids import a_session_id
 from support.web_app import (
@@ -25,7 +28,7 @@ from songmaker_cli.auth_dependencies import (
     get_current_user,
     require_admin,
 )
-from songmaker_cli.db.queries.auth import create_session
+from songmaker_cli.db.queries.auth import create_session, get_session_with_user
 
 _TEST_SECRET = b"a" * 64
 
@@ -145,6 +148,27 @@ def test_valid_session_returns_200(auth_app: TestClient, create_session_id) -> N
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
     assert resp.json()["username"].startswith("test_user")
+
+
+def test_an_authenticated_request_line_names_the_account(
+    auth_app: TestClient, create_session_id, capsys
+) -> None:
+    sid = create_session_id()
+    auth_app.app.add_middleware(RequestLineMiddleware)
+    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
+    session_factory = auth_app.app.state.ctx.db
+
+    with configured("songmaker-test"):
+        auth_app.get("/protected")
+        auth_app.get("/public")
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    request_lines = {
+        line["route"]: line["sub"] for line in lines if line["event"] == REQUEST_EVENT
+    }
+    with session_factory() as db:
+        account_id = get_session_with_user(db, sid).user_id
+    assert request_lines == {"/protected": account_id, "/public": None}
 
 
 def test_sliding_window_renewal(auth_app: TestClient, create_session_id) -> None:

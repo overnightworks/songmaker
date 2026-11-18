@@ -1052,15 +1052,6 @@ async def run_lora_training_job(
     Registered under :class:`JobFunction.LORA_TRAINING` in the music
     worker's settings.
     """
-    import structlog
-
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        job_id=job_id,
-        job_type=JobType.LORA_TRAINING,
-        lora_id=lora_id,
-    )
-
     try:
         await _run_lora_training(
             audio_dir=audio_dir,

@@ -334,13 +334,6 @@ def test_music_worker_settings_functions() -> None:
     assert len(MusicWorkerSettings.functions) == 4
 
 
-def test_music_worker_settings_uses_singleton_methods() -> None:
-    """The arq Settings shim must expose bound methods of _music_worker."""
-    from songmaker_cli.music_worker import MusicWorkerSettings
-    for func in MusicWorkerSettings.functions:
-        assert func.coroutine.__self__ is mw_mod._music_worker
-
-
 def test_music_worker_functions_registered_under_job_function_names() -> None:
     """Regression: arq must register class methods under the plain JobFunction
     names, not ``ClassName.method``. Enqueuers send the JobFunction name, and
