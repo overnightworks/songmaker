@@ -38,7 +38,7 @@ port — see `ACESTEP_INNER_PORT` below).
 
 ```
 music worker (songmaker_cli.music_worker.MusicWorkerSettings)
-  → on generate job: scheduler dispatches the admitted worker
+  → on a claimed generate job: scheduler dispatches the admitted worker
     → POST /load_model on worker (if needed)
     → POST /generate on worker → task_id
     → consume SSE /tasks/{id}/stream until done
@@ -123,7 +123,7 @@ LM models (text planner):
 
 ### Downloading models
 
-The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it enqueues a `download_model_on_worker` arq job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds. With no worker online, a row's download state is `unknown_no_worker`, not `not_downloaded` — nobody is available to answer the question, so there is no Download button either.
+The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it queues a `download_model_on_worker` job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds. With no worker online, a row's download state is `unknown_no_worker`, not `not_downloaded` — nobody is available to answer the question, so there is no Download button either.
 
 Concurrency guard: the mode's download lock (family `download`, see [Locks in Redis](#locks-in-redis)) prevents two concurrent download jobs of the same mode. The job takes it before it calls the worker and releases it when it ends, with its label `songmaker:acestep:download:{mode}`; both run out 15 seconds after a crashed job. The ACE-Step worker also runs one transfer per mode: a request for a mode already downloading returns the running task.
 
@@ -201,7 +201,7 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 | `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
 | `songmaker:acestep:hold:{worker_id}` | Worker `/gpu_hold/*` endpoints, beside the GPU lock | Scheduler admission, `pick_worker` and worker `/generate` | 15 s, renewed with the lock | The previous release's GPU hold, kept for one release: its value is the lock's generation, and a live key counts as a hold |
 | `songmaker:acestep:lm-failure:{worker_id}` | `acestep-worker` when a load comes up without its LM | `acestep-worker` at start, the health routes (existence only) | none | The mode whose LM failed to initialise; the restarted worker loads it before registering, then clears the key |
-| `songmaker:acestep:download:{mode}` | `download_model_on_worker` arq job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | 15 s, renewed every 5 s | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does |
+| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | 15 s, renewed every 5 s | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does |
 
 The Worker Pool panel mirrors a live hold as Training with the remaining hold lease; this projection never owns, renews, or releases the hold.
 
@@ -342,7 +342,7 @@ On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.rese
 
 **"Load fails with CapacityError"** — two distinct messages, both actionable. If the worker has models loaded, the message names the loaded/pinned/in-use sets and how much VRAM is already in use (measured or, without a reader, estimated from declared sizes); if the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. If the worker has **nothing** loaded and still can't fit the request, the message says so explicitly — VRAM outside this cache's tracking (a stray process, an unreleased subprocess) is holding the GPU; check `nvidia-smi` on the worker host before retrying. The Worker Pool card's per-mode buttons make the first case directly actionable; the second needs a host-level check.
 
-**"Stale-job reaper killed my long generation"** — the reaper looks at `Job.heartbeat_at`. The arq job calls `_touch_heartbeat` on every SSE progress event from the worker (which fires every ~2 s for downloads and on every 3-second ACE-Step poll tick for a generation). If a long task is being killed unexpectedly, check whether the on_progress callback is wired into the SSE consumer — the contract is that *every* yielded event refreshes the heartbeat, not just the milestone events.
+**"Stale-job reaper killed my long generation"** — the reaper looks at `Job.heartbeat_at`. The running job calls `_touch_heartbeat` on every SSE progress event from the worker (which fires every ~2 s for downloads and on every 3-second ACE-Step poll tick for a generation). If a long task is being killed unexpectedly, check whether the on_progress callback is wired into the SSE consumer — the contract is that *every* yielded event refreshes the heartbeat, not just the milestone events.
 
 For the cross-cutting flow (web → music-worker → acestep-worker), see [architecture.md](architecture.md). For the trust boundaries and the internal token, see [security.md](security.md).
 

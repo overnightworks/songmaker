@@ -38,14 +38,14 @@ The platform runs these services; the test stack (`docker/docker-compose.test.ym
 │  │  + control plane  │   │             │   │  worker state (TTL) │    │
 │  └────────┬─────────┘   └────────────┘   └──────────┬──────────┘    │
 │           │                                          │               │
-│           │  enqueue jobs to named Redis queues       │               │
+│           │  commit job rows; a wake says look now   │               │
 │           ▼                                          ▼               │
 │  ┌────────────────────┐            ┌──────────────────────────────┐  │
 │  │  music-worker       │            │  scoring-worker              │  │
 │  │  no GPU             │            │  CPU (or GPU)                │  │
 │  │  scheduler dispatch │            │  Whisper + AudioBox          │  │
-│  │  queue: music       │            │  queue: scoring              │  │
-│  │  max_jobs: 2        │            │  max_jobs: 1                 │  │
+│  │  queue: music       │            │  queue: score                │  │
+│  │  places: 2          │            │  places: 1                   │  │
 │  └──────────┬──────────┘            └──────────────────────────────┘  │
 │             │ HTTP /load_model, /generate, SSE                       │
 │             ▼                                                        │
@@ -65,7 +65,7 @@ container with its own GPU; the live shape is the platform Deployment `acestep-w
 (`apps/songmaker/acestep-worker.yaml` in the platform repository). Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
 Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
-arq `generate` job calls the scheduler (`scheduler.py`), which picks an
+claimed `generate` job calls the scheduler (`scheduler.py`), which picks an
 online worker, INCRs queue depth atomically, dispatches via HTTP, and
 consumes the worker's task SSE stream until `done`. A stream that stays silent
 for 630 seconds retains `Worker stream went silent` as its logged diagnosis; transport
@@ -95,8 +95,8 @@ User clicks "Generate"                    User clicks "Score"
         ├── create Job record                     ├── create Job record
         │                                         │
         ▼                                         ▼
-  arq:queue:music                          jobs row + wake `queue/score`
-  (Redis sorted set)                       (PostgreSQL; the wake is a hint)
+  jobs row + wake `queue/music`            jobs row + wake `queue/score`
+  (PostgreSQL; the wake is a hint)         (PostgreSQL; the wake is a hint)
         │                                         │
         ▼                                         ▼
   Music Worker (orchestrator)              Scoring Worker
@@ -1477,11 +1477,12 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → rate limit check (per-user, advisory lock)
   → ownership check
   → model validation (if specified — reject 409 if active model doesn't match)
-  → create Job record (with its payload) + audit log entry
-  → enqueue to arq (Redis-backed, music queue)
-  → music worker: claim the Job's queued row (queued → running, else return), then run_generation_job()
+  → create Job record (with its payload) + audit log entry (a generation nothing can run
+    commits already failed and answers 503)
+  → commit, then publish a wake on `queue/music`
+  → music worker: claim the next due queued row (queued → running), then run_generation_job()
     → pick then atomically Lua-admit one online acestep-worker for the full take series
-      → LoRA hold: put the Job back in the queue (`run_after` one poll ahead) and defer a fresh ARQ envelope
+      → LoRA hold: put the Job back in the queue (`run_after` one poll ahead); the next claim after that time runs it
     → build config (model defaults + admin defaults + preset + song params)
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
@@ -1564,7 +1565,7 @@ SIGKILLed and even the values the run did produce would be lost.
 ## Worker Architecture
 
 ```
-                         ┌─ arq:queue:music ──→ Music Worker(s)
+                         ┌─ jobs rows (generate, lora_training, model jobs) + wake queue/music → Music Worker(s)
   API ─→ route by type ──┤
                          └─ jobs rows (type score) + wake queue/score → Scoring Worker(s)
 
@@ -1576,14 +1577,15 @@ SIGKILLed and even the values the run did produce would be lost.
 - Thin orchestrator — no GPU, no ACE-Step process. Dispatches generation jobs
   to acestep-worker peer containers via the scheduler (`scheduler.py`).
 - Handles `generate`, `load_model_on_worker`, `download_model_on_worker`, and
-  `train_lora` tasks
-- `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
-  acestep-worker)
+  `lora_training` jobs, claimed from their rows ("Queued job lifecycle" below)
+- `MUSIC_MAX_JOBS` places, 2 by default (concurrent SSE consumers; the actual generation runs on the
+  acestep-worker); each job runs within `ARQ_JOB_TIMEOUT`, a LoRA training within
+  `LORA_TRAINING_JOB_TIMEOUT`
 - Cron: audits orphaned audio files and applies file-expiry cleanup; once a day
   (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed. A web process fails a stopped worker's running jobs through the
+  has passed (arq hosts these crons and the process's health key). A web process fails a stopped worker's running jobs through the
   owner lease; see "Owner liveness".
 - Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
 
@@ -1597,7 +1599,7 @@ SIGKILLed and even the values the run did produce would be lost.
   Hugging Face Hub ([security](security.md))
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
-- Takes its jobs from PostgreSQL, not from arq ("Score job lifecycle" below); arq still
+- Takes its jobs from PostgreSQL, not from arq ("Queued job lifecycle" below); arq still
   hosts the process, writes its health key and carries the `score` function
 
 **Shared infrastructure** (`worker_base.py`):
@@ -1614,31 +1616,36 @@ SIGKILLed and even the values the run did produce would be lost.
   every `OWNER_LEASE_REFRESH_SECONDS`, ended at shutdown before the DB pool is
   disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
-  recovery below). Queued work remains for a replacement worker to claim after a
-  deploy: in arq for the music worker, in its rows for the scoring worker. A worker's arq connection retries a refused or lost connection for
+  recovery below). Queued work remains in its rows for a replacement worker to claim after a
+  deploy. A worker's arq connection retries a refused or lost connection for
   `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
   process's arq pool fails fast. A stop signal ends that retry, so a worker
   stops within seconds during the outage.
 - A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
   type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
-  the transaction that creates the row, before the arq enqueue, and `jobs.run_after` holds the time a
+  the transaction that creates the row, and `jobs.run_after` holds the time a
   queued job waits until: now for a new job, one poll ahead for a put-back job; a claim clears it.
-  The score claim reads it (`claim_next_queued_job`); for the music worker's types the arq
-  deferral still enforces the wait. A requeue that sends fewer arguments (the takes a generate job has left) stores
-  them on the row in the same write. arq still carries the arguments a music-worker handler runs with; the
-  row's payload is the copy a claim from PostgreSQL reads, and the only copy a score job has. Cover and chat jobs run from their
-  own row and have no payload. Every arq handler (`WorkerBase.claim_job`) first moves its row from
+  `claim_next_queued_job` reads both, so the row is the only copy of a music or score job's
+  arguments. A requeue that sends fewer arguments (the takes a generate job has left) stores
+  them on the row in the same write. Cover and chat jobs run from their
+  own row and have no payload. A claim moves the row from
   queued to running by one conditional UPDATE that names the worker as owner
-  (`claim_queued_job`, the statement `claim_next_cover_job` shares), and returns without running
-  when the row is not queued: a message delivered twice, retried by arq or for a job that ended
-  or was cancelled runs the work once. A GPU-hold requeue writes the row back to queued, without
-  an owner and with `run_after`, before it enqueues the deferred message, whose handler claims the
-  row again.
+  (`claim_next_queued_job`, the statement `claim_next_cover_job` shares), so a job reaches one
+  worker. The arq `score` handler of the previous release (`WorkerBase.claim_job`) claims the same
+  way. A GPU-hold requeue writes the row back to queued, without an owner and with `run_after`;
+  no message is sent, and the next claim after that time runs it.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
-**Score job lifecycle** (`job_queue.py`, `scoring_worker.py`). The row is the queue entry; no
-Redis key holds a score job, so a flush of Redis or a web process that dies after its commit
-loses none.
+**Queued job lifecycle** (`job_queue.py`, `scoring_worker.py`, `music_worker.py`). The row is the queue entry; no
+Redis key holds a score or music job, so a flush of Redis or a web process that dies after its commit
+loses none. The music queue (`queue/music`: `generate`, `lora_training`, `load_model_on_worker`,
+`download_model_on_worker`) follows the same steps as the score queue below; it differs in four things:
+the web process reads the capacity a generation needs (music worker alive, an online ACE-Step
+worker) before it creates the row, and a generation nothing can run commits already failed, so no
+worker claims it before the refusal; one loop claims the four types, oldest `run_after` first; each job runs within
+`ARQ_JOB_TIMEOUT`, a LoRA training within `LORA_TRAINING_JOB_TIMEOUT`; and LoRA training yields to a
+generation that is queued or claimed and has not started a take, so a generation claimed but not yet
+admitted never waits behind a whole training run.
 
 1. The web process (or the music worker, for an auto-score) first checks that the scoring worker
    lives (a committed row is claimable at once, so a refusal never follows it), then commits the
@@ -1671,7 +1678,7 @@ Recovery judges a score row by its owner stamp like every other row: a `running`
 owner lease is gone fails with the restart verdict. A `running` score row with no owner id (a
 worker that did not stamp owners) has no owner verdict and is never claimed again; only its
 heartbeat bound (`SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS`) fails it. The queue depth in
-`/health/details` and `/metrics` counts the queued score rows.
+`/health/details` and `/metrics` counts the queued rows of each queue.
 
 **Stale-job recovery** (web process — #446, #456): The lifecycle loop is the
 one periodic owner for every job type: `chat`, `generate`, `score`,
@@ -1719,10 +1726,7 @@ process reads leases, so a worker's jobs end while a web process runs. A start o
 either kind leaves a live sibling's jobs alone; a clean stop ends the stopped
 process's jobs within one tick after its lifespan or its worker shutdown ends, a
 crash within the lease span plus a tick. A worker that is cancelled at its shutdown
-ends its running generation and LoRA jobs itself, and arq queues the cancelled task
-again; the new run finds the job terminal and returns. A killed worker's job stays in
-the arq queue until its in-progress key expires, then another run does the same. A
-killed generation never decrements the admitted ACE-Step worker's queue depth, which
+ends its running generation and LoRA jobs itself. A killed generation never decrements the admitted ACE-Step worker's queue depth, which
 the scheduler reads, and it stays raised until that worker restarts. After a clean restart the
 panel shows "Try again" at once; after a crash within 20 s.
 
@@ -1799,7 +1803,7 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
 
   Generation uses three ordered clocks: ACE-Step's 600-second poll window,
   the scheduler's 630-second SSE read timeout (poll window plus 30-second
-  margin), and arq's 1000-second job timeout as the final safeguard. Before
+  margin), and the worker's 1000-second `ARQ_JOB_TIMEOUT` per job as the final safeguard. Before
   the first SSE event, a cold worker can spend 600 seconds loading a model,
   30 seconds accepting generation, and 10 seconds connecting the stream. The
   760-second generate reaper threshold is therefore the longer of that
@@ -1812,7 +1816,7 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   LoRA training uses its own `LORA_TRAINING_JOB_TIMEOUT` (3600 seconds by
   default), while the MusicWorker's global `ARQ_JOB_TIMEOUT` remains the
   generation limit. Its five-second worker progress poll is ordered below the
-  300-second LoRA reaper threshold, which is ordered below the LoRA arq timeout.
+  300-second LoRA reaper threshold, which is ordered below the LoRA job timeout.
   Every TaskStore progress event follows the shared SSE path and refreshes the
   job heartbeat; the reaper therefore only terminalizes a training job after
   progress has stopped for its threshold, not because its total age exceeds a
@@ -1821,8 +1825,8 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   The 630-second scheduler SSE read timeout applies to generation, download,
   and LoRA task streams through their shared `DispatchOptions()`. On a cold
   generate path, the 640-second window before the initial event plus a later
-  630-second silent-read window exceeds arq's 1000-second timeout, so arq
-  remains the final mechanism: it cancels or fails the local Music-Worker job
+  630-second silent-read window exceeds the 1000-second job timeout, so the timeout
+  remains the final mechanism: the worker cancels the local Music-Worker job
   and closes its subscription. It does not remotely cancel the ACE-Step task,
   which can continue running after that local job ends.
 
