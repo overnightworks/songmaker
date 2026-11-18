@@ -199,7 +199,7 @@ generate_kind() { # generate_kind LABEL PATH JSON SONG_ID
     prove_take "$label" "$(newest_take "$song")"
 }
 
-# Every process migrates itself in init_db, as in e2e.yml: the stores first, then the apps.
+# The migrate service runs before the apps, as in e2e.yml: the stores first, then the apps.
 compose --profile gpu up -d --wait postgres redis
 compose --profile gpu up -d --build --wait \
     songmaker-web songmaker-music-worker "$WORKER_SERVICE"
