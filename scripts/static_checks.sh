@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run songmaker's static CI gates locally, cheapest first, stopping at the first red one.
 # Usage: bash scripts/static_checks.sh   (from anywhere; runs at the repository root)
-# Needs .venv (uv sync --frozen --extra server --extra dev --extra agent --extra image)
+# Needs .venv (uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal)
 # and frontend/node_modules (pnpm install --frozen-lockfile in frontend/), as CI does.
 # Sonar and tests are not run here: Sonar needs CI, tests stay targeted.
 # Each command and flag is copied from .github/workflows/ci.yml; keep them in step.
@@ -9,7 +9,7 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
-[[ -x .venv/bin/ruff ]] || { echo "static_checks: .venv is missing or incomplete; run: uv sync --frozen --extra server --extra dev --extra agent --extra image" >&2; exit 2; }
+[[ -x .venv/bin/ruff ]] || { echo "static_checks: .venv is missing or incomplete; run: uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal" >&2; exit 2; }
 [[ -d frontend/node_modules ]] || { echo "static_checks: frontend/node_modules is missing; run: pnpm install --frozen-lockfile (in frontend/)" >&2; exit 2; }
 
 export PATH="$PWD/.venv/bin:$PATH"
@@ -39,6 +39,7 @@ quality() {
 gate "CI and compose pin the same Postgres and Redis images" python scripts/check_pinned_images_match.py
 gate "Every requirement is cited by a test" python scripts/check_requirement_citations.py
 gate "Ruff lint" ruff check src/ tests/
+gate "Type check and ANN401 ratchet (mypy, baseline only shrinks)" python scripts/check_type_findings.py
 gate "Test helper duplication ratchet" scripts/test_helper_ratchet.sh
 gate "No silent-fallback smell check" python scripts/check_no_silent_fallbacks.py src/
 gate "No unreferenced backend symbols" python scripts/check_dead_symbols.py

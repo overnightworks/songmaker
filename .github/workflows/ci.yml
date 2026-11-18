@@ -53,6 +53,9 @@ jobs:
       - name: Ruff lint
         run: uv run --no-sync --frozen --no-build ruff check src/ tests/
 
+      - name: Type check and ANN401 ratchet
+        run: uv run --no-sync --frozen --no-build python scripts/check_type_findings.py
+
       - name: Test helper duplication ratchet
         run: uv run --no-sync --frozen --no-build scripts/test_helper_ratchet.sh
 
