@@ -14,6 +14,7 @@ import logging
 from datetime import UTC
 
 from arq import cron
+from arq.worker import Function
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
@@ -181,7 +182,7 @@ _music_worker = MusicWorker(_settings)
 
 
 class MusicWorkerSettings:
-    functions = []
+    functions: list[Function] = []
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)

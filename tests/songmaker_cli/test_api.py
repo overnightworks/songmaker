@@ -12,7 +12,7 @@ import pytest
 from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.job_owner import an_owner
+from support.job_owner import an_owner, stored_payload
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -1243,12 +1243,8 @@ def _register_worker_with_gpu_health(
     mock_pool.get = AsyncMock(return_value=json.dumps(heartbeat).encode())
 
 
-def _stored_payload(client: TestClient, response):
-    """The arguments the answered job's row holds: what a worker runs the job with."""
-    from songmaker_cli.db.queries.jobs import get_job
-
-    with client.app.state.ctx.db() as session:
-        return get_job(session, response.json()["id"]).payload
+def _payload_of(client: TestClient, response):
+    return stored_payload(client.app.state.ctx.db, response.json()["id"])
 
 
 def test_generate_song_submits_job(client: TestClient) -> None:
@@ -1266,7 +1262,7 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    assert (_stored_payload(client, resp).song_id, _stored_payload(client, resp).count) == ("s1", 2)
+    assert (_payload_of(client, resp).song_id, _payload_of(client, resp).count) == ("s1", 2)
     publish.assert_awaited_once_with(JobQueue.MUSIC)
 
 
@@ -1292,7 +1288,7 @@ def test_generate_song_stores_the_model_for_the_worker(client: TestClient, model
         )
 
     assert resp.status_code == 200
-    assert _stored_payload(client, resp).target_model == model
+    assert _payload_of(client, resp).target_model == model
 
 
 def test_generate_song_missing_model_rejected(client: TestClient) -> None:
@@ -1330,7 +1326,7 @@ def test_generate_song_seed_accepted(client: TestClient) -> None:
             json={"count": 1, "seed": 42, "model": "turbo"},
         )
     assert resp.status_code == 200
-    payload = _stored_payload(client, resp)
+    payload = _payload_of(client, resp)
     assert (payload.seed, payload.target_model) == (42, "turbo")
 
 
@@ -1691,7 +1687,7 @@ def test_repaint_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    repaint = _stored_payload(client, resp).task_params
+    repaint = _payload_of(client, resp).task_params
     assert repaint.repainting_start == 0.2
     assert repaint.repainting_end == 0.8
     publish.assert_awaited_once_with(JobQueue.MUSIC)
@@ -1745,7 +1741,7 @@ def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
         })
 
     assert resp.status_code == 200
-    assert _stored_payload(client, resp).task_params.src_wav_path.endswith(".wav")
+    assert _payload_of(client, resp).task_params.src_wav_path.endswith(".wav")
 
 
 def test_repaint_without_ffmpeg_is_unavailable(client: TestClient) -> None:
@@ -1840,7 +1836,7 @@ def test_repaint_with_lyrics_override(client: TestClient) -> None:
         })
 
     assert resp.status_code == 200
-    repaint = _stored_payload(client, resp).task_params
+    repaint = _payload_of(client, resp).task_params
     assert repaint.lyrics == "new lyrics here"
     assert repaint.prompt == "jazz ballad"
 
@@ -1864,7 +1860,7 @@ def test_cover_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    cover = _stored_payload(client, resp).task_params
+    cover = _payload_of(client, resp).task_params
     assert cover.audio_cover_strength == 0.7
     assert cover.prompt == "jazz version"
     publish.assert_awaited_once_with(JobQueue.MUSIC)
@@ -1897,7 +1893,7 @@ def test_cover_default_strength(client: TestClient) -> None:
         })
 
     assert resp.status_code == 200
-    assert _stored_payload(client, resp).task_params.audio_cover_strength == 0.8
+    assert _payload_of(client, resp).task_params.audio_cover_strength == 0.8
 
 
 # ── No silent fallbacks: model required across all three endpoints ──

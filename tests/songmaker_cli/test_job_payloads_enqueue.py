@@ -9,6 +9,7 @@ import fakeredis
 import pytest
 from fastapi.testclient import TestClient
 from support.generation_job_world import worker_up
+from support.job_owner import stored_payload
 from support.lora_api_world import USER_A
 from support.web_app import (
     arrange_fake_async_redis,
@@ -22,14 +23,13 @@ from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
-from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, User, Version
+from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, User, Version
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
     GeneratePayload,
-    JobPayload,
     LoadModelPayload,
     LoraTrainingPayload,
     ScorePayload,
@@ -64,11 +64,6 @@ def client(tmp_path: Path, pg_factory) -> TestClient:
     return web_client(make_router_app(ctx, user=make_authenticated_user(OWNER_ID)))
 
 
-def _stored_payload(ctx: AppContext, job_id: str) -> JobPayload:
-    with ctx.db() as session:
-        return session.get(Job, job_id).payload
-
-
 def _queue_via(client: TestClient, path: str, body: dict):
     with worker_up():
         return client.post(f"/api/{path}", json=body)
@@ -77,7 +72,7 @@ def _queue_via(client: TestClient, path: str, body: dict):
 def test_generate_stores_its_arguments(client: TestClient) -> None:
     response = _queue_via(client, "songs/song/generate", {"count": 2, "seed": 7, "model": MODE})
 
-    assert _stored_payload(client.app.state.ctx, response.json()["id"]) == GeneratePayload(
+    assert stored_payload(client.app.state.ctx.db, response.json()["id"]) == GeneratePayload(
         song_id="song", version_id="version", count=2, user_id=OWNER_ID, seed=7,
         target_model=MODE, task_params=None,
     )
@@ -89,7 +84,7 @@ def test_repaint_stores_its_arguments_and_its_task(client: TestClient) -> None:
         "count": 3, "model": MODE,
     })
 
-    payload = _stored_payload(client.app.state.ctx, response.json()["id"])
+    payload = stored_payload(client.app.state.ctx.db, response.json()["id"])
     assert (payload.count, payload.target_model, type(payload.task_params)) == (
         3, MODE, RepaintTaskParams,
     )
@@ -101,7 +96,7 @@ def test_cover_stores_its_arguments_and_its_task(client: TestClient) -> None:
         "src_generation_id": "take", "audio_cover_strength": 0.7, "model": MODE,
     })
 
-    payload = _stored_payload(client.app.state.ctx, response.json()["id"])
+    payload = stored_payload(client.app.state.ctx.db, response.json()["id"])
     assert (payload.song_id, payload.version_id, type(payload.task_params)) == (
         "song", "version", CoverTaskParams,
     )
@@ -112,7 +107,7 @@ def test_cover_stores_its_arguments_and_its_task(client: TestClient) -> None:
 def test_score_stores_its_arguments(client: TestClient, scorers) -> None:
     response = _queue_via(client, "generations/take/score", {"scorers": scorers})
 
-    assert _stored_payload(client.app.state.ctx, response.json()["id"]) == ScorePayload(
+    assert stored_payload(client.app.state.ctx.db, response.json()["id"]) == ScorePayload(
         gen_id="take", scorers=scorers,
     )
 
@@ -122,7 +117,7 @@ def test_the_automatic_score_of_a_new_take_stores_its_arguments(client: TestClie
 
     job_id = _create_auto_score_job(ctx.db, "take", "song")
 
-    assert _stored_payload(ctx, job_id) == ScorePayload(gen_id="take", scorers=None)
+    assert stored_payload(ctx.db, job_id) == ScorePayload(gen_id="take", scorers=None)
 
 
 def test_training_a_voice_stores_its_arguments(client_and_ctx) -> None:
@@ -138,7 +133,7 @@ def test_training_a_voice_stores_its_arguments(client_and_ctx) -> None:
 
     response = client.post(f"/api/loras/{lora_id}/train")
 
-    assert _stored_payload(ctx, response.json()["training_job_id"]) == LoraTrainingPayload(
+    assert stored_payload(ctx.db, response.json()["training_job_id"]) == LoraTrainingPayload(
         lora_id=lora_id, user_id=USER_A, target_mode=MODEL_DEFAULT_MODE,
     )
 
@@ -159,7 +154,7 @@ def test_loading_a_model_on_a_worker_stores_its_arguments(admin_client: TestClie
         f"/api/admin/workers/{WORKER_ID}/load_model", json={"mode": MODE},
     )
 
-    assert _stored_payload(ctx, response.json()["id"]) == LoadModelPayload(
+    assert stored_payload(ctx.db, response.json()["id"]) == LoadModelPayload(
         worker_id=WORKER_ID, mode=MODE,
     )
 
@@ -174,4 +169,4 @@ def test_downloading_a_model_stores_its_arguments(admin_client: TestClient) -> N
 
     response = admin_client.post(f"/api/admin/registry/{MODE}/download")
 
-    assert _stored_payload(ctx, response.json()["id"]) == DownloadModelPayload(mode=MODE)
+    assert stored_payload(ctx.db, response.json()["id"]) == DownloadModelPayload(mode=MODE)

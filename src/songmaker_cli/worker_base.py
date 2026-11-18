@@ -124,7 +124,7 @@ class WorkerBase:
     """
 
     service_name: ClassVar[str]
-    job_types: ClassVar[tuple[str, ...]]
+    job_types: ClassVar[tuple[JobType, ...]]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
     health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS

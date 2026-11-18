@@ -153,7 +153,6 @@ src/songmaker_cli/jobs/generation.py :: ANN401 :: Dynamically typed expressions 
 src/songmaker_cli/jobs/generation.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `**overrides`
 src/songmaker_cli/jobs/generation.py :: arg-type :: Argument "base_params" to "GenerationContext" has incompatible type "BaseGenerationParams"; expected "dict[Any, Any]"
 src/songmaker_cli/jobs/lora_training.py :: arg-type :: Argument 1 to "_iterate_task_events" has incompatible type "_WorkerHandle"; expected "_PickedWorker"
-src/songmaker_cli/jobs/lora_training.py :: attr-defined :: "Redis" has no attribute "enqueue_job"
 src/songmaker_cli/jobs_api.py :: arg-type :: Argument 2 to "can_access_album" has incompatible type "AuthenticatedUser"; expected "Actor"
 src/songmaker_cli/jobs_api.py :: assignment :: Incompatible types in assignment (expression has type "Job | None", variable has type "Job")
 src/songmaker_cli/jobs_api.py :: pydantic-orm :: "JobResponse" does not have from_attributes=True
@@ -215,10 +214,6 @@ src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incomp
 src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
 src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
 src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "func" has incompatible type "Callable[..., Awaitable[Any]]"; expected "str | Function | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "func" has incompatible type "Callable[..., Awaitable[None]]"; expected "str | Function | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "func" has incompatible type "Callable[..., Awaitable[None]]"; expected "str | Function | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "func" has incompatible type "Callable[..., Awaitable[None]]"; expected "str | Function | WorkerCoroutine"
 src/songmaker_cli/playlist_api.py :: arg-type :: Argument 2 to "can_access_album" has incompatible type "AuthenticatedUser"; expected "Actor"
 src/songmaker_cli/playlist_api.py :: arg-type :: Argument 2 to "public_share_url" has incompatible type "str | None"; expected "str"
 src/songmaker_cli/playlist_api.py :: pydantic-orm :: "PlaylistDetailResponse" does not have from_attributes=True
