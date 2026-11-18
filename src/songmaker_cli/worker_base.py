@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 
 JOB_ENDED_EVENT = "arq_job.ended"
 JOB_FAILED_REASON = "job_failed"
+JOB_STATUS_UNREADABLE_REASON = "status_unreadable"
 
 
 def logged_job[Result](
@@ -52,7 +53,9 @@ def logged_job[Result](
     argument; a cron job has none): ids only, never the job's content. A job records its result
     in its row and returns normally, so ``status_of`` names how that row reads once the job
     returned: ``failed`` ends the line as failed (reason ``job_failed``) and ``cancelled`` as
-    cancelled; any other status, or none, leaves it ``ok``.
+    cancelled; any other status, or none, leaves it ``ok``. A status that cannot be read never
+    fails the job, which finished: the line ends as failed, reason ``status_unreadable``, as a
+    warning, and a warning names the read's exception class.
     """
 
     @functools.wraps(job)
@@ -64,7 +67,7 @@ def logged_job[Result](
             async with StepTimer(JOB_ENDED_EVENT, log, **fields) as timer:
                 result = await job(ctx, *args, **kwargs)
                 if status_of is not None and args:
-                    status = await asyncio.to_thread(status_of, args[0])
+                    status = await _read_status(status_of, args[0], timer)
                     if status is JobStatus.FAILED:
                         timer.fail(JOB_FAILED_REASON)
                     elif status is JobStatus.CANCELLED:
@@ -72,6 +75,21 @@ def logged_job[Result](
                 return result
 
     return run
+
+
+async def _read_status(
+    status_of: Callable[[str], JobStatus | None], job_id: str, timer: StepTimer
+) -> JobStatus | None:
+    try:
+        return await asyncio.to_thread(status_of, job_id)
+    except Exception as error:
+        timer.handled()
+        timer.fail(JOB_STATUS_UNREADABLE_REASON)
+        log.warning(
+            "arq_job.status_unreadable",
+            extra={"job_id": job_id, "error_type": type(error).__name__},
+        )
+        return None
 
 
 class WorkerBase:
