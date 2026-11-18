@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parents[2] / "scripts/type_check/check.py"
+SCRIPT = Path(__file__).parents[2] / "scripts/check_type_findings.py"
 KNOWN = "src/a.py :: return :: Missing return"
 
 

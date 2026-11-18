@@ -17,18 +17,18 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-BASELINE = Path(__file__).with_name("baseline.txt")
-REGENERATE = "python scripts/type_check/check.py --regenerate"
+ROOT = Path(__file__).resolve().parents[1]
+BASELINE = Path(__file__).with_suffix(".txt")
+REGENERATE = "python scripts/check_type_findings.py --regenerate"
 SEPARATOR = " :: "
-MYPY_LINE = re.compile(r"^(?P<path>[^:]+):\d+: error: (?P<message>.*)  \[(?P<code>[\w-]+)\]$")
+MYPY_LINE = re.compile(r"^(?P<path>[^:]+):\d+: error: (?P<message>.*) {2}\[(?P<code>[\w-]+)\]$")
 LINE_REFERENCE = re.compile(r"\bline \d+")
 
 type ToolRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
 
 
 def run_tool(command: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+    return subprocess.run(command, cwd=cwd, capture_output=True, text=True)  # noqa: S603 - the commands are built here from sys.executable and constants
 
 
 def mypy_findings(root: Path, run: ToolRunner) -> list[str]:
