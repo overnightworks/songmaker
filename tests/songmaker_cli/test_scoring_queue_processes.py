@@ -9,7 +9,6 @@ from redis import Redis
 from support.app_processes import WorkerProcess, poll_until
 from support.score_jobs import queued_score_job
 
-from songmaker_cli.constants import REDIS_SOCKET_TIMEOUT_SECONDS
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus
@@ -20,7 +19,7 @@ START_MARGIN_SECONDS = 20.0
 RUN_MARGIN_SECONDS = 2.0
 MISSING_GENERATION_KEY = "jobFailure.scoringGenerationMissing"
 SUBSCRIPTION_CONFIRMED_EVENT = "wake_subscription.confirmed"
-QUIET_INTERVALS = 3
+IDLE_OBSERVATION_SECONDS = 30.0
 
 
 @pytest.fixture
@@ -107,12 +106,12 @@ def test_an_idle_scoring_worker_follows_the_wake_channel_without_subscribing_aga
         lambda: _subscriptions_confirmed(worker) == 1, deadline_seconds=START_MARGIN_SECONDS,
     ), worker.log_tail()
 
-    resubscribed = poll_until(
-        lambda: _subscriptions_confirmed(worker) > 1,
-        deadline_seconds=REDIS_SOCKET_TIMEOUT_SECONDS * QUIET_INTERVALS,
+    confirmation_count_changed = poll_until(
+        lambda: _subscriptions_confirmed(worker) != 1,
+        deadline_seconds=IDLE_OBSERVATION_SECONDS,
     )
 
-    assert not resubscribed, worker.log_tail()
+    assert not confirmation_count_changed, worker.log_tail()
 
 
 def test_two_scoring_workers_run_each_job_exactly_once(web_cluster) -> None:
