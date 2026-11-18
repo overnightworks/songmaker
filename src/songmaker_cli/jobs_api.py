@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from time import monotonic
 from typing import Final
 
+from anyio import from_thread
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -298,7 +299,7 @@ def api_cancel_job(
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
     if job.type in _SIGNALLED_JOB_TYPES:
-        publish_cover_cancel(ctx.redis, job_id)
+        from_thread.run(publish_cover_cancel, ctx.cancel_wake, job_id)
     job = get_job(session, job_id)
     return JobResponse.from_orm(job)
 

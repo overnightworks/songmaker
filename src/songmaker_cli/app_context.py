@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
+from tandem import WakeChannel
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
-from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+from songmaker_cli.constants import REDIS_KEY_PREFIX, REDIS_RL_IP_PREFIX
 from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 if TYPE_CHECKING:
@@ -42,9 +43,12 @@ class AppContext:
     owner_leases: Leases = field(init=False)
     owner: JobOwner = field(init=False)
     """This process as the owner of its jobs, set once its lease is held."""
+    cancel_wake: WakeChannel = field(init=False)
+    """Tells every web process that a job's cancel committed."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)
+        self.cancel_wake = WakeChannel(self.async_redis, key_prefix=REDIS_KEY_PREFIX)
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
