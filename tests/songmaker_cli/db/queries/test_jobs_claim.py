@@ -163,4 +163,4 @@ def test_two_claimers_that_have_not_committed_get_different_jobs(pg_factory) -> 
 
         second = claim_next_queued_job(second_session, SECOND, JobType.SCORE)
 
-        assert {first.id, second.id} == ids
+        assert ids == {first.id, second.id}
