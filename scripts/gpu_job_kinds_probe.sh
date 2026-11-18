@@ -18,11 +18,12 @@
 # 2 s on the voices stack without the image removal, and a worker that still holds
 # the GPU or the removal of the probe's images adds to it.
 #
-# Each run takes its own Compose project name and a free loopback port; the one GPU
-# still admits one run, because the script refuses while any other project's worker runs.
-#
-# The operator stops the live `acestep-worker-0` first and restarts it after;
-# the script refuses to start while one runs (one GPU, one worker name).
+# Each run takes its own Compose project name and a free loopback port. The probe
+# runs only while the card is free: before it builds or starts anything it reads
+# `nvidia-smi` and refuses, naming each holder, while any process computes on the
+# GPU (the live worker and speech-runtime included), or when nvidia-smi fails.
+# The check and the start are not atomic: a holder that starts after the check is
+# not guarded until platform's gpu:use switch exists (platform#521).
 # The checkpoint directory is mounted read-only, so the probe cannot change the
 # deploy's models. The script never touches the live project, port 8080 or an
 # `.env`: every compose call reads an empty environment file instead of the
@@ -54,18 +55,24 @@ checkpoints="$1"
 [[ -d "$checkpoints" ]] || { echo "not a directory: $checkpoints" >&2; usage; }
 checkpoints="$(cd "$checkpoints" && pwd)"
 
-refuse_while_another_worker_runs() {
-    local running
-    running="$(docker ps --filter "label=com.docker.compose.service=$WORKER_SERVICE" \
-        --format '{{.Names}} {{.Label "com.docker.compose.project"}}')"
-    while read -r name project; do
-        [[ -z "$name" || "$project" == "$PROJECT" ]] && continue
-        echo "refusing to start: $name (compose project $project) runs $WORKER_SERVICE;" \
-            "the operator stops the live worker first" >&2
+refuse_while_any_process_holds_the_gpu() {
+    local holders line pid rest
+    if ! holders="$(nvidia-smi --query-compute-apps=pid,process_name,used_memory \
+        --format=csv,noheader 2>&1)"; then
+        echo "refusing to start: nvidia-smi failed, so the card cannot be shown free: $holders" >&2
         exit 3
-    done <<<"$running"
+    fi
+    [[ -n "${holders//[[:space:]]/}" ]] || return 0
+    while read -r line; do
+        [[ -z "$line" ]] && continue
+        pid="${line%%,*}"
+        rest="${line#*, }"
+        rest="${rest%, *}"
+        echo "refusing to start: pid $pid (${rest%% *}) holds the GPU" >&2
+    done <<<"$holders"
+    exit 3
 }
-refuse_while_another_worker_runs
+refuse_while_any_process_holds_the_gpu
 
 WORK_DIR="$(mktemp -d)"
 secrets_dir="$WORK_DIR/secrets"
