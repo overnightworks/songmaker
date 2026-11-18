@@ -1,7 +1,0 @@
-claim_id = "2f720e46d5cf44618489ea604ac989e4"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "2ff551d237748c464d38490400f98a33a13d3f07"
-branch = "claude/issue-3301-drop-the-withdrawn-picomatch-advisory-al"
-scope = ["quality/config.toml"]
-opened_commit = "482370b71fff31a1c912938bc52a23fbf8a18609"
