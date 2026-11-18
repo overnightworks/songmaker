@@ -1221,7 +1221,7 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference: keep clears the stamp and unkeep of a kept row starts a fresh full countdown, stamping at once unless a link holds the row, both under the row lock, unused_since? — when it last became unused: set at upload and when a take delete, an in-place version edit, a version delete, a song cleanup, an album cleanup, the trash expiry's hard delete of an album or song or retention's final take deletion leaves it without a link (never overwritten, kept rows skipped), cleared under the row lock when a version or take links it; the daily unused-stamp reconciliation stamps unstamped, unkept, unlinked rows late and clears the stamps of kept or linked rows, each half under the rows' locks in its own transaction; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row; the list hands out `deletes_at` for each stamped row — the next daily run (`DAILY_CLEANUP_HOUR_UTC`) at or after the later of `unused_since` and the publication instant (`now` until published) plus `final_deletion_days`, none for a kept or linked row — and `countdown_epoch` when any row carries a date; the daily run deletes exactly the stamped, unkept, unlinked rows whose listed date has passed, under that same formula, each in its own transaction under its row lock (the row, then its file) and holding neither the owner lock nor the purge lock, so it adds no edge to the lock order. The publication instant lives in one global `rate_limit_settings` row (`reference_countdown_visible_since`, seeded by its migration with a fresh uuid4 `id` as the epoch, `value_text` empty): `POST /api/references/countdown-shown` with that epoch writes the server's instant into it once, answers 204 for the current epoch whether or not it wrote, and 409 for any other; nothing is published until a page posts the epoch, and a reader that finds the row missing, duplicated or malformed fails the list)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, completed_takes? — the takes a partial Generate finished, written with `take_count`, error_message? — the failure, stored as a `Message` token like the wait below and answered beside `error`, the agent's English sentence built from the token and the takes (`api_models/jobs.py`), error_type?, queue_reason_message? — the wait a queued job shows, stored as a `Message` token (a catalog key and its gap values; `db/message_column.py` checks it against the catalog on write only, so a row with a retired key still loads) and answered beside `queue_reason`, the same wait as the agent's English sentence, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start, owner_id? — the web or worker process that runs the job, never carried by an answer)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, completed_takes? — the takes a partial Generate finished, written with `take_count`, error_message? — the failure, stored as a `Message` token like the wait below and answered beside `error`, the agent's English sentence built from the token and the takes (`api_models/jobs.py`), error_type?, queue_reason_message? — the wait a queued job shows, stored as a `Message` token (a catalog key and its gap values; `db/message_column.py` checks it against the catalog on write only, so a row with a retired key still loads) and answered beside `queue_reason`, the same wait as the agent's English sentence, payload? — the arguments of the job's type as a typed record (`job_payloads.py`), never carried by an answer, run_after? — until when a put-back job waits before a worker may claim it, never carried by an answer, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start, owner_id? — the web or worker process that runs the job, never carried by an answer)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
@@ -1473,11 +1473,11 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → rate limit check (per-user, advisory lock)
   → ownership check
   → model validation (if specified — reject 409 if active model doesn't match)
-  → create Job record + audit log entry
+  → create Job record (with its payload) + audit log entry
   → enqueue to arq (Redis-backed, music queue)
-  → music worker: run_generation_job()
+  → music worker: claim the Job's queued row (queued → running, else return), then run_generation_job()
     → pick then atomically Lua-admit one online acestep-worker for the full take series
-      → LoRA hold: keep the Job queued and defer a fresh ARQ envelope
+      → LoRA hold: put the Job back in the queue (`run_after` one poll ahead) and defer a fresh ARQ envelope
     → build config (model defaults + admin defaults + preset + song params)
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
@@ -1491,7 +1491,7 @@ Cancel (POST /api/jobs/{id}/cancel) sets status=cancelled and completed_at.
 `update_job_status` is a no-op once the job is already terminal, so progress
 callbacks and finalize cannot revive a cancelled job. The generation runner
 stops before setup, before each variant, after the worker returns, and before
-persist. Queued cancelled jobs are skipped by `check_job_still_valid`.
+persist. A cancelled job's row is no longer queued, so a handler's claim fails and it runs nothing.
 In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ```
 
@@ -1506,9 +1506,9 @@ and the worker stores what came back; no scoring run makes a coherence verdict.
 POST /api/generations/{id}/score
   → rate limit check (per-user, advisory lock)
   → ownership check
-  → create Job record + audit log entry
+  → create Job record (with its payload) + audit log entry
   → enqueue to arq (Redis-backed, scoring queue)
-  → scoring worker: run_scoring_job(device=SCORING_DEVICE)
+  → scoring worker: claim the Job's queued row, then run_scoring_job(device=SCORING_DEVICE)
     → ScorerProcess.score() dispatches to a long-lived subprocess:
       Subprocess calls run_scoring_pipeline() with parallel execution:
         GPU scorers (audiobox) run sequentially
@@ -1611,6 +1611,18 @@ SIGKILLed and even the values the run did produce would be lost.
   `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
   process's arq pool fails fast. A stop signal ends that retry, so a worker
   stops within seconds during the outage.
+- A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
+  type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
+  the transaction that creates the row, before the arq enqueue, and `jobs.run_after` holds the time
+  a job put back in the queue waits for. arq still carries the arguments a handler runs with; the
+  row's payload is the copy a claim from PostgreSQL will read. Cover and chat jobs run from their
+  own row and have no payload. Every arq handler (`WorkerBase.claim_job`) first moves its row from
+  queued to running by one conditional UPDATE that names the worker as owner
+  (`claim_queued_job`, the statement `claim_next_cover_job` shares), and returns without running
+  when the row is not queued: a message delivered twice, retried by arq or for a job that ended
+  or was cancelled runs the work once. A GPU-hold requeue writes the row back to queued, without
+  an owner and with `run_after`, before it enqueues the deferred message, whose handler claims the
+  row again.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
 **Stale-job recovery** (web process — #446, #456): The lifecycle loop is the

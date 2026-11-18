@@ -28,7 +28,7 @@ class ScoringWorker(WorkerBase):
     queue_name = ARQ_SCORING_QUEUE_NAME
 
     async def score(self, _ctx, job_id, gen_id, scorers):
-        if not self.check_job_still_valid(job_id):
+        if not self.claim_job(job_id):
             return
 
         await asyncio.to_thread(
