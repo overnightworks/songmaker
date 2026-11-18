@@ -145,7 +145,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ctx: AppContext = app.state.ctx
     registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     app.state.background_loop_registry = registry
-    cleanup_expired_queue_streams(ctx)
+    await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)
         if deleted:

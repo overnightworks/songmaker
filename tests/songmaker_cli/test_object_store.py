@@ -133,3 +133,25 @@ def test_a_web_process_without_a_readable_credentials_file_refuses_to_start(
             database_url="postgresql://x", redis_url="redis://x", session_secret="s",
             songmaker_internal_token="t", songmaker_s3_bucket="b",
         ))
+
+
+def test_a_store_error_that_is_not_a_missing_key_or_range_reaches_the_caller_unchanged(
+    prefix: str,
+) -> None:
+    with pytest.raises(ClientError) as raised:
+        ObjectStore(f"no-such-bucket-{uuid.uuid4().hex}").get_bytes(f"{prefix}a")
+
+    assert raised.value.response["Error"]["Code"] == "NoSuchBucket"
+
+
+def test_deleting_more_keys_than_one_call_takes_removes_them_all(
+    object_store: ObjectStore, prefix: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(object_store_module, "DELETE_OBJECTS_PER_CALL", 2)
+    keys = [f"{prefix}{number}" for number in range(5)]
+    for key in keys:
+        object_store.put_bytes(key, b"x", content_type="text/plain")
+
+    object_store.delete(keys)
+
+    assert [entry.key for entry in object_store.list(prefix)] == []
