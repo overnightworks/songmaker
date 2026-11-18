@@ -27,6 +27,7 @@ from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
 
 FOREVER_SECONDS = 3600
+RUNS_LONGER_THAN_ZERO_SECONDS = 1
 
 
 def _run(coro):
@@ -132,26 +133,25 @@ def test_a_claimed_voice_training_runs_with_its_configuration_and_target_mode() 
     assert work.await_args.kwargs["target_mode"] == "turbo"
 
 
-@pytest.mark.parametrize("job_type", [JobType.GENERATE, JobType.LORA_TRAINING])
-def test_a_job_that_outlasts_its_time_limit_is_cut(job_type) -> None:
-    limits = {"arq_job_timeout": 0, "lora_training_job_timeout": 0}
+@pytest.mark.parametrize(
+    ("payload", "own_limit", "other_limit"),
+    [
+        (A_GENERATE, "arq_job_timeout", "lora_training_job_timeout"),
+        (A_LORA_TRAINING, "lora_training_job_timeout", "arq_job_timeout"),
+    ],
+    ids=lambda value: value.job_type if hasattr(value, "job_type") else value,
+)
+def test_a_job_that_outlasts_its_own_time_limit_is_cut(payload, own_limit, other_limit) -> None:
+    limits = {own_limit: 0, other_limit: FOREVER_SECONDS}
     worker = _make_worker(MusicWorker(get_settings().model_copy(update=limits)))
 
-    async def never_ends(*_args, **_kwargs) -> None:
-        await asyncio.sleep(FOREVER_SECONDS)
+    async def outlasts_a_zero_limit(*_args, **_kwargs) -> None:
+        await asyncio.sleep(RUNS_LONGER_THAN_ZERO_SECONDS)
 
-    with patch(WORK[job_type], new=never_ends), pytest.raises(TimeoutError):
-        _run(worker.run_claimed(_claimed(A_GENERATE if job_type is JobType.GENERATE
-                                         else A_LORA_TRAINING)))
-
-
-def test_voice_training_has_its_own_longer_time_limit() -> None:
-    worker = MusicWorker()
-
-    assert worker._timeout_seconds(JobType.LORA_TRAINING) == (
-        worker._settings.lora_training_job_timeout
-    )
-    assert worker._timeout_seconds(JobType.GENERATE) == worker._settings.arq_job_timeout
+    with patch(WORK[JobType(payload.job_type)], new=outlasts_a_zero_limit), pytest.raises(
+        TimeoutError,
+    ):
+        _run(worker.run_claimed(_claimed(payload)))
 
 
 def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg_factory) -> None:
