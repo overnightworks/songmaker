@@ -202,7 +202,6 @@ def test_a_handler_that_raises_gives_the_model_a_fixed_sentence_and_logs_the_cla
 
 def _backend_without_key(world: World) -> GatewayBackend:
     config = AgentConfig(
-        backend=world.stack.config.backend,
         gateway=ChatGateway(
             origin=world.stack.config.gateway.origin, key_file=world.tmp_path / "no-such-key",
         ),

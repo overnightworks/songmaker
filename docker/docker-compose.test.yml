@@ -93,7 +93,6 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-songmaker}
       OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_client_secret
       # The co-writer's gateway; hal owns these values (its docs/agent-service.md, "An app's side").
-      AGENT__BACKEND: litellm
       AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
       AGENT__GATEWAY__KEY_FILE: /run/secrets/gateway_key
       AGENT__API_GROUP: /services/agent-service/api

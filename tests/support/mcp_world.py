@@ -57,7 +57,6 @@ FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
 AGENT_ENVIRONMENT = {
-    "AGENT__BACKEND": "litellm",
     "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
     "AGENT__API_GROUP": "/apps/songmaker/api",

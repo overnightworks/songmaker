@@ -280,7 +280,6 @@ def test_a_malformed_public_base_url_fails_loud_and_names_the_value(malformed: s
 
 
 _AGENT_ENVIRONMENT = {
-    "AGENT__BACKEND": "litellm",
     "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
     "AGENT__API_GROUP": "/apps/songmaker/api",
@@ -336,7 +335,7 @@ def test_mcp_on_without_an_agent_group_stops_startup(monkeypatch: pytest.MonkeyP
 @pytest.mark.parametrize(
     "environment",
     [
-        {"AGENT__BACKEND": "litellm"},
+        {"AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000"},
         {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__COLOUR": "blue"},
         {name: "" for name in _AGENT_ENVIRONMENT},
         {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__CA_FILE": ""},
