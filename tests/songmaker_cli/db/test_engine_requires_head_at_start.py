@@ -32,10 +32,10 @@ def _stored_revisions(url: URL) -> list[str]:
         engine.dispose()
 
 
-def _execute(url: URL, statement: str) -> None:
+def _execute(url: URL, statement: str, **parameters: str) -> None:
     engine = create_engine(url)
     with engine.begin() as connection:
-        connection.execute(text(statement))
+        connection.execute(text(statement), parameters)
     engine.dispose()
 
 
@@ -51,8 +51,12 @@ def test_two_concurrent_upgrades_on_an_empty_database_both_succeed_and_migrate_o
         for _ in range(2):
             upgrades.append(
                 subprocess.Popen(
-                    UPGRADE_COMMAND, cwd=REPOSITORY_ROOT,
-                    env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    UPGRADE_COMMAND,
+                    cwd=REPOSITORY_ROOT,
+                    env=environment,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
                 )
             )
         outputs = [upgrade.communicate(timeout=UPGRADE_TIMEOUT_SECONDS)[0] for upgrade in upgrades]
@@ -78,7 +82,11 @@ def test_a_start_on_a_database_behind_head_fails_naming_both_revisions_and_chang
     empty_postgresql_url: URL,
 ) -> None:
     upgrade_to_head(empty_postgresql_url)
-    _execute(empty_postgresql_url, f"UPDATE alembic_version SET version_num = '{BEHIND_REVISION}'")
+    _execute(
+        empty_postgresql_url,
+        "UPDATE alembic_version SET version_num = :revision",
+        revision=BEHIND_REVISION,
+    )
 
     with pytest.raises(DatabaseNotAtHeadError) as refusal:
         init_db(empty_postgresql_url)

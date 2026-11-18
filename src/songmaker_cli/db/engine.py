@@ -29,7 +29,7 @@ MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
 DATABASE_NOT_AT_HEAD_MESSAGE = (
     "The database is at revision {stored}, not at head {head}. The migrate init container "
-    "owns migrations and this process never migrates; the orchestrator restarts this "
+    "owns migrations and this process never migrates; Kubernetes restarts this "
     "process until the head matches."
 )
 
