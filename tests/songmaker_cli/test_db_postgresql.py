@@ -76,9 +76,7 @@ def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.render_as_string(hide_password=False) == f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://user:pass@host/db"
 
 
-def test_a_role_whose_password_is_kept_apart_migrates_and_connects_whose_password_is_kept_apart(
-    empty_postgresql_url: URL,
-) -> None:
+def test_init_db_connects_as_a_role_with_a_kept_apart_password(empty_postgresql_url: URL) -> None:
     name = f"secret_password_{uuid.uuid4().hex[:12]}"
     password = "p%a@s/s:w ord"
     admin = create_engine(empty_postgresql_url)
@@ -90,9 +88,9 @@ def test_a_role_whose_password_is_kept_apart_migrates_and_connects_whose_passwor
         connection.execute(text(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"'))
         connection.execute(text(f'ALTER ROLE "{name}" SET search_path = "{name}"'))
     base = empty_postgresql_url._replace(username=name, password=None)
+    url = database_url_with_password(base, password)
     factory = None
     try:
-        url = database_url_with_password(base, password)
         upgrade_to_head(url)
         factory = init_db(url)
         tables = inspect(factory.kw["bind"]).get_table_names(schema=name)
