@@ -1,0 +1,6076 @@
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgctxt "coverProblem.busy"
+msgid "Cover suggestions are busy. Try again when Suggest opens."
+msgstr ""
+"Die Cover-Vorschläge sind gerade ausgelastet. Versuch es noch einmal, "
+"wenn „Vorschlagen“ wieder offen ist."
+
+msgctxt "coverProblem.budgetSpent"
+msgid "The budget for cover suggestions is used up. Try again later."
+msgstr ""
+"Das Budget für Cover-Vorschläge ist aufgebraucht. Versuch es später noch "
+"einmal."
+
+msgctxt "coverProblem.notEnabled"
+msgid ""
+"Cover suggestions are not enabled for your account. Ask an admin to "
+"enable them."
+msgstr ""
+"Cover-Vorschläge sind für dein Konto nicht freigeschaltet. Bitte einen "
+"Admin, sie freizuschalten."
+
+msgctxt "coverProblem.unavailable"
+msgid "Cover suggestions are unavailable right now. Try again later."
+msgstr ""
+"Cover-Vorschläge sind gerade nicht verfügbar. Versuch es später noch "
+"einmal."
+
+msgctxt "coverProblem.signInAgain"
+msgid "Log in again to get cover suggestions."
+msgstr "Melde dich erneut an, um Cover-Vorschläge zu bekommen."
+
+msgctxt "cowriterProblem.busy"
+msgid "The co-writer is busy"
+msgstr "Der Co-Writer ist gerade ausgelastet"
+
+msgctxt "cowriterProblem.budgetSpent"
+msgid "The co-writer's budget is used up. Try again later."
+msgstr "Das Budget des Co-Writers ist aufgebraucht. Versuch es später noch einmal."
+
+msgctxt "cowriterProblem.notEnabled"
+msgid "The co-writer is not enabled for your account"
+msgstr "Der Co-Writer ist für dein Konto nicht freigeschaltet"
+
+msgctxt "cowriterProblem.signInAgain"
+msgid "Log in again to use the co-writer"
+msgstr "Melde dich erneut an, um den Co-Writer zu nutzen"
+
+msgctxt "cowriterProblem.unavailable"
+msgid "The co-writer is unavailable"
+msgstr "Der Co-Writer ist nicht verfügbar"
+
+msgctxt "cowriterProblem.noAnswer"
+msgid "The co-writer did not answer. Try again."
+msgstr "Der Co-Writer hat nicht geantwortet. Versuch es noch einmal."
+
+msgctxt "problemLine.logIn"
+msgid "Log in"
+msgstr "Anmelden"
+
+msgctxt "problemLine.tryAgain"
+msgid "Try again"
+msgstr "Noch einmal"
+
+msgctxt "homeWrite.label"
+msgid "Write"
+msgstr "Schreiben"
+
+msgctxt "homeWrite.empty"
+msgid "Songs you work on will appear here."
+msgstr "Songs, an denen du arbeitest, erscheinen hier."
+
+msgctxt "homeWrite.loading"
+msgid "Loading Write…"
+msgstr "Schreiben wird geladen…"
+
+msgctxt "homeWrite.error"
+msgid "Could not load Write."
+msgstr "Schreiben konnte nicht geladen werden."
+
+msgctxt "homeWrite.openSong"
+msgid "Open song {title}"
+msgstr "Song {title} öffnen"
+
+msgctxt "homeWrite.workCreated"
+msgid "new song · {time}"
+msgstr "neuer Song · {time}"
+
+msgctxt "homeWrite.workLyrics"
+msgid "lyrics edited · {time}"
+msgstr "Text bearbeitet · {time}"
+
+msgctxt "homeWrite.workStyle"
+msgid "style edited · {time}"
+msgstr "Stil bearbeitet · {time}"
+
+msgctxt "homeWrite.workRenamed"
+msgid "renamed · {time}"
+msgstr "umbenannt · {time}"
+
+msgctxt "homeWrite.workTake"
+msgid "new take · {time}"
+msgstr "neuer Take · {time}"
+
+msgctxt "homeWrite.workCowriter"
+msgid "co-writer · {time}"
+msgstr "Co-Writer · {time}"
+
+msgctxt "homeWrite.workEdited"
+msgid "edited · {time}"
+msgstr "bearbeitet · {time}"
+
+msgctxt "homeListen.label"
+msgid "Listen"
+msgstr "Hören"
+
+msgctxt "homeListen.empty"
+msgid "Albums and playlists you play will appear here."
+msgstr "Alben und Playlists, die du abspielst, erscheinen hier."
+
+msgctxt "homeListen.loading"
+msgid "Loading Listen…"
+msgstr "Hören wird geladen…"
+
+msgctxt "homeListen.error"
+msgid "Could not load Listen."
+msgstr "Hören konnte nicht geladen werden."
+
+msgctxt "homeListen.openAlbum"
+msgid "Open album {title}"
+msgstr "Album {title} öffnen"
+
+msgctxt "homeListen.openPlaylist"
+msgid "Open playlist {title}"
+msgstr "Playlist {title} öffnen"
+
+msgctxt "homeListen.albumCover"
+msgid "album cover for {title}"
+msgstr "Albumcover von {title}"
+
+msgctxt "homeListen.playlistCover"
+msgid "playlist cover for {title}"
+msgstr "Playlist-Cover von {title}"
+
+msgctxt "homeListen.albumPlaying"
+msgid "Album · playing · song {number} of {total}"
+msgstr "Album · läuft · Song {number} von {total}"
+
+msgctxt "homeListen.playlistPlaying"
+msgid "Playlist · playing · song {number} of {total}"
+msgstr "Playlist · läuft · Song {number} von {total}"
+
+msgctxt "homeListen.albumStopped"
+msgid "Album · stopped at song {number}"
+msgstr "Album · gestoppt bei Song {number}"
+
+msgctxt "homeListen.playlistStopped"
+msgid "Playlist · stopped at song {number}"
+msgstr "Playlist · gestoppt bei Song {number}"
+
+msgctxt "homeListen.albumPlayed"
+msgid "Album · played {time}"
+msgstr "Album · gehört {time}"
+
+msgctxt "homeListen.playlistPlayed"
+msgid "Playlist · played {time}"
+msgstr "Playlist · gehört {time}"
+
+msgctxt "phoneTabs.nav"
+msgid "Places"
+msgstr "Bereiche"
+
+msgctxt "places.home"
+msgid "Home"
+msgstr "Start"
+
+msgctxt "places.library"
+msgid "Library"
+msgstr "Bibliothek"
+
+msgctxt "places.playlists"
+msgid "Playlists"
+msgstr "Playlists"
+
+msgctxt "phoneAppBar.searchOpen"
+msgid "Search"
+msgstr "Suchen"
+
+msgctxt "phoneAppBar.searchSheet"
+msgid "Search"
+msgstr "Suche"
+
+msgctxt "phoneAppBar.searchClose"
+msgid "Close search"
+msgstr "Suche schließen"
+
+msgctxt "rail.nav"
+msgid "Primary"
+msgstr "Hauptnavigation"
+
+msgctxt "rail.collapse"
+msgid "Collapse rail"
+msgstr "Leiste einklappen"
+
+msgctxt "rail.expand"
+msgid "Expand rail"
+msgstr "Leiste ausklappen"
+
+msgctxt "rail.resize"
+msgid "Resize rail"
+msgstr "Leistenbreite ändern"
+
+msgctxt "rail.playlistsNav"
+msgid "Rail playlists"
+msgstr "Playlists in der Leiste"
+
+msgctxt "places.settings"
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgctxt "rail.settingsNav"
+msgid "Settings sections"
+msgstr "Einstellungsbereiche"
+
+msgctxt "rail.libraryNav"
+msgid "Library albums"
+msgstr "Alben der Bibliothek"
+
+msgctxt "rail.libraryLoading"
+msgid "Loading albums…"
+msgstr "Alben werden geladen…"
+
+msgctxt "rail.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "rail.libraryLoadError"
+msgid "Couldn't load your library"
+msgstr "Deine Bibliothek konnte nicht geladen werden"
+
+msgctxt "rail.albumCover"
+msgid "Album {title}"
+msgstr "Album {title}"
+
+msgctxt "rail.trackTakes.one"
+msgid "{count} take"
+msgstr "{count} Take"
+
+msgctxt "rail.trackTakes.other"
+msgid "{count} takes"
+msgstr "{count} Takes"
+
+msgctxt "rail.trackTakesPick.one"
+msgid "{count} take · pick"
+msgstr "{count} Take · fürs Album"
+
+msgctxt "rail.trackTakesPick.other"
+msgid "{count} takes · pick"
+msgstr "{count} Takes · fürs Album"
+
+msgctxt "railSearch.field"
+msgid "Search or go to…"
+msgstr "Suchen oder springen zu…"
+
+msgctxt "railSearch.clear"
+msgid "Clear search"
+msgstr "Suche leeren"
+
+msgctxt "railSearch.searching"
+msgid "Searching…"
+msgstr "Suche läuft…"
+
+msgctxt "railSearch.failed"
+msgid "Search failed"
+msgstr "Suche fehlgeschlagen"
+
+msgctxt "railSearch.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "railSearch.results"
+msgid "Search results"
+msgstr "Suchergebnisse"
+
+msgctxt "railSearch.noResults"
+msgid "No results for “{query}”."
+msgstr "Keine Ergebnisse für „{query}“."
+
+msgctxt "railSearch.groupAlbums"
+msgid "Albums"
+msgstr "Alben"
+
+msgctxt "railSearch.groupSongs"
+msgid "Songs"
+msgstr "Songs"
+
+msgctxt "railSearch.groupPlaylists"
+msgid "Playlists"
+msgstr "Playlists"
+
+msgctxt "railSearch.groupPages"
+msgid "Pages"
+msgstr "Seiten"
+
+msgctxt "railSearch.kindAlbum"
+msgid "Album"
+msgstr "Album"
+
+msgctxt "railSearch.kindSong"
+msgid "Song"
+msgstr "Song"
+
+msgctxt "railSearch.kindPlaylist"
+msgid "Playlist"
+msgstr "Playlist"
+
+msgctxt "railSearch.kindPage"
+msgid "Page"
+msgstr "Seite"
+
+msgctxt "railSearch.songCount.one"
+msgid "{count} song"
+msgstr "{count} Song"
+
+msgctxt "railSearch.songCount.other"
+msgid "{count} songs"
+msgstr "{count} Songs"
+
+msgctxt "pageBack.backTo"
+msgid "Back to {page}"
+msgstr "Zurück zu {page}"
+
+msgctxt "pageBack.album"
+msgid "Album"
+msgstr "Album"
+
+msgctxt "pageBack.playlist"
+msgid "Playlist"
+msgstr "Playlist"
+
+msgctxt "pageBack.song"
+msgid "Song"
+msgstr "Song"
+
+msgctxt "pageBack.previousPage"
+msgid "Previous page"
+msgstr "Vorherige Seite"
+
+msgctxt "settingsSections.generation"
+msgid "Generation"
+msgstr "Generierung"
+
+msgctxt "settingsSections.voices"
+msgid "Voices"
+msgstr "Stimmen"
+
+msgctxt "settingsSections.references"
+msgid "References"
+msgstr "Referenzen"
+
+msgctxt "settingsSections.admin"
+msgid "Admin"
+msgstr "Admin"
+
+msgctxt "settingsSections.about"
+msgid "About"
+msgstr "Über"
+
+msgctxt "settingsPage.documentTitle"
+msgid "Settings — {app}"
+msgstr "Einstellungen — {app}"
+
+msgctxt "settingsPage.nav"
+msgid "Settings sections"
+msgstr "Einstellungsbereiche"
+
+msgctxt "settingsPage.adminOnly"
+msgid "admins only"
+msgstr "nur für Admins"
+
+msgctxt "libraryWall.heading"
+msgid "{page} · {count}"
+msgstr "{page} · {count}"
+
+msgctxt "libraryWall.sortAlbums"
+msgid "Sort albums"
+msgstr "Alben sortieren"
+
+msgctxt "libraryWall.sortPlaylists"
+msgid "Sort playlists"
+msgstr "Playlists sortieren"
+
+msgctxt "libraryWall.orderTitle"
+msgid "A–Z"
+msgstr "A–Z"
+
+msgctxt "libraryWall.orderPlayed"
+msgid "Last played"
+msgstr "Zuletzt gehört"
+
+msgctxt "libraryWall.libraryLoading"
+msgid "Loading library…"
+msgstr "Bibliothek wird geladen…"
+
+msgctxt "libraryWall.libraryFailed"
+msgid "Could not load library."
+msgstr "Die Bibliothek konnte nicht geladen werden."
+
+msgctxt "libraryWall.libraryEmpty"
+msgid "No albums yet. + New on {home} makes one."
+msgstr "Noch keine Alben. Mit + Neu auf {home} legst du eins an."
+
+msgctxt "libraryWall.playlistsLoading"
+msgid "Loading playlists…"
+msgstr "Playlists werden geladen…"
+
+msgctxt "libraryWall.playlistsFailed"
+msgid "Failed to load playlists"
+msgstr "Playlists konnten nicht geladen werden"
+
+msgctxt "libraryWall.playlistsEmpty"
+msgid "No playlists yet. + New on {home} makes one."
+msgstr "Noch keine Playlists. Mit + Neu auf {home} legst du eine an."
+
+msgctxt "libraryWall.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "libraryWall.openAlbum"
+msgid "Open album {title}"
+msgstr "Album {title} öffnen"
+
+msgctxt "libraryWall.openPlaylist"
+msgid "Open playlist {title}"
+msgstr "Playlist {title} öffnen"
+
+msgctxt "libraryWall.albumCover"
+msgid "Album {title}"
+msgstr "Album {title}"
+
+msgctxt "libraryWall.playlistCover"
+msgid "Playlist cover for {title}"
+msgstr "Playlist-Cover von {title}"
+
+msgctxt "libraryWall.songCount.one"
+msgid "{count} song"
+msgstr "{count} Song"
+
+msgctxt "libraryWall.songCount.other"
+msgid "{count} songs"
+msgstr "{count} Songs"
+
+msgctxt "libraryWorkspace.loading"
+msgid "Loading..."
+msgstr "Wird geladen..."
+
+msgctxt "libraryWorkspace.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "addressPage.loadingAlbum"
+msgid "Loading album..."
+msgstr "Album wird geladen..."
+
+msgctxt "addressPage.loadingSong"
+msgid "Loading song..."
+msgstr "Song wird geladen..."
+
+msgctxt "addressPage.loadingTake"
+msgid "Loading take..."
+msgstr "Take wird geladen..."
+
+msgctxt "addressPage.loadingPlaylist"
+msgid "Loading playlist..."
+msgstr "Playlist wird geladen..."
+
+msgctxt "addressPage.noSuchAlbum"
+msgid "No such album"
+msgstr "Album nicht gefunden"
+
+msgctxt "addressPage.noSuchSong"
+msgid "No such song"
+msgstr "Song nicht gefunden"
+
+msgctxt "addressPage.noSuchTake"
+msgid "No such take"
+msgstr "Take nicht gefunden"
+
+msgctxt "addressPage.noSuchPlaylist"
+msgid "No such playlist"
+msgstr "Playlist nicht gefunden"
+
+msgctxt "addressPage.albumUnknown"
+msgid "This address does not name an album in your library."
+msgstr "Diese Adresse führt zu keinem Album in deiner Bibliothek."
+
+msgctxt "addressPage.songUnknown"
+msgid "This address does not name a song in this album."
+msgstr "Diese Adresse führt zu keinem Song in diesem Album."
+
+msgctxt "addressPage.takeUnknown"
+msgid "This address does not name a take of this song."
+msgstr "Diese Adresse führt zu keinem Take dieses Songs."
+
+msgctxt "addressPage.playlistUnknown"
+msgid "This address does not name a playlist in your library."
+msgstr "Diese Adresse führt zu keiner Playlist in deiner Bibliothek."
+
+msgctxt "addressPage.albumUnreachable"
+msgid "This album could not be loaded."
+msgstr "Dieses Album konnte nicht geladen werden."
+
+msgctxt "addressPage.songUnreachable"
+msgid "This song could not be loaded."
+msgstr "Dieser Song konnte nicht geladen werden."
+
+msgctxt "addressPage.takeUnreachable"
+msgid "This take could not be loaded."
+msgstr "Dieser Take konnte nicht geladen werden."
+
+msgctxt "addressPage.playlistUnreachable"
+msgid "This playlist could not be loaded."
+msgstr "Diese Playlist konnte nicht geladen werden."
+
+msgctxt "addressPage.backToLibrary"
+msgid "Back to the library"
+msgstr "Zurück zur Bibliothek"
+
+msgctxt "addressPage.backToAlbum"
+msgid "Back to the album"
+msgstr "Zurück zum Album"
+
+msgctxt "addressPage.backToSong"
+msgid "Back to the song"
+msgstr "Zurück zum Song"
+
+msgctxt "addressPage.tryAgain"
+msgid "Try again"
+msgstr "Noch einmal"
+
+msgctxt "homeList.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "songMove.heading"
+msgid "Move to"
+msgstr "Verschieben nach"
+
+msgctxt "songMove.back"
+msgid "Back to song menu"
+msgstr "Zurück zum Song-Menü"
+
+msgctxt "songMove.filterLabel"
+msgid "Filter albums"
+msgstr "Alben filtern"
+
+msgctxt "songMove.filterPlaceholder"
+msgid "Filter"
+msgstr "Filtern"
+
+msgctxt "songMove.loading"
+msgid "Looking…"
+msgstr "Suche…"
+
+msgctxt "songMove.noOtherAlbum"
+msgid "No other album"
+msgstr "Kein anderes Album"
+
+msgctxt "songMove.noMatch"
+msgid "No album matches"
+msgstr "Kein Album passt"
+
+msgctxt "songMove.albumCover"
+msgid "Album {title}"
+msgstr "Album {title}"
+
+msgctxt "songMove.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "songMove.libraryLoadError"
+msgid "Couldn't load your library"
+msgstr "Deine Bibliothek konnte nicht geladen werden"
+
+msgctxt "songMove.notMoved"
+msgid "Not moved · {reason}"
+msgstr "Nicht verschoben · {reason}"
+
+msgctxt "songMove.albumGone"
+msgid "album gone"
+msgstr "Album nicht mehr da"
+
+msgctxt "songMove.noConnection"
+msgid "no connection"
+msgstr "keine Verbindung"
+
+msgctxt "songMove.failedReason"
+msgid "something went wrong"
+msgstr "etwas ist schiefgelaufen"
+
+msgctxt "songMove.sharedTitle"
+msgid "Move to a shared album?"
+msgstr "In ein geteiltes Album verschieben?"
+
+msgctxt "songMove.sharedMessage"
+msgid "{song} appears on {album}'s public page"
+msgstr "{song} erscheint auf der öffentlichen Seite von {album}"
+
+msgctxt "songMove.confirm"
+msgid "Move"
+msgstr "Verschieben"
+
+msgctxt "songMove.moved"
+msgid "Moved to {album}"
+msgstr "Verschoben nach {album}"
+
+msgctxt "newPlace.face"
+msgid "New"
+msgstr "Neu"
+
+msgctxt "newPlace.menuLabel"
+msgid "New album or playlist"
+msgstr "Neues Album oder neue Playlist"
+
+msgctxt "newPlace.menuClose"
+msgid "Close New in {library}"
+msgstr "Neu in {library} schließen"
+
+msgctxt "newPlace.album"
+msgid "Album"
+msgstr "Album"
+
+msgctxt "newPlace.playlist"
+msgid "Playlist"
+msgstr "Playlist"
+
+msgctxt "newPlace.create"
+msgid "Create"
+msgstr "Anlegen"
+
+msgctxt "newPlace.offline"
+msgid "You're offline, so nothing was created. Try again once you're back online."
+msgstr ""
+"Du bist offline, daher wurde nichts angelegt. Versuch es noch einmal, "
+"sobald du wieder online bist."
+
+msgctxt "newAlbum.cardLabel"
+msgid "New album"
+msgstr "Neues Album"
+
+msgctxt "newAlbum.close"
+msgid "Close new album"
+msgstr "Neues Album schließen"
+
+msgctxt "newAlbum.titleLabel"
+msgid "Title"
+msgstr "Titel"
+
+msgctxt "newAlbum.artistLabel"
+msgid "Artist"
+msgstr "Künstler"
+
+msgctxt "newAlbum.artistOptional"
+msgid "optional"
+msgstr "optional"
+
+msgctxt "newAlbum.hint"
+msgid "Opens the album; add songs there."
+msgstr "Öffnet das Album; dort fügst du Songs hinzu."
+
+msgctxt "newAlbum.failed"
+msgid "The album could not be created. Try again."
+msgstr "Das Album konnte nicht angelegt werden. Versuch es noch einmal."
+
+msgctxt "newAlbum.refused"
+msgid "The album could not be created."
+msgstr "Das Album konnte nicht angelegt werden."
+
+msgctxt "newPlaylist.cardLabel"
+msgid "New playlist"
+msgstr "Neue Playlist"
+
+msgctxt "newPlaylist.close"
+msgid "Close new playlist"
+msgstr "Neue Playlist schließen"
+
+msgctxt "newPlaylist.nameLabel"
+msgid "Name"
+msgstr "Name"
+
+msgctxt "newPlaylist.hint"
+msgid "Opens the playlist; add songs from any album."
+msgstr "Öffnet die Playlist; füge Songs aus jedem beliebigen Album hinzu."
+
+msgctxt "newPlaylist.failed"
+msgid "The playlist could not be created. Try again."
+msgstr "Die Playlist konnte nicht angelegt werden. Versuch es noch einmal."
+
+msgctxt "newPlaylist.refused"
+msgid "The playlist could not be created."
+msgstr "Die Playlist konnte nicht angelegt werden."
+
+msgctxt "newSong.rowLabel"
+msgid "New song"
+msgstr "Neuer Song"
+
+msgctxt "newSong.cardLabel"
+msgid "New song in {album}"
+msgstr "Neuer Song in {album}"
+
+msgctxt "newSong.close"
+msgid "Close new song"
+msgstr "Neuen Song schließen"
+
+msgctxt "newSong.titleLabel"
+msgid "Title"
+msgstr "Titel"
+
+msgctxt "newSong.hint"
+msgid "Opens the song on Write."
+msgstr "Öffnet den Song in Schreiben."
+
+msgctxt "newSong.failed"
+msgid "The song could not be created. Try again."
+msgstr "Der Song konnte nicht angelegt werden. Versuch es noch einmal."
+
+msgctxt "newSong.refused"
+msgid "The song could not be created."
+msgstr "Der Song konnte nicht angelegt werden."
+
+msgctxt "referenceMenu.label"
+msgid "Reference menu"
+msgstr "Referenzmenü"
+
+msgctxt "referenceMenu.close"
+msgid "Close menu"
+msgstr "Menü schließen"
+
+msgctxt "referenceMenu.showTakes"
+msgid "Show takes"
+msgstr "Takes zeigen"
+
+msgctxt "referenceMenu.delete"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "referenceMenu.inUse"
+msgid "In use"
+msgstr "In Verwendung"
+
+msgctxt "newPlace.heading"
+msgid "New in {#strong}{library}{/strong}"
+msgstr "Neu in {#strong}{library}{/strong}"
+
+msgctxt "takeRefusal.archived"
+msgid "Restore this take first."
+msgstr "Stell diesen Take zuerst wieder her."
+
+msgctxt "modelRefusal.unavailable"
+msgid "Model '{model}' is not currently available"
+msgstr "Das Modell „{model}“ ist gerade nicht verfügbar"
+
+msgctxt "songMenu.label"
+msgid "Song menu"
+msgstr "Song-Menü"
+
+msgctxt "songMenu.close"
+msgid "Close menu"
+msgstr "Menü schließen"
+
+msgctxt "songMenu.heading"
+msgid "Song · {title}"
+msgstr "Song · {title}"
+
+msgctxt "songMenu.save"
+msgid "Save version"
+msgstr "Version speichern"
+
+msgctxt "songMenu.rename"
+msgid "Rename"
+msgstr "Umbenennen"
+
+msgctxt "songMenu.addToPlaylist"
+msgid "Add to playlist"
+msgstr "Zur Playlist hinzufügen"
+
+msgctxt "songMenu.move"
+msgid "Move"
+msgstr "Verschieben"
+
+msgctxt "songMenu.delete"
+msgid "Delete song"
+msgstr "Song löschen"
+
+msgctxt "takeMenu.label"
+msgid "More"
+msgstr "Mehr"
+
+msgctxt "takeMenu.close"
+msgid "Close menu"
+msgstr "Menü schließen"
+
+msgctxt "takeMenu.headingWithVersion"
+msgid "Take · v{version} · {take}"
+msgstr "Take · v{version} · {take}"
+
+msgctxt "takeMenu.heading"
+msgid "Take · {take}"
+msgstr "Take · {take}"
+
+msgctxt "takeMenu.repaint"
+msgid "Repaint"
+msgstr "Repaint"
+
+msgctxt "takeMenu.cover"
+msgid "Cover"
+msgstr "Cover"
+
+msgctxt "takeMenu.useSeed"
+msgid "Use seed"
+msgstr "Seed übernehmen"
+
+msgctxt "takeMenu.restore"
+msgid "Restore"
+msgstr "Wiederherstellen"
+
+msgctxt "takeMenu.addToPlaylist"
+msgid "Add to playlist"
+msgstr "Zur Playlist hinzufügen"
+
+msgctxt "takeMenu.share"
+msgid "Share"
+msgstr "Teilen"
+
+msgctxt "takeMenu.shareOn"
+msgid "on"
+msgstr "an"
+
+msgctxt "takeMenu.shareOff"
+msgid "off"
+msgstr "aus"
+
+msgctxt "takeMenu.delete"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "collectionMenu.label"
+msgid "More"
+msgstr "Mehr"
+
+msgctxt "collectionMenu.close"
+msgid "Close menu"
+msgstr "Menü schließen"
+
+msgctxt "collectionMenu.albumHeading"
+msgid "Album · {title}"
+msgstr "Album · {title}"
+
+msgctxt "collectionMenu.playlistHeading"
+msgid "Playlist · {title}"
+msgstr "Playlist · {title}"
+
+msgctxt "collectionMenu.editDetails"
+msgid "Edit details"
+msgstr "Details bearbeiten"
+
+msgctxt "collectionMenu.cover"
+msgid "Cover"
+msgstr "Cover"
+
+msgctxt "collectionMenu.coverHint"
+msgid "upload · suggest"
+msgstr "hochladen · vorschlagen"
+
+msgctxt "collectionMenu.curate"
+msgid "Pick album takes"
+msgstr "Album-Takes auswählen"
+
+msgctxt "collectionMenu.addToPlaylist"
+msgid "Add to playlist"
+msgstr "Zur Playlist hinzufügen"
+
+msgctxt "collectionMenu.archive"
+msgid "Archive"
+msgstr "Archivieren"
+
+msgctxt "collectionMenu.albumShare"
+msgid "Share"
+msgstr "Teilen"
+
+msgctxt "collectionMenu.playlistShare"
+msgid "Share playlist"
+msgstr "Playlist teilen"
+
+msgctxt "collectionMenu.shareOn"
+msgid "on"
+msgstr "an"
+
+msgctxt "collectionMenu.shareOff"
+msgid "off"
+msgstr "aus"
+
+msgctxt "collectionMenu.upload"
+msgid "Upload…"
+msgstr "Hochladen…"
+
+msgctxt "collectionMenu.removeCover"
+msgid "Remove cover"
+msgstr "Cover entfernen"
+
+msgctxt "collectionMenu.rename"
+msgid "Rename"
+msgstr "Umbenennen"
+
+msgctxt "collectionMenu.albumDelete"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "collectionMenu.playlistDelete"
+msgid "Delete playlist"
+msgstr "Playlist löschen"
+
+msgctxt "albumPage.loading"
+msgid "Loading albums…"
+msgstr "Alben werden geladen…"
+
+msgctxt "albumPage.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "albumPage.noSongs"
+msgid "No songs yet."
+msgstr "Noch keine Songs."
+
+msgctxt "albumPage.coverAlt"
+msgid "Album {title}"
+msgstr "Album {title}"
+
+msgctxt "albumPage.coverAltFallback"
+msgid "Album"
+msgstr "Album"
+
+msgctxt "albumPage.songTakes.one"
+msgid "{count} take"
+msgstr "{count} Take"
+
+msgctxt "albumPage.songTakes.other"
+msgid "{count} takes"
+msgstr "{count} Takes"
+
+msgctxt "albumPage.coverUploadFailed"
+msgid "Cover upload failed"
+msgstr "Cover-Upload fehlgeschlagen"
+
+msgctxt "albumPage.coverDiscardFailed"
+msgid "Cover suggestions could not be discarded"
+msgstr "Cover-Vorschläge konnten nicht verworfen werden"
+
+msgctxt "albumPage.coverRemoved"
+msgid "Cover removed"
+msgstr "Cover entfernt"
+
+msgctxt "albumPage.coverRemoveFailed"
+msgid "Cover remove failed"
+msgstr "Cover konnte nicht entfernt werden"
+
+msgctxt "albumPage.yearWhole"
+msgid "Year must be a whole number"
+msgstr "Das Jahr muss eine ganze Zahl sein"
+
+msgctxt "albumPage.yearRange"
+msgid "Year must be between {min} and {max}"
+msgstr "Das Jahr muss zwischen {min} und {max} liegen"
+
+msgctxt "albumPage.deleted"
+msgid "Album deleted"
+msgstr "Album gelöscht"
+
+msgctxt "albumPage.restored"
+msgid "Album restored"
+msgstr "Album wiederhergestellt"
+
+msgctxt "albumPage.restoreFailed"
+msgid "Restore failed"
+msgstr "Wiederherstellen fehlgeschlagen"
+
+msgctxt "albumPage.deleteFailed"
+msgid "Delete failed"
+msgstr "Löschen fehlgeschlagen"
+
+msgctxt "albumPage.archived"
+msgid "Album archived"
+msgstr "Album archiviert"
+
+msgctxt "albumPage.unarchived"
+msgid "Album unarchived"
+msgstr "Album aus dem Archiv geholt"
+
+msgctxt "albumPage.unarchiveFailed"
+msgid "Unarchive failed"
+msgstr "Aus dem Archiv holen fehlgeschlagen"
+
+msgctxt "albumPage.archiveFailed"
+msgid "Archive failed"
+msgstr "Archivieren fehlgeschlagen"
+
+msgctxt "albumPage.addedSkipped"
+msgid "Added {added}, skipped {skipped}"
+msgstr "{added} hinzugefügt, {skipped} übersprungen"
+
+msgctxt "albumPage.addedToPlaylist"
+msgid "Added to playlist"
+msgstr "Zur Playlist hinzugefügt"
+
+msgctxt "albumPage.addFailed"
+msgid "Failed to add"
+msgstr "Hinzufügen fehlgeschlagen"
+
+msgctxt "albumPage.songsLoadFailed"
+msgid "Failed to load songs"
+msgstr "Songs konnten nicht geladen werden"
+
+msgctxt "albumPage.deleteTitle"
+msgid "Delete \"{title}\"?"
+msgstr "„{title}“ löschen?"
+
+msgctxt "albumPage.deleteSongs.one"
+msgid "{count} song ({titles})"
+msgstr "{count} Song ({titles})"
+
+msgctxt "albumPage.deleteSongs.other"
+msgid "{count} songs ({titles})"
+msgstr "{count} Songs ({titles})"
+
+msgctxt "albumPage.deleteTakes.one"
+msgid "{count} take"
+msgstr "{count} Take"
+
+msgctxt "albumPage.deleteTakes.other"
+msgid "{count} takes"
+msgstr "{count} Takes"
+
+msgctxt "albumPage.deleteHistory"
+msgid "All versions, scores, and chat history"
+msgstr "Alle Versionen, Scores und der Chatverlauf"
+
+msgctxt "albumPage.deleteConfirm"
+msgid "Delete Album"
+msgstr "Album löschen"
+
+msgctxt "albumCover.add"
+msgid "Add cover"
+msgstr "Cover hinzufügen"
+
+msgctxt "albumCover.edit"
+msgid "Edit cover"
+msgstr "Cover bearbeiten"
+
+msgctxt "albumCover.editing"
+msgid "Cover editing"
+msgstr "Cover bearbeiten"
+
+msgctxt "albumCover.editingClose"
+msgid "Close cover editing"
+msgstr "Cover-Bearbeitung schließen"
+
+msgctxt "albumCover.upload"
+msgid "Upload"
+msgstr "Hochladen"
+
+msgctxt "albumCover.suggest"
+msgid "Suggest"
+msgstr "Vorschlagen"
+
+msgctxt "albumCover.suggestAnother"
+msgid "Suggest another"
+msgstr "Anderen vorschlagen"
+
+msgctxt "albumCover.use"
+msgid "Use"
+msgstr "Übernehmen"
+
+msgctxt "albumCover.remove"
+msgid "Remove"
+msgstr "Entfernen"
+
+msgctxt "albumCover.previousSuggestion"
+msgid "Previous suggestion"
+msgstr "Vorheriger Vorschlag"
+
+msgctxt "albumCover.nextSuggestion"
+msgid "Next suggestion"
+msgstr "Nächster Vorschlag"
+
+msgctxt "albumCover.suggestionsLoading"
+msgid "Loading cover suggestion…"
+msgstr "Cover-Vorschlag wird geladen…"
+
+msgctxt "albumCover.suggesting"
+msgid "Making a cover"
+msgstr "Cover wird erstellt"
+
+msgctxt "albumCover.suggestionFailedTitle"
+msgid "Couldn’t make a cover suggestion"
+msgstr "Kein Cover-Vorschlag möglich"
+
+msgctxt "albumCover.suggestionFailedFallback"
+msgid "The cover suggestion failed. Try again."
+msgstr "Der Cover-Vorschlag ist fehlgeschlagen. Versuch es noch einmal."
+
+msgctxt "albumCover.throttledFallback"
+msgid "Too many requests right now. Press Suggest again in a moment."
+msgstr "Gerade zu viele Anfragen. Drück gleich noch einmal auf „Vorschlagen“."
+
+msgctxt "albumCover.suggestionsRetry"
+msgid "Try again"
+msgstr "Noch einmal"
+
+msgctxt "albumCover.alt"
+msgid "Album {title}"
+msgstr "Album {title}"
+
+msgctxt "albumCover.suggestionAlt"
+msgid "Cover suggestion for {title}"
+msgstr "Cover-Vorschlag für {title}"
+
+msgctxt "albumCover.suggestionPosition"
+msgid "{shown} / {total}"
+msgstr "{shown} / {total}"
+
+msgctxt "albumCover.stageLabel"
+msgid "Cover suggestion {shown} of {total}"
+msgstr "Cover-Vorschlag {shown} von {total}"
+
+msgctxt "albumCover.saved"
+msgid "Cover saved"
+msgstr "Cover gespeichert"
+
+msgctxt "albumDetails.close"
+msgid "Close edit details"
+msgstr "Details bearbeiten schließen"
+
+msgctxt "albumDetails.title"
+msgid "Title"
+msgstr "Titel"
+
+msgctxt "albumDetails.subtitle"
+msgid "Subtitle"
+msgstr "Untertitel"
+
+msgctxt "albumDetails.year"
+msgid "Year"
+msgstr "Jahr"
+
+msgctxt "albumDetails.save"
+msgid "Save"
+msgstr "Speichern"
+
+msgctxt "albumDetails.titleRequired"
+msgid "Title cannot be empty"
+msgstr "Der Titel darf nicht leer sein"
+
+msgctxt "albumDetails.saved"
+msgid "Details saved"
+msgstr "Details gespeichert"
+
+msgctxt "albumDetails.saveFailed"
+msgid "Saving the details failed"
+msgstr "Die Details konnten nicht gespeichert werden"
+
+msgctxt "coverMark.waiting.one"
+msgid "{count} waiting"
+msgstr "{count} wartet"
+
+msgctxt "coverMark.waiting.other"
+msgid "{count} waiting"
+msgstr "{count} warten"
+
+msgctxt "coverMark.runningName"
+msgid "{label} · making a suggestion"
+msgstr "{label} · erstellt einen Vorschlag"
+
+msgctxt "coverMark.waitingName"
+msgid "{label} · {waiting}"
+msgstr "{label} · {waiting}"
+
+msgctxt "collectionHeader.songCount.one"
+msgid "{count} song"
+msgstr "{count} Song"
+
+msgctxt "collectionHeader.songCount.other"
+msgid "{count} songs"
+msgstr "{count} Songs"
+
+msgctxt "playlistPage.coverAlt"
+msgid "Playlist cover for {title}"
+msgstr "Playlist-Cover von {title}"
+
+msgctxt "playlistPage.coverAltEmpty"
+msgid "Playlist cover"
+msgstr "Playlist-Cover"
+
+msgctxt "playlistPage.loading"
+msgid "Loading playlist…"
+msgstr "Playlist wird geladen…"
+
+msgctxt "playlistPage.empty"
+msgid "No songs in this playlist yet."
+msgstr "Noch keine Songs in dieser Playlist."
+
+msgctxt "playlistPage.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "playlistPage.loadError"
+msgid "Failed to load playlists"
+msgstr "Playlists konnten nicht geladen werden"
+
+msgctxt "playlistPage.entryMore"
+msgid "More for {title}"
+msgstr "Mehr zu {title}"
+
+msgctxt "playlistPage.moveUp"
+msgid "Move up"
+msgstr "Nach oben"
+
+msgctxt "playlistPage.moveDown"
+msgid "Move down"
+msgstr "Nach unten"
+
+msgctxt "playlistPage.remove"
+msgid "Remove from playlist"
+msgstr "Aus der Playlist entfernen"
+
+msgctxt "playlistPage.deleted"
+msgid "Playlist deleted"
+msgstr "Playlist gelöscht"
+
+msgctxt "playlistPage.deleteFailed"
+msgid "Delete failed"
+msgstr "Löschen fehlgeschlagen"
+
+msgctxt "playlistPage.renameFailed"
+msgid "Rename failed"
+msgstr "Umbenennen fehlgeschlagen"
+
+msgctxt "playlistPage.coverSaved"
+msgid "Cover saved"
+msgstr "Cover gespeichert"
+
+msgctxt "playlistPage.coverSaveFailed"
+msgid "Cover upload failed"
+msgstr "Cover-Upload fehlgeschlagen"
+
+msgctxt "playlistPage.coverRemoved"
+msgid "Cover removed"
+msgstr "Cover entfernt"
+
+msgctxt "playlistPage.coverRemoveFailed"
+msgid "Cover remove failed"
+msgstr "Cover konnte nicht entfernt werden"
+
+msgctxt "playlistPage.removeFailed"
+msgid "Remove failed"
+msgstr "Entfernen fehlgeschlagen"
+
+msgctxt "playlistPage.reorderFailed"
+msgid "Reorder failed"
+msgstr "Umsortieren fehlgeschlagen"
+
+msgctxt "playlistPage.deleteTitle"
+msgid "Delete \"{title}\"?"
+msgstr "„{title}“ löschen?"
+
+msgctxt "playlistPage.songCount.one"
+msgid "{count} song"
+msgstr "{count} Song"
+
+msgctxt "playlistPage.songCount.other"
+msgid "{count} songs"
+msgstr "{count} Songs"
+
+msgctxt "playlistPage.deleteConfirm"
+msgid "Delete Playlist"
+msgstr "Playlist löschen"
+
+msgctxt "playlistPicker.label"
+msgid "Add to Playlist"
+msgstr "Zur Playlist hinzufügen"
+
+msgctxt "playlistPicker.heading"
+msgid "Add to Playlist"
+msgstr "Zur Playlist hinzufügen"
+
+msgctxt "playlistPicker.loading"
+msgid "Loading playlists…"
+msgstr "Playlists werden geladen…"
+
+msgctxt "playlistPicker.error"
+msgid "Failed to load playlists"
+msgstr "Playlists konnten nicht geladen werden"
+
+msgctxt "playlistPicker.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "playlistPicker.newPlaceholder"
+msgid "New playlist..."
+msgstr "Neue Playlist..."
+
+msgctxt "playlistPicker.add"
+msgid "Add playlist"
+msgstr "Playlist hinzufügen"
+
+msgctxt "playlistPicker.createFailed"
+msgid "Failed to create playlist"
+msgstr "Playlist konnte nicht angelegt werden"
+
+msgctxt "songRow.openInEditor"
+msgid "Open {title} in the song editor"
+msgstr "{title} im Song-Editor öffnen"
+
+msgctxt "homeWrite.openInEditor"
+msgid "Open {title} in the song editor"
+msgstr "{title} im Song-Editor öffnen"
+
+msgctxt "songPage.coverAlt"
+msgid "Song {title}"
+msgstr "Song {title}"
+
+msgctxt "songPage.coverAltAlbum"
+msgid "Album {title}"
+msgstr "Album {title}"
+
+msgctxt "songPage.coverAltBare"
+msgid "Song"
+msgstr "Song"
+
+msgctxt "songPage.coverUpload"
+msgid "Upload song cover"
+msgstr "Song-Cover hochladen"
+
+msgctxt "songPage.coverReplace"
+msgid "Replace song cover"
+msgstr "Song-Cover ersetzen"
+
+msgctxt "songPage.trackOf"
+msgid "Track {position} of {total}"
+msgstr "Track {position} von {total}"
+
+msgctxt "songPage.save"
+msgid "Save"
+msgstr "Speichern"
+
+msgctxt "songPage.saveName"
+msgid "Save changes"
+msgstr "Änderungen speichern"
+
+msgctxt "songPage.unsavedTitle"
+msgid "Unsaved changes"
+msgstr "Ungespeicherte Änderungen"
+
+msgctxt "songPage.unsavedMessage"
+msgid "Save this draft as a new version before leaving, or discard it?"
+msgstr ""
+"Diesen Entwurf vor dem Verlassen als neue Version speichern oder "
+"verwerfen?"
+
+msgctxt "songPage.unsavedSave"
+msgid "Save"
+msgstr "Speichern"
+
+msgctxt "songPage.unsavedDiscard"
+msgid "Discard"
+msgstr "Verwerfen"
+
+msgctxt "songPage.coverSaved"
+msgid "Cover saved"
+msgstr "Cover gespeichert"
+
+msgctxt "songPage.coverUploadFailed"
+msgid "Cover upload failed"
+msgstr "Cover-Upload fehlgeschlagen"
+
+msgctxt "songPage.coverRemoved"
+msgid "Cover removed"
+msgstr "Cover entfernt"
+
+msgctxt "songPage.coverRemoveFailed"
+msgid "Cover remove failed"
+msgstr "Cover konnte nicht entfernt werden"
+
+msgctxt "songPage.renamed"
+msgid "Song renamed"
+msgstr "Song umbenannt"
+
+msgctxt "songPage.renameFailed"
+msgid "Rename failed"
+msgstr "Umbenennen fehlgeschlagen"
+
+msgctxt "songPage.deleted"
+msgid "Song deleted"
+msgstr "Song gelöscht"
+
+msgctxt "songPage.undo"
+msgid "Undo"
+msgstr "Rückgängig"
+
+msgctxt "songPage.restored"
+msgid "Song restored"
+msgstr "Song wiederhergestellt"
+
+msgctxt "songPage.restoreFailed"
+msgid "Restore failed"
+msgstr "Wiederherstellen fehlgeschlagen"
+
+msgctxt "songPage.deleteFailed"
+msgid "Delete failed"
+msgstr "Löschen fehlgeschlagen"
+
+msgctxt "songPage.takeDeleted"
+msgid "Take deleted"
+msgstr "Take gelöscht"
+
+msgctxt "songPage.addedToPlaylist"
+msgid "Added to playlist"
+msgstr "Zur Playlist hinzugefügt"
+
+msgctxt "songPage.addToPlaylistFailed"
+msgid "Failed to add"
+msgstr "Hinzufügen fehlgeschlagen"
+
+msgctxt "songPage.savedVersion"
+msgid "Saved version {number}"
+msgstr "Version {number} gespeichert"
+
+msgctxt "songPage.saveFailed"
+msgid "Save failed"
+msgstr "Speichern fehlgeschlagen"
+
+msgctxt "songPage.deleteTitle"
+msgid "Delete \"{title}\"?"
+msgstr "„{title}“ löschen?"
+
+msgctxt "songPage.deleteTakes.one"
+msgid "{count} take"
+msgstr "{count} Take"
+
+msgctxt "songPage.deleteTakes.other"
+msgid "{count} takes"
+msgstr "{count} Takes"
+
+msgctxt "songPage.deleteVersions.one"
+msgid "{count} version"
+msgstr "{count} Version"
+
+msgctxt "songPage.deleteVersions.other"
+msgid "{count} versions"
+msgstr "{count} Versionen"
+
+msgctxt "songPage.deleteHistory"
+msgid "All scores, ratings, and chat history"
+msgstr "Alle Scores, Bewertungen und der Chatverlauf"
+
+msgctxt "songPage.deleteConfirm"
+msgid "Delete Song"
+msgstr "Song löschen"
+
+msgctxt "songPage.expiry.one"
+msgid "{count} take expires {when} — pick or keep to preserve."
+msgstr ""
+"{count} Take läuft {when} ab – wähl ihn fürs Album oder behalte ihn, "
+"damit er bleibt."
+
+msgctxt "songPage.expiry.other"
+msgid "{count} takes expire {when} — pick or keep to preserve."
+msgstr ""
+"{count} Takes laufen {when} ab – wähl sie fürs Album oder behalte sie, "
+"damit sie bleiben."
+
+msgctxt "songPage.expirySoon"
+msgid "soon"
+msgstr "bald"
+
+msgctxt "songPage.expiryDays.one"
+msgid "in {count} day"
+msgstr "in {count} Tag"
+
+msgctxt "songPage.expiryDays.other"
+msgid "in {count} days"
+msgstr "in {count} Tagen"
+
+msgctxt "songHeader.title"
+msgid "Song title"
+msgstr "Songtitel"
+
+msgctxt "songHeader.editTitle"
+msgid "Edit song title"
+msgstr "Songtitel bearbeiten"
+
+msgctxt "songHeader.albumNavigation"
+msgid "Album navigation"
+msgstr "Album-Navigation"
+
+msgctxt "songHeader.previous"
+msgid "Previous song"
+msgstr "Vorheriger Song"
+
+msgctxt "songHeader.next"
+msgid "Next song"
+msgstr "Nächster Song"
+
+msgctxt "songHeader.removeCover"
+msgid "Remove song cover"
+msgstr "Song-Cover entfernen"
+
+msgctxt "songTabs.label"
+msgid "Editor tabs"
+msgstr "Editor-Tabs"
+
+msgctxt "songTabs.edit"
+msgid "Edit"
+msgstr "Bearbeiten"
+
+msgctxt "songTabs.takes"
+msgid "Takes"
+msgstr "Takes"
+
+msgctxt "songTabs.cowriter"
+msgid "Co-writer"
+msgstr "Co-Writer"
+
+msgctxt "writeColumn.lyrics"
+msgid "Lyrics"
+msgstr "Songtext"
+
+msgctxt "writeColumn.stylePrompt"
+msgid "Style Prompt"
+msgstr "Stil-Prompt"
+
+msgctxt "writeColumn.loadedFrom"
+msgid "Loaded from v{number}"
+msgstr "Geladen aus v{number}"
+
+msgctxt "versions.name"
+msgid "v{number}"
+msgstr "v{number}"
+
+msgctxt "versions.chipDraft"
+msgid "v{number} · draft"
+msgstr "v{number} · Entwurf"
+
+msgctxt "versions.chipName"
+msgid "Versions: {chip}"
+msgstr "Versionen: {chip}"
+
+msgctxt "versions.heading"
+msgid "Versions"
+msgstr "Versionen"
+
+msgctxt "versions.close"
+msgid "Close versions"
+msgstr "Versionen schließen"
+
+msgctxt "versions.current"
+msgid "current"
+msgstr "aktuell"
+
+msgctxt "versions.picked"
+msgid "picked"
+msgstr "ausgewählt"
+
+msgctxt "versions.noLyrics"
+msgid "No lyrics"
+msgstr "Kein Songtext"
+
+msgctxt "versions.noTakes"
+msgid "no takes"
+msgstr "keine Takes"
+
+msgctxt "versions.takes.one"
+msgid "{count} take"
+msgstr "{count} Take"
+
+msgctxt "versions.takes.other"
+msgid "{count} takes"
+msgstr "{count} Takes"
+
+msgctxt "versions.deleteName"
+msgid "Delete v{number}"
+msgstr "v{number} löschen"
+
+msgctxt "versions.deleteTitle"
+msgid "Delete v{number}?"
+msgstr "v{number} löschen?"
+
+msgctxt "versions.deleteTitleTakes.one"
+msgid "Delete v{number} and its {count} take?"
+msgstr "v{number} und seinen {count} Take löschen?"
+
+msgctxt "versions.deleteTitleTakes.other"
+msgid "Delete v{number} and its {count} takes?"
+msgstr "v{number} und seine {count} Takes löschen?"
+
+msgctxt "versions.deleteConfirm"
+msgid "Delete version"
+msgstr "Version löschen"
+
+msgctxt "versions.deletePick.one"
+msgid "It is the album pick."
+msgstr "Er ist die Auswahl fürs Album."
+
+msgctxt "versions.deletePick.other"
+msgid "The album pick is one of them."
+msgstr "Die Auswahl fürs Album ist einer davon."
+
+msgctxt "versions.deleteDraftGoes"
+msgid "Your unsaved draft goes too."
+msgstr "Dein ungespeicherter Entwurf geht ebenfalls verloren."
+
+msgctxt "versions.deleteEmptiesEditor"
+msgid "Its lyrics leave the editor, which will be empty."
+msgstr "Ihr Songtext verschwindet aus dem Editor, der dann leer ist."
+
+msgctxt "versions.deleteLoadUndoGoes"
+msgid "Undo for your earlier draft goes too."
+msgstr "Das Rückgängigmachen für deinen früheren Entwurf geht ebenfalls verloren."
+
+msgctxt "versions.deleteReplacedBy"
+msgid "Its lyrics leave the editor; v{number} replaces them."
+msgstr "Ihr Songtext verschwindet aus dem Editor; v{number} tritt an seine Stelle."
+
+msgctxt "versions.deleteLoadedDraftGoes"
+msgid "The draft loaded from v{number} goes too."
+msgstr "Der aus v{number} geladene Entwurf geht ebenfalls verloren."
+
+msgctxt "versions.deleteLoadedDraftReplaced"
+msgid ""
+"The draft loaded from v{loadedFrom} leaves the editor; v{replacedBy} "
+"replaces it."
+msgstr ""
+"Der aus v{loadedFrom} geladene Entwurf verschwindet aus dem Editor; "
+"v{replacedBy} tritt an seine Stelle."
+
+msgctxt "versions.deleted"
+msgid "Deleted v{number}"
+msgstr "v{number} gelöscht"
+
+msgctxt "versions.replaceTitle"
+msgid "Replace your unsaved draft?"
+msgstr "Deinen ungespeicherten Entwurf ersetzen?"
+
+msgctxt "versions.replaceMessage"
+msgid ""
+"Your draft has changes that are not in any version. Loading v{number} "
+"replaces them. You can undo right after."
+msgstr ""
+"Dein Entwurf hat Änderungen, die in keiner Version stehen. Wenn du "
+"v{number} lädst, werden sie ersetzt. Du kannst das gleich danach "
+"rückgängig machen."
+
+msgctxt "versions.replaceConfirm"
+msgid "Replace"
+msgstr "Ersetzen"
+
+msgctxt "versions.loaded"
+msgid "v{number} loaded"
+msgstr "v{number} geladen"
+
+msgctxt "versions.alreadyDraft"
+msgid "v{number} is already the draft"
+msgstr "v{number} ist bereits der Entwurf"
+
+msgctxt "versions.undo"
+msgid "Undo"
+msgstr "Rückgängig"
+
+msgctxt "editableTitle.hint"
+msgid "Click to edit"
+msgstr "Zum Bearbeiten klicken"
+
+msgctxt "collectionHeader.titleAlbum"
+msgid "album title"
+msgstr "Albumtitel"
+
+msgctxt "collectionHeader.titlePlaylist"
+msgid "playlist title"
+msgstr "Playlist-Titel"
+
+msgctxt "collectionHeader.editTitleAlbum"
+msgid "Edit album title"
+msgstr "Albumtitel bearbeiten"
+
+msgctxt "collectionHeader.editTitlePlaylist"
+msgid "Edit playlist title"
+msgstr "Playlist-Titel bearbeiten"
+
+msgctxt "recipe.panel"
+msgid "Recipe"
+msgstr "Rezept"
+
+msgctxt "recipe.panelChanged"
+msgid "Recipe, changed"
+msgstr "Rezept, geändert"
+
+msgctxt "recipe.tabsLabel"
+msgid "Recipe sections"
+msgstr "Rezeptbereiche"
+
+msgctxt "recipe.close"
+msgid "Close the recipe"
+msgstr "Rezept schließen"
+
+msgctxt "recipe.tabSong"
+msgid "Song"
+msgstr "Song"
+
+msgctxt "recipe.tabGenerate"
+msgid "Generate"
+msgstr "Generieren"
+
+msgctxt "recipe.tabEngine"
+msgid "Engine"
+msgstr "Engine"
+
+msgctxt "recipe.savedWithVersion"
+msgid "Saved with the version"
+msgstr "Mit der Version gespeichert"
+
+msgctxt "recipe.resetAll"
+msgid "Reset all"
+msgstr "Alles zurücksetzen"
+
+msgctxt "recipe.resetAuto"
+msgid "Back to Auto"
+msgstr "Zurück auf Auto"
+
+msgctxt "recipe.resetEmpty"
+msgid "Back to empty"
+msgstr "Zurück auf leer"
+
+msgctxt "recipe.resetNone"
+msgid "Back to None"
+msgstr "Zurück auf Keine"
+
+msgctxt "recipe.resetReference"
+msgid "Remove the reference"
+msgstr "Referenz entfernen"
+
+msgctxt "recipe.resetModel"
+msgid "Back to the first model"
+msgstr "Zurück zum ersten Modell"
+
+msgctxt "recipe.resetTakes"
+msgid "Back to ×1"
+msgstr "Zurück auf ×1"
+
+msgctxt "recipe.resetPreset"
+msgid "Back to Default"
+msgstr "Zurück auf Standard"
+
+msgctxt "recipe.bpm"
+msgid "BPM"
+msgstr "BPM"
+
+msgctxt "recipe.duration"
+msgid "Duration (s)"
+msgstr "Dauer (s)"
+
+msgctxt "recipe.key"
+msgid "Key"
+msgstr "Tonart"
+
+msgctxt "recipe.auto"
+msgid "Auto"
+msgstr "Auto"
+
+msgctxt "recipe.empty"
+msgid "—"
+msgstr "—"
+
+msgctxt "recipe.none"
+msgid "None"
+msgstr "Keine"
+
+msgctxt "recipe.model"
+msgid "Model"
+msgstr "Modell"
+
+msgctxt "recipe.modelLoading"
+msgid "Loading…"
+msgstr "Wird geladen…"
+
+msgctxt "recipe.modelLoaded"
+msgid "Loaded"
+msgstr "Geladen"
+
+msgctxt "recipe.takes"
+msgid "Takes per Generate"
+msgstr "Takes pro Generierung"
+
+msgctxt "recipe.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "recipe.defaultsError"
+msgid "Failed to load generation defaults"
+msgstr "Die Standardwerte für die Generierung konnten nicht geladen werden"
+
+msgctxt "recipe.engineEmptyHint"
+msgid "Empty field = the model's default"
+msgstr "Leeres Feld = Standardwert des Modells"
+
+msgctxt "recipe.preset"
+msgid "Preset"
+msgstr "Preset"
+
+msgctxt "recipe.presetDefault"
+msgid "Default"
+msgstr "Standard"
+
+msgctxt "recipe.presetCustom"
+msgid "Custom"
+msgstr "Eigenes"
+
+msgctxt "recipe.presetShared"
+msgid "{name} (shared)"
+msgstr "{name} (geteilt)"
+
+msgctxt "recipe.presetNamePlaceholder"
+msgid "Preset name"
+msgstr "Name des Presets"
+
+msgctxt "recipe.presetSave"
+msgid "Save"
+msgstr "Speichern"
+
+msgctxt "recipe.presetCancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "recipe.presetSaveError"
+msgid "Failed to save preset"
+msgstr "Preset konnte nicht gespeichert werden"
+
+msgctxt "recipe.saveAsPreset"
+msgid "Save as preset"
+msgstr "Als Preset speichern"
+
+msgctxt "recipe.managePresets"
+msgid "Manage in Settings → Generation"
+msgstr "Verwalten unter Einstellungen → Generierung"
+
+msgctxt "referencePicker.label"
+msgid "Reference track"
+msgstr "Referenztrack"
+
+msgctxt "referencePicker.chosen"
+msgid "Reference track: {name}"
+msgstr "Referenztrack: {name}"
+
+msgctxt "referencePicker.none"
+msgid "None"
+msgstr "Keiner"
+
+msgctxt "referencePicker.play"
+msgid "Play {name}"
+msgstr "{name} abspielen"
+
+msgctxt "referencePicker.pause"
+msgid "Pause {name}"
+msgstr "{name} pausieren"
+
+msgctxt "referencePicker.loading"
+msgid "Loading references…"
+msgstr "Referenzen werden geladen…"
+
+msgctxt "referencePicker.loadError"
+msgid "Failed to load references"
+msgstr "Referenzen konnten nicht geladen werden"
+
+msgctxt "referencePicker.playError"
+msgid "Can't play this recording"
+msgstr "Diese Aufnahme lässt sich nicht abspielen"
+
+msgctxt "referencePicker.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "referencePicker.upload"
+msgid "Upload audio"
+msgstr "Audio hochladen"
+
+msgctxt "referencePicker.uploading"
+msgid "Uploading…"
+msgstr "Wird hochgeladen…"
+
+msgctxt "referencePicker.uploadError"
+msgid "Upload failed"
+msgstr "Upload fehlgeschlagen"
+
+msgctxt "referencePicker.all"
+msgid "All references"
+msgstr "Alle Referenzen"
+
+msgctxt "voicePicker.label"
+msgid "Your Voice"
+msgstr "Deine Stimme"
+
+msgctxt "voicePicker.mobileLabel"
+msgid "Your Voice · {mode} model"
+msgstr "Deine Stimme · Modell {mode}"
+
+msgctxt "voicePicker.none"
+msgid "None"
+msgstr "Keine"
+
+msgctxt "voicePicker.create"
+msgid "Create a voice"
+msgstr "Stimme anlegen"
+
+msgctxt "voicePicker.stateNotForModel"
+msgid "not available for this model"
+msgstr "für dieses Modell nicht verfügbar"
+
+msgctxt "voicePicker.stateDeleted"
+msgid "voice deleted"
+msgstr "Stimme gelöscht"
+
+msgctxt "voicePicker.stateDraft"
+msgid "draft"
+msgstr "Entwurf"
+
+msgctxt "voicePicker.stateTraining"
+msgid "training"
+msgstr "im Training"
+
+msgctxt "voicePicker.stateFailed"
+msgid "failed"
+msgstr "fehlgeschlagen"
+
+msgctxt "voicePicker.chosenUnavailable"
+msgid "{name} — {state}"
+msgstr "{name} — {state}"
+
+msgctxt "voicePicker.optionUnavailable"
+msgid "— {state}"
+msgstr "— {state}"
+
+msgctxt "referenceExpiry.deletesOn"
+msgid "Deleted on {date} — keep to preserve"
+msgstr "Wird am {date} gelöscht – behalte sie, damit sie bleibt"
+
+msgctxt "referenceExpiry.daysLeft.one"
+msgid "{count}d"
+msgstr "{count} T."
+
+msgctxt "referenceExpiry.daysLeft.other"
+msgid "{count}d"
+msgstr "{count} T."
+
+msgctxt "paramField.inferenceSteps"
+msgid "Inference Steps"
+msgstr "Inferenzschritte"
+
+msgctxt "paramField.inferenceStepsHelp"
+msgid "Diffusion denoising steps. More = slower but more refined."
+msgstr "Entrauschungsschritte der Diffusion. Mehr = langsamer, aber feiner."
+
+msgctxt "paramField.guidanceScale"
+msgid "Guidance Scale"
+msgstr "Guidance Scale"
+
+msgctxt "paramField.guidanceScaleHelp"
+msgid "How strongly to follow your style prompt. Ignored on turbo models."
+msgstr "Wie stark dein Stil-Prompt befolgt wird. Bei Turbo-Modellen ohne Wirkung."
+
+msgctxt "paramField.shift"
+msgid "Shift"
+msgstr "Shift"
+
+msgctxt "paramField.shiftHelp"
+msgid "Biases denoising toward early structure or late detail. 3.0 is balanced."
+msgstr ""
+"Verschiebt das Entrauschen zu früher Struktur oder spätem Detail. 3.0 ist"
+" ausgewogen."
+
+msgctxt "paramField.cfgIntervalStart"
+msgid "CFG Interval Start"
+msgstr "CFG-Intervall Start"
+
+msgctxt "paramField.cfgIntervalStartHelp"
+msgid "Apply CFG starting from this point in the denoising trajectory (0.0–1.0)."
+msgstr "CFG ab diesem Punkt der Entrauschungsbahn anwenden (0.0–1.0)."
+
+msgctxt "paramField.cfgIntervalEnd"
+msgid "CFG Interval End"
+msgstr "CFG-Intervall Ende"
+
+msgctxt "paramField.cfgIntervalEndHelp"
+msgid "Stop applying CFG at this point in the denoising trajectory (0.0–1.0)."
+msgstr "CFG ab diesem Punkt der Entrauschungsbahn nicht mehr anwenden (0.0–1.0)."
+
+msgctxt "paramField.velocityNorm"
+msgid "Velocity Norm"
+msgstr "Velocity Norm"
+
+msgctxt "paramField.velocityNormHelp"
+msgid "DiT velocity normalization threshold. 0 = disabled."
+msgstr "Schwellwert der Velocity-Normalisierung im DiT. 0 = aus."
+
+msgctxt "paramField.velocityEma"
+msgid "Velocity EMA"
+msgstr "Velocity EMA"
+
+msgctxt "paramField.velocityEmaHelp"
+msgid "Exponential moving average smoothing for DiT velocity. 0 = disabled."
+msgstr "Glättung der DiT-Velocity per exponentiellem gleitendem Mittel. 0 = aus."
+
+msgctxt "paramField.latentShift"
+msgid "Latent Shift"
+msgstr "Latent Shift"
+
+msgctxt "paramField.latentShiftHelp"
+msgid "Shifts the latent space center. 0 = no shift."
+msgstr "Verschiebt die Mitte des latenten Raums. 0 = keine Verschiebung."
+
+msgctxt "paramField.latentRescale"
+msgid "Latent Rescale"
+msgstr "Latent Rescale"
+
+msgctxt "paramField.latentRescaleHelp"
+msgid "Rescales latent magnitude. 1.0 = no change."
+msgstr "Skaliert die latente Größe neu. 1.0 = keine Änderung."
+
+msgctxt "paramField.lmCodeStrength"
+msgid "LM Code Strength"
+msgstr "LM-Code-Stärke"
+
+msgctxt "paramField.lmCodeStrengthHelp"
+msgid ""
+"How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes "
+"ignored."
+msgstr ""
+"Wie stark die LM-Codes den DiT führen. 1.0 = volle Führung, 0 = Codes "
+"ignoriert."
+
+msgctxt "paramField.inferMethod"
+msgid "Infer Method"
+msgstr "Inferenzmethode"
+
+msgctxt "paramField.inferMethodHelp"
+msgid ""
+"ODE = deterministic, reproducible. SDE = adds randomness, sometimes more "
+"natural."
+msgstr ""
+"ODE = deterministisch, reproduzierbar. SDE = bringt Zufall hinein, klingt"
+" manchmal natürlicher."
+
+msgctxt "paramField.sampler"
+msgid "Sampler"
+msgstr "Sampler"
+
+msgctxt "paramField.samplerHelp"
+msgid "Diffusion sampler algorithm. heun is a second-order predictor-corrector."
+msgstr ""
+"Sampler-Algorithmus der Diffusion. heun ist ein Prädiktor-Korrektor "
+"zweiter Ordnung."
+
+msgctxt "paramField.adaptiveDualGuidance"
+msgid "Adaptive Dual Guidance"
+msgstr "Adaptive Dual Guidance"
+
+msgctxt "paramField.adaptiveDualGuidanceHelp"
+msgid ""
+"Smarter CFG that prevents over-saturation. Only matters when "
+"guidance_scale > 1."
+msgstr ""
+"Klügeres CFG, das Übersättigung verhindert. Wirkt nur bei guidance_scale "
+"> 1."
+
+msgctxt "paramField.temperature"
+msgid "Temperature"
+msgstr "Temperatur"
+
+msgctxt "paramField.temperatureHelp"
+msgid ""
+"How creative the LM is when planning. Higher = more varied, lower = more "
+"predictable."
+msgstr ""
+"Wie kreativ das LM beim Planen ist. Höher = abwechslungsreicher, "
+"niedriger = vorhersehbarer."
+
+msgctxt "paramField.topK"
+msgid "Top-K"
+msgstr "Top-K"
+
+msgctxt "paramField.topKHelp"
+msgid "Limit LM sampling to the K most-likely tokens. 0 = disabled."
+msgstr ""
+"Beschränkt das Sampling des LM auf die K wahrscheinlichsten Tokens. 0 = "
+"aus."
+
+msgctxt "paramField.topP"
+msgid "Top-P"
+msgstr "Top-P"
+
+msgctxt "paramField.topPHelp"
+msgid ""
+"Nucleus sampling — sample only from tokens covering P of the probability "
+"mass."
+msgstr ""
+"Nucleus-Sampling – nur aus den Tokens samplen, die den Anteil P der "
+"Wahrscheinlichkeitsmasse abdecken."
+
+msgctxt "paramField.cfgScale"
+msgid "CFG Scale"
+msgstr "CFG Scale"
+
+msgctxt "paramField.cfgScaleHelp"
+msgid "CFG strength for the LM's plan (separate from the DiT guidance_scale)."
+msgstr "CFG-Stärke für den Plan des LM (getrennt von guidance_scale des DiT)."
+
+msgctxt "paramField.repetitionPenalty"
+msgid "Rep. Penalty"
+msgstr "Wiederh.-Strafe"
+
+msgctxt "paramField.repetitionPenaltyHelp"
+msgid "Discourages the LM from repeating itself. 1.0 = off."
+msgstr "Hält das LM davon ab, sich zu wiederholen. 1.0 = aus."
+
+msgctxt "paramField.batchSize"
+msgid "Batch Size"
+msgstr "Batch-Größe"
+
+msgctxt "paramField.batchSizeHelp"
+msgid "Number of audio variations to generate from one request (1–8)."
+msgstr "Anzahl der Audio-Varianten, die aus einer Anfrage generiert werden (1–8)."
+
+msgctxt "paramField.thinking"
+msgid "Thinking"
+msgstr "Thinking"
+
+msgctxt "paramField.thinkingHelp"
+msgid "Let the LM plan musical structure before audio generation."
+msgstr "Lässt das LM vor der Audiogenerierung die musikalische Struktur planen."
+
+msgctxt "paramField.cotCaption"
+msgid "CoT Caption"
+msgstr "CoT-Caption"
+
+msgctxt "paramField.cotCaptionHelp"
+msgid "Let the LM rewrite your style caption to be more model-friendly."
+msgstr ""
+"Lässt das LM deine Stil-Caption so umschreiben, dass das Modell sie "
+"besser versteht."
+
+msgctxt "paramField.cotLanguage"
+msgid "CoT Language"
+msgstr "CoT-Sprache"
+
+msgctxt "paramField.cotLanguageHelp"
+msgid "Let the LM auto-detect the language of your lyrics."
+msgstr "Lässt das LM die Sprache deines Songtexts selbst erkennen."
+
+msgctxt "paramField.negativePrompt"
+msgid "Negative Prompt"
+msgstr "Negativ-Prompt"
+
+msgctxt "paramField.negativePromptHelp"
+msgid "Tell the LM what NOT to include in its musical plan."
+msgstr "Sag dem LM, was NICHT in seinen musikalischen Plan soll."
+
+msgctxt "paramField.negativePromptPlaceholder"
+msgid "e.g. bad quality, noise"
+msgstr "z. B. schlechte Qualität, Rauschen"
+
+msgctxt "paramField.sectionDit"
+msgid "DiT (Sound)"
+msgstr "DiT (Klang)"
+
+msgctxt "paramField.sectionLm"
+msgid "LM (Lyrics)"
+msgstr "LM (Songtext)"
+
+msgctxt "paramField.defaultOption"
+msgid "default"
+msgstr "Standard"
+
+msgctxt "paramField.defaultOptionValue"
+msgid "default ({value})"
+msgstr "Standard ({value})"
+
+msgctxt "paramField.defaultMissing"
+msgid "Default missing for {key}"
+msgstr "Standardwert fehlt für {key}"
+
+msgctxt "paramField.resetTitle"
+msgid "Back to the model's default"
+msgstr "Zurück zum Standardwert des Modells"
+
+msgctxt "paramField.resetLabel"
+msgid "{field}: Back to the model's default"
+msgstr "{field}: zurück zum Standardwert des Modells"
+
+msgctxt "voiceRefusal.deleted"
+msgid "LoRA is deleted"
+msgstr "Die LoRA ist gelöscht"
+
+msgctxt "voiceRefusal.modifyDuringTraining"
+msgid "LoRA is {status} — cannot modify during training"
+msgstr "Die LoRA ist {status} – während des Trainings nicht änderbar"
+
+msgctxt "voiceRefusal.deleteDuringTraining"
+msgid "LoRA is {status} — cannot delete during training"
+msgstr "Die LoRA ist {status} – während des Trainings nicht löschbar"
+
+msgctxt "voiceRefusal.alreadyTraining"
+msgid "LoRA is {status} — already training"
+msgstr "Die LoRA ist {status} – das Training läuft bereits"
+
+msgctxt "voiceRefusal.notReady"
+msgid "LoRA is not ready (status={status})"
+msgstr "Die LoRA ist nicht bereit (Status={status})"
+
+msgctxt "voiceRefusal.nameRequired"
+msgid "Name is required"
+msgstr "Ein Name ist erforderlich"
+
+msgctxt "voiceRefusal.limit"
+msgid ""
+"Could not create voice\n"
+"You have reached the limit of {limit} voices. Delete a voice before "
+"creating another."
+msgstr ""
+"Stimme konnte nicht angelegt werden\n"
+"Du hast die Grenze von {limit} Stimmen erreicht. Lösch eine Stimme, bevor"
+" du eine weitere anlegst."
+
+msgctxt "voiceRefusal.slugConflict"
+msgid "LoRA slug conflict for '{name}'"
+msgstr "LoRA-Slug-Konflikt für „{name}“"
+
+msgctxt "voiceRefusal.sampleLimit"
+msgid "LoRA already has the maximum of {maximum} samples"
+msgstr "Die LoRA hat bereits die Höchstzahl von {maximum} Samples"
+
+msgctxt "voiceRefusal.captionRequired"
+msgid "Caption is required"
+msgstr "Eine Caption ist erforderlich"
+
+msgctxt "voiceRefusal.lyricsRequired"
+msgid "Lyrics are required"
+msgstr "Ein Songtext ist erforderlich"
+
+msgctxt "voiceRefusal.captionEmpty"
+msgid "Caption cannot be empty"
+msgstr "Die Caption darf nicht leer sein"
+
+msgctxt "voiceRefusal.lyricsEmpty"
+msgid "Lyrics cannot be empty"
+msgstr "Der Songtext darf nicht leer sein"
+
+msgctxt "voiceRefusal.unsupportedFormat"
+msgid "Unsupported audio format '{extension}'. Accepted: {accepted}"
+msgstr "Audioformat „{extension}“ wird nicht unterstützt. Erlaubt: {accepted}"
+
+msgctxt "voiceRefusal.fileTooLarge"
+msgid "Audio file too large (max {maxMb}MB)"
+msgstr "Audiodatei zu groß (max. {maxMb} MB)"
+
+msgctxt "voiceRefusal.fileEmpty"
+msgid "Audio file is empty"
+msgstr "Die Audiodatei ist leer"
+
+msgctxt "voiceRefusal.tooFewSamples"
+msgid "At least {minimum} samples required for training (have {have})"
+msgstr ""
+"Für das Training sind mindestens {minimum} Samples nötig (vorhanden: "
+"{have})"
+
+msgctxt "voiceRefusal.samplesIncomplete"
+msgid "All samples must have non-empty caption and lyrics before training"
+msgstr "Vor dem Training brauchen alle Samples eine Caption und einen Songtext"
+
+msgctxt "voiceRefusal.trainingQueueFull"
+msgid ""
+"Training queue is full\n"
+"{waiting} trainings are already waiting. Try again when one training "
+"starts or finishes."
+msgstr ""
+"Die Trainings-Warteschlange ist voll\n"
+"{waiting} Trainings warten bereits. Versuch es noch einmal, wenn ein "
+"Training startet oder fertig ist."
+
+msgctxt "generationRefusal.sourceNoAudio"
+msgid "Source generation has no audio file"
+msgstr "Die Quell-Generierung hat keine Audiodatei"
+
+msgctxt "generationRefusal.ffmpegMissing"
+msgid "ffmpeg is not available"
+msgstr "ffmpeg ist nicht verfügbar"
+
+msgctxt "generationRefusal.wavConversionFailed"
+msgid "Failed to convert MP3 to WAV"
+msgstr "MP3 konnte nicht in WAV umgewandelt werden"
+
+msgctxt "generationRefusal.noLinkedVersion"
+msgid "Generation has no linked version"
+msgstr "Die Generierung ist mit keiner Version verknüpft"
+
+msgctxt "generationRefusal.needsLyricsAndPrompt"
+msgid "Song needs lyrics and a style prompt before generating"
+msgstr "Der Song braucht vor dem Generieren einen Songtext und einen Stil-Prompt"
+
+msgctxt "generationRefusal.repaintRange"
+msgid "repainting_start must be less than repainting_end"
+msgstr "repainting_start muss kleiner als repainting_end sein"
+
+msgctxt "generationRefusal.workerNotRunning"
+msgid "Worker not running"
+msgstr "Der Worker läuft nicht"
+
+msgctxt "jobRefusal.queueUnavailable"
+msgid "Job queue unavailable"
+msgstr "Die Job-Warteschlange ist nicht verfügbar"
+
+msgctxt "jobRefusal.queueFull"
+msgid "Queue is full. Try again later."
+msgstr "Die Warteschlange ist voll. Versuch es später noch einmal."
+
+msgctxt "jobRefusal.activeJob"
+msgid "You already have an active job. Wait for it to finish."
+msgstr "Du hast schon einen laufenden Job. Warte, bis er fertig ist."
+
+msgctxt "jobRefusal.hourlyLimit"
+msgid "Rate limit reached ({limit}/{jobType}s per hour)."
+msgstr "Limit erreicht ({limit} {jobType}-Jobs pro Stunde)."
+
+msgctxt "cowriterRefusal.browserLogin"
+msgid "The co-writer needs a browser login."
+msgstr "Der Co-Writer braucht eine Anmeldung im Browser."
+
+msgctxt "cowriterRefusal.turnRunning"
+msgid "A co-writer reply is still being written"
+msgstr "Eine Antwort des Co-Writers wird noch geschrieben"
+
+msgctxt "cowriterRefusal.takeNotInSong"
+msgid "Generation does not belong to the current song"
+msgstr "Die Generierung gehört nicht zum aktuellen Song"
+
+msgctxt "takeRefusal.notPlayable"
+msgid "Generation is not playable"
+msgstr "Die Generierung lässt sich nicht abspielen"
+
+msgctxt "settingsRefusal.modelUnavailable"
+msgid "Model '{mode}' is not available"
+msgstr "Das Modell „{mode}“ ist nicht verfügbar"
+
+msgctxt "settingsRefusal.invalidDefaultConfig"
+msgid "Invalid config: must be null, 'sft', 'turbo', or a preset ID"
+msgstr ""
+"Ungültige Konfiguration: muss null, 'sft', 'turbo' oder eine Preset-ID "
+"sein"
+
+msgctxt "settingsRefusal.tailBudgetRange"
+msgid "tail_token_budget must be between {minimum} and {maximum}"
+msgstr "tail_token_budget muss zwischen {minimum} und {maximum} liegen"
+
+msgctxt "settingsRefusal.unknownKeys"
+msgid "Unknown setting keys: {keys}"
+msgstr "Unbekannte Einstellungsschlüssel: {keys}"
+
+msgctxt "settingsRefusal.negativeValue"
+msgid "Value for {key} must be non-negative"
+msgstr "Der Wert für {key} darf nicht negativ sein"
+
+msgctxt "presetRefusal.nameTaken"
+msgid "A preset with that name already exists"
+msgstr "Ein Preset mit diesem Namen gibt es schon"
+
+msgctxt "adminRefusal.unknownModelMode"
+msgid "Unknown model mode '{mode}'"
+msgstr "Unbekannter Modellmodus „{mode}“"
+
+msgctxt "adminRefusal.noOnlineWorkers"
+msgid "No online workers available to download"
+msgstr "Kein Worker online, der herunterladen kann"
+
+msgctxt "adminRefusal.alreadyDownloaded"
+msgid "Model '{mode}' is already downloaded"
+msgstr "Das Modell „{mode}“ ist bereits heruntergeladen"
+
+msgctxt "adminRefusal.alreadyDownloading"
+msgid "Model '{mode}' is already being downloaded (job {jobId})"
+msgstr "Das Modell „{mode}“ wird bereits heruntergeladen (Job {jobId})"
+
+msgctxt "workerRefusal.unreachable"
+msgid "Worker unreachable: {reason}"
+msgstr "Worker nicht erreichbar: {reason}"
+
+msgctxt "workerRefusal.relayed"
+msgid "{cause}"
+msgstr "{cause}"
+
+msgctxt "workerRefusal.notResponding"
+msgid ""
+"Worker '{workerId}' isn't responding, so it can't be asked to restart "
+"itself. Its container is likely stopped or crashed — restart the "
+"container directly."
+msgstr ""
+"Der Worker „{workerId}“ antwortet nicht und kann daher nicht gebeten "
+"werden, sich neu zu starten. Sein Container ist wahrscheinlich gestoppt "
+"oder abgestürzt – starte den Container direkt neu."
+
+msgctxt "workerRefusal.returnedStatus"
+msgid "Worker returned {status}"
+msgstr "Der Worker hat {status} zurückgegeben"
+
+msgctxt "coverRefusal.tooLarge"
+msgid "Cover file is too large"
+msgstr "Die Cover-Datei ist zu groß"
+
+msgctxt "coverRefusal.unreadable"
+msgid "Cover image could not be read"
+msgstr "Das Cover-Bild konnte nicht gelesen werden"
+
+msgctxt "coverRefusal.unsupportedType"
+msgid "Cover must be a JPEG or PNG image"
+msgstr "Das Cover muss ein JPEG- oder PNG-Bild sein"
+
+msgctxt "coverRefusal.tooManyPixels"
+msgid "Cover image is too large"
+msgstr "Das Cover-Bild ist zu groß"
+
+msgctxt "coverRefusal.variantUnknown"
+msgid "Unknown cover variant"
+msgstr "Unbekannte Cover-Variante"
+
+msgctxt "coverRefusal.invalidAlbumId"
+msgid "Invalid album id for cover storage"
+msgstr "Ungültige Album-ID für die Cover-Ablage"
+
+msgctxt "coverRefusal.invalidSongId"
+msgid "Invalid song id for cover storage"
+msgstr "Ungültige Song-ID für die Cover-Ablage"
+
+msgctxt "coverRefusal.invalidPlaylistId"
+msgid "Invalid playlist id for cover storage"
+msgstr "Ungültige Playlist-ID für die Cover-Ablage"
+
+msgctxt "coverSuggestionRefusal.alreadyRunning"
+msgid "Cover suggestions are already being generated"
+msgstr "Cover-Vorschläge werden bereits erstellt"
+
+msgctxt "referenceRefusal.quotaReached"
+msgid "Reference audio storage limit reached."
+msgstr "Das Speicherlimit für Referenz-Audio ist erreicht."
+
+msgctxt "referenceRefusal.storage"
+msgid "Reference audio storage could not be checked."
+msgstr "Der Speicher für Referenz-Audio konnte nicht geprüft werden."
+
+msgctxt "albumRefusal.restoreWindowPassed"
+msgid ""
+"Album {id} was deleted {days} days ago, past the {window}-day restore "
+"window"
+msgstr ""
+"Das Album {id} wurde vor {days} Tagen gelöscht, nach Ablauf der Frist von"
+" {window} Tagen zum Wiederherstellen"
+
+msgctxt "songRefusal.restoreWindowPassed"
+msgid ""
+"Song {id} was deleted {days} days ago, past the {window}-day restore "
+"window"
+msgstr ""
+"Der Song {id} wurde vor {days} Tagen gelöscht, nach Ablauf der Frist von "
+"{window} Tagen zum Wiederherstellen"
+
+msgctxt "takesList.loading"
+msgid "Loading takes…"
+msgstr "Takes werden geladen…"
+
+msgctxt "takesList.error"
+msgid "Failed to load takes"
+msgstr "Takes konnten nicht geladen werden"
+
+msgctxt "takesList.retry"
+msgid "Try again"
+msgstr "Noch einmal"
+
+msgctxt "takesList.aboutTakes"
+msgid "About takes"
+msgstr "Über Takes"
+
+msgctxt "takesList.mobileHint"
+msgid "Tap play → details in Now Playing"
+msgstr "Tipp auf Abspielen → Details unter „Läuft gerade“"
+
+msgctxt "takesList.empty"
+msgid "No takes yet · {generate} makes the first"
+msgstr "Noch keine Takes · {generate} erzeugt den ersten"
+
+msgctxt "takesList.draftUnsaved"
+msgid "Draft — unsaved changes. Generate creates v{next}."
+msgstr "Entwurf – ungespeicherte Änderungen. Generieren legt v{next} an."
+
+msgctxt "takesList.draftDiffers"
+msgid "Draft — differs from v{latest}. Generate creates v{next}."
+msgstr "Entwurf – weicht von v{latest} ab. Generieren legt v{next} an."
+
+msgctxt "takesList.openVersion"
+msgid "Open v{number}"
+msgstr "v{number} öffnen"
+
+msgctxt "takesList.currentHead.one"
+msgid "v{number} current · {count} take"
+msgstr "v{number} aktuell · {count} Take"
+
+msgctxt "takesList.currentHead.other"
+msgid "v{number} current · {count} takes"
+msgstr "v{number} aktuell · {count} Takes"
+
+msgctxt "takesList.foldedVersion.one"
+msgid "v{number} · {count} take"
+msgstr "v{number} · {count} Take"
+
+msgctxt "takesList.foldedVersion.other"
+msgid "v{number} · {count} takes"
+msgstr "v{number} · {count} Takes"
+
+msgctxt "takesList.foldedImported.one"
+msgid "Imported · {count} take"
+msgstr "Importiert · {count} Take"
+
+msgctxt "takesList.foldedImported.other"
+msgid "Imported · {count} takes"
+msgstr "Importiert · {count} Takes"
+
+msgctxt "takesList.foldedVersionArchived.one"
+msgid "v{number} · {count} take · {archived} archived"
+msgstr "v{number} · {count} Take · {archived} archiviert"
+
+msgctxt "takesList.foldedVersionArchived.other"
+msgid "v{number} · {count} takes · {archived} archived"
+msgstr "v{number} · {count} Takes · {archived} archiviert"
+
+msgctxt "takesList.foldedImportedArchived.one"
+msgid "Imported · {count} take · {archived} archived"
+msgstr "Importiert · {count} Take · {archived} archiviert"
+
+msgctxt "takesList.foldedImportedArchived.other"
+msgid "Imported · {count} takes · {archived} archived"
+msgstr "Importiert · {count} Takes · {archived} archiviert"
+
+msgctxt "takesList.allArchived"
+msgid "all"
+msgstr "alle"
+
+msgctxt "takesList.earlier"
+msgid "Earlier versions"
+msgstr "Frühere Versionen"
+
+msgctxt "takesList.takeLabel"
+msgid "Take {number}"
+msgstr "Take {number}"
+
+msgctxt "takesList.selectAllUnkept"
+msgid "Select all unkept"
+msgstr "Alle nicht behaltenen auswählen"
+
+msgctxt "takesList.selectedCount.one"
+msgid "{count} selected"
+msgstr "{count} ausgewählt"
+
+msgctxt "takesList.selectedCount.other"
+msgid "{count} selected"
+msgstr "{count} ausgewählt"
+
+msgctxt "takesList.bulkDeleteLabel.one"
+msgid "Delete {count}"
+msgstr "{count} löschen"
+
+msgctxt "takesList.bulkDeleteLabel.other"
+msgid "Delete {count}"
+msgstr "{count} löschen"
+
+msgctxt "takesList.bulkDeleteTitle.one"
+msgid "Delete {count} take?"
+msgstr "{count} Take löschen?"
+
+msgctxt "takesList.bulkDeleteTitle.other"
+msgid "Delete {count} takes?"
+msgstr "{count} Takes löschen?"
+
+msgctxt "takesList.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "takesList.deleteTitle"
+msgid "Delete take {number}?"
+msgstr "Take {number} löschen?"
+
+msgctxt "takesList.deleteMessage"
+msgid "Audio files will be permanently deleted"
+msgstr "Die Audiodateien werden endgültig gelöscht"
+
+msgctxt "takesList.deleteConfirm"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "takesList.deleted.one"
+msgid "Deleted {count} take"
+msgstr "{count} Take gelöscht"
+
+msgctxt "takesList.deleted.other"
+msgid "Deleted {count} takes"
+msgstr "{count} Takes gelöscht"
+
+msgctxt "takesList.bulkDeleteFailed"
+msgid "Bulk delete failed"
+msgstr "Löschen mehrerer Takes fehlgeschlagen"
+
+msgctxt "takesList.addedToPlaylist"
+msgid "Added to playlist"
+msgstr "Zur Playlist hinzugefügt"
+
+msgctxt "takesList.addFailed"
+msgid "Failed to add"
+msgstr "Hinzufügen fehlgeschlagen"
+
+msgctxt "takeRow.takeLabel"
+msgid "Take {number}"
+msgstr "Take {number}"
+
+msgctxt "takeRow.takeVersioned"
+msgid "v{version} · take {take}"
+msgstr "v{version} · Take {take}"
+
+msgctxt "takeRow.takeUnversioned"
+msgid "take {take}"
+msgstr "Take {take}"
+
+msgctxt "takeRow.archivedTitle"
+msgid "Archived take"
+msgstr "Archivierter Take"
+
+msgctxt "takeRow.selectTake"
+msgid "Select {take}"
+msgstr "{take} auswählen"
+
+msgctxt "takeRow.playTake"
+msgid "Play {take}"
+msgstr "{take} abspielen"
+
+msgctxt "takeRow.pauseTake"
+msgid "Pause {take}"
+msgstr "{take} pausieren"
+
+msgctxt "takeRow.retryTake"
+msgid "Retry {take}"
+msgstr "{take} erneut versuchen"
+
+msgctxt "takeRow.pickTake"
+msgid "Pick {take}"
+msgstr "{take} fürs Album wählen"
+
+msgctxt "takeRow.unpickTake"
+msgid "Unpick {take}"
+msgstr "{take} nicht mehr fürs Album wählen"
+
+msgctxt "takeRow.keepTake"
+msgid "Keep {take}"
+msgstr "{take} behalten"
+
+msgctxt "takeRow.unkeepTake"
+msgid "Unkeep {take}"
+msgstr "{take} nicht mehr behalten"
+
+msgctxt "takeRow.provenanceRepaint"
+msgid "Repaint from {take}"
+msgstr "Repaint von {take}"
+
+msgctxt "takeRow.provenanceCover"
+msgid "Cover from {take}"
+msgstr "Cover von {take}"
+
+msgctxt "takeRow.batchBadge"
+msgid "{delivered} of {requested}"
+msgstr "{delivered} von {requested}"
+
+msgctxt "takeRow.batchTitle"
+msgid ""
+"Batch size reduced by ACE-Step due to available VRAM: delivered "
+"{delivered} of {requested}"
+msgstr ""
+"ACE-Step hat die Batch-Größe wegen des verfügbaren VRAM verkleinert: "
+"{delivered} von {requested} geliefert"
+
+msgctxt "takeRow.flagNoVocals"
+msgid "No vocals"
+msgstr "Kein Gesang"
+
+msgctxt "takeRow.flagNoVocalsTitle"
+msgid "No vocals detected in this take"
+msgstr "In diesem Take wurde kein Gesang erkannt"
+
+msgctxt "takeRow.flagLongSilence"
+msgid "Long silence"
+msgstr "Lange Stille"
+
+msgctxt "takeRow.flagLongSilenceTitle"
+msgid "{count}s of silence detected"
+msgstr "{count} s Stille erkannt"
+
+msgctxt "takeRow.rescoring"
+msgid "Re-scoring…"
+msgstr "Wird neu bewertet…"
+
+msgctxt "takeRow.archived"
+msgid "archived"
+msgstr "archiviert"
+
+msgctxt "takeRow.archivedBadgeTitle"
+msgid "Archived — will be hard-deleted"
+msgstr "Archiviert – wird endgültig gelöscht"
+
+msgctxt "takeRow.expiryBadge"
+msgid "{count}d"
+msgstr "{count} T."
+
+msgctxt "takeRow.expiresIn.one"
+msgid "Expires in {count} day — pick or keep to preserve"
+msgstr "Läuft in {count} Tag ab – fürs Album wählen oder behalten, damit er bleibt"
+
+msgctxt "takeRow.expiresIn.other"
+msgid "Expires in {count} days — pick or keep to preserve"
+msgstr ""
+"Läuft in {count} Tagen ab – fürs Album wählen oder behalten, damit er "
+"bleibt"
+
+msgctxt "takeRow.voice"
+msgid "Voice: {name}"
+msgstr "Stimme: {name}"
+
+msgctxt "takeRow.voiceDeleted"
+msgid "Voice: {name} — voice deleted"
+msgstr "Stimme: {name} – Stimme gelöscht"
+
+msgctxt "takeRow.scoreTitle"
+msgid "{metric} {value}"
+msgstr "{metric} {value}"
+
+msgctxt "takeRow.scoreRating"
+msgid "Rating"
+msgstr "Bewertung"
+
+msgctxt "takeRow.scoreLyricsSung"
+msgid "Lyrics sung"
+msgstr "Text gesungen"
+
+msgctxt "takeRow.scoreDynamics"
+msgid "Dynamics"
+msgstr "Dynamik"
+
+msgctxt "takeRow.scoreQuality"
+msgid "Quality"
+msgstr "Qualität"
+
+msgctxt "takeRow.scoreEnjoyment"
+msgid "Enjoyment"
+msgstr "Hörspaß"
+
+msgctxt "takeRow.scoreCoherence"
+msgid "Coherence"
+msgstr "Stimmigkeit"
+
+msgctxt "takeTask.repaint"
+msgid "Repaint"
+msgstr "Repaint"
+
+msgctxt "takeTask.cover"
+msgid "Cover"
+msgstr "Cover"
+
+msgctxt "takeTask.close"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "takeTask.closeTitle"
+msgid "Close — nothing changes"
+msgstr "Schließen – nichts ändert sich"
+
+msgctxt "takeTask.fromTake"
+msgid "take {number}"
+msgstr "Take {number}"
+
+msgctxt "takeTask.detailVersioned"
+msgid "· v{version} · {duration}"
+msgstr "· v{version} · {duration}"
+
+msgctxt "takeTask.detail"
+msgid "· {duration}"
+msgstr "· {duration}"
+
+msgctxt "takeTask.range"
+msgid "Range"
+msgstr "Bereich"
+
+msgctxt "takeTask.rangeCaption"
+msgid "drag the handles"
+msgstr "zieh an den Griffen"
+
+msgctxt "takeTask.repaintAmount"
+msgid "How much changes"
+msgstr "Wie viel sich ändert"
+
+msgctxt "takeTask.modeConservative"
+msgid "Conservative"
+msgstr "Behutsam"
+
+msgctxt "takeTask.modeBalanced"
+msgid "Balanced"
+msgstr "Ausgewogen"
+
+msgctxt "takeTask.modeAggressive"
+msgid "Aggressive"
+msgstr "Kräftig"
+
+msgctxt "takeTask.repaintStrength"
+msgid "Repaint strength"
+msgstr "Repaint-Stärke"
+
+msgctxt "takeTask.strengthValue"
+msgid "{count}%"
+msgstr "{count} %"
+
+msgctxt "takeTask.coverCloseness"
+msgid "How close to take {number}"
+msgstr "Wie nah an Take {number}"
+
+msgctxt "takeTask.coverFree"
+msgid "Free"
+msgstr "Frei"
+
+msgctxt "takeTask.coverStrict"
+msgid "Strict"
+msgstr "Streng"
+
+msgctxt "takeTask.coverStrength"
+msgid "Cover strength"
+msgstr "Cover-Stärke"
+
+msgctxt "takeTask.noise"
+msgid "Noise"
+msgstr "Rauschen"
+
+msgctxt "takeTask.noiseCaption"
+msgid "more noise, more surprise"
+msgstr "mehr Rauschen, mehr Überraschung"
+
+msgctxt "takeTask.noiseBound"
+msgid "{count}"
+msgstr "{count}"
+
+msgctxt "takeTask.promptHint"
+msgid ""
+"Paints using the lyrics and style currently in the editor — not the "
+"source take's own."
+msgstr ""
+"Malt mit dem Songtext und Stil, die gerade im Editor stehen – nicht mit "
+"denen des Quell-Takes."
+
+msgctxt "takeTask.seedLine"
+msgid "seed: from take {number}"
+msgstr "Seed: aus Take {number}"
+
+msgctxt "takeTask.landing"
+msgid "New take in v{number}"
+msgstr "Neuer Take in v{number}"
+
+msgctxt "takeTask.headerNote"
+msgid "· the header Generate stays what it is"
+msgstr "· „Generieren“ oben bleibt, wie es ist"
+
+msgctxt "takeTask.repaintPress"
+msgid "Repaint {start} – {end}"
+msgstr "Repaint {start} – {end}"
+
+msgctxt "takeTask.repaintStart"
+msgid "Repaint start"
+msgstr "Repaint-Start"
+
+msgctxt "takeTask.repaintEnd"
+msgid "Repaint end"
+msgstr "Repaint-Ende"
+
+msgctxt "takeTask.previewRange"
+msgid "Preview selected range"
+msgstr "Ausgewählten Bereich anhören"
+
+msgctxt "seedChip.label"
+msgid "Seed · take {number}"
+msgstr "Seed · Take {number}"
+
+msgctxt "seedChip.clear"
+msgid "Clear seed"
+msgstr "Seed entfernen"
+
+msgctxt "takeActions.pickFailed"
+msgid "Pick failed"
+msgstr "Auswählen fehlgeschlagen"
+
+msgctxt "takeActions.keepFailed"
+msgid "Keep failed"
+msgstr "Behalten fehlgeschlagen"
+
+msgctxt "takeActions.restoreFailed"
+msgid "Restore failed"
+msgstr "Wiederherstellen fehlgeschlagen"
+
+msgctxt "takeActions.ratingSaved"
+msgid "Rating saved"
+msgstr "Bewertung gespeichert"
+
+msgctxt "takeActions.ratingFailed"
+msgid "Rating failed"
+msgstr "Bewertung fehlgeschlagen"
+
+msgctxt "takeActions.rescoreQueued"
+msgid "Re-scoring this take…"
+msgstr "Dieser Take wird neu bewertet…"
+
+msgctxt "takeActions.rescoreFailed"
+msgid "Re-score failed"
+msgstr "Neubewertung fehlgeschlagen"
+
+msgctxt "takeActions.useSeed"
+msgid "Seed from take {number}"
+msgstr "Seed aus Take {number}"
+
+msgctxt "nowPlayingTake.label"
+msgid "Take {number}"
+msgstr "Take {number}"
+
+msgctxt "nowPlayingTake.importedHeading"
+msgid "Imported take"
+msgstr "Importierter Take"
+
+msgctxt "nowPlayingTake.heading"
+msgid "v{version} · take {take}"
+msgstr "v{version} · Take {take}"
+
+msgctxt "nowPlayingTake.headingDuration"
+msgid "v{version} · take {take} · {duration}"
+msgstr "v{version} · Take {take} · {duration}"
+
+msgctxt "nowPlayingTake.headingMode"
+msgid "v{version} · take {take} · {mode}"
+msgstr "v{version} · Take {take} · {mode}"
+
+msgctxt "nowPlayingTake.headingDurationMode"
+msgid "v{version} · take {take} · {duration} · {mode}"
+msgstr "v{version} · Take {take} · {duration} · {mode}"
+
+msgctxt "nowPlayingTake.openVersion"
+msgid "Open v{number}"
+msgstr "v{number} öffnen"
+
+msgctxt "nowPlayingTake.pick"
+msgid "Pick"
+msgstr "Fürs Album"
+
+msgctxt "nowPlayingTake.unpick"
+msgid "Unpick"
+msgstr "Nicht fürs Album"
+
+msgctxt "nowPlayingTake.keep"
+msgid "Keep"
+msgstr "Behalten"
+
+msgctxt "nowPlayingTake.unkeep"
+msgid "Unkeep"
+msgstr "Nicht behalten"
+
+msgctxt "nowPlayingTake.scores"
+msgid "Scores"
+msgstr "Scores"
+
+msgctxt "nowPlayingTake.scoresEmpty"
+msgid "No scores yet"
+msgstr "Noch keine Scores"
+
+msgctxt "nowPlayingTake.scoreRating"
+msgid "Rating"
+msgstr "Bewertung"
+
+msgctxt "nowPlayingTake.scoreLyricsSung"
+msgid "Lyrics sung"
+msgstr "Text gesungen"
+
+msgctxt "nowPlayingTake.scoreDynamics"
+msgid "Dynamics"
+msgstr "Dynamik"
+
+msgctxt "nowPlayingTake.scoreQuality"
+msgid "Quality"
+msgstr "Qualität"
+
+msgctxt "nowPlayingTake.scoreEnjoyment"
+msgid "Enjoyment"
+msgstr "Hörspaß"
+
+msgctxt "nowPlayingTake.scoreCoherence"
+msgid "Coherence"
+msgstr "Stimmigkeit"
+
+msgctxt "nowPlayingTake.scoreBpm"
+msgid "BPM"
+msgstr "BPM"
+
+msgctxt "nowPlayingTake.deviations"
+msgid "Sung vs. lyrics"
+msgstr "Gesungen vs. Songtext"
+
+msgctxt "nowPlayingTake.deviationsEmpty"
+msgid "Sung text matches the lyrics"
+msgstr "Der gesungene Text passt zum Songtext"
+
+msgctxt "nowPlayingTake.deviationsUnavailable"
+msgid "No transcript to compare against yet"
+msgstr "Noch kein Transkript zum Vergleichen"
+
+msgctxt "nowPlayingTake.lyricsRow"
+msgid "Lyrics: {lyrics}"
+msgstr "Songtext: {lyrics}"
+
+msgctxt "nowPlayingTake.deviationAddedTitle"
+msgid "Not in lyrics"
+msgstr "Nicht im Songtext"
+
+msgctxt "nowPlayingTake.deviationAdded"
+msgid "{value} (Not in lyrics)"
+msgstr "{value} (nicht im Songtext)"
+
+msgctxt "nowPlayingTake.rescoreAction"
+msgid "Re-score this take to follow the lyrics."
+msgstr "Bewerte diesen Take neu, damit er dem Songtext folgt."
+
+msgctxt "nowPlayingTake.rescoring"
+msgid "Re-scoring…"
+msgstr "Wird neu bewertet…"
+
+msgctxt "nowPlayingTake.rescore"
+msgid "Re-score"
+msgstr "Neu bewerten"
+
+msgctxt "nowPlayingTake.recipe"
+msgid "Recipe"
+msgstr "Rezept"
+
+msgctxt "nowPlayingTake.rating"
+msgid "Your rating"
+msgstr "Deine Bewertung"
+
+msgctxt "nowPlayingTake.ratingNotes"
+msgid "Notes (optional)"
+msgstr "Notizen (optional)"
+
+msgctxt "nowPlayingTake.ratingSave"
+msgid "Save rating"
+msgstr "Bewertung speichern"
+
+msgctxt "nowPlayingTake.ratingSaving"
+msgid "Saving…"
+msgstr "Wird gespeichert…"
+
+msgctxt "nowPlayingTake.useSeed"
+msgid "Use seed"
+msgstr "Seed übernehmen"
+
+msgctxt "nowPlayingTake.repaint"
+msgid "Repaint"
+msgstr "Repaint"
+
+msgctxt "nowPlayingTake.cover"
+msgid "Cover"
+msgstr "Cover"
+
+msgctxt "takeRecipe.groupModel"
+msgid "Model & Sampling"
+msgstr "Modell & Sampling"
+
+msgctxt "takeRecipe.groupReproducibility"
+msgid "Reproducibility"
+msgstr "Reproduzierbarkeit"
+
+msgctxt "takeRecipe.groupVersion"
+msgid "Version"
+msgstr "Version"
+
+msgctxt "takeRecipe.groupOther"
+msgid "Other"
+msgstr "Sonstiges"
+
+msgctxt "takeRecipe.model"
+msgid "Model"
+msgstr "Modell"
+
+msgctxt "takeRecipe.deliveredBatchSize"
+msgid "Delivered Batch Size"
+msgstr "Gelieferte Batch-Größe"
+
+msgctxt "takeRecipe.seed"
+msgid "Seed"
+msgstr "Seed"
+
+msgctxt "takeRecipe.requestedSeed"
+msgid "Requested Seed"
+msgstr "Angefragter Seed"
+
+msgctxt "takeRecipe.bpm"
+msgid "BPM"
+msgstr "BPM"
+
+msgctxt "takeRecipe.duration"
+msgid "Duration"
+msgstr "Dauer"
+
+msgctxt "takeRecipe.key"
+msgid "Key"
+msgstr "Tonart"
+
+msgctxt "takeRecipe.language"
+msgid "Language"
+msgstr "Sprache"
+
+msgctxt "takeRecipe.on"
+msgid "On"
+msgstr "An"
+
+msgctxt "takeRecipe.off"
+msgid "Off"
+msgstr "Aus"
+
+msgctxt "albumRefusal.notFound"
+msgid "Album not found"
+msgstr "Album nicht gefunden"
+
+msgctxt "albumRefusal.titleRequired"
+msgid "Title is required"
+msgstr "Ein Titel ist erforderlich"
+
+msgctxt "albumRefusal.idConflict"
+msgid "Album ID conflict for '{title}'. Try a different title."
+msgstr "Album-ID-Konflikt für „{title}“. Versuch einen anderen Titel."
+
+msgctxt "songRefusal.notFound"
+msgid "Song not found"
+msgstr "Song nicht gefunden"
+
+msgctxt "songRefusal.titleRequired"
+msgid "Title is required"
+msgstr "Ein Titel ist erforderlich"
+
+msgctxt "songRefusal.titleTooLong"
+msgid "Title is too long"
+msgstr "Der Titel ist zu lang"
+
+msgctxt "songRefusal.moveTargetMissing"
+msgid "Song or album not found"
+msgstr "Song oder Album nicht gefunden"
+
+msgctxt "songRefusal.restoreAlbumDeleted"
+msgid "Cannot restore song {id}: parent album is deleted"
+msgstr "Song {id} lässt sich nicht wiederherstellen: Sein Album ist gelöscht"
+
+msgctxt "songRefusal.notPlayable"
+msgid "Song is not playable"
+msgstr "Der Song lässt sich nicht abspielen"
+
+msgctxt "songRefusal.playlistLacksSong"
+msgid "Playlist does not hold this song"
+msgstr "Die Playlist enthält diesen Song nicht"
+
+msgctxt "songRefusal.referenceMissing"
+msgid "Not Found"
+msgstr "Nicht gefunden"
+
+msgctxt "versionRefusal.notFound"
+msgid "Version not found"
+msgstr "Version nicht gefunden"
+
+msgctxt "versionRefusal.inUse"
+msgid "This version has a take rendering; wait for it to finish or cancel it."
+msgstr ""
+"Zu dieser Version wird gerade ein Take gerendert; warte, bis er fertig "
+"ist, oder brich ihn ab."
+
+msgctxt "playlistRefusal.notFound"
+msgid "Playlist not found"
+msgstr "Playlist nicht gefunden"
+
+msgctxt "playlistRefusal.entryNotFound"
+msgid "Playlist entry not found"
+msgstr "Playlist-Eintrag nicht gefunden"
+
+msgctxt "playlistRefusal.songNotPlayable"
+msgid "Song has no playable take"
+msgstr "Der Song hat keinen abspielbaren Take"
+
+msgctxt "coverSuggestionRefusal.notFound"
+msgid "Album not found"
+msgstr "Album nicht gefunden"
+
+msgctxt "coverSuggestionRefusal.nothingNamed"
+msgid "Name the suggestions or runs to discard"
+msgstr "Nenn die Vorschläge oder Durchläufe, die verworfen werden sollen"
+
+msgctxt "coverSuggestionRefusal.browserLogin"
+msgid "Cover suggestions need a browser login."
+msgstr "Cover-Vorschläge brauchen eine Anmeldung im Browser."
+
+msgctxt "shareRefusal.personsAgent"
+msgid "A person's own agent cannot share; the person shares in the app."
+msgstr ""
+"Der eigene Agent einer Person kann nicht teilen; die Person teilt in der "
+"App."
+
+msgctxt "libraryRefusal.queryRequired"
+msgid "Search query is required"
+msgstr "Ein Suchbegriff ist erforderlich"
+
+msgctxt "cowriter.title"
+msgid "Co-writer"
+msgstr "Co-Writer"
+
+msgctxt "cowriter.conversationMenu"
+msgid "Conversation menu"
+msgstr "Gesprächsmenü"
+
+msgctxt "cowriter.conversationMenuWaiting"
+msgid "Conversation menu, memory proposal waiting"
+msgstr "Gesprächsmenü, ein Gedächtnis-Vorschlag wartet"
+
+msgctxt "cowriter.composerPlaceholder"
+msgid "Ask for a rewrite…"
+msgstr "Bitte um eine Überarbeitung…"
+
+msgctxt "cowriter.newConversation"
+msgid "New conversation"
+msgstr "Neues Gespräch"
+
+msgctxt "cowriter.memory"
+msgid "Memory"
+msgstr "Gedächtnis"
+
+msgctxt "cowriter.memoryWaiting"
+msgid "Memory, memory proposal waiting"
+msgstr "Gedächtnis, ein Gedächtnis-Vorschlag wartet"
+
+msgctxt "cowriter.deleteConversationTitle"
+msgid "Delete conversation?"
+msgstr "Gespräch löschen?"
+
+msgctxt "cowriter.deleteConversationWarning"
+msgid "This can't be undone."
+msgstr "Das lässt sich nicht rückgängig machen."
+
+msgctxt "cowriter.deleteConversation"
+msgid "Delete conversation"
+msgstr "Gespräch löschen"
+
+msgctxt "cowriter.newConversationLine"
+msgid "new conversation"
+msgstr "neues Gespräch"
+
+msgctxt "cowriter.lineSince"
+msgid "conversation since {day}"
+msgstr "Gespräch seit {day}"
+
+msgctxt "cowriter.lineArchived"
+msgid "archived conversation from {day}"
+msgstr "archiviertes Gespräch vom {day}"
+
+msgctxt "cowriter.conversationSince"
+msgid "Conversation since {day} {time}"
+msgstr "Gespräch seit {day} {time}"
+
+msgctxt "cowriter.archivedRow"
+msgid "Archived · {day} {time}"
+msgstr "Archiviert · {day} {time}"
+
+msgctxt "cowriter.confirmRow"
+msgid "{name} · {messages}"
+msgstr "{name} · {messages}"
+
+msgctxt "cowriter.messageCount.one"
+msgid "{count} msg"
+msgstr "{count} Nachr."
+
+msgctxt "cowriter.messageCount.other"
+msgid "{count} msgs"
+msgstr "{count} Nachr."
+
+msgctxt "cowriter.today"
+msgid "today"
+msgstr "heute"
+
+msgctxt "cowriter.toolTarget"
+msgid "for: {title}"
+msgstr "für: {title}"
+
+msgctxt "cowriter.toolForeignTarget"
+msgid "This proposal applies to a different song than the one you have open"
+msgstr "Dieser Vorschlag gilt für einen anderen Song als den, der gerade offen ist"
+
+msgctxt "cowriter.historyUnavailable"
+msgid "Conversation history unavailable"
+msgstr "Der Gesprächsverlauf ist nicht verfügbar"
+
+msgctxt "cowriter.startFailed"
+msgid "Failed to start new conversation"
+msgstr "Neues Gespräch konnte nicht gestartet werden"
+
+msgctxt "cowriter.deleteFailed"
+msgid "Failed to delete conversation"
+msgstr "Gespräch konnte nicht gelöscht werden"
+
+msgctxt "cowriter.archivedBanner"
+msgid "Archived — {#link}start a new conversation{/link} to reply."
+msgstr "Archiviert – {#link}beginne ein neues Gespräch{/link}, um zu antworten."
+
+msgctxt "cowriter.albumFallback"
+msgid "Album"
+msgstr "Album"
+
+msgctxt "cowriter.noMatches"
+msgid "No matches"
+msgstr "Keine Treffer"
+
+msgctxt "cowriter.memoryUnavailable"
+msgid "Memory unavailable"
+msgstr "Das Gedächtnis ist nicht verfügbar"
+
+msgctxt "cowriter.memorySaveFailed"
+msgid "Failed to save memory"
+msgstr "Gedächtnis konnte nicht gespeichert werden"
+
+msgctxt "cowriter.proposalStale"
+msgid "Memory proposal is stale or belongs elsewhere"
+msgstr "Der Gedächtnis-Vorschlag ist veraltet oder gehört woandershin"
+
+msgctxt "memory.close"
+msgid "Close memory"
+msgstr "Gedächtnis schließen"
+
+msgctxt "memory.loading"
+msgid "Loading memory…"
+msgstr "Gedächtnis wird geladen…"
+
+msgctxt "memory.you"
+msgid "You"
+msgstr "Du"
+
+msgctxt "memory.thisSong"
+msgid "This song"
+msgstr "Dieser Song"
+
+msgctxt "memory.albumNotes"
+msgid "Album notes"
+msgstr "Album-Notizen"
+
+msgctxt "memory.hintUser"
+msgid "Taste, language, standing rules"
+msgstr "Geschmack, Sprache, feste Regeln"
+
+msgctxt "memory.hintSong"
+msgid "Concept, locked vs open decisions, names, open questions"
+msgstr "Konzept, feste und offene Entscheidungen, Namen, offene Fragen"
+
+msgctxt "memory.hintAlbum"
+msgid "Album-level notes — not lyrics"
+msgstr "Notizen zum ganzen Album – kein Songtext"
+
+msgctxt "memory.proposedUser"
+msgid "Proposed You"
+msgstr "Vorschlag für „Du“"
+
+msgctxt "memory.proposedSong"
+msgid "Proposed This song"
+msgstr "Vorschlag für „Dieser Song“"
+
+msgctxt "memory.proposedAlbum"
+msgid "Proposed Album notes"
+msgstr "Vorschlag für „Album-Notizen“"
+
+msgctxt "memory.accept"
+msgid "Accept"
+msgstr "Annehmen"
+
+msgctxt "memory.reject"
+msgid "Reject"
+msgstr "Ablehnen"
+
+msgctxt "memory.userField"
+msgid "User memory"
+msgstr "Gedächtnis zu dir"
+
+msgctxt "memory.songField"
+msgid "Song memory"
+msgstr "Gedächtnis zum Song"
+
+msgctxt "memory.albumField"
+msgid "Album notes"
+msgstr "Album-Notizen"
+
+msgctxt "memory.save"
+msgid "Save"
+msgstr "Speichern"
+
+msgctxt "memory.saving"
+msgid "Saving..."
+msgstr "Wird gespeichert..."
+
+msgctxt "cowriter.emptyHint"
+msgid ""
+"I can see the song you have open. Tell me what you want to work on, or "
+"ask me to browse your other songs — I'll pull them up as needed."
+msgstr ""
+"Ich sehe den Song, den du offen hast. Sag mir, woran du arbeiten willst, "
+"oder bitte mich, deine anderen Songs durchzusehen – ich hole sie bei "
+"Bedarf dazu."
+
+msgctxt "shareStatus.loadingAlbum"
+msgid "Loading album"
+msgstr "Album wird geladen"
+
+msgctxt "shareStatus.loadingPlaylist"
+msgid "Loading playlist"
+msgstr "Playlist wird geladen"
+
+msgctxt "shareStatus.loadingSong"
+msgid "Loading song"
+msgstr "Song wird geladen"
+
+msgctxt "shareStatus.loadingTake"
+msgid "Loading take"
+msgstr "Take wird geladen"
+
+msgctxt "shareStatus.notFoundAlbum"
+msgid "Album not found"
+msgstr "Album nicht gefunden"
+
+msgctxt "shareStatus.notFoundPlaylist"
+msgid "Playlist not found"
+msgstr "Playlist nicht gefunden"
+
+msgctxt "shareStatus.notFoundSong"
+msgid "Song not found"
+msgstr "Song nicht gefunden"
+
+msgctxt "shareStatus.notFoundTake"
+msgid "Take not found"
+msgstr "Take nicht gefunden"
+
+msgctxt "shareStatus.errorAlbum"
+msgid "Could not load this album"
+msgstr "Dieses Album konnte nicht geladen werden"
+
+msgctxt "shareStatus.errorPlaylist"
+msgid "Could not load this playlist"
+msgstr "Diese Playlist konnte nicht geladen werden"
+
+msgctxt "shareStatus.errorSong"
+msgid "Could not load this song"
+msgstr "Dieser Song konnte nicht geladen werden"
+
+msgctxt "shareStatus.errorTake"
+msgid "Could not load this take"
+msgstr "Dieser Take konnte nicht geladen werden"
+
+msgctxt "shareStatus.errorBodyAlbum"
+msgid "Something went wrong while loading this album."
+msgstr "Beim Laden dieses Albums ist etwas schiefgelaufen."
+
+msgctxt "shareStatus.errorBodyPlaylist"
+msgid "Something went wrong while loading this playlist."
+msgstr "Beim Laden dieser Playlist ist etwas schiefgelaufen."
+
+msgctxt "shareStatus.errorBodySong"
+msgid "Something went wrong while loading this song."
+msgstr "Beim Laden dieses Songs ist etwas schiefgelaufen."
+
+msgctxt "shareStatus.errorBodyTake"
+msgid "Something went wrong while loading this take."
+msgstr "Beim Laden dieses Takes ist etwas schiefgelaufen."
+
+msgctxt "shareStatus.invalidLink"
+msgid "This share link is invalid or was removed."
+msgstr "Dieser Freigabelink ist ungültig oder wurde entfernt."
+
+msgctxt "shareStatus.openApp"
+msgid "Open {app}"
+msgstr "{app} öffnen"
+
+msgctxt "shareStatus.retry"
+msgid "Try again"
+msgstr "Noch einmal"
+
+msgctxt "shareAlbumPage.documentTitle"
+msgid "{title} — {artist} | {app}"
+msgstr "{title} — {artist} | {app}"
+
+msgctxt "shareAlbumPage.fallbackTitle"
+msgid "Shared album | {app}"
+msgstr "Geteiltes Album | {app}"
+
+msgctxt "sharePlaylistPage.documentTitle"
+msgid "{title} | {app}"
+msgstr "{title} | {app}"
+
+msgctxt "sharePlaylistPage.fallbackTitle"
+msgid "Shared playlist | {app}"
+msgstr "Geteilte Playlist | {app}"
+
+msgctxt "shareSongPage.documentTitle"
+msgid "{title} — {artist} | {app}"
+msgstr "{title} — {artist} | {app}"
+
+msgctxt "shareSongPage.fallbackTitle"
+msgid "Shared song | {app}"
+msgstr "Geteilter Song | {app}"
+
+msgctxt "shareTakePage.documentTitle"
+msgid "Take {number} — {title} | {app}"
+msgstr "Take {number} — {title} | {app}"
+
+msgctxt "shareTakePage.fallbackTitle"
+msgid "Shared take | {app}"
+msgstr "Geteilter Take | {app}"
+
+msgctxt "share.nowPlaying"
+msgid "Now playing · {title} · {position} of {total}"
+msgstr "Läuft gerade · {title} · {position} von {total}"
+
+msgctxt "share.albumSubtitle"
+msgid "{artist} · Album"
+msgstr "{artist} · Album"
+
+msgctxt "share.albumSubtitleNoArtist"
+msgid "Album"
+msgstr "Album"
+
+msgctxt "share.playlistSubtitle.one"
+msgid "Playlist · {count} song"
+msgstr "Playlist · {count} Song"
+
+msgctxt "share.playlistSubtitle.other"
+msgid "Playlist · {count} songs"
+msgstr "Playlist · {count} Songs"
+
+msgctxt "share.noLyrics"
+msgid "No lyrics"
+msgstr "Kein Songtext"
+
+msgctxt "share.noAudio"
+msgid "No audio available yet."
+msgstr "Noch kein Audio verfügbar."
+
+msgctxt "share.backToPlayer"
+msgid "Back to the player"
+msgstr "Zurück zum Player"
+
+msgctxt "share.songs"
+msgid "Songs"
+msgstr "Songs"
+
+msgctxt "shareButton.copyFailedToast"
+msgid "Shared — copy the link manually, clipboard write failed"
+msgstr ""
+"Geteilt – kopier den Link selbst, das Schreiben in die Zwischenablage ist"
+" fehlgeschlagen"
+
+msgctxt "shareButton.copiedToast"
+msgid "Link copied to clipboard"
+msgstr "Link in die Zwischenablage kopiert"
+
+msgctxt "shareButton.unsharedToast"
+msgid "Sharing disabled"
+msgstr "Teilen ausgeschaltet"
+
+msgctxt "shareButton.failedToast"
+msgid "Share failed"
+msgstr "Teilen fehlgeschlagen"
+
+msgctxt "shareButton.fallbackTitle"
+msgid "Share"
+msgstr "Teilen"
+
+msgctxt "shareButton.songLabel"
+msgid "Share song"
+msgstr "Song teilen"
+
+msgctxt "shareToggle.sharedTooltip"
+msgid "Shared: {path}"
+msgstr "Geteilt: {path}"
+
+msgctxt "shareLink.copiedToast"
+msgid "Link copied"
+msgstr "Link kopiert"
+
+msgctxt "shareLink.copyFailedToast"
+msgid "Copy failed"
+msgstr "Kopieren fehlgeschlagen"
+
+msgctxt "shareDialog.title"
+msgid "Missing from the share page"
+msgstr "Fehlt auf der Freigabeseite"
+
+msgctxt "shareDialog.intro"
+msgid "These songs have no playable take and won't appear when shared:"
+msgstr ""
+"Diese Songs haben keinen abspielbaren Take und erscheinen beim Teilen "
+"nicht:"
+
+msgctxt "shareDialog.close"
+msgid "Got it"
+msgstr "Verstanden"
+
+msgctxt "libraryShares.copyLink"
+msgid "Copy link"
+msgstr "Link kopieren"
+
+msgctxt "legal.imprint"
+msgid "Legal notice"
+msgstr "Impressum"
+
+msgctxt "legal.privacy"
+msgid "Privacy"
+msgstr "Datenschutz"
+
+msgctxt "legal.terms"
+msgid "Terms of use"
+msgstr "Nutzungsbedingungen"
+
+msgctxt "account.menu"
+msgid "Account · {username}"
+msgstr "Konto · {username}"
+
+msgctxt "account.menuClose"
+msgid "Close account menu"
+msgstr "Kontomenü schließen"
+
+msgctxt "account.signOutFailed"
+msgid "Couldn't log out. Check your connection and try again."
+msgstr "Abmelden fehlgeschlagen. Prüf deine Verbindung und versuch es noch einmal."
+
+msgctxt "auth.loading"
+msgid "Loading..."
+msgstr "Wird geladen..."
+
+msgctxt "auth.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "auth.checkRateLimited"
+msgid "Too many requests. Retry in a moment to check your session."
+msgstr ""
+"Zu viele Anfragen. Versuch es gleich noch einmal, um deine Sitzung zu "
+"prüfen."
+
+msgctxt "auth.checkServerError"
+msgid "Could not verify your session. Retry to try again."
+msgstr "Deine Sitzung konnte nicht geprüft werden. Versuch es noch einmal."
+
+msgctxt "auth.checkNetworkError"
+msgid "Network error. Retry to check your session."
+msgstr "Netzwerkfehler. Versuch es noch einmal, um deine Sitzung zu prüfen."
+
+msgctxt "referenceRefusal.notFound"
+msgid "Not Found"
+msgstr "Nicht gefunden"
+
+msgctxt "referenceRefusal.noFilename"
+msgid "No filename provided"
+msgstr "Kein Dateiname angegeben"
+
+msgctxt "referenceRefusal.filenameInvalid"
+msgid "Invalid filename."
+msgstr "Ungültiger Dateiname."
+
+msgctxt "referenceRefusal.filenameTooLong"
+msgid "Filename too long (max {max} characters)"
+msgstr "Dateiname zu lang (max. {max} Zeichen)"
+
+msgctxt "referenceRefusal.formatUnsupported"
+msgid "Unsupported format '{extension}'. Accepted: {accepted}"
+msgstr "Format „{extension}“ wird nicht unterstützt. Erlaubt: {accepted}"
+
+msgctxt "referenceRefusal.fileTooLarge"
+msgid "File too large (max {max}MB)"
+msgstr "Datei zu groß (max. {max} MB)"
+
+msgctxt "referenceRefusal.fileTooSmall"
+msgid "File is empty or too small"
+msgstr "Die Datei ist leer oder zu klein"
+
+msgctxt "referenceRefusal.inUse"
+msgid "Reference audio is in use."
+msgstr "Das Referenz-Audio wird gerade verwendet."
+
+msgctxt "referenceRefusal.countdownStale"
+msgid "The countdown epoch is no longer current."
+msgstr "Die Countdown-Epoche ist nicht mehr aktuell."
+
+msgctxt "jobRefusal.notFound"
+msgid "Job not found"
+msgstr "Job nicht gefunden"
+
+msgctxt "jobRefusal.notCancellable"
+msgid "Only queued or running jobs can be cancelled"
+msgstr "Nur wartende oder laufende Jobs lassen sich abbrechen"
+
+msgctxt "libraryQueueRefusal.startUnplayable"
+msgid "Requested take is not playable"
+msgstr "Der angefragte Take lässt sich nicht abspielen"
+
+msgctxt "libraryQueueRefusal.emptyPool"
+msgid "No playable takes in pool '{pool}'"
+msgstr "Keine abspielbaren Takes im Pool „{pool}“"
+
+msgctxt "libraryQueueRefusal.emptyWindow"
+msgid "No playable takes in scanned library window"
+msgstr "Keine abspielbaren Takes im durchsuchten Ausschnitt der Bibliothek"
+
+msgctxt "libraryQueueRefusal.tooManyRequests"
+msgid "Too many queue stream requests"
+msgstr "Zu viele Anfragen an den Warteschlangen-Stream"
+
+msgctxt "libraryQueueRefusal.limiterUnavailable"
+msgid "Queue stream rate limiter unavailable"
+msgstr "Das Ratenlimit des Warteschlangen-Streams ist nicht verfügbar"
+
+msgctxt "libraryRefusal.cursorInvalid"
+msgid "Invalid library cursor"
+msgstr "Ungültiger Bibliotheks-Cursor"
+
+msgctxt "libraryRefusal.cursorMismatch"
+msgid "Library cursor does not match query and sort"
+msgstr "Der Bibliotheks-Cursor passt nicht zu Suche und Sortierung"
+
+msgctxt "connectivity.offlineStrip"
+msgid "You're offline — retrying"
+msgstr "Du bist offline – neuer Versuch läuft"
+
+msgctxt "resourceSync.error"
+msgid "Couldn't reach your library"
+msgstr "Deine Bibliothek ist nicht erreichbar"
+
+msgctxt "http.rateLimited"
+msgid "Too many requests — hang on, it will continue in a moment."
+msgstr "Zu viele Anfragen – einen Moment, gleich geht es weiter."
+
+msgctxt "http.genericError"
+msgid "Something went wrong. Try again."
+msgstr "Etwas ist schiefgelaufen. Versuch es noch einmal."
+
+msgctxt "navigation.songLinkNotFound"
+msgid "Song not found — it may have been deleted"
+msgstr "Song nicht gefunden – vielleicht wurde er gelöscht"
+
+msgctxt "dialog.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "dialog.confirm"
+msgid "Confirm"
+msgstr "Bestätigen"
+
+msgctxt "toast.dismiss"
+msgid "Dismiss"
+msgstr "Schließen"
+
+msgctxt "adminPage.accessRequired"
+msgid "Admin access required."
+msgstr "Admin-Zugang erforderlich."
+
+msgctxt "adminPage.sections"
+msgid "Admin sections"
+msgstr "Admin-Bereiche"
+
+msgctxt "adminPage.tabVoices"
+msgid "Voices"
+msgstr "Stimmen"
+
+msgctxt "adminPage.tabRateLimits"
+msgid "Rate Limits"
+msgstr "Limits"
+
+msgctxt "adminPage.tabGeneration"
+msgid "Generation"
+msgstr "Generierung"
+
+msgctxt "adminPage.tabModels"
+msgid "Models"
+msgstr "Modelle"
+
+msgctxt "adminPage.tabAcestep"
+msgid "ACE-Step"
+msgstr "ACE-Step"
+
+msgctxt "adminPage.tabCleanup"
+msgid "Cleanup"
+msgstr "Aufräumen"
+
+msgctxt "adminPage.saving"
+msgid "Saving..."
+msgstr "Wird gespeichert..."
+
+msgctxt "adminPage.saveDefaults"
+msgid "Save Defaults"
+msgstr "Standardwerte speichern"
+
+msgctxt "adminPage.saveFailed"
+msgid "Failed to save"
+msgstr "Speichern fehlgeschlagen"
+
+msgctxt "adminVoices.heading"
+msgid "Voice operations"
+msgstr "Stimmen verwalten"
+
+msgctxt "adminVoices.loading"
+msgid "Loading voices..."
+msgstr "Stimmen werden geladen..."
+
+msgctxt "adminVoices.empty"
+msgid "No voices have been created."
+msgstr "Es wurden noch keine Stimmen angelegt."
+
+msgctxt "adminVoices.loadFailed"
+msgid "Failed to load voices"
+msgstr "Stimmen konnten nicht geladen werden"
+
+msgctxt "adminVoices.columnVoice"
+msgid "Voice"
+msgstr "Stimme"
+
+msgctxt "adminVoices.columnOwner"
+msgid "Owner"
+msgstr "Besitzer"
+
+msgctxt "adminVoices.columnStatus"
+msgid "Status"
+msgstr "Status"
+
+msgctxt "rateLimits.heading"
+msgid "Global Defaults"
+msgstr "Globale Standardwerte"
+
+msgctxt "rateLimits.hint"
+msgid "These apply to all users."
+msgstr "Diese gelten für alle Nutzer."
+
+msgctxt "rateLimits.generations"
+msgid "Generations / hour"
+msgstr "Generierungen / Stunde"
+
+msgctxt "rateLimits.scorings"
+msgid "Scorings / hour"
+msgstr "Bewertungen / Stunde"
+
+msgctxt "rateLimits.maxQueueDepth"
+msgid "Max queue depth"
+msgstr "Max. Länge der Warteschlange"
+
+msgctxt "rateLimits.maxActiveJobs"
+msgid "Max active jobs"
+msgstr "Max. laufende Jobs"
+
+msgctxt "rateLimits.loadFailed"
+msgid "Failed to load rate limits"
+msgstr "Limits konnten nicht geladen werden"
+
+msgctxt "generationDefaults.heading"
+msgid "Generation Defaults"
+msgstr "Standardwerte der Generierung"
+
+msgctxt "generationDefaults.hint"
+msgid ""
+"Default generation parameters for all users. Per-song overrides take "
+"precedence."
+msgstr ""
+"Standard-Parameter der Generierung für alle Nutzer. Einstellungen pro "
+"Song haben Vorrang."
+
+msgctxt "generationDefaults.reset"
+msgid "Reset"
+msgstr "Zurücksetzen"
+
+msgctxt "generationDefaults.loadFailed"
+msgid "Failed to load generation defaults"
+msgstr "Die Standardwerte der Generierung konnten nicht geladen werden"
+
+msgctxt "generationDefaults.saveFailed"
+msgid "Failed to save generation defaults"
+msgstr "Die Standardwerte der Generierung konnten nicht gespeichert werden"
+
+msgctxt "availableModels.heading"
+msgid "Available Models"
+msgstr "Verfügbare Modelle"
+
+msgctxt "availableModels.hint"
+msgid "Toggle which models users can create presets for."
+msgstr "Leg fest, für welche Modelle Nutzer Presets anlegen können."
+
+msgctxt "availableModels.on"
+msgid "ON"
+msgstr "AN"
+
+msgctxt "availableModels.off"
+msgid "OFF"
+msgstr "AUS"
+
+msgctxt "availableModels.toggleFailed"
+msgid "Failed to toggle model"
+msgstr "Modell konnte nicht umgeschaltet werden"
+
+msgctxt "modelsTable.heading"
+msgid "Models"
+msgstr "Modelle"
+
+msgctxt "modelsTable.columnTask"
+msgid "Task"
+msgstr "Aufgabe"
+
+msgctxt "modelsTable.columnProvider"
+msgid "Provider"
+msgstr "Anbieter"
+
+msgctxt "modelsTable.columnRoute"
+msgid "Route"
+msgstr "Route"
+
+msgctxt "modelsTable.columnModel"
+msgid "Model"
+msgstr "Modell"
+
+msgctxt "modelsTable.columnStatus"
+msgid "Status"
+msgstr "Status"
+
+msgctxt "modelsTable.taskCowriter"
+msgid "Co-Writer"
+msgstr "Co-Writer"
+
+msgctxt "modelsTable.taskCover"
+msgid "Cover"
+msgstr "Cover"
+
+msgctxt "modelsTable.setByAgentFile"
+msgid "Set by the agent file"
+msgstr "Durch die Agent-Datei festgelegt"
+
+msgctxt "modelsTable.routeGateway"
+msgid "Gateway"
+msgstr "Gateway"
+
+msgctxt "modelsTable.advanced"
+msgid "Advanced"
+msgstr "Erweitert"
+
+msgctxt "modelsTable.historyTail"
+msgid "History tail (tokens)"
+msgstr "Verlaufsende (Tokens)"
+
+msgctxt "modelsTable.saved"
+msgid "Saved."
+msgstr "Gespeichert."
+
+msgctxt "modelsTable.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "modelsTable.saveFailed"
+msgid "The server rejected the change."
+msgstr "Der Server hat die Änderung abgelehnt."
+
+msgctxt "modelsTable.loading"
+msgid "Loading…"
+msgstr "Wird geladen…"
+
+msgctxt "modelsTable.unavailable"
+msgid "Unavailable"
+msgstr "Nicht verfügbar"
+
+msgctxt "modelsTable.loadFailed"
+msgid "Failed to load co-writer settings"
+msgstr "Die Co-Writer-Einstellungen konnten nicht geladen werden"
+
+msgctxt "recipe.modelsLoadFailed"
+msgid "Failed to load models"
+msgstr "Modelle konnten nicht geladen werden"
+
+msgctxt "workerPool.heading"
+msgid "Worker Pool"
+msgstr "Worker-Pool"
+
+msgctxt "workerPool.loadFailed"
+msgid "Cannot reach the worker pool API."
+msgstr "Die API des Worker-Pools ist nicht erreichbar."
+
+msgctxt "workerPool.refreshFailed"
+msgid "Worker pool not updating — retrying…"
+msgstr "Der Worker-Pool aktualisiert sich nicht – neuer Versuch läuft…"
+
+msgctxt "workerPool.noWorkers"
+msgid ""
+"No workers registered. Start the {#code}{container}{/code} container and "
+"wait a few seconds."
+msgstr ""
+"Keine Worker registriert. Starte den Container {#code}{container}{/code} "
+"und warte ein paar Sekunden."
+
+msgctxt "workerPool.cardHeader"
+msgid "GPU {gpu} • {vram}"
+msgstr "GPU {gpu} • {vram}"
+
+msgctxt "workerPool.vramTotal"
+msgid "{total} GB"
+msgstr "{total} GB"
+
+msgctxt "workerPool.statusLabel"
+msgid "Status:"
+msgstr "Status:"
+
+msgctxt "workerPool.logLabel"
+msgid "Log:"
+msgstr "Log:"
+
+msgctxt "workerPool.queueLabel"
+msgid "Queue:"
+msgstr "Warteschlange:"
+
+msgctxt "workerPool.lastSeenLabel"
+msgid "Last seen:"
+msgstr "Zuletzt gesehen:"
+
+msgctxt "workerPool.queueJobs.one"
+msgid "{count} job"
+msgstr "{count} Job"
+
+msgctxt "workerPool.queueJobs.other"
+msgid "{count} jobs"
+msgstr "{count} Jobs"
+
+msgctxt "workerPool.loadingSpinner"
+msgid "loading"
+msgstr "lädt"
+
+msgctxt "workerPool.statusLoading"
+msgid "Loading {mode}…"
+msgstr "{mode} wird geladen…"
+
+msgctxt "workerPool.statusLoadingElapsed"
+msgid "Loading {mode}… ({elapsed} elapsed)"
+msgstr "{mode} wird geladen… (seit {elapsed})"
+
+msgctxt "workerPool.statusTraining"
+msgid "Training ({seconds}s remaining)"
+msgstr "Training (noch {seconds} s)"
+
+msgctxt "workerPool.statusNoModel"
+msgid "No model loaded"
+msgstr "Kein Modell geladen"
+
+msgctxt "workerPool.statusBusy"
+msgid "Busy ({count} in queue)"
+msgstr "Beschäftigt ({count} in der Warteschlange)"
+
+msgctxt "workerPool.statusIdle"
+msgid "Idle"
+msgstr "Bereit"
+
+msgctxt "workerPool.offlineSince"
+msgid "Offline — last registered {lastSeen}"
+msgstr "Offline – zuletzt registriert {lastSeen}"
+
+msgctxt "workerPool.gpuUnavailableDetail"
+msgid "GPU unavailable — {detail}"
+msgstr "GPU nicht verfügbar – {detail}"
+
+msgctxt "workerPool.gpuUnavailable"
+msgid "GPU unavailable"
+msgstr "GPU nicht verfügbar"
+
+msgctxt "workerPool.gpuHealthNotReported"
+msgid "GPU health not reported — worker build predates GPU health checks"
+msgstr ""
+"Kein GPU-Zustand gemeldet – der Worker-Build ist älter als die GPU-"
+"Zustandsprüfung"
+
+msgctxt "workerPool.restartNoProcess"
+msgid ""
+"Can't restart — no worker process is running to ask. Restart the "
+"container running worker \"{worker}\" directly."
+msgstr ""
+"Neustart nicht möglich – es läuft kein Worker-Prozess, den man bitten "
+"könnte. Starte den Container von Worker „{worker}“ direkt neu."
+
+msgctxt "workerPool.restartBrokenGpu"
+msgid ""
+"Can't restart — its GPU is the problem, not the process. Restart the "
+"container running worker \"{worker}\" directly, or check the host's "
+"NVIDIA driver."
+msgstr ""
+"Neustart nicht möglich – das Problem ist die GPU, nicht der Prozess. "
+"Starte den Container von Worker „{worker}“ direkt neu oder prüf den "
+"NVIDIA-Treiber des Hosts."
+
+msgctxt "workerPool.restartNoGpuHealth"
+msgid ""
+"Can't restart — this worker build doesn't report GPU health, so it can't "
+"be trusted as healthy. Restarting the same process won't add that; update"
+" the container running worker \"{worker}\" to the current image."
+msgstr ""
+"Neustart nicht möglich – dieser Worker-Build meldet keinen GPU-Zustand, "
+"daher gilt er nicht als gesund. Ein Neustart desselben Prozesses ändert "
+"daran nichts; aktualisiere den Container von Worker „{worker}“ auf das "
+"aktuelle Image."
+
+msgctxt "workerPool.seenNever"
+msgid "never"
+msgstr "nie"
+
+msgctxt "workerPool.seenJustNow"
+msgid "just now"
+msgstr "gerade eben"
+
+msgctxt "workerPool.secondsAgo"
+msgid "{count}s ago"
+msgstr "vor {count} s"
+
+msgctxt "workerPool.minutesAgo"
+msgid "{count}m ago"
+msgstr "vor {count} min"
+
+msgctxt "workerPool.hoursAgo"
+msgid "{count}h ago"
+msgstr "vor {count} h"
+
+msgctxt "workerPool.daysAgo"
+msgid "{count}d ago"
+msgstr "vor {count} T."
+
+msgctxt "workerPool.elapsedSeconds"
+msgid "{seconds}s"
+msgstr "{seconds} s"
+
+msgctxt "workerPool.elapsedMinutes"
+msgid "{minutes}m {seconds}s"
+msgstr "{minutes} min {seconds} s"
+
+msgctxt "workerPool.elapsedHours"
+msgid "{hours}h {minutes}m"
+msgstr "{hours} h {minutes} min"
+
+msgctxt "workerPool.loadModel"
+msgid "Load model…"
+msgstr "Modell laden…"
+
+msgctxt "workerPool.load"
+msgid "Load"
+msgstr "Laden"
+
+msgctxt "workerPool.loadingAction"
+msgid "Loading…"
+msgstr "Wird geladen…"
+
+msgctxt "workerPool.selectModel"
+msgid "Select a model to load"
+msgstr "Wähl ein Modell zum Laden"
+
+msgctxt "workerPool.enqueueFailed"
+msgid "Failed to enqueue load"
+msgstr "Laden konnte nicht eingereiht werden"
+
+msgctxt "workerPool.unloadFailed"
+msgid "Failed to unload model"
+msgstr "Modell konnte nicht entladen werden"
+
+msgctxt "workerPool.restartFailed"
+msgid "Restart failed"
+msgstr "Neustart fehlgeschlagen"
+
+msgctxt "workerPool.keepLoadedFailed"
+msgid "Failed to change Keep loaded"
+msgstr "„Geladen halten“ konnte nicht geändert werden"
+
+msgctxt "workerPool.loadingToast"
+msgid "Loading {mode} on {worker}…"
+msgstr "{mode} wird auf {worker} geladen…"
+
+msgctxt "workerPool.unloadedToast"
+msgid "Unloaded {mode} from {worker}"
+msgstr "{mode} von {worker} entladen"
+
+msgctxt "workerPool.restartRequested"
+msgid "Restart requested for {worker}"
+msgstr "Neustart für {worker} angefordert"
+
+msgctxt "workerPool.keepLoadedOff"
+msgid "Keep loaded disabled for {mode} on {worker}"
+msgstr "„Geladen halten“ für {mode} auf {worker} ausgeschaltet"
+
+msgctxt "workerPool.keepLoadedOn"
+msgid "Keep loaded enabled for {mode} on {worker}"
+msgstr "„Geladen halten“ für {mode} auf {worker} eingeschaltet"
+
+msgctxt "workerPool.lastError"
+msgid "Last error"
+msgstr "Letzter Fehler"
+
+msgctxt "workerPool.fullLogs"
+msgid "Full logs: {#code}{command}{/code}"
+msgstr "Vollständige Logs: {#code}{command}{/code}"
+
+msgctxt "workerPool.restart"
+msgid "Restart worker…"
+msgstr "Worker neu starten…"
+
+msgctxt "workerPool.restarting"
+msgid "Restarting…"
+msgstr "Wird neu gestartet…"
+
+msgctxt "workerPool.restartTitle"
+msgid "Restart {worker}?"
+msgstr "{worker} neu starten?"
+
+msgctxt "workerPool.restartWarning"
+msgid "Running takes will stop."
+msgstr "Laufende Takes werden abgebrochen."
+
+msgctxt "workerPool.restartConfirm"
+msgid "Restart"
+msgstr "Neu starten"
+
+msgctxt "workerPool.models"
+msgid "Models on this GPU"
+msgstr "Modelle auf dieser GPU"
+
+msgctxt "workerPool.modelsLoading"
+msgid "None yet — {mode} is loading."
+msgstr "Noch keine – {mode} wird geladen."
+
+msgctxt "workerPool.modelsOffline"
+msgid "Unknown while the worker is offline."
+msgstr "Unbekannt, solange der Worker offline ist."
+
+msgctxt "workerPool.keepLoaded"
+msgid "Keep loaded"
+msgstr "Geladen halten"
+
+msgctxt "workerPool.keepLoadedHint"
+msgid "Keep loaded — never unloaded to make room"
+msgstr "Geladen halten – wird nie entladen, um Platz zu schaffen"
+
+msgctxt "workerPool.keepLoadedModel"
+msgid "Keep loaded {mode}"
+msgstr "{mode} geladen halten"
+
+msgctxt "workerPool.unload"
+msgid "Unload"
+msgstr "Entladen"
+
+msgctxt "workerPool.unloadModel"
+msgid "Unload {mode}"
+msgstr "{mode} entladen"
+
+msgctxt "workerPool.modelSize"
+msgid "~{size} GB"
+msgstr "~{size} GB"
+
+msgctxt "workerPool.vram"
+msgid "VRAM"
+msgstr "VRAM"
+
+msgctxt "workerPool.vramLabel"
+msgid "VRAM:"
+msgstr "VRAM:"
+
+msgctxt "workerPool.vramUsed"
+msgid "{used} / {total} GB"
+msgstr "{used} / {total} GB"
+
+msgctxt "workerPool.vramUsedEstimated"
+msgid "~{used} / {total} GB est."
+msgstr "~{used} / {total} GB geschätzt"
+
+msgctxt "workerPool.vramFree"
+msgid "{free} GB free"
+msgstr "{free} GB frei"
+
+msgctxt "workerPool.vramEstimateReason"
+msgid "No GPU reading — the sizes of the loaded models, not a measurement"
+msgstr "Kein GPU-Messwert – die Größen der geladenen Modelle, keine Messung"
+
+msgctxt "workerPool.vramUnknown"
+msgid "unknown"
+msgstr "unbekannt"
+
+msgctxt "workerPool.vramOffline"
+msgid "VRAM unavailable while the worker is offline."
+msgstr "VRAM nicht verfügbar, solange der Worker offline ist."
+
+msgctxt "workerPool.vramNoHeartbeat"
+msgid "No heartbeat — nothing to read"
+msgstr "Kein Heartbeat – nichts zu lesen"
+
+msgctxt "workerPool.vramNoTotal"
+msgid "Worker does not report total VRAM"
+msgstr "Der Worker meldet kein Gesamt-VRAM"
+
+msgctxt "workerPool.vramNoFields"
+msgid "Worker build does not report VRAM fields"
+msgstr "Der Worker-Build meldet keine VRAM-Felder"
+
+msgctxt "modelRegistry.heading"
+msgid "Model Registry"
+msgstr "Modellverzeichnis"
+
+msgctxt "modelRegistry.loading"
+msgid "Loading registry…"
+msgstr "Verzeichnis wird geladen…"
+
+msgctxt "modelRegistry.loadFailed"
+msgid "Cannot reach the registry API."
+msgstr "Die API des Verzeichnisses ist nicht erreichbar."
+
+msgctxt "modelRegistry.columnMode"
+msgid "Mode"
+msgstr "Modus"
+
+msgctxt "modelRegistry.columnStatus"
+msgid "Status"
+msgstr "Status"
+
+msgctxt "modelRegistry.columnLoaded"
+msgid "Loaded"
+msgstr "Geladen"
+
+msgctxt "modelRegistry.columnLoading"
+msgid "Loading"
+msgstr "Lädt"
+
+msgctxt "modelRegistry.columnActions"
+msgid "Actions"
+msgstr "Aktionen"
+
+msgctxt "modelRegistry.downloaded"
+msgid "downloaded"
+msgstr "heruntergeladen"
+
+msgctxt "modelRegistry.stateUnknown"
+msgid "no worker running — download state unknown"
+msgstr "kein Worker läuft – Download-Status unbekannt"
+
+msgctxt "modelRegistry.notDownloaded"
+msgid "not downloaded"
+msgstr "nicht heruntergeladen"
+
+msgctxt "modelRegistry.downloadingProgress"
+msgid "Downloading… {percent}"
+msgstr "Wird heruntergeladen… {percent}"
+
+msgctxt "modelRegistry.noWorkerOnline"
+msgid "No worker online to download it"
+msgstr "Kein Worker online, der es herunterladen kann"
+
+msgctxt "modelRegistry.starting"
+msgid "Starting…"
+msgstr "Wird gestartet…"
+
+msgctxt "modelRegistry.download"
+msgid "Download"
+msgstr "Herunterladen"
+
+msgctxt "modelRegistry.connectionLost"
+msgid "Connection lost — retrying…"
+msgstr "Verbindung verloren – neuer Versuch läuft…"
+
+msgctxt "modelRegistry.downloadingToast"
+msgid "Downloading {mode}…"
+msgstr "{mode} wird heruntergeladen…"
+
+msgctxt "modelRegistry.downloadFailed"
+msgid "Failed to start download"
+msgstr "Download konnte nicht gestartet werden"
+
+msgctxt "takeRetention.heading"
+msgid "Take Retention"
+msgstr "Aufbewahrung der Takes"
+
+msgctxt "takeRetention.explanation"
+msgid ""
+"Takes that are neither picked nor kept are archived after the retention "
+"window, then permanently deleted after the hard-delete window."
+msgstr ""
+"Takes, die weder fürs Album gewählt noch behalten sind, werden nach der "
+"Aufbewahrungsfrist archiviert und nach der Löschfrist endgültig gelöscht."
+
+msgctxt "takeRetention.whatThisDoes"
+msgid "What this does"
+msgstr "Was das bewirkt"
+
+msgctxt "takeRetention.schedule"
+msgid "Auto · daily {hour}:00 UTC"
+msgstr "Auto · täglich {hour}:00 UTC"
+
+msgctxt "takeRetention.loading"
+msgid "Loading preview…"
+msgstr "Vorschau wird geladen…"
+
+msgctxt "takeRetention.days.one"
+msgid "{count} day"
+msgstr "{count} Tag"
+
+msgctxt "takeRetention.days.other"
+msgid "{count} days"
+msgstr "{count} Tage"
+
+msgctxt "takeRetention.archiveAfter"
+msgid "Archive after"
+msgstr "Archivieren nach"
+
+msgctxt "takeRetention.hardDeleteAfter"
+msgid "Hard-delete after archive"
+msgstr "Endgültig löschen nach dem Archivieren"
+
+msgctxt "takeRetention.toArchive"
+msgid "to archive now"
+msgstr "jetzt zu archivieren"
+
+msgctxt "takeRetention.toHardDelete"
+msgid "to hard-delete now"
+msgstr "jetzt endgültig zu löschen"
+
+msgctxt "takeRetention.nothingDue"
+msgid "Nothing to clean up right now"
+msgstr "Gerade gibt es nichts aufzuräumen"
+
+msgctxt "takeRetention.refresh"
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+msgctxt "takeRetention.runNow"
+msgid "Run now"
+msgstr "Jetzt ausführen"
+
+msgctxt "takeRetention.confirm.one"
+msgid ""
+"Archive {#strong}{count} take{/strong} and permanently delete "
+"{#strong}{deleted}{/strong}. Deleting cannot be undone."
+msgstr ""
+"{#strong}{count} Take{/strong} archivieren und "
+"{#strong}{deleted}{/strong} endgültig löschen. Das Löschen lässt sich "
+"nicht rückgängig machen."
+
+msgctxt "takeRetention.confirm.other"
+msgid ""
+"Archive {#strong}{count} takes{/strong} and permanently delete "
+"{#strong}{deleted}{/strong}. Deleting cannot be undone."
+msgstr ""
+"{#strong}{count} Takes{/strong} archivieren und "
+"{#strong}{deleted}{/strong} endgültig löschen. Das Löschen lässt sich "
+"nicht rückgängig machen."
+
+msgctxt "takeRetention.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "takeRetention.running"
+msgid "Running…"
+msgstr "Läuft…"
+
+msgctxt "takeRetention.delete"
+msgid "Delete {count}"
+msgstr "{count} löschen"
+
+msgctxt "takeRetention.previewFailed"
+msgid "Preview failed"
+msgstr "Vorschau fehlgeschlagen"
+
+msgctxt "takeRetention.runFailed"
+msgid "Cleanup failed"
+msgstr "Aufräumen fehlgeschlagen"
+
+msgctxt "takeRetention.outcome"
+msgid "Archived {archived}, deleted {deleted}"
+msgstr "{archived} archiviert, {deleted} gelöscht"
+
+msgctxt "generationRefusal.notFound"
+msgid "Generation not found"
+msgstr "Generierung nicht gefunden"
+
+msgctxt "generationRefusal.someNotFound"
+msgid "One or more generations not found"
+msgstr "Eine oder mehrere Generierungen nicht gefunden"
+
+msgctxt "generationRefusal.audioMissing"
+msgid "Audio file not found"
+msgstr "Audiodatei nicht gefunden"
+
+msgctxt "voiceRefusal.notFound"
+msgid "LoRA not found"
+msgstr "LoRA nicht gefunden"
+
+msgctxt "voiceRefusal.sampleNotFound"
+msgid "LoRA sample not found"
+msgstr "LoRA-Sample nicht gefunden"
+
+msgctxt "conversationRefusal.notFound"
+msgid "Conversation not found"
+msgstr "Gespräch nicht gefunden"
+
+msgctxt "presetRefusal.notFound"
+msgid "Preset not found"
+msgstr "Preset nicht gefunden"
+
+msgctxt "modelRefusal.notFound"
+msgid "Model not found"
+msgstr "Modell nicht gefunden"
+
+msgctxt "workerRefusal.notFound"
+msgid "Worker '{workerId}' not found"
+msgstr "Worker „{workerId}“ nicht gefunden"
+
+msgctxt "voicesPage.documentTitle"
+msgid "My Voices — {app}"
+msgstr "Meine Stimmen — {app}"
+
+msgctxt "voicesPage.heading"
+msgid "My Voices"
+msgstr "Meine Stimmen"
+
+msgctxt "voicesPage.showDeleted"
+msgid "Show deleted"
+msgstr "Gelöschte zeigen"
+
+msgctxt "voicesPage.newVoice"
+msgid "New Voice"
+msgstr "Neue Stimme"
+
+msgctxt "voicesPage.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "voicesPage.namePlaceholder"
+msgid "Voice name (e.g. My Tenor)"
+msgstr "Name der Stimme (z. B. Mein Tenor)"
+
+msgctxt "voicesPage.creating"
+msgid "Creating..."
+msgstr "Wird angelegt..."
+
+msgctxt "voicesPage.create"
+msgid "Create"
+msgstr "Anlegen"
+
+msgctxt "voicesPage.loading"
+msgid "Loading voices..."
+msgstr "Stimmen werden geladen..."
+
+msgctxt "voicesPage.loadFailed"
+msgid "Failed to load voices"
+msgstr "Stimmen konnten nicht geladen werden"
+
+msgctxt "voicesPage.empty"
+msgid ""
+"No voices yet. Create one to upload samples and train your own vocal "
+"style."
+msgstr ""
+"Noch keine Stimmen. Leg eine an, um Samples hochzuladen und deinen "
+"eigenen Gesangsstil zu trainieren."
+
+msgctxt "voicesPage.sampleCount.one"
+msgid "{count} sample"
+msgstr "{count} Sample"
+
+msgctxt "voicesPage.sampleCount.other"
+msgid "{count} samples"
+msgstr "{count} Samples"
+
+msgctxt "voicesPage.delete"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "voicesPage.deletedTag"
+msgid "deleted"
+msgstr "gelöscht"
+
+msgctxt "voicesPage.statusDraft"
+msgid "draft"
+msgstr "Entwurf"
+
+msgctxt "voicesPage.statusQueued"
+msgid "queued"
+msgstr "wartet"
+
+msgctxt "voicesPage.statusPreprocessing"
+msgid "preprocessing"
+msgstr "Vorverarbeitung"
+
+msgctxt "voicesPage.statusTraining"
+msgid "training"
+msgstr "im Training"
+
+msgctxt "voicesPage.statusExporting"
+msgid "exporting"
+msgstr "Export"
+
+msgctxt "voicesPage.statusReady"
+msgid "ready"
+msgstr "bereit"
+
+msgctxt "voicesPage.statusFailed"
+msgid "failed"
+msgstr "fehlgeschlagen"
+
+msgctxt "voicesPage.created"
+msgid "Voice created"
+msgstr "Stimme angelegt"
+
+msgctxt "voicesPage.createFailed"
+msgid "Could not create voice"
+msgstr "Stimme konnte nicht angelegt werden"
+
+msgctxt "voicesPage.deletedToast"
+msgid "Deleted {name}"
+msgstr "{name} gelöscht"
+
+msgctxt "voicesPage.deleteFailed"
+msgid "Delete failed"
+msgstr "Löschen fehlgeschlagen"
+
+msgctxt "voicesPage.deleteTitle"
+msgid "Delete voice?"
+msgstr "Stimme löschen?"
+
+msgctxt "voicesPage.deleteWarning"
+msgid ""
+"{name} will be hidden from new generations. Existing takes keep their "
+"audio and remain playable; they will show “voice deleted”."
+msgstr ""
+"{name} wird für neue Generierungen ausgeblendet. Vorhandene Takes "
+"behalten ihr Audio und bleiben abspielbar; sie zeigen „Stimme gelöscht“."
+
+msgctxt "voiceDetail.deletedBanner"
+msgid "This voice has been deleted. Editing is disabled."
+msgstr "Diese Stimme wurde gelöscht. Bearbeiten ist nicht möglich."
+
+msgctxt "voiceDetail.trainingCancelled"
+msgid "Training cancelled"
+msgstr "Training abgebrochen"
+
+msgctxt "voiceDetail.lockedQueued"
+msgid "Voice is queued — editing is locked until training finishes."
+msgstr "Die Stimme wartet – Bearbeiten ist gesperrt, bis das Training fertig ist."
+
+msgctxt "voiceDetail.lockedPreprocessing"
+msgid "Voice is preprocessing — editing is locked until training finishes."
+msgstr ""
+"Die Stimme wird vorverarbeitet – Bearbeiten ist gesperrt, bis das "
+"Training fertig ist."
+
+msgctxt "voiceDetail.lockedTraining"
+msgid "Voice is training — editing is locked until training finishes."
+msgstr ""
+"Die Stimme wird trainiert – Bearbeiten ist gesperrt, bis das Training "
+"fertig ist."
+
+msgctxt "voiceDetail.lockedExporting"
+msgid "Voice is exporting — editing is locked until training finishes."
+msgstr ""
+"Die Stimme wird exportiert – Bearbeiten ist gesperrt, bis das Training "
+"fertig ist."
+
+msgctxt "voiceDetail.trainingFailed"
+msgid "Training failed"
+msgstr "Training fehlgeschlagen"
+
+msgctxt "voiceDetail.samples"
+msgid "Samples"
+msgstr "Samples"
+
+msgctxt "voiceDetail.sampleCapacity"
+msgid "{used} / {max}"
+msgstr "{used} / {max}"
+
+msgctxt "voiceDetail.noSamples"
+msgid "No samples yet. Add at least {count} to train."
+msgstr "Noch keine Samples. Füg mindestens {count} hinzu, um zu trainieren."
+
+msgctxt "voiceDetail.samplePosition"
+msgid "#{position}"
+msgstr "#{position}"
+
+msgctxt "voiceDetail.removeLabel"
+msgid "Remove sample"
+msgstr "Sample entfernen"
+
+msgctxt "voiceDetail.remove"
+msgid "Remove"
+msgstr "Entfernen"
+
+msgctxt "voiceDetail.removeConfirm"
+msgid "Remove sample at position {position}?"
+msgstr "Sample an Position {position} entfernen?"
+
+msgctxt "voiceDetail.captionLabel"
+msgid "Caption (style prompt)"
+msgstr "Caption (Stil-Prompt)"
+
+msgctxt "voiceDetail.lyricsLabel"
+msgid "Lyrics"
+msgstr "Songtext"
+
+msgctxt "voiceDetail.addSample"
+msgid "Add sample"
+msgstr "Sample hinzufügen"
+
+msgctxt "voiceDetail.dropHint"
+msgid "Drag audio here, or {#browse}browse{/browse}"
+msgstr "Audio hierher ziehen oder {#browse}durchsuchen{/browse}"
+
+msgctxt "voiceDetail.sources"
+msgid "Your takes and uploads only."
+msgstr "Nur deine Takes und Uploads."
+
+msgctxt "voiceDetail.captionPlaceholder"
+msgid "e.g. warm male vocal, folk guitar"
+msgstr "z. B. warme Männerstimme, Folk-Gitarre"
+
+msgctxt "voiceDetail.lyricsPlaceholder"
+msgid "Lyrics present in this audio clip"
+msgstr "Songtext, der in diesem Audioclip vorkommt"
+
+msgctxt "voiceDetail.uploading"
+msgid "Uploading..."
+msgstr "Wird hochgeladen..."
+
+msgctxt "voiceDetail.sampleLimit"
+msgid "Sample limit reached."
+msgstr "Höchstzahl an Samples erreicht."
+
+msgctxt "voiceDetail.ownTakesOpen"
+msgid "Use a take"
+msgstr "Einen Take verwenden"
+
+msgctxt "voiceDetail.ownTakesClose"
+msgid "Close takes"
+msgstr "Takes schließen"
+
+msgctxt "voiceDetail.ownTakes"
+msgid "Your takes"
+msgstr "Deine Takes"
+
+msgctxt "voiceDetail.ownTakesLoading"
+msgid "Loading your takes..."
+msgstr "Deine Takes werden geladen..."
+
+msgctxt "voiceDetail.ownTakesEmpty"
+msgid "No playable takes yet."
+msgstr "Noch keine abspielbaren Takes."
+
+msgctxt "voiceDetail.takeNumber"
+msgid "Take {number}"
+msgstr "Take {number}"
+
+msgctxt "voiceDetail.adding"
+msgid "Adding..."
+msgstr "Wird hinzugefügt..."
+
+msgctxt "voiceDetail.useTake"
+msgid "Use as sample"
+msgstr "Als Sample verwenden"
+
+msgctxt "voiceDetail.waiting"
+msgid "Waiting"
+msgstr "Wartet"
+
+msgctxt "voiceDetail.training"
+msgid "Training"
+msgstr "Training"
+
+msgctxt "voiceDetail.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "voiceDetail.waitingDefault"
+msgid "Waiting for the worker."
+msgstr "Wartet auf den Worker."
+
+msgctxt "voiceDetail.queuePosition"
+msgid "Position {position} in the queue"
+msgstr "Position {position} in der Warteschlange"
+
+msgctxt "voiceDetail.progressLabel"
+msgid "Training progress"
+msgstr "Trainingsfortschritt"
+
+msgctxt "voiceDetail.epoch"
+msgid "Epoch {current} of {total}"
+msgstr "Epoche {current} von {total}"
+
+msgctxt "voiceDetail.remainingCalculating"
+msgid "Calculating remaining time..."
+msgstr "Restzeit wird berechnet..."
+
+msgctxt "voiceDetail.remainingMinutes"
+msgid "~ {minutes}m remaining"
+msgstr "noch ~ {minutes} min"
+
+msgctxt "voiceDetail.remainingHours"
+msgid "~ {hours}h {minutes}m remaining"
+msgstr "noch ~ {hours} h {minutes} min"
+
+msgctxt "voiceDetail.trainVoice"
+msgid "Train voice"
+msgstr "Stimme trainieren"
+
+msgctxt "voiceDetail.trainAgain"
+msgid "Train again"
+msgstr "Erneut trainieren"
+
+msgctxt "voiceDetail.starting"
+msgid "Starting..."
+msgstr "Wird gestartet..."
+
+msgctxt "voiceDetail.trainButtonQueued"
+msgid "Training (queued)"
+msgstr "Training (wartet)"
+
+msgctxt "voiceDetail.trainButtonPreprocessing"
+msgid "Training (preprocessing)"
+msgstr "Training (Vorverarbeitung)"
+
+msgctxt "voiceDetail.trainButtonTraining"
+msgid "Training (training)"
+msgstr "Training (läuft)"
+
+msgctxt "voiceDetail.trainButtonExporting"
+msgid "Training (exporting)"
+msgstr "Training (Export)"
+
+msgctxt "voiceDetail.needSamples.one"
+msgid "Need at least {count} sample (have {have})"
+msgstr "Mindestens {count} Sample nötig (vorhanden: {have})"
+
+msgctxt "voiceDetail.needSamples.other"
+msgid "Need at least {count} samples (have {have})"
+msgstr "Mindestens {count} Samples nötig (vorhanden: {have})"
+
+msgctxt "voiceDetail.sampleTextsMissing"
+msgid "Every sample needs a non-empty caption and lyrics"
+msgstr "Jedes Sample braucht eine Caption und einen Songtext"
+
+msgctxt "voiceDetail.progressLoadFailed"
+msgid "Could not load training progress"
+msgstr "Der Trainingsfortschritt konnte nicht geladen werden"
+
+msgctxt "voiceDetail.unsupportedFormat"
+msgid "Unsupported format. Accepted: {formats}"
+msgstr "Format wird nicht unterstützt. Erlaubt: {formats}"
+
+msgctxt "voiceDetail.pickFileFirst"
+msgid "Pick an audio file first"
+msgstr "Wähl zuerst eine Audiodatei"
+
+msgctxt "voiceDetail.captionLyricsRequired"
+msgid "Caption and lyrics are required"
+msgstr "Caption und Songtext sind erforderlich"
+
+msgctxt "voiceDetail.sampleAdded"
+msgid "Sample added"
+msgstr "Sample hinzugefügt"
+
+msgctxt "voiceDetail.uploadFailed"
+msgid "Upload failed"
+msgstr "Upload fehlgeschlagen"
+
+msgctxt "voiceDetail.ownTakesLoadFailed"
+msgid "Could not load takes"
+msgstr "Takes konnten nicht geladen werden"
+
+msgctxt "voiceDetail.copyFailed"
+msgid "Could not add take"
+msgstr "Take konnte nicht hinzugefügt werden"
+
+msgctxt "voiceDetail.saveFailed"
+msgid "Save failed"
+msgstr "Speichern fehlgeschlagen"
+
+msgctxt "voiceDetail.deleteFailed"
+msgid "Delete failed"
+msgstr "Löschen fehlgeschlagen"
+
+msgctxt "voiceDetail.queuedToast"
+msgid "Training queued"
+msgstr "Training eingereiht"
+
+msgctxt "voiceDetail.startFailed"
+msgid "Training failed to start"
+msgstr "Das Training konnte nicht gestartet werden"
+
+msgctxt "voiceDetail.cancelFailed"
+msgid "Could not cancel training"
+msgstr "Das Training konnte nicht abgebrochen werden"
+
+msgctxt "referencesPage.documentTitle"
+msgid "References — {app}"
+msgstr "Referenzen — {app}"
+
+msgctxt "referencesPage.loading"
+msgid "Loading references…"
+msgstr "Referenzen werden geladen…"
+
+msgctxt "referencesPage.loadFailed"
+msgid "Failed to load references"
+msgstr "Referenzen konnten nicht geladen werden"
+
+msgctxt "referencesPage.retry"
+msgid "Try again"
+msgstr "Noch einmal"
+
+msgctxt "referencesPage.empty"
+msgid "No references yet — upload a recording to guide a song's sound."
+msgstr ""
+"Noch keine Referenzen – lade eine Aufnahme hoch, um den Klang eines Songs"
+" zu lenken."
+
+msgctxt "referencesPage.upload"
+msgid "Upload"
+msgstr "Hochladen"
+
+msgctxt "referencesPage.uploadingName"
+msgid "Uploading {name}"
+msgstr "{name} wird hochgeladen"
+
+msgctxt "referencesPage.uploadFailed"
+msgid "Couldn't upload this file"
+msgstr "Diese Datei konnte nicht hochgeladen werden"
+
+msgctxt "referencesPage.filesFigure.one"
+msgid "{files} of {count} file"
+msgstr "{files} von {count} Datei"
+
+msgctxt "referencesPage.filesFigure.other"
+msgid "{files} of {count} files"
+msgstr "{files} von {count} Dateien"
+
+msgctxt "referencesPage.sizeFigure"
+msgid "{used} of {limit} MB"
+msgstr "{used} von {limit} MB"
+
+msgctxt "referencesPage.storageFullFiles.one"
+msgid "Reference storage is full ({files} of {count} file) — delete one first."
+msgstr ""
+"Der Referenzspeicher ist voll ({files} von {count} Datei) – lösch zuerst "
+"eine."
+
+msgctxt "referencesPage.storageFullFiles.other"
+msgid "Reference storage is full ({files} of {count} files) — delete one first."
+msgstr ""
+"Der Referenzspeicher ist voll ({files} von {count} Dateien) – lösch "
+"zuerst eine."
+
+msgctxt "referencesPage.storageFullSize"
+msgid "Reference storage is full ({used} of {limit} MB) — delete one first."
+msgstr "Der Referenzspeicher ist voll ({used} von {limit} MB) – lösch zuerst eine."
+
+msgctxt "referencesPage.doesNotFit"
+msgid "That file doesn't fit ({used} of {limit} MB used) — delete one first."
+msgstr ""
+"Diese Datei passt nicht mehr hinein ({used} von {limit} MB belegt) – "
+"lösch zuerst eine."
+
+msgctxt "referencesPage.playFault"
+msgid "Can't play this recording"
+msgstr "Diese Aufnahme lässt sich nicht abspielen"
+
+msgctxt "referencesPage.inUseFault"
+msgid "In use — not deleted."
+msgstr "In Verwendung – nicht gelöscht."
+
+msgctxt "referencesPage.deleteFailed"
+msgid "Couldn't delete this recording"
+msgstr "Diese Aufnahme konnte nicht gelöscht werden"
+
+msgctxt "referencesPage.keepFailed"
+msgid "Couldn't keep this recording"
+msgstr "Diese Aufnahme konnte nicht behalten werden"
+
+msgctxt "referencesPage.unkeepFailed"
+msgid "Couldn't unkeep this recording"
+msgstr "Diese Aufnahme konnte nicht freigegeben werden"
+
+msgctxt "referencesPage.deleteTitle"
+msgid "Delete reference?"
+msgstr "Referenz löschen?"
+
+msgctxt "referencesPage.deleteItem"
+msgid "{filename} — its audio file"
+msgstr "{filename} – ihre Audiodatei"
+
+msgctxt "referenceRow.play"
+msgid "Play {filename}"
+msgstr "{filename} abspielen"
+
+msgctxt "referenceRow.pause"
+msgid "Pause {filename}"
+msgstr "{filename} pausieren"
+
+msgctxt "referenceRow.keep"
+msgid "Keep {filename}"
+msgstr "{filename} behalten"
+
+msgctxt "referenceRow.unkeep"
+msgid "Unkeep {filename}"
+msgstr "{filename} nicht mehr behalten"
+
+msgctxt "referenceRow.usedIn"
+msgid "Used in {uses}"
+msgstr "Verwendet in {uses}"
+
+msgctxt "referenceRow.takes.one"
+msgid "{count} take"
+msgstr "{count} Take"
+
+msgctxt "referenceRow.takes.other"
+msgid "{count} takes"
+msgstr "{count} Takes"
+
+msgctxt "referenceRow.versions.one"
+msgid "{count} version"
+msgstr "{count} Version"
+
+msgctxt "referenceRow.versions.other"
+msgid "{count} versions"
+msgstr "{count} Versionen"
+
+msgctxt "referenceUses.loading"
+msgid "Loading…"
+msgstr "Wird geladen…"
+
+msgctxt "referenceUses.loadFailed"
+msgid "Couldn't load where it is used"
+msgstr "Die Verwendungen konnten nicht geladen werden"
+
+msgctxt "referenceUses.staysNote"
+msgid "It stays while a take or version uses it."
+msgstr "Sie bleibt, solange ein Take oder eine Version sie verwendet."
+
+msgctxt "referenceUses.deletedTag"
+msgid "Deleted"
+msgstr "Gelöscht"
+
+msgctxt "referenceUses.archivedTag"
+msgid "Archived"
+msgstr "Archiviert"
+
+msgctxt "referenceUses.take"
+msgid "Take {number}"
+msgstr "Take {number}"
+
+msgctxt "referenceUses.takeVersion"
+msgid "Take {number} · v{version}"
+msgstr "Take {number} · v{version}"
+
+msgctxt "referenceUses.takeLength"
+msgid "Take {number} · {length}"
+msgstr "Take {number} · {length}"
+
+msgctxt "referenceUses.takeVersionLength"
+msgid "Take {number} · v{version} · {length}"
+msgstr "Take {number} · v{version} · {length}"
+
+msgctxt "referenceUses.version"
+msgid "Version v{version}"
+msgstr "Version v{version}"
+
+msgctxt "generationPage.defaultHeading"
+msgid "Default for New Songs"
+msgstr "Standard für neue Songs"
+
+msgctxt "generationPage.inherit"
+msgid "Inherit"
+msgstr "Übernehmen"
+
+msgctxt "generationPage.myPresets"
+msgid "My Presets"
+msgstr "Meine Presets"
+
+msgctxt "generationPage.newPreset"
+msgid "New Preset"
+msgstr "Neues Preset"
+
+msgctxt "generationPage.presetName"
+msgid "Preset name"
+msgstr "Name des Presets"
+
+msgctxt "generationPage.saving"
+msgid "Saving..."
+msgstr "Wird gespeichert..."
+
+msgctxt "generationPage.update"
+msgid "Update"
+msgstr "Aktualisieren"
+
+msgctxt "generationPage.save"
+msgid "Save"
+msgstr "Speichern"
+
+msgctxt "generationPage.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "generationPage.setDefault"
+msgid "set default"
+msgstr "als Standard"
+
+msgctxt "generationPage.unsetDefault"
+msgid "unset default"
+msgstr "nicht mehr Standard"
+
+msgctxt "generationPage.edit"
+msgid "edit"
+msgstr "bearbeiten"
+
+msgctxt "generationPage.delete"
+msgid "delete"
+msgstr "löschen"
+
+msgctxt "generationPage.noPresets"
+msgid "No presets saved yet."
+msgstr "Noch keine Presets gespeichert."
+
+msgctxt "generationPage.sharedPresets"
+msgid "Shared Presets"
+msgstr "Geteilte Presets"
+
+msgctxt "generationPage.defaultTag"
+msgid "default"
+msgstr "Standard"
+
+msgctxt "generationPage.deleteTitle"
+msgid "Delete preset?"
+msgstr "Preset löschen?"
+
+msgctxt "generationPage.loadDefaultsFailed"
+msgid "Failed to load generation defaults"
+msgstr "Die Standardwerte der Generierung konnten nicht geladen werden"
+
+msgctxt "generationPage.setDefaultFailed"
+msgid "Failed to set default config"
+msgstr "Die Standardkonfiguration konnte nicht gesetzt werden"
+
+msgctxt "generationPage.savePresetFailed"
+msgid "Failed to save preset"
+msgstr "Preset konnte nicht gespeichert werden"
+
+msgctxt "generationPage.updatePresetFailed"
+msgid "Failed to update preset"
+msgstr "Preset konnte nicht aktualisiert werden"
+
+msgctxt "generationPage.updateDefaultFailed"
+msgid "Failed to update default"
+msgstr "Standard konnte nicht aktualisiert werden"
+
+msgctxt "generationPage.deletePresetFailed"
+msgid "Failed to delete preset"
+msgstr "Preset konnte nicht gelöscht werden"
+
+msgctxt "aboutPage.documentTitle"
+msgid "About — {app}"
+msgstr "Über — {app}"
+
+msgctxt "aboutPage.loadFailed"
+msgid "Failed to load the release"
+msgstr "Das Release konnte nicht geladen werden"
+
+msgctxt "aboutPage.app"
+msgid "App"
+msgstr "App"
+
+msgctxt "aboutPage.version"
+msgid "Version"
+msgstr "Version"
+
+msgctxt "aboutPage.noRelease"
+msgid "No release"
+msgstr "Kein Release"
+
+msgctxt "aboutPage.released"
+msgid "Released"
+msgstr "Veröffentlicht"
+
+msgctxt "aboutPage.commit"
+msgid "Commit"
+msgstr "Commit"
+
+msgctxt "aboutPage.unknown"
+msgid "Unknown"
+msgstr "Unbekannt"
+
+msgctxt "aboutPage.whatsNew"
+msgid "What’s new"
+msgstr "Was ist neu"
+
+msgctxt "aboutPage.licence"
+msgid "Licence"
+msgstr "Lizenz"
+
+msgctxt "generate.button"
+msgid "Generate"
+msgstr "Generieren"
+
+msgctxt "generate.disabledButton"
+msgid "Generate — {reason}"
+msgstr "Generieren – {reason}"
+
+msgctxt "generate.openWorkerPool"
+msgid "Open worker pool"
+msgstr "Worker-Pool öffnen"
+
+msgctxt "generate.cancel"
+msgid "Cancel generation"
+msgstr "Generierung abbrechen"
+
+msgctxt "generate.cancelOffline"
+msgid "Cancel generation (unavailable while offline)"
+msgstr "Generierung abbrechen (offline nicht möglich)"
+
+msgctxt "generate.cancelFailed"
+msgid "Could not cancel generation"
+msgstr "Die Generierung konnte nicht abgebrochen werden"
+
+msgctxt "generate.lastKnownProgress"
+msgid "Last known progress"
+msgstr "Letzter bekannter Fortschritt"
+
+msgctxt "generate.versionLabel"
+msgid "v{version}"
+msgstr "v{version}"
+
+msgctxt "generate.queued"
+msgid "Queued"
+msgstr "Wartet"
+
+msgctxt "generate.queuedPosition"
+msgid "Queued #{position}"
+msgstr "Wartet, Nr. {position}"
+
+msgctxt "generate.takeOfCount"
+msgid "Take {index} of {count}"
+msgstr "Take {index} von {count}"
+
+msgctxt "generate.generating"
+msgid "Generating..."
+msgstr "Wird generiert..."
+
+msgctxt "generate.reconnecting"
+msgid "Reconnecting…"
+msgstr "Verbindung wird wiederhergestellt…"
+
+msgctxt "generate.lastSeen"
+msgid "last seen at {percent}"
+msgstr "zuletzt bei {percent}"
+
+msgctxt "generate.phaseLoadingModel"
+msgid "Loading model…"
+msgstr "Modell wird geladen…"
+
+msgctxt "generate.phaseWriting"
+msgid "Writing"
+msgstr "Schreibt"
+
+msgctxt "generate.phaseRendering"
+msgid "Rendering"
+msgstr "Rendert"
+
+msgctxt "generate.phaseSavingTake"
+msgid "Saving take"
+msgstr "Take wird gespeichert"
+
+msgctxt "generate.needsContent"
+msgid "Add lyrics and style prompt first"
+msgstr "Füg zuerst Songtext und Stil-Prompt hinzu"
+
+msgctxt "generate.noModels"
+msgid "No models enabled. Ask admin to enable one."
+msgstr "Keine Modelle freigeschaltet. Bitte einen Admin, eins freizuschalten."
+
+msgctxt "generate.selectModel"
+msgid "Select a model first"
+msgstr "Wähl zuerst ein Modell"
+
+msgctxt "generate.startFailed"
+msgid "Generation failed"
+msgstr "Generierung fehlgeschlagen"
+
+msgctxt "jobWait.voiceTraining"
+msgid "Waiting for LoRA training on this GPU."
+msgstr "Wartet auf ein LoRA-Training auf dieser GPU."
+
+msgctxt "jobWait.queuedGenerations"
+msgid "Waiting for queued generations on this GPU."
+msgstr "Wartet auf eingereihte Generierungen auf dieser GPU."
+
+msgctxt "jobFailure.audioDownloadFailed"
+msgid "Failed to download generated audio"
+msgstr "Das generierte Audio konnte nicht heruntergeladen werden"
+
+msgctxt "jobFailure.serverUnreachable"
+msgid "ACE-Step server not reachable"
+msgstr "Der ACE-Step-Server ist nicht erreichbar"
+
+msgctxt "jobFailure.generationTimedOut"
+msgid "Generation timed out"
+msgstr "Zeitüberschreitung bei der Generierung"
+
+msgctxt "jobFailure.noWorkers"
+msgid "No ACE-Step workers available"
+msgstr "Keine ACE-Step-Worker verfügbar"
+
+msgctxt "jobFailure.internal"
+msgid "Internal error during processing"
+msgstr "Interner Fehler bei der Verarbeitung"
+
+msgctxt "jobFailure.unexpected"
+msgid "An unexpected error occurred"
+msgstr "Ein unerwarteter Fehler ist aufgetreten"
+
+msgctxt "jobFailure.workerReported"
+msgid "The worker reported: {cause}"
+msgstr "Der Worker meldet: {cause}"
+
+msgctxt "jobFailure.recorded"
+msgid "{cause}"
+msgstr "{cause}"
+
+msgctxt "jobFailure.generationFailed"
+msgid "Generating failed — try again."
+msgstr "Generieren fehlgeschlagen – versuch es noch einmal."
+
+msgctxt "jobFailure.generationUnavailable"
+msgid "Generating isn't available right now."
+msgstr "Generieren ist gerade nicht möglich."
+
+msgctxt "jobFailure.gpuOutOfMemory"
+msgid "Too long for the GPU right now — try a shorter duration."
+msgstr "Für die GPU gerade zu lang – versuch eine kürzere Dauer."
+
+msgctxt "jobFailure.songNotFound"
+msgid "Song not found"
+msgstr "Song nicht gefunden"
+
+msgctxt "jobFailure.versionNotFound"
+msgid "Version not found"
+msgstr "Version nicht gefunden"
+
+msgctxt "jobFailure.referenceAudioNotFound"
+msgid "Reference audio not found"
+msgstr "Referenz-Audio nicht gefunden"
+
+msgctxt "jobFailure.referenceDeletedDuringTake"
+msgid "The reference track was deleted while this take was generating."
+msgstr "Der Referenztrack wurde gelöscht, während dieser Take generiert wurde."
+
+msgctxt "jobFailure.voiceUnavailable"
+msgid "Selected voice is unavailable for this generation"
+msgstr "Die gewählte Stimme ist für diese Generierung nicht verfügbar"
+
+msgctxt "jobFailure.generationCancelled"
+msgid "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
+msgstr ""
+"Job abgebrochen: ARQ_JOB_TIMEOUT überschritten oder Worker "
+"heruntergefahren"
+
+msgctxt "jobFailure.partialTakes"
+msgid "{completed}/{count} completed, {failed} failed: {cause}"
+msgstr "{completed}/{count} fertig, {failed} fehlgeschlagen: {cause}"
+
+msgctxt "jobFailure.scoringWorkerDown"
+msgid "Scoring worker not running"
+msgstr "Der Bewertungs-Worker läuft nicht"
+
+msgctxt "jobFailure.scoringEnqueueFailed"
+msgid "Failed to enqueue auto-score job"
+msgstr "Der Job zur automatischen Bewertung konnte nicht eingereiht werden"
+
+msgctxt "jobFailure.scoringAudioMissing"
+msgid "Audio file not found for scoring"
+msgstr "Audiodatei für die Bewertung nicht gefunden"
+
+msgctxt "jobFailure.scoringGenerationMissing"
+msgid "Generation not found"
+msgstr "Generierung nicht gefunden"
+
+msgctxt "jobFailure.serverRestarted"
+msgid "Server restarted while job was in progress"
+msgstr "Der Server wurde neu gestartet, während der Job lief"
+
+msgctxt "jobFailure.noWorkerAlive"
+msgid "No worker alive for this job type — please retry."
+msgstr "Für diese Job-Art läuft kein Worker – bitte versuch es noch einmal."
+
+msgctxt "jobFailure.queuedFullQueueBound"
+msgid "Queued longer than a full queue could take — please retry."
+msgstr ""
+"Länger gewartet, als eine volle Warteschlange dauern kann – bitte versuch"
+" es noch einmal."
+
+msgctxt "jobFailure.tookTooLong"
+msgid "Took too long to finish — please retry."
+msgstr "Hat zu lange gedauert – bitte versuch es noch einmal."
+
+msgctxt "jobFailure.queuedTooLong"
+msgid "Queued too long — please retry."
+msgstr "Zu lange gewartet – bitte versuch es noch einmal."
+
+msgctxt "chatFailure.clientCancelled"
+msgid "Turn cancelled by the client."
+msgstr "Antwort vom Client abgebrochen."
+
+msgctxt "chatFailure.requestCancelled"
+msgid "Chat request cancelled"
+msgstr "Chat-Anfrage abgebrochen"
+
+msgctxt "chatFailure.setupFailed"
+msgid "Chat setup failed"
+msgstr "Chat-Einrichtung fehlgeschlagen"
+
+msgctxt "chatFailure.requestFailed"
+msgid "Chat request failed"
+msgstr "Chat-Anfrage fehlgeschlagen"
+
+msgctxt "chatFailure.completionFailed"
+msgid "Chat completion failed"
+msgstr "Chat-Antwort fehlgeschlagen"
+
+msgctxt "chatFailure.problem"
+msgid "{problem}: {detail}"
+msgstr "{problem}: {detail}"
+
+msgctxt "voiceFailure.notFound"
+msgid "LoRA not found"
+msgstr "LoRA nicht gefunden"
+
+msgctxt "voiceFailure.deleted"
+msgid "LoRA is deleted"
+msgstr "Die LoRA ist gelöscht"
+
+msgctxt "voiceFailure.workerTrainingFailed"
+msgid "Worker training failed"
+msgstr "Das Training auf dem Worker ist fehlgeschlagen"
+
+msgctxt "voiceFailure.crashed"
+msgid "Training crashed or was interrupted"
+msgstr "Das Training ist abgestürzt oder wurde unterbrochen"
+
+msgctxt "voiceFailure.drainTimeout"
+msgid "Generation queue did not drain before LoRA training could start"
+msgstr ""
+"Die Generierungs-Warteschlange wurde nicht leer, bevor das LoRA-Training "
+"starten konnte"
+
+msgctxt "voiceFailure.cancelled"
+msgid "Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown"
+msgstr ""
+"Job abgebrochen: LORA_TRAINING_JOB_TIMEOUT überschritten oder Worker "
+"heruntergefahren"
+
+msgctxt "voiceFailure.modeUnsupported"
+msgid "Worker completed LoRA training with unsupported model mode: {workerMode}"
+msgstr ""
+"Der Worker hat das LoRA-Training mit einem nicht unterstützten "
+"Modellmodus abgeschlossen: {workerMode}"
+
+msgctxt "voiceFailure.modeMismatch"
+msgid ""
+"Worker completed LoRA training with model mode {workerMode}, expected "
+"{requestedMode}"
+msgstr ""
+"Der Worker hat das LoRA-Training mit dem Modellmodus {workerMode} "
+"abgeschlossen, erwartet war {requestedMode}"
+
+msgctxt "voiceFailure.recorded"
+msgid "{cause}"
+msgstr "{cause}"
+
+msgctxt "jobEnd.generateCompleted"
+msgid "generate completed"
+msgstr "Generierung abgeschlossen"
+
+msgctxt "jobEnd.generatePartial"
+msgid "generate partially completed"
+msgstr "Generierung teilweise abgeschlossen"
+
+msgctxt "jobEnd.generateCancelled"
+msgid "generate cancelled"
+msgstr "Generierung abgebrochen"
+
+msgctxt "jobEnd.generateFailed"
+msgid "generate failed"
+msgstr "Generierung fehlgeschlagen"
+
+msgctxt "jobEnd.scoreCompleted"
+msgid "score completed"
+msgstr "Bewertung abgeschlossen"
+
+msgctxt "jobEnd.scorePartial"
+msgid "score partially completed"
+msgstr "Bewertung teilweise abgeschlossen"
+
+msgctxt "jobEnd.scoreCancelled"
+msgid "score cancelled"
+msgstr "Bewertung abgebrochen"
+
+msgctxt "jobEnd.scoreFailed"
+msgid "score failed"
+msgstr "Bewertung fehlgeschlagen"
+
+msgctxt "jobEnd.voiceTrainingCompleted"
+msgid "lora_training completed"
+msgstr "LoRA-Training abgeschlossen"
+
+msgctxt "jobEnd.voiceTrainingPartial"
+msgid "lora_training partially completed"
+msgstr "LoRA-Training teilweise abgeschlossen"
+
+msgctxt "jobEnd.voiceTrainingFailed"
+msgid "lora_training failed"
+msgstr "LoRA-Training fehlgeschlagen"
+
+msgctxt "jobEnd.modelLoadCompleted"
+msgid "load_model_on_worker completed"
+msgstr "Modell auf dem Worker geladen"
+
+msgctxt "jobEnd.modelLoadPartial"
+msgid "load_model_on_worker partially completed"
+msgstr "Modell auf dem Worker teilweise geladen"
+
+msgctxt "jobEnd.modelLoadCancelled"
+msgid "load_model_on_worker cancelled"
+msgstr "Laden des Modells auf dem Worker abgebrochen"
+
+msgctxt "jobEnd.modelLoadFailed"
+msgid "load_model_on_worker failed"
+msgstr "Laden des Modells auf dem Worker fehlgeschlagen"
+
+msgctxt "jobEnd.modelDownloadCompleted"
+msgid "download_model_on_worker completed"
+msgstr "Modell auf den Worker heruntergeladen"
+
+msgctxt "jobEnd.modelDownloadPartial"
+msgid "download_model_on_worker partially completed"
+msgstr "Modell teilweise auf den Worker heruntergeladen"
+
+msgctxt "jobEnd.modelDownloadCancelled"
+msgid "download_model_on_worker cancelled"
+msgstr "Download des Modells auf den Worker abgebrochen"
+
+msgctxt "jobEnd.modelDownloadFailed"
+msgid "download_model_on_worker failed"
+msgstr "Download des Modells auf den Worker fehlgeschlagen"
+
+msgctxt "transport.play"
+msgid "Play"
+msgstr "Abspielen"
+
+msgctxt "transport.pause"
+msgid "Pause"
+msgstr "Pause"
+
+msgctxt "transport.retry"
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+msgctxt "transport.previous"
+msgid "Previous"
+msgstr "Zurück"
+
+msgctxt "transport.next"
+msgid "Next"
+msgstr "Weiter"
+
+msgctxt "transport.nowPlaying"
+msgid "Now Playing"
+msgstr "Läuft gerade"
+
+msgctxt "transport.seek"
+msgid "Seek playback"
+msgstr "Wiedergabeposition"
+
+msgctxt "transport.seekPosition"
+msgid "{position} of {length}"
+msgstr "{position} von {length}"
+
+msgctxt "transport.waitingForNetwork"
+msgid "Waiting for the network."
+msgstr "Wartet auf das Netzwerk."
+
+msgctxt "transport.playbackFailed"
+msgid "Playback failed. Press Retry."
+msgstr "Wiedergabe fehlgeschlagen. Drück auf „Erneut versuchen“."
+
+msgctxt "transport.fileNotFound"
+msgid "Audio file not found."
+msgstr "Audiodatei nicht gefunden."
+
+msgctxt "transport.stalled"
+msgid "Playback stalled. Press Retry."
+msgstr "Wiedergabe hängt. Drück auf „Erneut versuchen“."
+
+msgctxt "transport.autoplayBlocked"
+msgid "Autoplay blocked. Press Play to start."
+msgstr "Autoplay blockiert. Drück auf „Abspielen“, um zu starten."
+
+msgctxt "transport.aborted"
+msgid "Playback aborted."
+msgstr "Wiedergabe abgebrochen."
+
+msgctxt "transport.fileCorrupted"
+msgid "Audio file is corrupted."
+msgstr "Die Audiodatei ist beschädigt."
+
+msgctxt "transport.formatUnsupported"
+msgid "Audio format not supported by this browser."
+msgstr "Dieser Browser unterstützt das Audioformat nicht."
+
+msgctxt "transport.shuffleLibrary"
+msgid "Shuffle all albums"
+msgstr "Alle Alben zufällig abspielen"
+
+msgctxt "transport.shuffleAlbum"
+msgid "Shuffle this album"
+msgstr "Dieses Album zufällig abspielen"
+
+msgctxt "transport.shufflePlaylist"
+msgid "Shuffle this playlist"
+msgstr "Diese Playlist zufällig abspielen"
+
+msgctxt "transport.unshuffleLibrary"
+msgid "Disable shuffle (all albums)"
+msgstr "Zufallswiedergabe aus (alle Alben)"
+
+msgctxt "transport.unshuffleAlbum"
+msgid "Disable shuffle (this album)"
+msgstr "Zufallswiedergabe aus (dieses Album)"
+
+msgctxt "transport.unshufflePlaylist"
+msgid "Disable shuffle (this playlist)"
+msgstr "Zufallswiedergabe aus (diese Playlist)"
+
+msgctxt "player.openNowPlaying"
+msgid "{title} — open Now Playing"
+msgstr "{title} – „Läuft gerade“ öffnen"
+
+msgctxt "player.loading"
+msgid "Loading"
+msgstr "Wird geladen"
+
+msgctxt "player.nothingToPlay"
+msgid "Nothing to play yet"
+msgstr "Noch nichts zum Abspielen"
+
+msgctxt "player.startFailed"
+msgid "{source} failed"
+msgstr "{source} fehlgeschlagen"
+
+msgctxt "player.pressPlayToRetry"
+msgid "Press play to retry"
+msgstr "Drück auf Abspielen, um es noch einmal zu versuchen"
+
+msgctxt "player.play"
+msgid "Play"
+msgstr "Abspielen"
+
+msgctxt "player.playlistLoading"
+msgid "Loading playlist…"
+msgstr "Playlist wird geladen…"
+
+msgctxt "player.picksQueueFailed"
+msgid "Picks queue failed. Press play to retry."
+msgstr ""
+"Warteschlange der Album-Takes fehlgeschlagen. Drück auf Abspielen, um es "
+"noch einmal zu versuchen."
+
+msgctxt "player.keepsQueueFailed"
+msgid "+ Keeps queue failed. Press play to retry."
+msgstr ""
+"Warteschlange „+ Behaltene“ fehlgeschlagen. Drück auf Abspielen, um es "
+"noch einmal zu versuchen."
+
+msgctxt "player.allTakesQueueFailed"
+msgid "All takes queue failed. Press play to retry."
+msgstr ""
+"Warteschlange aller Takes fehlgeschlagen. Drück auf Abspielen, um es noch"
+" einmal zu versuchen."
+
+msgctxt "player.takeNotInQueue"
+msgid "This take is not in the queue"
+msgstr "Dieser Take ist nicht in der Warteschlange"
+
+msgctxt "player.playTakeFailed"
+msgid "Playback failed"
+msgstr "Wiedergabe fehlgeschlagen"
+
+msgctxt "player.takeSkipped"
+msgid "{title} couldn't be loaded, skipped."
+msgstr "{title} konnte nicht geladen werden und wurde übersprungen."
+
+msgctxt "collectionHeader.playAlbum"
+msgid "Play album"
+msgstr "Album abspielen"
+
+msgctxt "collectionHeader.pauseAlbum"
+msgid "Pause album"
+msgstr "Album pausieren"
+
+msgctxt "collectionHeader.retryAlbum"
+msgid "Retry album"
+msgstr "Album erneut versuchen"
+
+msgctxt "collectionHeader.playPlaylist"
+msgid "Play playlist"
+msgstr "Playlist abspielen"
+
+msgctxt "collectionHeader.pausePlaylist"
+msgid "Pause playlist"
+msgstr "Playlist pausieren"
+
+msgctxt "collectionHeader.retryPlaylist"
+msgid "Retry playlist"
+msgstr "Playlist erneut versuchen"
+
+msgctxt "libraryWall.playTitle"
+msgid "Play {title}"
+msgstr "{title} abspielen"
+
+msgctxt "libraryWall.pauseTitle"
+msgid "Pause {title}"
+msgstr "{title} pausieren"
+
+msgctxt "libraryWall.retryTitle"
+msgid "Retry {title}"
+msgstr "{title} erneut versuchen"
+
+msgctxt "playingMark.playing"
+msgid "Playing"
+msgstr "Läuft"
+
+msgctxt "share.shuffle"
+msgid "Shuffle"
+msgstr "Zufallswiedergabe"
+
+msgctxt "share.disableShuffle"
+msgid "Disable shuffle"
+msgstr "Zufallswiedergabe aus"
+
+msgctxt "nowPlaying.kicker"
+msgid "Now Playing"
+msgstr "Läuft gerade"
+
+msgctxt "nowPlaying.close"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "nowPlaying.expand"
+msgid "Expand"
+msgstr "Aufklappen"
+
+msgctxt "nowPlaying.collapse"
+msgid "Collapse"
+msgstr "Zuklappen"
+
+msgctxt "nowPlaying.goToSong"
+msgid "Go to song"
+msgstr "Zum Song"
+
+msgctxt "nowPlaying.playAgain"
+msgid "Play again"
+msgstr "Noch einmal abspielen"
+
+msgctxt "nowPlaying.previousSong"
+msgid "Previous song"
+msgstr "Vorheriger Song"
+
+msgctxt "nowPlaying.nextSong"
+msgid "Next song"
+msgstr "Nächster Song"
+
+msgctxt "nowPlaying.rightPanel"
+msgid "Now Playing panel"
+msgstr "Bereich „Läuft gerade“"
+
+msgctxt "nowPlaying.closeSheet"
+msgid "Close {sheet}"
+msgstr "{sheet} schließen"
+
+msgctxt "nowPlaying.queueTab"
+msgid "Queue"
+msgstr "Warteschlange"
+
+msgctxt "nowPlaying.takeTab"
+msgid "This take"
+msgstr "Dieser Take"
+
+msgctxt "nowPlaying.queueHeading"
+msgid "Queue · {source}"
+msgstr "Warteschlange · {source}"
+
+msgctxt "nowPlaying.upNext"
+msgid "Up next: {title}"
+msgstr "Als Nächstes: {title}"
+
+msgctxt "nowPlaying.fromSource"
+msgid "from {title}"
+msgstr "aus {title}"
+
+msgctxt "nowPlaying.openAlbumSource"
+msgid "from {title} — open album"
+msgstr "aus {title} – Album öffnen"
+
+msgctxt "nowPlaying.openPlaylistSource"
+msgid "from {title} — open playlist"
+msgstr "aus {title} – Playlist öffnen"
+
+msgctxt "nowPlaying.takeVersioned"
+msgid "v{version} · take {take}"
+msgstr "v{version} · Take {take}"
+
+msgctxt "nowPlaying.takeUnversioned"
+msgid "take {take}"
+msgstr "Take {take}"
+
+msgctxt "nowPlaying.takeDetailsFailed"
+msgid "Failed to load take details"
+msgstr "Die Details des Takes konnten nicht geladen werden"
+
+msgctxt "nowPlaying.lyricsHeading"
+msgid "Lyrics"
+msgstr "Songtext"
+
+msgctxt "nowPlaying.lyricsHeadingTitled"
+msgid "Lyrics · {title}"
+msgstr "Songtext · {title}"
+
+msgctxt "nowPlaying.lyricsFollow"
+msgid "Follow"
+msgstr "Mitlaufen"
+
+msgctxt "nowPlaying.lyricsUnsynced"
+msgid "Lyrics aren't synced for this take."
+msgstr "Der Songtext ist für diesen Take nicht synchronisiert."
+
+msgctxt "nowPlaying.noLyrics"
+msgid "No lyrics for this take"
+msgstr "Kein Songtext für diesen Take"
+
+msgctxt "nowPlaying.importedNoLyrics"
+msgid "Imported take — no lyrics were saved with it."
+msgstr "Importierter Take – mit ihm wurde kein Songtext gespeichert."
+
+msgctxt "nowPlaying.curateGroup"
+msgid "Pick album takes"
+msgstr "Album-Takes auswählen"
+
+msgctxt "nowPlaying.curateProgress"
+msgid "Pick album takes · Song {index} of {total}"
+msgstr "Album-Takes auswählen · Song {index} von {total}"
+
+msgctxt "nowPlaying.pick"
+msgid "Pick"
+msgstr "Fürs Album"
+
+msgctxt "nowPlaying.keep"
+msgid "Keep"
+msgstr "Behalten"
+
+msgctxt "nowPlaying.unkeep"
+msgid "Unkeep"
+msgstr "Nicht behalten"
+
+msgctxt "nowPlaying.skip"
+msgid "Skip"
+msgstr "Überspringen"
+
+msgctxt "nowPlaying.skipName"
+msgid "Skip — Next song"
+msgstr "Überspringen – nächster Song"
+
+msgctxt "nowPlaying.done"
+msgid "Done"
+msgstr "Fertig"
+
+msgctxt "nowPlaying.takePool"
+msgid "Take pool"
+msgstr "Take-Auswahl"
+
+msgctxt "nowPlaying.poolPicks"
+msgid "Picks"
+msgstr "Album-Takes"
+
+msgctxt "nowPlaying.poolKeeps"
+msgid "+ Keeps"
+msgstr "+ Behaltene"
+
+msgctxt "nowPlaying.poolAll"
+msgid "All takes"
+msgstr "Alle Takes"
+
+msgctxt "nowPlaying.streamSkipped.one"
+msgid "{count} take skipped"
+msgstr "{count} Take übersprungen"
+
+msgctxt "nowPlaying.streamSkipped.other"
+msgid "{count} takes skipped"
+msgstr "{count} Takes übersprungen"
+
+msgctxt "nowPlaying.streamCheckIncomplete"
+msgid "Check incomplete"
+msgstr "Prüfung unvollständig"
+
+msgctxt "nowPlaying.streamEnded"
+msgid "End of stream"
+msgstr "Ende des Streams"
+
+msgctxt "nowPlaying.streamMissingPath"
+msgid "{count} no audio file"
+msgstr "{count} ohne Audiodatei"
+
+msgctxt "nowPlaying.streamMissingFile"
+msgid "{count} file not found"
+msgstr "{count} Datei nicht gefunden"
+
+msgctxt "nowPlaying.streamUnreadable"
+msgid "{count} file unreadable"
+msgstr "{count} Datei nicht lesbar"
+
+msgctxt "nowPlaying.streamMoreNotChecked"
+msgid "More takes not checked"
+msgstr "Weitere Takes nicht geprüft"
+
+msgctxt "nowPlaying.streamMoreNotLoaded"
+msgid "More takes not loaded"
+msgstr "Weitere Takes nicht geladen"
+
+msgctxt "app.name"
+msgid "Hallucinai"
+msgstr "Hallucinai"
+
+msgctxt "breadcrumb.label"
+msgid "Breadcrumb"
+msgstr "Brotkrumen"
+
+msgctxt "deleteDialog.warning"
+msgid "This cannot be undone."
+msgstr "Das lässt sich nicht rückgängig machen."
+
+msgctxt "deleteDialog.confirm"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "deleteDialog.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "sharedFooter.poweredBy"
+msgid "Powered by {#home}{app}{/home}"
+msgstr "Läuft mit {#home}{app}{/home}"
+
+msgctxt "songHeader.albumLine.one"
+msgid "{album} · {count} song"
+msgstr "{album} · {count} Song"
+
+msgctxt "songHeader.albumLine.other"
+msgid "{album} · {count} songs"
+msgstr "{album} · {count} Songs"
+
+msgctxt "cowriter.versionChip"
+msgid "v{number}"
+msgstr "v{number}"
+
+msgctxt "albumPage.undo"
+msgid "Undo"
+msgstr "Rückgängig"
+
+msgctxt "versions.loadFailed"
+msgid "Could not load versions"
+msgstr "Versionen konnten nicht geladen werden"
+
+msgctxt "account.themeSaveFailed"
+msgid "Saving the theme failed"
+msgstr "Das Design konnte nicht gespeichert werden"
+
+msgctxt "routeError.offline"
+msgid "This page needs the network. It opens by itself when you are back online."
+msgstr ""
+"Diese Seite braucht das Netzwerk. Sie öffnet sich von selbst, sobald du "
+"wieder online bist."
+
+msgctxt "routeError.notFound"
+msgid "Not Found"
+msgstr "Nicht gefunden"
+
+msgctxt "routeError.failed"
+msgid "Internal Error"
+msgstr "Interner Fehler"
+
+msgctxt "aiNotice.generated"
+msgid "KI-generiert"
+msgstr "KI-generiert"
+
+msgctxt "aiNotice.writing"
+msgid "Du schreibst mit einer KI"
+msgstr "Du schreibst mit einer KI"
+
+msgctxt "player.detailLoading"
+msgid "Loading..."
+msgstr "Wird geladen..."
+
+msgctxt "aboutPage.loading"
+msgid "Loading..."
+msgstr "Wird geladen..."
+
+msgctxt "workerPool.cancel"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "adminPage.voiceStatusDraft"
+msgid "draft"
+msgstr "Entwurf"
+
+msgctxt "adminPage.voiceStatusQueued"
+msgid "queued"
+msgstr "wartet"
+
+msgctxt "adminPage.voiceStatusPreprocessing"
+msgid "preprocessing"
+msgstr "Vorverarbeitung"
+
+msgctxt "adminPage.voiceStatusTraining"
+msgid "training"
+msgstr "im Training"
+
+msgctxt "adminPage.voiceStatusExporting"
+msgid "exporting"
+msgstr "Export"
+
+msgctxt "adminPage.voiceStatusReady"
+msgid "ready"
+msgstr "bereit"
+
+msgctxt "adminPage.voiceStatusFailed"
+msgid "failed"
+msgstr "fehlgeschlagen"
+
+msgctxt "logoutPage.logOut"
+msgid "Log out"
+msgstr "Abmelden"
+

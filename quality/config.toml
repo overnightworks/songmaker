@@ -4,7 +4,12 @@ mandatory_jobs = [
     "Combine backend coverage",
     "Frontend",
     "E2E / Browser suite",
+    "Render pass",
 ]
+
+# Render pass stands for the render-pass tests the E2E legs run on their stack; it requires them present and the run green.
+[languages]
+render_pass = "Render pass"
 
 [[gate.loosened]]
 what = 'mandatory job "Alert rules (promtool)" removed'
@@ -165,11 +170,18 @@ date = 2026-11-11
 reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
 
 [[size.generated]]
+path = "frontend/src/lib/words/de.ts"
+job = "Backend (Python 3.14)"
+item = "#3278"
+date = 2026-11-18
+reason = "written by design-catalogs from frontend/src/lib/catalogs/de.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
+
+[[size.generated]]
 path = "src/songmaker_cli/words.py"
 job = "Backend (Python 3.14)"
 item = "#3097"
 date = 2026-11-13
-reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
+reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and de.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
 
 [[root.allow]]
 entry = "alembic.ini"

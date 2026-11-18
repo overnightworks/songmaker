@@ -6,6 +6,12 @@
 	import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
 
 	const LOAD_FAILED_STATUS = 500;
+	const NOT_FOUND_STATUS = 404;
+
+	// The router's own message is English; the page names the failure in its language.
+	const failureWords = $derived(
+		pageText(page.status === NOT_FOUND_STATUS ? 'routeError.notFound' : 'routeError.failed')
+	);
 
 	// A page chunk that fails to load is a 500 to the router; offline it is the lost network.
 	const waitsForNetwork = $derived(page.status === LOAD_FAILED_STATUS && $offline);
@@ -34,7 +40,7 @@
 		<p class="route-error-words">{pageText('routeError.offline')}</p>
 	{:else}
 		<h1 class="route-error-status">{page.status}</h1>
-		<p class="route-error-words">{page.error?.message}</p>
+		<p class="route-error-words">{failureWords}</p>
 	{/if}
 </section>
 

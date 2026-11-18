@@ -12,7 +12,10 @@ const { goto, page } = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/state', () => ({ page }));
 
+import { loadPageWords } from '#lib/utils/page-words.ts';
+import { sourceLanguage } from '#lib/words/index.ts';
 import { words } from '#lib/words/en.ts';
+import { words as germanWords } from '#lib/words/de.ts';
 import ErrorPage from './+error.svelte';
 
 const OFFLINE_SENTENCE = words['routeError.offline'];
@@ -43,6 +46,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	resetConnectivityForTests();
 	vi.restoreAllMocks();
+	await loadPageWords(sourceLanguage);
 });
 
 describe('route error page', () => {
@@ -128,6 +132,23 @@ describe('route error page', () => {
 		expect(target.textContent).toContain('Internal Error');
 		expect(target.textContent).not.toContain(OFFLINE_SENTENCE);
 	});
+
+	it.each([
+		[404, 'Not Found', germanWords['routeError.notFound']],
+		[500, 'Internal Error', germanWords['routeError.failed']]
+	])(
+		'names a %i failure in the page language, not in the router message',
+		async (status, routerMessage, germanSentence) => {
+			await loadPageWords('de');
+			failNavigationWith(status, routerMessage);
+
+			const target = await mountErrorPage();
+
+			expect(target.textContent).toContain(String(status));
+			expect(target.textContent).toContain(germanSentence);
+			expect(target.textContent).not.toContain(routerMessage);
+		}
+	);
 
 	it('shows a 404 even while offline and never retries it', async () => {
 		browserReportsOnline(false);

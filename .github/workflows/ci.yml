@@ -517,8 +517,60 @@ jobs:
       contents: read
     uses: $/.github/workflows/e2e.yml
 
+  # The render pass of every further language (frontend/e2e/language-render.spec.ts) runs in the
+  # E2E legs on their stack, at the phone and a desktop width; this job names it to the gate. It is
+  # green only when the E2E run passed and the pass holds a test in each width's project, so a
+  # pass that renders nothing cannot stand for one.
+  render-pass:
+    name: Render pass
+    needs: [e2e]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Fail unless the E2E run succeeded
+        env:
+          E2E_RESULT: ${{ needs.e2e.result }}
+        run: test "$E2E_RESULT" = success
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.x
+        with:
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
+        with:
+          node-version-file: frontend/.node-version
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Require a render-pass test in each width's project
+        working-directory: frontend
+        env:
+          CI: "true"
+          # Listing reaches no server; the configuration only requires an address.
+          E2E_BASE_URL: http://localhost:8080
+        run: |
+          set -euo pipefail
+          for project in desktop mobile; do
+            count="$(pnpm exec playwright test --list --reporter=json --project="$project" e2e/language-render.spec.ts \
+              | jq '[.. | objects | select(has("tests")) | .tests[]] | length')"
+            echo "$project: $count render-pass tests"
+            [ "$count" -gt 0 ] || { echo "no render-pass test in the $project project" >&2; exit 1; }
+          done
+
   quality:
-    needs: [backend, backend-coverage, frontend, coverage, e2e]
+    needs: [backend, backend-coverage, frontend, coverage, e2e, render-pass]
     if: ${{ !cancelled() }}
     permissions:
       contents: read
