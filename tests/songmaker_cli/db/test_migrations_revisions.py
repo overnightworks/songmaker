@@ -12,14 +12,13 @@ from alembic import command
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 from support.migration_chain import column_names
+from support.postgresql import upgrade_to_head
 from support.reference_link_migration import execute
 
 from songmaker_cli.constants import MODEL_AVAILABLE_MODES, MODEL_DEFAULT_MODE
-from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.models import (
     PLAYLIST_SLUG_MAX_LENGTH,
     SONG_SLUG_MAX_LENGTH,
-    Base,
 )
 
 VERSIONS = "songmaker_cli.db.migrations.versions."
@@ -87,12 +86,13 @@ def _run_on(monkeypatch: pytest.MonkeyPatch, migration, engine: sa.Engine, step)
         step()
 
 
-def test_init_db_fresh_creates_all_tables(empty_postgresql_url) -> None:
-    factory = init_db(empty_postgresql_url)
+def test_upgrade_on_an_empty_database_creates_all_tables(empty_postgresql_url) -> None:
+    upgrade_to_head(empty_postgresql_url)
+    engine = create_engine(empty_postgresql_url)
     try:
-        tables = set(inspect(factory.kw["bind"]).get_table_names())
+        tables = set(inspect(engine).get_table_names())
     finally:
-        factory.kw["bind"].dispose()
+        engine.dispose()
 
     expected = {
         "albums", "album_cover_suggestions", "songs", "versions", "generations", "scores",
@@ -114,29 +114,13 @@ def test_available_models_seed_idempotent(empty_postgresql_url) -> None:
         engine.dispose()
         return rows
 
-    init_db(empty_postgresql_url).kw["bind"].dispose()
+    upgrade_to_head(empty_postgresql_url)
     count_before = len(seeded_models())
     assert set(seeded_models()) == MODEL_AVAILABLE_MODES
 
-    init_db(empty_postgresql_url).kw["bind"].dispose()
+    upgrade_to_head(empty_postgresql_url)
     assert set(seeded_models()) == MODEL_AVAILABLE_MODES
     assert len(seeded_models()) == count_before
-
-
-def test_init_db_stamps_existing_db(empty_postgresql_url) -> None:
-    engine = create_engine(empty_postgresql_url)
-    Base.metadata.create_all(engine)
-    engine.dispose()
-
-    init_db(empty_postgresql_url).kw["bind"].dispose()
-
-    engine = create_engine(empty_postgresql_url)
-    tables = set(inspect(engine).get_table_names())
-    assert "alembic_version" in tables
-    with engine.connect() as conn:
-        row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
-        assert row is not None
-    engine.dispose()
 
 
 def test_user_lora_model_mode_migration_backfills_constrains_and_removes(database) -> None:

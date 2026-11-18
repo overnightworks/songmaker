@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
@@ -27,11 +27,21 @@ log = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
+DATABASE_NOT_AT_HEAD_MESSAGE = (
+    "The database is at revision {stored}, not at head {head}. The migrate init container "
+    "owns migrations and this process never migrates; Kubernetes restarts this "
+    "process until the head matches."
+)
+
 _RETRIED_SERVER_FATALS = (
     "the database system is starting up",
     "the database system is shutting down",
     "the database system is in recovery mode",
 )
+
+
+class DatabaseNotAtHeadError(RuntimeError):
+    """The database revision differs from the script head, or the database is unversioned."""
 
 
 def resolve_database_url() -> URL:
@@ -90,31 +100,40 @@ def wait_for_database(
             return
 
 
-def _run_migrations(url: URL | str) -> None:
-    """Run Alembic migrations, stamping existing databases that lack alembic_version."""
-    from alembic import command
+def _script_head() -> str:
     from alembic.config import Config
+    from alembic.script import ScriptDirectory
 
     cfg = Config()
     cfg.set_main_option("script_location", MIGRATIONS_DIR)
-    # configparser interpolates "%", so the rendered URL doubles it.
-    rendered_url = make_url(url).render_as_string(hide_password=False)
-    cfg.set_main_option("sqlalchemy.url", rendered_url.replace("%", "%%"))
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+    if head is None:
+        raise RuntimeError("The migration chain has no head")
+    return head
+
+
+def _stored_revision(url: URL | str) -> str | None:
+    from alembic.runtime.migration import MigrationContext
 
     engine = create_engine(url)
-    inspector = inspect(engine)
-    table_names = inspector.get_table_names()
-    engine.dispose()
+    try:
+        with engine.connect() as connection:
+            return MigrationContext.configure(connection).get_current_revision()
+    finally:
+        engine.dispose()
 
-    has_app_tables = "albums" in table_names
-    has_alembic = "alembic_version" in table_names
 
-    if has_app_tables and not has_alembic:
-        command.stamp(cfg, "head", purge=True)
-        log.info("Stamped existing database at current migration head")
-        return
+def require_database_at_head(url: URL | str) -> None:
+    """Raise ``DatabaseNotAtHeadError`` unless the database holds the script head revision.
 
-    command.upgrade(cfg, "head")
+    Never migrates and never stamps: an unversioned database counts as behind.
+    """
+    head = _script_head()
+    stored = _stored_revision(url)
+    if stored != head:
+        raise DatabaseNotAtHeadError(
+            DATABASE_NOT_AT_HEAD_MESSAGE.format(stored=stored or "none", head=head)
+        )
 
 
 def connect_db(url: URL | str) -> sessionmaker[Session]:
@@ -141,7 +160,7 @@ def connect_db(url: URL | str) -> sessionmaker[Session]:
 
 
 def init_db(url: URL | str) -> sessionmaker[Session]:
-    """Wait for the database, run migrations, and return a session factory."""
+    """Wait for the database, require it at head, and return a session factory."""
     wait_for_database(url)
-    _run_migrations(url)
+    require_database_at_head(url)
     return connect_db(url)
