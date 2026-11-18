@@ -1614,7 +1614,9 @@ SIGKILLed and even the values the run did produce would be lost.
 - A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
   type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
   the transaction that creates the row, before the arq enqueue, and `jobs.run_after` holds the time
-  a job put back in the queue waits for. arq still carries the arguments a handler runs with; the
+  from which a queued job may be claimed: now for a new job, one poll ahead for a put-back job; a
+  claim clears it. A requeue that sends fewer arguments (the takes a generate job has left) stores
+  them on the row in the same write. arq still carries the arguments a handler runs with; the
   row's payload is the copy a claim from PostgreSQL will read. Cover and chat jobs run from their
   own row and have no payload. Every arq handler (`WorkerBase.claim_job`) first moves its row from
   queued to running by one conditional UPDATE that names the worker as owner

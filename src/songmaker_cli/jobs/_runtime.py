@@ -17,6 +17,8 @@ from songmaker_cli.db.queries.jobs import (
     update_job_heartbeat,
     update_job_status,
 )
+from songmaker_cli.db.queries.sentinels import unset_if_none
+from songmaker_cli.job_payloads import JobPayload
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS, JOB_HEARTBEAT_INTERVAL_SECONDS
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, JobStatus
 from songmaker_cli.messages import Message, message
@@ -103,10 +105,17 @@ def _update_job(factory, job_id: str, status: JobStatus, **fields: Any) -> bool:
     ) from last_exc
 
 
-def _defer_job(factory, job_id: str, reason: Message) -> bool:
-    """Put the job back in the queue for one poll of the GPU hold, saying why it waits."""
+def _defer_job(
+    factory, job_id: str, reason: Message, payload: JobPayload | None = None,
+) -> bool:
+    """Put the job back in the queue for one poll of the GPU hold, saying why it waits.
+
+    A job that comes back with fewer arguments than it left with passes them as ``payload``, so
+    the row and the queue message name the same work.
+    """
     return _update_job(
         factory, job_id, JobStatus.QUEUED, queue_reason_message=reason,
+        payload=unset_if_none(payload),
         run_after=utcnow() + timedelta(seconds=GPU_HOLD_POLL_INTERVAL_SECONDS),
     )
 

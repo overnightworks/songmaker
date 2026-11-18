@@ -235,6 +235,7 @@ class JobStatusUpdate:
     queue_reason_message: Message | None = None
     owner: JobOwner | _Unset = UNSET
     run_after: datetime | None | _Unset = UNSET
+    payload: JobPayload | None | _Unset = UNSET
     current_epoch: int | _Unset = UNSET
     train_epochs: int | _Unset = UNSET
     training_started_at: datetime | _Unset = UNSET

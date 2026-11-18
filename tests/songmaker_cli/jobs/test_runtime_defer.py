@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from support.job_owner import an_owner
 
 from songmaker_cli.db.queries.jobs import claim_queued_job, create_job, get_job
+from songmaker_cli.job_payloads import GeneratePayload
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs._runtime import _defer_job
+from songmaker_cli.jobs.generation import _generate_variants
+from songmaker_cli.jobs.generation_request import GenerationJobRequest
 from songmaker_cli.messages import message
+from songmaker_cli.scheduler import WorkerHeld
 from songmaker_cli.timestamps import utcnow
 
 REASON = message("jobWait.voiceTraining")
@@ -55,3 +62,40 @@ def test_a_deferred_job_can_be_claimed_again(pg_factory) -> None:
 
     with pg_factory() as session:
         assert claim_queued_job(session, job_id, WORKER) is True
+
+
+def test_a_new_job_may_be_claimed_from_the_moment_it_is_created(pg_factory) -> None:
+    before = utcnow()
+    with pg_factory() as session:
+        job_id = create_job(session, JobType.GENERATE).id
+        session.commit()
+    after = utcnow()
+
+    with pg_factory() as session:
+        assert before <= get_job(session, job_id).run_after <= after
+
+
+def test_a_generation_held_after_some_takes_is_requeued_with_the_takes_it_has_left(
+    pg_factory, tmp_path: Path,
+) -> None:
+    payload = GeneratePayload(
+        song_id="song", version_id="version", count=3, user_id="user",
+        seed=None, target_model="sft", task_params=None,
+    )
+    with pg_factory() as session:
+        job_id = create_job(session, JobType.GENERATE, payload=payload).id
+        claim_queued_job(session, job_id, WORKER)
+        session.commit()
+    request = GenerationJobRequest(
+        job_id=job_id, audio_dir=tmp_path, data_dir=tmp_path, repaint_params=None,
+        cover_params=None, **payload.model_dump(exclude={"job_type", "task_params"}),
+    )
+    one_take_then_held = AsyncMock(side_effect=[(None, None), WorkerHeld("held")])
+    redis = MagicMock(enqueue_job=AsyncMock())
+
+    with patch("songmaker_cli.jobs.generation._generate_variant", one_take_then_held):
+        asyncio.run(_generate_variants(MagicMock(), redis, pg_factory, request, MagicMock(), None))
+
+    with pg_factory() as session:
+        stored = get_job(session, job_id).payload
+    assert stored == payload.model_copy(update={"count": 2})

@@ -84,6 +84,7 @@ from .generation_failure import (
     running_failure_pair,
     select_generation_failure,
 )
+from .generation_request import GenerationJobRequest
 
 log = logging.getLogger(__name__)
 
@@ -202,41 +203,6 @@ class GenerationProgressTracker:
             **fields,
         )
         self.last_write = self.clock()
-
-
-@dataclass(frozen=True)
-class GenerationJobRequest:
-    """Keep audio_dir/data_dir out of queue_args() because the worker supplies its local paths."""
-
-    job_id: str
-    song_id: str
-    version_id: str
-    count: int
-    user_id: str
-    audio_dir: Path
-    data_dir: Path
-    seed: int | None
-    target_model: str
-    repaint_params: RepaintTaskParams | None
-    cover_params: CoverTaskParams | None
-
-    def with_takes_left(self, count: int) -> GenerationJobRequest:
-        return cast(GenerationJobRequest, replace(self, count=count))
-
-    def queue_args(
-        self,
-    ) -> tuple[str, str, str, int, str, int | None, str, dict | None, dict | None]:
-        return (
-            self.job_id,
-            self.song_id,
-            self.version_id,
-            self.count,
-            self.user_id,
-            self.seed,
-            self.target_model,
-            self.repaint_params.model_dump() if self.repaint_params is not None else None,
-            self.cover_params.model_dump() if self.cover_params is not None else None,
-        )
 
 
 @dataclass
@@ -945,7 +911,9 @@ async def _admit_generation_worker_or_requeue(
 async def _requeue_generation(
     request: GenerationJobRequest, redis: ArqRedis, db_factory: sessionmaker[Session],
 ) -> None:
-    _defer_job(db_factory, request.job_id, message("jobWait.voiceTraining"))
+    _defer_job(
+        db_factory, request.job_id, message("jobWait.voiceTraining"), request.payload(),
+    )
     await redis.enqueue_job(
         JobFunction.GENERATE, *request.queue_args(),
         _queue_name=ARQ_MUSIC_QUEUE_NAME, _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
