@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from importlib.resources import files
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from agents.agent_file import load_agent
@@ -564,18 +565,14 @@ def test_a_cancel_the_channel_cannot_carry_is_logged_as_a_warning(
     assert _the_cover_runner_records(caplog) == [logging.WARNING]
 
 
-def test_a_cancel_the_database_cannot_confirm_is_logged_as_an_error(world, monkeypatch, caplog):
-    ctx = world.app.state.ctx
+def test_a_cancel_the_database_cannot_confirm_is_logged_as_an_error(world, caplog):
+    def unreachable_database():
+        raise RuntimeError("database unreachable")
 
-    @asynccontextmanager
-    async def resync_once(*, on_resync, **_handlers):
-        on_resync()
-        yield
-
-    monkeypatch.setattr(ctx.cancel_wake, "following", resync_once)
-    monkeypatch.setattr(cover_runner, "_is_cancelled", _raise_database_unreachable)
+    ctx = SimpleNamespace(db=unreachable_database, cancel_wake=world.app.state.ctx.cancel_wake)
 
     async def work() -> str:
+        await ctx.cancel_wake.publish("job")
         while logging.ERROR not in _the_cover_runner_records(caplog):
             await asyncio.sleep(0)
         return "picture"
@@ -588,10 +585,6 @@ def test_a_cancel_the_database_cannot_confirm_is_logged_as_an_error(world, monke
 
     assert task.result() == "picture"
     assert _the_cover_runner_records(caplog) == [logging.ERROR]
-
-
-def _raise_database_unreachable(_db_factory, _job_id: str) -> bool:
-    raise RuntimeError("database unreachable")
 
 
 def test_a_cancel_between_the_start_and_the_picture_sends_no_request(world, monkeypatch):
