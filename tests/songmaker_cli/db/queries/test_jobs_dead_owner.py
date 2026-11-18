@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 
 import fakeredis
 import pytest
@@ -35,6 +36,7 @@ from songmaker_cli.db.queries.rate_limits import upsert_rate_limit_setting
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import JobOwnerStamp, owner_leases
 
 GONE = "owner-gone"
@@ -278,4 +280,18 @@ def test_claiming_a_cover_job_names_the_claimer_as_its_owner(pg_factory) -> None
 
         assert (claimed.id, claimed.owner_id, claimed.owner_generation) == (
             queued.id, HERE, "claimer-generation",
+        )
+
+
+def test_a_running_score_job_without_an_owner_is_left_to_its_heartbeat(pg_factory) -> None:
+    with pg_factory() as session:
+        fresh = _running_job(session, JobType.SCORE, None)
+        silent = _running_job(session, JobType.SCORE, None)
+        session.get(Job, silent).heartbeat_at = utcnow() - timedelta(days=1)
+
+        recover_jobs_of_dead_owners(session, {_unstamped(GONE): Liveness.GONE})
+        recover_stale_jobs_by_age_and_type(session)
+
+        assert (_outcome(session, fresh)[0], _outcome(session, silent)) == (
+            JobStatus.RUNNING, (JobStatus.FAILED, "heartbeat_lost"),
         )
