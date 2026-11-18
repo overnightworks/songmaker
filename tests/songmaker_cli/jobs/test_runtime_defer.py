@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from support.job_owner import an_owner
 
@@ -14,10 +14,9 @@ from songmaker_cli.job_payloads import GeneratePayload
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs._runtime import _defer_job
-from songmaker_cli.jobs.generation import _generate_variants
+from songmaker_cli.jobs.generation import _requeue_generation
 from songmaker_cli.jobs.generation_request import GenerationJobRequest
 from songmaker_cli.messages import message
-from songmaker_cli.scheduler import WorkerHeld
 from songmaker_cli.timestamps import utcnow
 
 REASON = message("jobWait.voiceTraining")
@@ -75,7 +74,7 @@ def test_a_new_job_may_be_claimed_from_the_moment_it_is_created(pg_factory) -> N
         assert before <= get_job(session, job_id).run_after <= after
 
 
-def test_a_generation_held_after_some_takes_is_requeued_with_the_takes_it_has_left(
+def test_a_generation_requeued_after_some_takes_stores_the_takes_it_has_left(
     pg_factory, tmp_path: Path,
 ) -> None:
     payload = GeneratePayload(
@@ -90,12 +89,12 @@ def test_a_generation_held_after_some_takes_is_requeued_with_the_takes_it_has_le
         job_id=job_id, audio_dir=tmp_path, data_dir=tmp_path, repaint_params=None,
         cover_params=None, **payload.model_dump(exclude={"job_type", "task_params"}),
     )
-    one_take_then_held = AsyncMock(side_effect=[(None, None), WorkerHeld("held")])
     redis = MagicMock(enqueue_job=AsyncMock())
 
-    with patch("songmaker_cli.jobs.generation._generate_variant", one_take_then_held):
-        asyncio.run(_generate_variants(MagicMock(), redis, pg_factory, request, MagicMock(), None))
+    asyncio.run(_requeue_generation(request.with_takes_left(2), redis, pg_factory))
 
     with pg_factory() as session:
         stored = get_job(session, job_id).payload
     assert stored == payload.model_copy(update={"count": 2})
+    queued_count = redis.enqueue_job.await_args.args[1 + 3]
+    assert queued_count == stored.count
