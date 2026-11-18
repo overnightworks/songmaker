@@ -68,6 +68,7 @@ router = APIRouter()
 # A queue-stream snapshot expires within hours and its share can be revoked, so
 # no cache may keep it past the request.
 QUEUE_STREAM_AUDIO_CACHE_CONTROL: Final = "no-store"
+QUEUE_STREAM_AUDIO_RANGE_DETAIL: Final = "Requested range not satisfiable"
 
 
 def _presented_audio_response(
@@ -344,7 +345,10 @@ def get_shared_playlist_audio(
 
 @router.get(
     "/shared/queue-streams/{snapshot_id}/audio",
-    responses={404: {"description": QUEUE_STREAM_NOT_FOUND_DETAIL}},
+    responses={
+        404: {"description": QUEUE_STREAM_NOT_FOUND_DETAIL},
+        416: {"description": QUEUE_STREAM_AUDIO_RANGE_DETAIL},
+    },
     openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_queue_stream_audio(
@@ -368,7 +372,7 @@ def _queue_stream_audio_response(
     except ObjectMissingError as exc:
         raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL) from exc  # unread: share
     except ObjectRangeError as exc:
-        raise HTTPException(416, "Requested range not satisfiable") from exc  # unread: share
+        raise HTTPException(416, QUEUE_STREAM_AUDIO_RANGE_DETAIL) from exc  # unread: share
     headers = {
         "Cache-Control": QUEUE_STREAM_AUDIO_CACHE_CONTROL,
         "Accept-Ranges": "bytes",
