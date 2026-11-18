@@ -19,7 +19,6 @@ from songmaker_cli.constants import MODEL_AVAILABLE_MODES, MODEL_DEFAULT_MODE
 from songmaker_cli.db.models import (
     PLAYLIST_SLUG_MAX_LENGTH,
     SONG_SLUG_MAX_LENGTH,
-    Base,
 )
 
 VERSIONS = "songmaker_cli.db.migrations.versions."

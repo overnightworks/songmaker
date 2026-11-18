@@ -16,7 +16,6 @@ from songmaker_cli.db import database_url as database_url_module
 from songmaker_cli.db import engine as engine_module
 from songmaker_cli.db.database_url import (
     POSTGRESQL_PSYCOPG2_DRIVERNAME,
-    database_url_with_password,
     password_from_secret_file,
 )
 

@@ -1,4 +1,4 @@
-"""A process never migrates: it starts only on a database at head, and `alembic upgrade head` serialises itself."""
+"""A process starts only on a database at head; concurrent `alembic upgrade head` runs serialise."""
 
 from __future__ import annotations
 
@@ -101,7 +101,9 @@ def test_a_start_on_an_unversioned_database_with_tables_fails_and_stamps_nothing
     engine = create_engine(empty_postgresql_url)
     try:
         with engine.connect() as connection:
-            versioned = connection.execute(text("SELECT to_regclass('alembic_version')")).scalar_one()
+            versioned = connection.execute(
+                text("SELECT to_regclass('alembic_version')")
+            ).scalar_one()
     finally:
         engine.dispose()
     assert versioned is None
