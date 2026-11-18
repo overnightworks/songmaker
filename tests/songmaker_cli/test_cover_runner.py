@@ -33,6 +33,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import JobOwnerStamp
 
 HANG_GUARD_SECONDS: Final = 30
@@ -69,7 +70,7 @@ def _queue(factory, stack: CowriterStack, job_id: str = "job") -> str:
     with factory() as session:
         session.add(Job(
             id=job_id, type=JobType.COVER, user_id=OWNER, album_id="album",
-            session_id=stack.session_id,
+            session_id=stack.session_id, run_after=utcnow(),
         ))
         session.commit()
     return job_id
