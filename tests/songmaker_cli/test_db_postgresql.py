@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, event, insert, inspect, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.postgresql import upgrade_to_head
 from support.repository_root import REPOSITORY_ROOT
 from support.web_app import make_authenticated_user, make_fake_async_redis, seed_user
 
@@ -75,7 +76,7 @@ def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.render_as_string(hide_password=False) == f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://user:pass@host/db"
 
 
-def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
+def test_a_role_whose_password_is_kept_apart_migrates_and_connects_whose_password_is_kept_apart(
     empty_postgresql_url: URL,
 ) -> None:
     name = f"secret_password_{uuid.uuid4().hex[:12]}"
@@ -91,7 +92,9 @@ def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
     base = empty_postgresql_url._replace(username=name, password=None)
     factory = None
     try:
-        factory = init_db(database_url_with_password(base, password))
+        url = database_url_with_password(base, password)
+        upgrade_to_head(url)
+        factory = init_db(url)
         tables = inspect(factory.kw["bind"]).get_table_names(schema=name)
         assert "albums" in tables
     finally:

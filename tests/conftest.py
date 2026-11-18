@@ -400,14 +400,14 @@ def extra_pg_factory(postgresql_databases):
 
     Every engine is disposed and its database dropped after the test.
     """
-    from songmaker_cli.db.engine import init_db
+    from support.postgresql import upgrade_to_head
 
     created = []
 
     def build():
         url = postgresql_databases.create_empty_database()
         created.append((url, None))
-        init_db(url).kw["bind"].dispose()
+        upgrade_to_head(url)
         factory = _session_factory_on(url)
         created[-1] = (url, factory)
         return factory

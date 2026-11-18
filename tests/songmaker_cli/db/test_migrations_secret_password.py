@@ -24,25 +24,6 @@ ENV_SCRIPT = Path(engine_module.MIGRATIONS_DIR) / "env.py"
 PASSWORD_WITH_SPECIALS = "p%a@s/s:w ord"
 
 
-def test_run_migrations_hands_alembic_a_password_with_a_percent_sign_intact(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    url = database_url_with_password("postgresql://app@db/songs", PASSWORD_WITH_SPECIALS)
-    handed_over: list[Config] = []
-    monkeypatch.setattr(
-        engine_module, "create_engine", lambda _url: SimpleNamespace(dispose=lambda: None),
-    )
-    monkeypatch.setattr(
-        engine_module, "inspect", lambda _engine: SimpleNamespace(get_table_names=list),
-    )
-    monkeypatch.setattr("alembic.command.upgrade", lambda cfg, _revision: handed_over.append(cfg))
-
-    engine_module._run_migrations(url)
-
-    (cfg,) = handed_over
-    assert make_url(cfg.get_main_option("sqlalchemy.url")).password == PASSWORD_WITH_SPECIALS
-
-
 def _url_alembic_configures(monkeypatch: pytest.MonkeyPatch) -> str:
     """Run alembic's env.py offline and return the URL it configures."""
     configured: dict[str, str] = {}
