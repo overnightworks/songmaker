@@ -1,0 +1,8 @@
+claim_id = "f3f96b7676564ebf88c3dea4eb733345"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "502451b59a6086b3f97df5aa672d5787994eab86"
+branch = "claude/issue-3268-the-real-gpu-probe-refuses-while-the-liv"
+scope = ["docs/acestep.md", "scripts/gpu_job_kinds_probe.sh"]
+opened_commit = "7fe65b910f1f26ca93a897133fcaeefa94fea0b1"
+whole_reason = "one probe script and its doc"
