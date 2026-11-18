@@ -17,6 +17,7 @@ from support.generation_job_world import (
     persist_via_post_process,
     run_async,
 )
+from support import job_wait
 from support.job_owner import an_owner
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
@@ -44,6 +45,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.workers import register_worker
+from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.jobs import (
     _finalize_generation_job,
@@ -187,6 +189,7 @@ def test_generation_hold_defers_before_building_temporary_context(
     redis = MagicMock()
     redis.enqueue_job = AsyncMock()
     build_context = MagicMock()
+    before_deferral = job_wait.now()
     with (
         patch(
             "songmaker_cli.jobs.admit_generation_worker",
@@ -219,6 +222,9 @@ def test_generation_hold_defers_before_building_temporary_context(
         job = get_job(session, "j1")
         assert job.status == "queued"
         assert job.queue_reason_message == message("jobWait.voiceTraining")
+        assert job_wait.run_after_follows_defer(
+            job, kwargs["_defer_by"], before_deferral, job_wait.now(),
+        )
 
 
 @pytest.mark.parametrize(
@@ -311,6 +317,11 @@ def test_generation_request_roundtrip_and_requeue_preserve_values(
             assert queued[0] == JobFunction.GENERATE
             queued_args = queued[1:]
             assert queued_args == expected_args
+            with seeded_db() as session:
+                waiting = get_job(session, "j1")
+                assert (waiting.status, waiting.owner_id, waiting.owner_generation) == (
+                    JobStatus.QUEUED, None, None,
+                )
 
 
 def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path) -> None:
@@ -1102,6 +1113,7 @@ def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path
         assert score_job.status == "queued"
         gen_id = gen.id
         score_job_id = score_job.id
+        assert score_job.payload == ScorePayload(gen_id=gen.id, scorers=None)
 
     redis.enqueue_job.assert_awaited_once()
     args, kwargs = redis.enqueue_job.await_args

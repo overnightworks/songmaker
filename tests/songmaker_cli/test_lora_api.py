@@ -21,6 +21,7 @@ from support.web_app import make_authenticated_user, make_router_app, web_client
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
+    MODEL_DEFAULT_MODE,
     USER_LORA_MAX_SAMPLES,
     USER_LORA_SAMPLE_MAX_BYTES,
     LoraStatus,
@@ -33,6 +34,7 @@ from songmaker_cli.db.models import (
     UserLoraSample,
 )
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
+from songmaker_cli.job_payloads import LoraTrainingPayload
 from songmaker_cli.job_types import JobStatus
 
 
@@ -1118,6 +1120,9 @@ def test_train_happy_path_enqueues_and_audits(
         job = session.query(Job).filter_by(id=data["training_job_id"]).first()
         assert job is not None
         assert job.type == "lora_training"
+        assert job.payload == LoraTrainingPayload(
+            lora_id=lora_id, user_id=USER_A, target_mode=MODEL_DEFAULT_MODE,
+        )
 
         from songmaker_cli.db.models import AuditLog
         audits = session.query(AuditLog).filter_by(

@@ -49,6 +49,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.messages import message
@@ -71,6 +72,7 @@ from ._runtime import (
     VERSION_NOT_FOUND,
     GenerationSetupError,
     ReferenceDeletedDuringTake,
+    _defer_job,
     _job_is_terminal,
     _sanitize_error,
     _touch_heartbeat,
@@ -659,7 +661,10 @@ def _create_auto_score_job(
     with db_factory() as session:
         if get_generation(session, gen_id) is None:
             return None
-        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id)
+        job = create_job(
+            session, JobType.SCORE, user_id=None, song_id=song_id,
+            payload=ScorePayload(gen_id=gen_id, scorers=None),
+        )
         session.commit()
         return job.id
 
@@ -942,10 +947,7 @@ async def _admit_generation_worker_or_requeue(
 async def _requeue_generation(
     request: GenerationJobRequest, redis: ArqRedis, db_factory: sessionmaker[Session],
 ) -> None:
-    _update_job(
-        db_factory, request.job_id, JobStatus.QUEUED,
-        queue_reason_message=message("jobWait.voiceTraining"),
-    )
+    _defer_job(db_factory, request.job_id, message("jobWait.voiceTraining"))
     await redis.enqueue_job(
         JobFunction.GENERATE, *request.queue_args(),
         _queue_name=ARQ_MUSIC_QUEUE_NAME, _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
