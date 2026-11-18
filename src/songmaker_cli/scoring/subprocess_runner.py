@@ -337,7 +337,8 @@ _scorer_process: ScorerProcess | None = None
 _scorer_process_lock = threading.Lock()
 
 
-def set_scorer_process(process: ScorerProcess) -> None:
+def set_scorer_process(process: ScorerProcess | None) -> None:
+    """Install the process the jobs score with; ``None`` leaves none installed."""
     global _scorer_process
     with _scorer_process_lock:
         _scorer_process = process

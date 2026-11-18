@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -11,7 +12,6 @@ import pytest
 from support.web_app import SettledFakeAsyncRedis
 from tandem.keys import wake_channel
 
-from songmaker_cli import jobs
 from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, REDIS_KEY_PREFIX
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import create_job
@@ -19,6 +19,7 @@ from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import JobQueue
 from songmaker_cli.job_types import JobType
 from songmaker_cli.scoring.models import SongScores
+from songmaker_cli.scoring.subprocess_runner import get_scorer_process, set_scorer_process
 from songmaker_cli.timestamps import utcnow
 
 SUBSCRIBED_WITHIN_SECONDS = 5
@@ -85,12 +86,17 @@ def a_scoreable_take(factory, audio_dir: Path) -> str:
 
 
 @pytest.fixture
-def scorer_requests(monkeypatch) -> MagicMock:
+def scorer_requests() -> Iterator[MagicMock]:
     """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
 
-    It answers every request with an empty result.
+    It answers every request with an empty result; the scorer installed before is back after.
     """
+    try:
+        installed_before = get_scorer_process()
+    except RuntimeError:
+        installed_before = None
     scorer = MagicMock()
     scorer.score.return_value = SongScores()
-    monkeypatch.setattr(jobs, "get_scorer_process", lambda: scorer)
-    return scorer.score
+    set_scorer_process(scorer)
+    yield scorer.score
+    set_scorer_process(installed_before)
