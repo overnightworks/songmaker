@@ -231,16 +231,19 @@ def test_a_music_worker_leaves_the_jobs_of_other_queues_alone(job_rows, pg_facto
     assert MusicWorker().claim_next_job() is None
 
 
-def test_a_claimed_music_job_without_a_payload_fails_and_runs_nothing(
-    job_rows, pg_factory,
+@pytest.mark.parametrize("written_before_rows_carried_arguments", [False, True])
+def test_a_claimed_music_job_without_a_payload_fails_with_a_setup_error(
+    written_before_rows_carried_arguments, job_rows, pg_factory,
 ) -> None:
     job_id = job_rows()
+    if written_before_rows_carried_arguments:
+        with pg_factory() as session:
+            get_job(session, job_id).run_after = None
+            session.commit()
     music_worker = MusicWorker()
-    music_worker._arq_context = {"redis": AsyncMock()}
 
-    with patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as work:
-        asyncio.run(music_worker.run_claimed(music_worker.claim_next_job()))
+    asyncio.run(music_worker.run_claimed(music_worker.claim_next_job()))
 
-    work.assert_not_called()
     with pg_factory() as session:
-        assert get_job(session, job_id).status == JobStatus.FAILED
+        job = get_job(session, job_id)
+        assert (job.status, job.error_type) == (JobStatus.FAILED, "setup_error")
