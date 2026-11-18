@@ -99,39 +99,38 @@ def test_a_web_process_without_a_bucket_name_refuses_to_start(
         server._create_default_context(tmp_path, tmp_path)
 
 
-@pytest.mark.parametrize("missing", ["AWS_ENDPOINT_URL_S3", "AWS_DEFAULT_REGION"])
+def a_web_settings(**store: str | Path | None) -> Settings:
+    return Settings(
+        database_url="postgresql://x", redis_url="redis://x", session_secret="s",
+        songmaker_internal_token="t", songmaker_s3_bucket="b", **store,
+    )
+
+
+@pytest.mark.parametrize("missing", ["aws_endpoint_url_s3", "aws_default_region"])
 def test_a_web_process_without_a_platform_store_variable_refuses_to_start(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, missing: str,
+    tmp_path: Path, missing: str,
 ) -> None:
     credentials = tmp_path / "credentials"
     credentials.write_text("[default]\n", encoding="utf-8")
-    monkeypatch.setenv("AWS_ENDPOINT_URL_S3", "http://store.invalid")
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "garage")
-    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(credentials))
-    monkeypatch.delenv(missing)
+    store = {
+        "aws_endpoint_url_s3": "http://store.invalid",
+        "aws_default_region": "garage",
+        "aws_shared_credentials_file": credentials,
+        missing: None,
+    }
 
-    with pytest.raises(ValueError, match=missing):
-        object_store_of(Settings(
-            database_url="postgresql://x", redis_url="redis://x", session_secret="s",
-            songmaker_internal_token="t", songmaker_s3_bucket="b",
-        ))
+    with pytest.raises(ValueError, match=missing.upper()):
+        object_store_of(a_web_settings(**store))
 
 
 @pytest.mark.parametrize("credentials_file", [None, "absent"])
 def test_a_web_process_without_a_readable_credentials_file_refuses_to_start(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, credentials_file: str | None,
+    tmp_path: Path, credentials_file: str | None,
 ) -> None:
-    monkeypatch.setenv("AWS_ENDPOINT_URL_S3", "http://store.invalid")
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "garage")
-    if credentials_file is None:
-        monkeypatch.delenv("AWS_SHARED_CREDENTIALS_FILE", raising=False)
-    else:
-        monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / credentials_file))
-
     with pytest.raises(ValueError, match="AWS_SHARED_CREDENTIALS_FILE"):
-        object_store_of(Settings(
-            database_url="postgresql://x", redis_url="redis://x", session_secret="s",
-            songmaker_internal_token="t", songmaker_s3_bucket="b",
+        object_store_of(a_web_settings(
+            aws_endpoint_url_s3="http://store.invalid", aws_default_region="garage",
+            aws_shared_credentials_file=credentials_file and tmp_path / credentials_file,
         ))
 
 

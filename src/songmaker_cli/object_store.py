@@ -120,10 +120,6 @@ def _store_error(exc: ClientError) -> Exception:
     return exc
 
 
-_PLATFORM_STORE_VARIABLES: Final = ("AWS_ENDPOINT_URL_S3", "AWS_DEFAULT_REGION")
-_CREDENTIALS_FILE_VARIABLE: Final = "AWS_SHARED_CREDENTIALS_FILE"
-
-
 def object_store_of(settings: Settings) -> ObjectStore:
     """The store a web process uses; refuses to start without its bucket or the platform's address.
 
@@ -131,10 +127,11 @@ def object_store_of(settings: Settings) -> ObjectStore:
     """
     if not settings.songmaker_s3_bucket:
         raise ValueError("SONGMAKER_S3_BUCKET names the object store's bucket and is required")
-    for variable in _PLATFORM_STORE_VARIABLES:
-        if not os.environ.get(variable):
-            raise ValueError(f"{variable} is set by the platform and is required")
-    credentials_file = os.environ.get(_CREDENTIALS_FILE_VARIABLE)
-    if not credentials_file or not os.access(credentials_file, os.R_OK):
-        raise ValueError(f"{_CREDENTIALS_FILE_VARIABLE} must name a readable credentials file")
+    if not settings.aws_endpoint_url_s3:
+        raise ValueError("AWS_ENDPOINT_URL_S3 is set by the platform and is required")
+    if not settings.aws_default_region:
+        raise ValueError("AWS_DEFAULT_REGION is set by the platform and is required")
+    credentials_file = settings.aws_shared_credentials_file
+    if credentials_file is None or not os.access(credentials_file, os.R_OK):
+        raise ValueError("AWS_SHARED_CREDENTIALS_FILE must name a readable credentials file")
     return ObjectStore(settings.songmaker_s3_bucket)
