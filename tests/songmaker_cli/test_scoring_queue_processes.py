@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from redis import Redis
 from support.app_processes import WorkerProcess, poll_until
@@ -10,10 +12,11 @@ from support.score_jobs import queued_score_job
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus
+from songmaker_cli.worker_base import JOB_ENDED_EVENT
 
 JOB_COUNT = 8
 START_MARGIN_SECONDS = 20.0
-RUN_LOG_PREFIX = "Scoring job"
+RUN_MARGIN_SECONDS = 2.0
 MISSING_GENERATION_KEY = "jobFailure.scoringGenerationMissing"
 
 
@@ -40,7 +43,15 @@ def _ended_without_a_take(factory, job_ids: list[str]) -> bool:
 
 
 def _times_run(workers: list[WorkerProcess], job_id: str) -> int:
-    return sum(worker.log_text().count(f"{RUN_LOG_PREFIX} {job_id}:") for worker in workers)
+    """How many of the workers' ``arq_job.ended`` lines name the job: one per run."""
+    ended = (
+        json.loads(line)
+        for worker in workers
+        for line in worker.log_text().splitlines()
+        if line.startswith("{")
+    )
+    return sum(1 for entry in ended if entry.get("event") == JOB_ENDED_EVENT
+               and entry.get("job_id") == job_id)
 
 
 def _owners(factory, job_ids: list[str]) -> set[str | None]:
@@ -51,7 +62,7 @@ def _owners(factory, job_ids: list[str]) -> set[str | None]:
 def test_a_queued_score_job_survives_a_redis_flush_and_runs(web_cluster, redis_client) -> None:
     cluster, factory = web_cluster
     [job_id] = _queue_score_jobs(factory, 1)
-    redis_client.flushall()
+    redis_client.flushdb()
 
     worker = cluster.start_scoring_worker("scoring")
 
@@ -64,12 +75,16 @@ def test_a_queued_score_job_survives_a_redis_flush_and_runs(web_cluster, redis_c
 def test_a_job_queued_with_no_wake_is_claimed_within_one_poll_interval(web_cluster) -> None:
     cluster, factory = web_cluster
     worker = cluster.start_scoring_worker("scoring")
+    [first] = _queue_score_jobs(factory, 1)
+    assert poll_until(
+        lambda: _times_run([worker], first) == 1, deadline_seconds=START_MARGIN_SECONDS,
+    ), worker.log_tail()
 
     [job_id] = _queue_score_jobs(factory, 1)
 
     assert poll_until(
         lambda: _ended_without_a_take(factory, [job_id]),
-        deadline_seconds=QUEUE_POLL_INTERVAL_SECONDS + START_MARGIN_SECONDS,
+        deadline_seconds=QUEUE_POLL_INTERVAL_SECONDS + RUN_MARGIN_SECONDS,
     ), worker.log_tail()
 
 
