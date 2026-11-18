@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.job_owner import an_owner
-from support.score_jobs import queued_score_job
+from support.score_jobs import a_scoreable_take, queued_score_job
 
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
@@ -147,23 +147,28 @@ def test_a_worker_with_no_due_job_claims_nothing(scoring_worker) -> None:
     assert scoring_worker.claim_next_job(JobType.SCORE) is None
 
 
-def test_a_claimed_score_job_runs_the_take_and_scorers_its_row_names(scoring_worker) -> None:
-    claimed = ClaimedJob("job", ScorePayload(gen_id="take", scorers=("silence", "bpm")))
+def test_a_claimed_score_job_asks_the_scorer_for_the_scorers_its_row_names(
+    scoring_worker, pg_factory, scorer_requests, tmp_path, monkeypatch,
+) -> None:
+    monkeypatch.setattr(ScoringWorker, "audio_dir", lambda self: tmp_path)
+    take = a_scoreable_take(pg_factory, tmp_path)
+    job_id = _score_job_with_payload(pg_factory, ScorePayload(gen_id=take, scorers=("silence",)))
 
-    with patch("songmaker_cli.scoring_worker.run_scoring_job") as work:
-        asyncio.run(scoring_worker.run_claimed(claimed))
+    claimed = scoring_worker.claim_next_job(JobType.SCORE)
+    asyncio.run(scoring_worker.run_claimed(claimed))
 
-    assert work.call_args.args == ("job", "take", ["silence", "bpm"])
+    assert scorer_requests.call_args.kwargs["scorers"] == ["silence"]
+    with pg_factory() as session:
+        assert get_job(session, job_id).status == JobStatus.COMPLETED
 
 
 def test_a_claimed_score_job_without_a_score_payload_fails_and_runs_nothing(
-    scoring_worker, pg_factory,
+    scoring_worker, pg_factory, scorer_requests,
 ) -> None:
     job_id = _score_job_with_payload(pg_factory, None)
 
-    with patch("songmaker_cli.scoring_worker.run_scoring_job") as work:
-        asyncio.run(scoring_worker.run_claimed(ClaimedJob(job_id, None)))
+    asyncio.run(scoring_worker.run_claimed(ClaimedJob(job_id, None)))
 
-    work.assert_not_called()
+    scorer_requests.assert_not_called()
     with pg_factory() as session:
         assert get_job(session, job_id).status == JobStatus.FAILED
