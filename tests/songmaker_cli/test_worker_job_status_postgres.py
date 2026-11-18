@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from support.job_owner import an_owner
 
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
-from songmaker_cli.music_worker import MusicWorker
-from songmaker_cli.scoring_worker import ScoringWorker
+from songmaker_cli.music_worker import MusicWorker, MusicWorkerSettings
+from songmaker_cli.scoring_worker import ScoringWorker, ScoringWorkerSettings
+from songmaker_cli.worker_base import JOB_ENDED_EVENT
 
 REGISTERED_ARGUMENTS = {
     JobFunction.GENERATE: ("song", "version", 1, "user", None, "turbo"),
@@ -49,3 +52,20 @@ def test_job_status_is_none_for_a_job_without_a_row(pg_factory, job_rows) -> Non
     from songmaker_cli.settings import get_settings
 
     assert MusicWorker(get_settings()).job_status("no-such-job") is None
+
+
+@pytest.mark.parametrize(
+    "function",
+    [*MusicWorkerSettings.functions, *ScoringWorkerSettings.functions],
+    ids=lambda function: function.name,
+)
+def test_every_registered_job_ends_its_line_failed_when_its_row_failed(
+    function, job_rows, caplog,
+) -> None:
+    job_id = job_rows(JobStatus.FAILED)
+
+    with caplog.at_level("INFO"):
+        asyncio.run(function.coroutine({}, job_id, *REGISTERED_ARGUMENTS[function.name]))
+
+    (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
+    assert (ended.job_function, ended.outcome) == (function.name, "failed")
