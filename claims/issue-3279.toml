@@ -1,8 +1,0 @@
-claim_id = "4dde6a0b56334403888a749aa129fe0f"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "a078a0f08742fb87226efc66bb270b7052ba1478"
-branch = "claude/issue-3279-every-job-step-logs-its-end-and-an-arq-j"
-scope = ["quality/baseline.toml", "src/songmaker_cli/arq_codec.py", "src/songmaker_cli/auth_dependencies.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/jobs", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/scheduler.py", "src/songmaker_cli/scoring_worker.py", "src/songmaker_cli/worker_base.py", "tests/songmaker_cli"]
-opened_commit = "baa18ef432940a754228c6ef28a4a8dd504da2bc"
-whole_reason = "Job-step lines and trace propagation touch every job module, the workers, the enqueuer, the arq codec and the auth binding."
