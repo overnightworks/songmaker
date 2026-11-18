@@ -3,6 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "502451b59a6086b3f97df5aa672d5787994eab86"
 branch = "claude/issue-3267-migrations-have-one-owner-and-an-unversi"
-scope = [".github/workflows/e2e.yml", "docker", "docs/architecture.md", "src/songmaker_cli/db", "src/songmaker_cli/server.py", "src/songmaker_cli/worker_base.py", "tests"]
+scope = [".github/workflows/e2e.yml", "docker", "docs/architecture.md", "docs/testing.md", "scripts/gpu_job_kinds_probe.sh", "src/songmaker_cli/db", "src/songmaker_cli/server.py", "src/songmaker_cli/worker_base.py", "tests"]
 opened_commit = "b1b773b5634a84e906abdda2069ac41255be5cea"
 whole_reason = "migration owner touches engine, process starts, test stack and the e2e init step together"
