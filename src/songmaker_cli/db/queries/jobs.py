@@ -167,21 +167,30 @@ def count_queued_lora_training_jobs(session: Session) -> int:
 
 
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
-    """Atomically move the oldest queued cover job to running, owned by ``owner``.
+    """Atomically move the oldest queued cover job to running, owned by ``owner``."""
+    return claim_next_queued_job(session, owner, JobType.COVER)
 
-    Competing web processes may select the same candidate, but only one can change its
-    queued row and receive it through RETURNING.
+
+def claim_next_queued_job(session: Session, owner: JobOwner, job_type: JobType) -> Job | None:
+    """Atomically move the job of ``job_type`` that is due first to running, owned by ``owner``.
+
+    Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
+    ``run_after`` and is never due, and a queued job without one (written before rows carried
+    their arguments) is left to its queue message. SKIP LOCKED makes competing workers take
+    different rows instead of waiting on each other's.
     """
     candidate_id = (
         session.query(Job.id)
-        .filter(Job.type == JobType.COVER, Job.status == JobStatus.QUEUED)
-        .order_by(Job.started_at.asc(), Job.id.asc())
+        .filter(
+            Job.type == job_type, Job.status == JobStatus.QUEUED,
+            Job.run_after <= datetime.now(timezone.utc),
+        )
+        .order_by(Job.run_after.asc(), Job.id.asc())
         .limit(1)
+        .with_for_update(skip_locked=True)
         .scalar_subquery()
     )
-    claimed_id = _claim_queued_row(
-        session, owner, Job.id == candidate_id, Job.type == JobType.COVER,
-    )
+    claimed_id = _claim_queued_row(session, owner, Job.id == candidate_id, Job.type == job_type)
     return None if claimed_id is None else session.get(Job, claimed_id)
 
 
