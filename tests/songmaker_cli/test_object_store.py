@@ -117,7 +117,7 @@ def test_a_web_process_without_a_platform_store_variable_refuses_to_start(
         ))
 
 
-@pytest.mark.parametrize("credentials_file", [None, "absent"])
+@pytest.mark.parametrize("credentials_file", [None, "absent", ""])
 def test_a_web_process_without_a_readable_credentials_file_refuses_to_start(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, credentials_file: str | None,
 ) -> None:
