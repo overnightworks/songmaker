@@ -24,6 +24,7 @@ from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker, MusicWorkerSettings
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring_worker import ScoringWorker, ScoringWorkerSettings
+from songmaker_cli.settings import get_settings
 
 WAIT_SECONDS = 10
 PLACE_HELD_SECONDS = 0.5
@@ -127,6 +128,11 @@ def scoring_worker(job_rows):
     return ScoringWorker()
 
 
+def _scoring_worker_with_one_place(audio_dir) -> ScoringWorker:
+    settings = get_settings().model_copy(update={"audio_dir": audio_dir, "scoring_max_jobs": 1})
+    return ScoringWorker(settings)
+
+
 def _score_job_with_payload(pg_factory, payload: ScorePayload | None) -> str:
     with pg_factory() as session:
         job = queued_score_job(session, payload=payload)
@@ -154,9 +160,9 @@ def test_a_worker_with_no_due_job_claims_nothing(scoring_worker) -> None:
 
 
 def test_a_claimed_score_job_asks_the_scorer_for_the_scorers_its_row_names(
-    scoring_worker, pg_factory, scorer_requests, tmp_path, monkeypatch,
+    job_rows, pg_factory, scorer_requests, tmp_path,
 ) -> None:
-    monkeypatch.setattr(ScoringWorker, "audio_dir", lambda self: tmp_path)
+    scoring_worker = _scoring_worker_with_one_place(tmp_path)
     take = a_scoreable_take(pg_factory, tmp_path)
     job_id = _score_job_with_payload(pg_factory, ScorePayload(gen_id=take, scorers=("silence",)))
 
@@ -181,9 +187,9 @@ def test_a_claimed_score_job_without_a_score_payload_fails_and_runs_nothing(
 
 
 def test_a_legacy_score_message_and_the_loop_never_run_two_jobs_on_one_place(
-    scoring_worker, pg_factory, scorer_requests, tmp_path, monkeypatch,
+    job_rows, pg_factory, scorer_requests, tmp_path,
 ) -> None:
-    monkeypatch.setattr(ScoringWorker, "audio_dir", lambda self: tmp_path)
+    scoring_worker = _scoring_worker_with_one_place(tmp_path)
     take = a_scoreable_take(pg_factory, tmp_path)
     scorer_running, scorer_may_finish = threading.Event(), threading.Event()
 

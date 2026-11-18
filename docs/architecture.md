@@ -1658,11 +1658,10 @@ loses none.
    signal cancels the loop), and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
    running keeps its row, which the owner lease hands to the reaper.
 
-During the release that introduces this, web processes of the previous release still enqueue
-`score` messages in arq. The worker keeps the `score` function for them, and its handler claims
-its row by the same compare-and-set as every arq handler, so a row reached by a message and by
-the loop runs once; the handler takes a place of the loop's capacity before it claims, so the two
-never run more jobs together than `SCORING_MAX_JOBS`. The function goes when the arq score queue goes.
+The worker keeps the arq `score` function for web processes that still enqueue score messages.
+Its handler claims its row by the same compare-and-set as every arq handler, so a row reached by
+a message and by the loop runs once, and it takes a place of the loop's capacity before it claims,
+so the two never run more jobs together than `SCORING_MAX_JOBS`. The function goes when the arq score queue goes.
 
 Recovery judges a score row by its owner stamp like every other row: a `running` row whose
 owner lease is gone fails with the restart verdict. A `running` score row with no owner id (a

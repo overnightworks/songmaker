@@ -177,8 +177,10 @@ def claim_next_queued_job(session: Session, owner: JobOwner, job_type: JobType) 
 
     Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
     ``run_after`` and is never due, and a queued job without one (written before rows carried
-    their arguments) is left to its queue message. SKIP LOCKED makes competing workers take
-    different rows instead of waiting on each other's.
+    their arguments) is never claimed here: a score job's arq message runs it, and a cover job,
+    which has no message, ends at the queued stale threshold. Such rows exist only at the
+    upgrade and a cover job lives minutes, so the stale reaper is the accepted exit. SKIP
+    LOCKED makes competing workers take different rows instead of waiting on each other's.
     """
     candidate_id = (
         session.query(Job.id)
