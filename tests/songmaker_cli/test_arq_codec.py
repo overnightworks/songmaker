@@ -419,6 +419,7 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
     async def job(ctx, *job_arguments):
         if raises is not None:
             raise raises
+        return "probe result"
 
     def read_status(_job_id):
         if isinstance(row_status, Exception):
@@ -434,10 +435,12 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
                 "probe",
             )
             try:
-                await pool.enqueue_job(
+                queued = await pool.enqueue_job(
                     "probe", *arguments, _queue_name=MusicWorkerSettings.queue_name
                 )
                 await worker.async_run()
+                if reason == "status_unreadable":
+                    assert await queued.result(timeout=1) == "probe result"
             finally:
                 await worker.close()
 
@@ -455,6 +458,14 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
     assert "private content" not in "".join(
         str(value) for value in vars(ended).values() if isinstance(value, str)
     )
+    if reason == "status_unreadable":
+        (warning,) = [
+            record
+            for record in caplog.records
+            if record.getMessage() == "arq_job.status_unreadable"
+        ]
+        assert (warning.job_id, warning.error_type) == ("job-1", "OSError")
+        assert ended.levelname == "WARNING"
 
 
 def test_a_job_runs_in_its_enqueuers_trace_and_a_failed_job_leaves_none_behind(
