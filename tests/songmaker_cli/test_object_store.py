@@ -160,8 +160,11 @@ def test_settings_reject_platform_store_variables_that_an_env_file_supplies(
 def test_a_store_error_that_is_not_a_missing_key_or_range_reaches_the_caller_unchanged(
     prefix: str,
 ) -> None:
+    store = ObjectStore(f"no-such-bucket-{uuid.uuid4().hex}")
+    key = f"{prefix}a"
+
     with pytest.raises(ClientError) as raised:
-        ObjectStore(f"no-such-bucket-{uuid.uuid4().hex}").get_bytes(f"{prefix}a")
+        store.get_bytes(key)
 
     assert raised.value.response["Error"]["Code"] == "NoSuchBucket"
 
