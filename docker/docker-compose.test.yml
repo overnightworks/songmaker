@@ -61,16 +61,40 @@ services:
       - SETUID
       - SETGID
 
+  # The one owner of migrations: the command of platform's migrate init container.
+  # The app processes only check that the database is at head, so they start after
+  # this service completed.
+  songmaker-migrate:
+    build: *web-image-build
+    entrypoint: ["/app/.venv/bin/alembic"]
+    command: ["upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
+    secrets:
+      - postgres_password
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
   songmaker-web:
     build: *web-image-build
     # tini as PID 1 reaps orphaned processes, which uv run as PID 1 does not.
     init: true
     depends_on:
-      - postgres
-      - redis
-    # Every process migrates in init_db under an advisory lock, so a starter
-    # blocked behind a running migration is "starting" until it ends; the
-    # start period outlasts any migration.
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      songmaker-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -166,8 +190,12 @@ services:
       start_period: 600s
       retries: 3
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      songmaker-migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -250,8 +278,12 @@ services:
       start_period: 600s
       retries: 3
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      songmaker-migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
