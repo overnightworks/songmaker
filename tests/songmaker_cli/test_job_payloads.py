@@ -40,7 +40,7 @@ PAYLOADS = [
     pytest.param(JobType.GENERATE, _generate(None), id="generate"),
     pytest.param(JobType.GENERATE, _generate(REPAINT), id="repaint"),
     pytest.param(JobType.GENERATE, _generate(COVER), id="cover-take"),
-    pytest.param(JobType.SCORE, ScorePayload(gen_id="take", scorers=["silence"]), id="score"),
+    pytest.param(JobType.SCORE, ScorePayload(gen_id="take", scorers=("silence",)), id="score"),
     pytest.param(JobType.SCORE, ScorePayload(gen_id="take", scorers=None), id="score-all"),
     pytest.param(
         JobType.LORA_TRAINING,
@@ -104,3 +104,17 @@ def test_a_stored_payload_that_is_not_a_record_of_any_type_is_refused_on_read(pg
     with pg_factory() as session:
         with pytest.raises(ValidationError):
             session.get(Job, job_id)
+
+
+@pytest.mark.parametrize("change", [
+    pytest.param(lambda: setattr(_generate(None), "count", 5), id="field"),
+    pytest.param(lambda: setattr(_generate(REPAINT).task_params, "lyrics", "x"), id="task"),
+    pytest.param(lambda: setattr(_generate(COVER).task_params, "prompt", "x"), id="cover-task"),
+    pytest.param(
+        lambda: ScorePayload(gen_id="take", scorers=["silence"]).scorers.append("clip"),
+        id="scorers",
+    ),
+])
+def test_a_payload_cannot_change_in_place(change) -> None:
+    with pytest.raises((ValidationError, AttributeError)):
+        change()
