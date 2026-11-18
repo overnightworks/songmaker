@@ -9,8 +9,8 @@ from redis import Redis
 from support.app_processes import WorkerProcess, poll_until
 from support.score_jobs import queued_score_job
 
-from songmaker_cli.db.models import Job
 from songmaker_cli.constants import REDIS_SOCKET_TIMEOUT_SECONDS
+from songmaker_cli.db.models import Job
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus
 from songmaker_cli.worker_base import JOB_ENDED_EVENT

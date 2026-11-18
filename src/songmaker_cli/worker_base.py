@@ -122,7 +122,6 @@ class WorkerBase:
         self.owner_id = str(uuid.uuid4())
         self.owner: JobOwner
         self._owner_redis: AsyncRedis | None = None
-        self._wake_redis: AsyncRedis | None = None
         self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
 
@@ -199,23 +198,23 @@ class WorkerBase:
         owner client's socket timeout.
         """
         self._owner_redis = create_async_redis(self._settings.redis_url)
-        self._wake_redis = create_async_redis(self._settings.redis_url, follows_wakes=True)
-        self.wake_channel = app_wake_channel(self._wake_redis)
+        wake_redis = create_async_redis(self._settings.redis_url, follows_wakes=True)
+        self.wake_channel = app_wake_channel(wake_redis)
         self._lease_stack = AsyncExitStack()
+        self._lease_stack.push_async_callback(wake_redis.aclose)
         try:
             self.owner = await self._lease_stack.enter_async_context(
                 keep_owner_lease(owner_leases(self._owner_redis), self.owner_id),
             )
         except BaseException:
             await self._owner_redis.aclose()
-            await self._wake_redis.aclose()
+            await self._lease_stack.aclose()
             raise
 
     async def _release_owner_lease(self) -> None:
         """End the lease so a web process fails this worker's jobs within one tick."""
         await self._lease_stack.aclose()
         await self._owner_redis.aclose()
-        await self._wake_redis.aclose()
 
     def audit_orphaned_files(self) -> None:
         """Log audio files on disk that have no matching DB record."""
