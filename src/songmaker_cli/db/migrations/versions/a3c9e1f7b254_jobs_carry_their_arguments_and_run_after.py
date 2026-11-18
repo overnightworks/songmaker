@@ -5,8 +5,9 @@ Revises: e5a2c8f1d703
 Create Date: 2026-11-18 09:00:00.000000
 
 The payload is the typed record of the job's type (see job_payloads): the arguments a worker runs
-the job with. run_after is the time a deferred job waits for before a worker may claim it. A row
-written before this migration keeps NULL in both; its arguments still travel in the queue message.
+the job with. run_after is the time a deferred job waits until. In S1 the claim does not read it:
+the arq deferral enforces the wait, and run_after is written for the S2 claim. A row written before
+this migration keeps NULL in both; its arguments still travel in the queue message.
 """
 from typing import Sequence
 
