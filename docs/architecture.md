@@ -1646,8 +1646,8 @@ loses none.
    `run_after` has passed, oldest first, with `FOR UPDATE SKIP LOCKED`, and moves it to
    `running` in the same statement, writing the worker's owner id and lease generation
    (`owner_columns`). Two workers never take one row; a cancelled row keeps its `run_after`
-   but is not queued, and a queued row without a `run_after` (written before rows carried
-   arguments) is left to its arq message.
+   but is not queued, and a queued score row without a `run_after` (written before rows carried
+   arguments) is left to its arq message; a cover row without one has no message and is claimed.
 3. The loop looks for due rows when a wake for `queue/score` arrives, when the subscription
    confirms (the first time and after every reconnect: `on_resync` only sets an event the loop
    task reads), when a job ends, and every `QUEUE_POLL_INTERVAL_SECONDS` as the backstop; a lost wake delays a job

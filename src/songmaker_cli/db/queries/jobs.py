@@ -167,6 +167,10 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     return count_queued_jobs(session, JobType.LORA_TRAINING)
 
 
+# A row of these types has no arq message behind it: only a claim can run it.
+_TYPES_WITHOUT_QUEUE_MESSAGE: Final = frozenset({JobType.COVER})
+
+
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
     """Atomically move the oldest queued cover job to running, owned by ``owner``."""
     return claim_next_queued_job(session, owner, JobType.COVER)
@@ -176,18 +180,17 @@ def claim_next_queued_job(session: Session, owner: JobOwner, job_type: JobType) 
     """Atomically move the job of ``job_type`` that is due first to running, owned by ``owner``.
 
     Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
-    ``run_after`` and is never due, and a queued job without one (written before rows carried
-    their arguments) is never claimed here: a score job's arq message runs it, and a cover job,
-    which has no message, ends at the queued stale threshold. Such rows exist only at the
-    upgrade and a cover job lives minutes, so the stale reaper is the accepted exit. SKIP
+    ``run_after`` and is never due. A queued job without one (written before rows carried
+    their arguments) is due for a type that has no queue message to run it; a score job
+    without one is left to its arq message, which runs it from its own arguments. SKIP
     LOCKED makes competing workers take different rows instead of waiting on each other's.
     """
+    due = Job.run_after <= datetime.now(timezone.utc)
+    if job_type in _TYPES_WITHOUT_QUEUE_MESSAGE:
+        due = or_(Job.run_after.is_(None), due)
     candidate_id = (
         session.query(Job.id)
-        .filter(
-            Job.type == job_type, Job.status == JobStatus.QUEUED,
-            Job.run_after <= datetime.now(timezone.utc),
-        )
+        .filter(Job.type == job_type, Job.status == JobStatus.QUEUED, due)
         .order_by(Job.run_after.asc(), Job.id.asc())
         .limit(1)
         .with_for_update(skip_locked=True)

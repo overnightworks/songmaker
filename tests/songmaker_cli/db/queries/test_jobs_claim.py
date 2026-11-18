@@ -139,6 +139,17 @@ def test_a_job_without_a_wait_is_left_to_its_queue_message(pg_factory) -> None:
         assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
 
 
+def test_a_cover_job_without_a_wait_is_claimed_as_no_queue_message_runs_it(pg_factory) -> None:
+    with pg_factory() as session:
+        job = _a_job_due_in(session, 0, JobType.COVER)
+        job.run_after = None
+        session.flush()
+
+        claimed = claim_next_queued_job(session, FIRST, JobType.COVER)
+
+        assert (claimed.id, claimed.status) == (job.id, JobStatus.RUNNING)
+
+
 def test_only_the_asked_type_is_claimed(pg_factory) -> None:
     with pg_factory() as session:
         _a_job_due_in(session, -1, JobType.GENERATE)
