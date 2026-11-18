@@ -87,9 +87,9 @@ score job automatically — `jobs.generation._auto_score_generation`, called
 from the generation job's own success path. This job is created with
 `user_id=None` so it never counts against the manual re-score button's
 per-user rate limit (`count_user_jobs_in_window` always filters on a
-specific user id). If the scoring worker is down when the check runs, the
-job is marked FAILED cleanly instead of queuing indefinitely — the
-generation still has no score row, so `lifecycle.score_backfill_loop`
+specific user id). The scoring worker's health is checked before the row exists,
+because a committed row is claimable at once: if the worker is down, no row is
+created and the generation still has no score row, so `lifecycle.score_backfill_loop`
 (throttled, `SCORE_BACKFILL_BATCH_SIZE` generations every
 `SCORE_BACKFILL_INTERVAL_SECONDS`) picks it up later, the same path that
 also catches up generations that predate auto-scoring. A generation the

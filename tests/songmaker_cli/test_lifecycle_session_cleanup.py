@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
+from support.object_store import an_object_store
 from support.web_app import TEST_SECRET, make_fake_async_redis
 
 from songmaker_cli.app_context import AppContext
@@ -23,6 +24,7 @@ from songmaker_cli.lifecycle import log as lifecycle_logger
 @pytest.fixture
 def cleanup_context(tmp_path, pg_factory):
     return AppContext(
+        object_store=an_object_store(),
         db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",

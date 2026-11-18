@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from logline.testing import configured
 from support.job_owner import an_owner
+from tandem.testing import FakeWakeBus
 
+from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.scoring_worker import ScoringWorker
+from songmaker_cli.settings import get_settings
+
+STOP_WITHIN_SECONDS = 5
+SHUTDOWN_HOLD_SECONDS = 0.5
 
 
 def _run(coro):
@@ -22,15 +31,15 @@ def _mock_ctx():
 def _make_worker() -> ScoringWorker:
     worker = ScoringWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker.check_job_still_valid = MagicMock(return_value=True)
+    worker.claim_job = MagicMock(return_value=True)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
     return worker
 
 
-def test_score_skips_completed_job() -> None:
+def test_score_skips_a_job_it_cannot_claim() -> None:
     worker = _make_worker()
-    worker.check_job_still_valid = MagicMock(return_value=False)
+    worker.claim_job = MagicMock(return_value=False)
 
     with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
         _run(worker.score(_mock_ctx(), "j1", "g1", None))
@@ -176,3 +185,73 @@ def test_scoring_worker_functions_registered_under_job_function_names() -> None:
 
     registered = _asyncio.run(_build_and_inspect())
     assert JobFunction.SCORE in registered
+
+
+@pytest.fixture
+def stop_signal_handlers():
+    """Leave the process's handlers of the stop signals as the test found them."""
+    stop_signals = (signal.SIGINT, signal.SIGTERM)
+    before = {number: signal.getsignal(number) for number in stop_signals}
+    yield
+    for number, handler in before.items():
+        signal.signal(number, handler)
+
+
+def test_a_stop_signal_ends_the_claiming_though_the_loops_own_handler_still_gets_it(
+    stop_signal_handlers,
+) -> None:
+    worker = ScoringWorker()
+    worker.wake_channel = FakeWakeBus().pod()
+    worker.claim_next_job = MagicMock(return_value=None)
+
+    async def scenario() -> tuple[bool, bool]:
+        loop = asyncio.get_running_loop()
+        arq_was_told = asyncio.Event()
+        loop.add_signal_handler(signal.SIGTERM, arq_was_told.set)
+        queue_task = asyncio.create_task(worker.serve_queued_jobs())
+        worker.stop_claiming_on_stop_signal(queue_task)
+        os.kill(os.getpid(), signal.SIGTERM)
+        async with asyncio.timeout(STOP_WITHIN_SECONDS):
+            await arq_was_told.wait()
+            await asyncio.wait([queue_task])
+        loop.remove_signal_handler(signal.SIGTERM)
+        return arq_was_told.is_set(), queue_task.cancelled()
+
+    assert _run(scenario()) == (True, True)
+
+
+def test_a_stop_signal_lets_a_running_job_finish_before_the_worker_shuts_down(
+    stop_signal_handlers, scorer_requests, postgresql_url, redis_url,
+) -> None:
+    settings = get_settings().model_copy(
+        update={"database_url": postgresql_url, "redis_url": redis_url},
+    )
+    worker = ScoringWorker(settings)
+    worker.claim_next_job = MagicMock(side_effect=[ClaimedJob("j1", None), None])
+    job_started, job_may_finish, job_finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def run_claimed(_claimed: ClaimedJob) -> None:
+        job_started.set()
+        await job_may_finish.wait()
+        job_finished.set()
+
+    worker.run_claimed = run_claimed
+
+    async def scenario() -> tuple[bool, bool]:
+        loop = asyncio.get_running_loop()
+        arq_was_told = asyncio.Event()
+        loop.add_signal_handler(signal.SIGTERM, arq_was_told.set)
+        await worker.on_startup(_mock_ctx())
+        async with asyncio.timeout(STOP_WITHIN_SECONDS):
+            await job_started.wait()
+            os.kill(os.getpid(), signal.SIGTERM)
+            await arq_was_told.wait()
+            shutting_down = asyncio.create_task(worker.on_shutdown({}))
+            ended, _ = await asyncio.wait([shutting_down], timeout=SHUTDOWN_HOLD_SECONDS)
+            ended_with_job_running = bool(ended)
+            job_may_finish.set()
+            await shutting_down
+        loop.remove_signal_handler(signal.SIGTERM)
+        return ended_with_job_running, job_finished.is_set()
+
+    assert _run(scenario()) == (False, True)

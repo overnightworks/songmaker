@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import socket
 import time
 import uuid
 from collections.abc import Callable
@@ -30,6 +31,12 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _ASYNC_REDIS_RETRY_ATTEMPTS = 3
+# A half-open connection of the wake follower is dropped after about 30 + 3 * 10 seconds.
+_WAKE_KEEPALIVE_OPTIONS = {
+    socket.TCP_KEEPIDLE: 30,
+    socket.TCP_KEEPINTVL: 10,
+    socket.TCP_KEEPCNT: 3,
+}
 _LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 
@@ -57,12 +64,16 @@ def create_redis(url: str) -> Redis:
     )
 
 
-def create_async_redis(url: str) -> AsyncRedis:
+def create_async_redis(url: str, *, follows_wakes: bool = False) -> AsyncRedis:
     """The asyncio client tandem needs.
 
     Its retry rides out a Redis restart and replays a command whose reply a lost
     connection took (redis-py 5.x retries only the errors named in ``retry_on_error``);
     its timeouts bound a silent one.
+
+    ``follows_wakes`` makes a client that only follows the wake channel: its blocking read of
+    the subscription has no ``socket_timeout``, which would end every quiet interval and make
+    tandem subscribe again. TCP keepalive finds a dead connection instead.
     """
     from redis.asyncio import Redis as AsyncRedisClient
     from redis.asyncio.retry import Retry
@@ -74,7 +85,9 @@ def create_async_redis(url: str) -> AsyncRedis:
         retry=Retry(ExponentialBackoff(), _ASYNC_REDIS_RETRY_ATTEMPTS),
         retry_on_error=[ConnectionError, TimeoutError],
         socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
-        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_timeout=None if follows_wakes else REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_keepalive=follows_wakes,
+        socket_keepalive_options=_WAKE_KEEPALIVE_OPTIONS if follows_wakes else None,
     )
 
 

@@ -47,7 +47,7 @@ class MusicWorker(WorkerBase):
 
     async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
                        requested_model, repaint_params=None, cover_params=None):
-        if not self.check_job_still_valid(job_id):
+        if not self.claim_job(job_id):
             return
 
         task_params = None
@@ -76,7 +76,7 @@ class MusicWorker(WorkerBase):
         user_id: str,
         target_mode: str = MODEL_DEFAULT_MODE,
     ) -> None:
-        if not self.check_job_still_valid(job_id):
+        if not self.claim_job(job_id):
             return
 
         await run_lora_training_job(
@@ -92,12 +92,18 @@ class MusicWorker(WorkerBase):
     async def load_model_on_worker(
         self, ctx, job_id: str, worker_id: str, mode: str,
     ) -> None:
+        if not self.claim_job(job_id):
+            return
+
         await _load_model_on_worker_impl(
             ctx, job_id, worker_id, mode,
             db_factory=self.get_db_factory(), owner=self.owner,
         )
 
     async def download_model_on_worker(self, ctx, job_id: str, mode: str) -> None:
+        if not self.claim_job(job_id):
+            return
+
         await _download_model_on_worker_impl(
             ctx, job_id, mode,
             db_factory=self.get_db_factory(), owner=self.owner,
@@ -152,17 +158,28 @@ _music_worker = MusicWorker(_settings)
 
 def _music_worker_functions(worker: MusicWorker, settings: Settings):
     functions = [
-        func(logged_job(JobFunction.GENERATE, worker.generate), name=JobFunction.GENERATE),
         func(
-            logged_job(JobFunction.LOAD_MODEL_ON_WORKER, worker.load_model_on_worker),
+            logged_job(JobFunction.GENERATE, worker.generate, status_of=worker.job_status),
+            name=JobFunction.GENERATE,
+        ),
+        func(
+            logged_job(
+                JobFunction.LOAD_MODEL_ON_WORKER,
+                worker.load_model_on_worker,
+                status_of=worker.job_status,
+            ),
             name=JobFunction.LOAD_MODEL_ON_WORKER,
         ),
         func(
-            logged_job(JobFunction.DOWNLOAD_MODEL_ON_WORKER, worker.download_model_on_worker),
+            logged_job(
+                JobFunction.DOWNLOAD_MODEL_ON_WORKER,
+                worker.download_model_on_worker,
+                status_of=worker.job_status,
+            ),
             name=JobFunction.DOWNLOAD_MODEL_ON_WORKER,
         ),
         func(
-            logged_job(JobFunction.LORA_TRAINING, worker.train_lora),
+            logged_job(JobFunction.LORA_TRAINING, worker.train_lora, status_of=worker.job_status),
             name=JobFunction.LORA_TRAINING,
             timeout=settings.lora_training_job_timeout,
         ),

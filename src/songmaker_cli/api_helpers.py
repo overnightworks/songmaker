@@ -71,6 +71,7 @@ from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_payloads import JobPayload
 from songmaker_cli.job_types import JobType
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
@@ -290,6 +291,7 @@ async def create_job_with_rate_limit(
     *,
     version_id: str | None = None,
     owner: JobOwner | None = None,
+    payload: JobPayload | None = None,
     redis: Redis,
     owner_leases: Leases,
 ) -> Job:
@@ -328,7 +330,7 @@ async def create_job_with_rate_limit(
 
     return create_job(
         session, job_type, user_id=user.id, song_id=song_id, version_id=version_id,
-        owner=owner,
+        owner=owner, payload=payload,
     )
 
 

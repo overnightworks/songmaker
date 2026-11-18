@@ -26,6 +26,7 @@ from support.wrapper_deps import settled_fake_redis
 
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.wrapper import create_app
+from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.settings import get_settings
 
@@ -166,7 +167,7 @@ async def unload_peer_model(model: LoadedModel) -> None:
 class GenerationWorkerPeer:
     def __init__(self, tmp_path: Path, scenario: WorkerScenario) -> None:
         self.phase = "startup"
-        self.redis = settled_fake_redis()
+        self.redis = settled_fake_redis(ARQ_SCORING_HEALTH_KEY)
         self.audio_dir = tmp_path / "audio"
         self.data_dir = tmp_path / "data"
         self.data_dir.mkdir(exist_ok=True)

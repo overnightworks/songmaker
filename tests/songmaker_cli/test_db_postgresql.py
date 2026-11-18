@@ -13,6 +13,8 @@ from sqlalchemy import create_engine, event, insert, inspect, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.object_store import an_object_store
+from support.postgresql import upgrade_to_head
 from support.repository_root import REPOSITORY_ROOT
 from support.web_app import make_authenticated_user, make_fake_async_redis, seed_user
 
@@ -75,9 +77,7 @@ def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.render_as_string(hide_password=False) == f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://user:pass@host/db"
 
 
-def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
-    empty_postgresql_url: URL,
-) -> None:
+def test_init_db_connects_as_a_role_with_a_kept_apart_password(empty_postgresql_url: URL) -> None:
     name = f"secret_password_{uuid.uuid4().hex[:12]}"
     password = "p%a@s/s:w ord"
     admin = create_engine(empty_postgresql_url)
@@ -89,11 +89,12 @@ def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
         connection.execute(text(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"'))
         connection.execute(text(f'ALTER ROLE "{name}" SET search_path = "{name}"'))
     base = empty_postgresql_url._replace(username=name, password=None)
+    url = database_url_with_password(base, password)
     factory = None
     try:
-        factory = init_db(database_url_with_password(base, password))
-        tables = inspect(factory.kw["bind"]).get_table_names(schema=name)
-        assert "albums" in tables
+        upgrade_to_head(url)
+        factory = init_db(url)
+        assert "albums" in inspect(factory.kw["bind"]).get_table_names(schema=name)
     finally:
         if factory is not None:
             factory.kw["bind"].dispose()
@@ -430,8 +431,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         session.commit()
 
     ctx = AppContext(
-        db=pg_factory,
-        audio_dir=tmp_path / "audio",
+        object_store=an_object_store(), db=pg_factory, audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=b"test",
         redis=None, async_redis=make_fake_async_redis(),  # type: ignore[arg-type]

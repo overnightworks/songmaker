@@ -61,16 +61,83 @@ services:
       - SETUID
       - SETGID
 
+  # The object store the web keeps queue-stream snapshots in: Garage at platform's image pin
+  # (infrastructure/objectstore), single node, on tmpfs. The RPC secret and admin token are
+  # test-only values of a store only this stack's network reaches.
+  garage:
+    image: docker.io/dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    command: ["/garage", "server", "--single-node"]
+    environment:
+      GARAGE_CONFIG_FILE: /etc/garage/garage.toml
+      GARAGE_RPC_SECRET: "0000000000000000000000000000000000000000000000000000000000000000" # why: test-only value; the node talks to itself and no port is published.
+      GARAGE_ADMIN_TOKEN: test-only-admin-token # why: test-only value; the admin port is not published.
+    volumes:
+      - ./docker/garage/garage.toml:/etc/garage/garage.toml:ro
+    tmpfs:
+      - /data
+    cap_drop:
+      - ALL
+
+  # Makes the bucket and a key for it, writes the key where the web reads its credentials file.
+  garage-bucket:
+    image: curlimages/curl:8.18.0@sha256:d94d07ba9e7d6de898b6d96c1a072f6f8266c687af78a74f380087a0addf5d17
+    entrypoint: ["sh", "-c", "sh /make_garage_bucket.sh && chmod 644 /s3/credentials"]
+    restart: "no"
+    user: root
+    depends_on:
+      garage:
+        condition: service_started
+    environment:
+      ADMIN_URL: http://garage:3903
+      ADMIN_TOKEN: test-only-admin-token # why: the same test-only value as the garage service.
+      BUCKET: songmaker
+      CREDENTIALS_FILE: /s3/credentials
+    volumes:
+      - ./docker/scripts/make_garage_bucket.sh:/make_garage_bucket.sh:ro
+      - s3credentials:/s3
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+
+  # The one owner of migrations: the command of platform's migrate init container.
+  # The app processes only check that the database is at head, so they start after
+  # this service completed.
+  songmaker-migrate:
+    build: *web-image-build
+    entrypoint: ["/app/.venv/bin/alembic"]
+    command: ["upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
+    secrets:
+      - postgres_password
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
   songmaker-web:
     build: *web-image-build
     # tini as PID 1 reaps orphaned processes, which uv run as PID 1 does not.
     init: true
     depends_on:
-      - postgres
-      - redis
-    # Every process migrates in init_db under an advisory lock, so a starter
-    # blocked behind a running migration is "starting" until it ends; the
-    # start period outlasts any migration.
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      songmaker-migrate:
+        condition: service_completed_successfully
+      garage-bucket:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -84,6 +151,11 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
+      # The platform's contract for the web: botocore reads the first three itself.
+      AWS_ENDPOINT_URL_S3: http://garage:3900
+      AWS_DEFAULT_REGION: garage
+      AWS_SHARED_CREDENTIALS_FILE: /s3/credentials
+      SONGMAKER_S3_BUCKET: songmaker
       FINAL_DELETION_DAYS:
       # The container's own healthcheck calls localhost and the ACE-Step control
       # plane calls songmaker-web, so the Host check admits these whatever
@@ -93,7 +165,6 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-songmaker}
       OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_client_secret
       # The co-writer's gateway; hal owns these values (its docs/agent-service.md, "An app's side").
-      AGENT__BACKEND: litellm
       AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
       AGENT__GATEWAY__KEY_FILE: /run/secrets/gateway_key
       AGENT__API_GROUP: /services/agent-service/api
@@ -145,7 +216,7 @@ services:
       - "127.0.0.1:${WEB_PORT:-8080}:8080"
     volumes:
       - audiofiles:/app/data/audio
-      - queuestreams:/app/data/queue-streams
+      - s3credentials:/s3:ro
     cap_drop:
       - ALL
     security_opt:
@@ -167,8 +238,12 @@ services:
       start_period: 600s
       retries: 3
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      songmaker-migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -251,8 +326,12 @@ services:
       start_period: 600s
       retries: 3
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      songmaker-migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -287,4 +366,4 @@ volumes:
   pgdata:
   redisdata:
   audiofiles:
-  queuestreams:
+  s3credentials:

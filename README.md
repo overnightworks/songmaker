@@ -6,7 +6,7 @@ SvelteKit frontend + FastAPI backend + PostgreSQL + Redis + arq job workers + GP
 
 ## Deployment and the test stack
 
-The platform serves Songmaker: it runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL and Redis from the images the Release workflow pushes. This repository ships no deploy file.
+The platform serves Songmaker: it runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, Redis and the S3 object store (the web's bucket, `SONGMAKER_S3_BUCKET`, holds the queue-stream snapshots) from the images the Release workflow pushes. This repository ships no deploy file.
 
 [`docker/docker-compose.test.yml`](docker/docker-compose.test.yml) is the test stack: CI's e2e boot, the GPU and Voices probes and local e2e runs boot it with throwaway secrets. Run every Compose call from the repository root, so the project name, the root `.env` and the relative paths keep resolving there:
 
@@ -19,7 +19,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml up -d --b
 ## Operations
 
 - **Updates:** the platform deploys a release tag (`vYYYY.MM.DD.N` on `main`) through Flux; the operator dispatches the Release workflow, which gates `main`, pushes the images to GHCR and sets the tag, and a merge to `main` alone deploys nothing.
-- **Backup:** PostgreSQL and the audio volume are backed up together and restored by the platform's k8up (platform `docs/runbooks/restore-a-database.md`, which names songmaker's audio files).
+- **Backup:** PostgreSQL and the audio volume are backed up together and restored by the platform's k8up (platform `docs/runbooks/restore-a-database.md`, which names songmaker's audio files). The bucket has no backup: it holds only queue-stream snapshots, which the next request rebuilds.
 - **Container confinement:** [docs/security.md](docs/security.md#container-confinement).
 
 ## Development

@@ -18,7 +18,9 @@ from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
 
-from songmaker_cli.constants import SECRET_ENV_KEYS
+from logline import configure
+
+from songmaker_cli.constants import SCORING_SERVICE_NAME, SECRET_ENV_KEYS
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
@@ -147,6 +149,16 @@ def _child_main(conn: Connection) -> None:
             conn.send(ScoreResponse(scores=None, error=str(exc)))
 
 
+def _logged_child_main(conn: Connection) -> None:
+    """The spawned child's entry: it writes its lines through logline, as its parent does.
+
+    A spawned process starts without its parent's logging setup, so a scorer's failure would
+    otherwise reach stderr as plain multi-line text.
+    """
+    configure(SCORING_SERVICE_NAME)
+    _child_main(conn)
+
+
 class ScorerProcess:
 
     def __init__(self) -> None:
@@ -178,7 +190,7 @@ class ScorerProcess:
             return expect_present(self._conn, "A live scorer child has a connection")
         self._cleanup_dead()
         parent_conn, child_conn = _ctx.Pipe()
-        self._process = _ctx.Process(target=_child_main, args=(child_conn,), daemon=True)
+        self._process = _ctx.Process(target=_logged_child_main, args=(child_conn,), daemon=True)
         self._process.start()
         child_conn.close()
         self._conn = parent_conn
@@ -325,7 +337,8 @@ _scorer_process: ScorerProcess | None = None
 _scorer_process_lock = threading.Lock()
 
 
-def set_scorer_process(process: ScorerProcess) -> None:
+def set_scorer_process(process: ScorerProcess | None) -> None:
+    """Install the process the jobs score with; ``None`` leaves none installed."""
     global _scorer_process
     with _scorer_process_lock:
         _scorer_process = process

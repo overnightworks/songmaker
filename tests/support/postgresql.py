@@ -1,6 +1,6 @@
 """The owner of the PostgreSQL databases a test run uses.
 
-One run and xdist worker gets one database, migrated through production ``init_db()``,
+One run and xdist worker gets one database, migrated through ``alembic upgrade head``,
 and the reset after every ordinary database test returns it to the state recorded after
 migration. Migration tests get additional empty databases. The administration database
 is only connected to: it is never migrated, truncated or dropped.
@@ -16,16 +16,17 @@ from functools import cache
 from graphlib import TopologicalSorter
 from io import BytesIO
 
+from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from psycopg2 import errors as postgresql_errors
 from sqlalchemy import Connection, Engine, create_engine, text
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.pool import NullPool
 
-from songmaker_cli.db.engine import MIGRATIONS_DIR, init_db
+from songmaker_cli.db.engine import MIGRATIONS_DIR
 
 DATABASE_PREFIX = "songmaker_test"
 # PostgreSQL's NAMEDATALEN is 64, so an identifier holds at most 63 bytes.
@@ -103,7 +104,7 @@ class WorkerDatabaseUnusableError(RuntimeError):
 
 @dataclass(frozen=True)
 class Baseline:
-    """What a freshly migrated worker database holds, recorded right after ``init_db()``."""
+    """What a freshly migrated worker database holds, recorded right after the upgrade."""
 
     structure: frozenset[tuple[str, ...]]
     tables_referenced_first: tuple[str, ...]
@@ -122,6 +123,15 @@ def _migrations_config() -> Config:
     config = Config()
     config.set_main_option("script_location", MIGRATIONS_DIR)
     return config
+
+
+def upgrade_to_head(url: URL | str) -> None:
+    """Migrate the database the way the migrate init container does: ``alembic upgrade head``."""
+    config = _migrations_config()
+    # configparser interpolates "%", so the rendered URL doubles it.
+    rendered = make_url(url).render_as_string(hide_password=False)
+    config.set_main_option("sqlalchemy.url", rendered.replace("%", "%%"))
+    command.upgrade(config, "head")
 
 
 def _quote(engine: Engine, name: str) -> str:
@@ -365,7 +375,7 @@ class PostgresqlTestDatabases:
     def _create_migrated_worker_database(self) -> None:
         self._create_database(self._worker_name)
         url = self._database_url(self._worker_name)
-        init_db(url).kw["bind"].dispose()
+        upgrade_to_head(url)
         with self._maintenance_engine().connect() as connection:
             self._baseline = _record_baseline(connection)
 

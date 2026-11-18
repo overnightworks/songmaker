@@ -2112,31 +2112,21 @@ def test_generate_song_redis_down(client: TestClient) -> None:
     assert "Job queue unavailable" in resp.json()["detail"]
 
 
-def test_score_generation_redis_down(client: TestClient) -> None:
-    """S6-E: queue failure retains its existing response."""
+def test_a_score_job_is_queued_though_its_wake_cannot_be_sent(client: TestClient) -> None:
+    """The committed row is the queue entry: a Redis that is down only costs the wake."""
     from unittest.mock import AsyncMock, patch
 
-    with (
-        patch(
-            "songmaker_cli.generation_api.is_music_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api.is_scoring_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api.get_arq_pool",
-            side_effect=ConnectionError("redis down"),
-        ),
-    ):
-        resp = client.post(
-            "/api/generations/g1/score",
-            json={},
-        )
+    from tandem import StoreError
 
-    assert resp.status_code == 503
-    assert "Job queue unavailable" in resp.json()["detail"]
+    refused = AsyncMock(side_effect=StoreError("redis down", outage=True))
+    with (
+        _mock_worker() as mock_pool,
+        patch.object(client.app.state.ctx.wake_channel, "publish", refused),
+    ):
+        resp = client.post("/api/generations/g1/score", json={})
+
+    assert (resp.status_code, resp.json()["status"]) == (200, "queued")
+    mock_pool.enqueue_job.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -2156,20 +2146,16 @@ def test_worker_preflight_reports_an_unavailable_worker(
     payload: dict,
     health_check: str,
 ) -> None:
-    """S6-E: score keeps "Worker not running"."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    """S6-E: score keeps "Worker not running", and no row a live worker could claim is left."""
+    from unittest.mock import AsyncMock, patch
 
-    with (
-        patch(
-            f"songmaker_cli.generation_api.{health_check}",
-            AsyncMock(return_value=False),
-        ),
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=MagicMock()),
-    ):
+    with patch(f"songmaker_cli.generation_api.{health_check}", AsyncMock(return_value=False)):
         response = client.post(path, json=payload)
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Worker not running"
+    with client.app.state.ctx.db() as session:
+        assert session.query(Job).filter_by(type="score").count() == 0
 
 
 @pytest.mark.parametrize(
@@ -2227,7 +2213,15 @@ def test_score_generation_not_found(client: TestClient) -> None:
 
 
 def test_score_generation_submits_job(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
+    from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.job_queue import JobQueue
+
+    publish = AsyncMock()
+    with (
+        _mock_worker() as mock_pool,
+        patch.object(client.app.state.ctx.wake_channel, "publish", publish),
+    ):
         resp = client.post(
             "/api/generations/g1/score",
             json={},
@@ -2235,7 +2229,8 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "score"
-    mock_pool.enqueue_job.assert_called_once()
+    mock_pool.enqueue_job.assert_not_called()
+    publish.assert_awaited_once_with(JobQueue.SCORE)
 
 
 # ── Chat job heartbeat ──────────────────────────────────────────────

@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 import fakeredis
 import pytest
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
+from support.object_store import an_object_store
 from support.owner_lease_epoch import aged_epoch
 from support.web_app import (
     TEST_SECRET,
@@ -27,7 +28,7 @@ import songmaker_cli.cover_runner as cover_runner
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import (
     Album,
     AlbumCoverSuggestion,
@@ -294,6 +295,7 @@ class _TickingProcess:
         self._factory = factory
         self._work_numbers = work_numbers
         self._ctx = AppContext(
+            object_store=an_object_store(),
             db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
             signing_key=TEST_SECRET, redis=make_fake_redis(),
             async_redis=fakeredis.FakeAsyncRedis(server=server),
@@ -306,9 +308,11 @@ class _TickingProcess:
         add_work, work_was_done = self._WORK[self.loop_name]
         number = next(self._work_numbers)
         add_work(self._factory, number)
+        scoring_worker_redis = fakeredis.FakeServer()
+        fakeredis.FakeRedis(server=scoring_worker_redis).set(ARQ_SCORING_HEALTH_KEY, 1)
         self._monkeypatch.setattr(
             "songmaker_cli.arq_pool.get_arq_pool",
-            lambda: fakeredis.FakeAsyncRedis(decode_responses=True),
+            lambda: fakeredis.FakeAsyncRedis(server=scoring_worker_redis, decode_responses=True),
         )
         run_ticks_observing_status(
             self._monkeypatch, self._LOOPS[self.loop_name](self._app), self.registry,

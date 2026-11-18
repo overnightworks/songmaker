@@ -48,6 +48,7 @@ from songmaker_cli.db.queries.auth import (
 )
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
+from songmaker_cli.job_payloads import DownloadModelPayload, LoadModelPayload
 from songmaker_cli.job_types import JobFunction, JobStatus
 from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
@@ -247,7 +248,10 @@ async def load_model_on_worker_endpoint(
         raise _worker_not_found(worker_id)
     _require_known_model_mode(req.mode)
 
-    job = create_job(db, JobFunction.LOAD_MODEL_ON_WORKER, user_id=admin.id)
+    job = create_job(
+        db, JobFunction.LOAD_MODEL_ON_WORKER, user_id=admin.id,
+        payload=LoadModelPayload(worker_id=worker_id, mode=req.mode),
+    )
     db.commit()
 
     try:
@@ -411,7 +415,10 @@ async def download_model_endpoint(
     if in_progress is not None:
         raise Refusal(409, "adminRefusal.alreadyDownloading", mode=mode, jobId=in_progress)
 
-    job = create_job(db, JobFunction.DOWNLOAD_MODEL_ON_WORKER, user_id=admin.id)
+    job = create_job(
+        db, JobFunction.DOWNLOAD_MODEL_ON_WORKER, user_id=admin.id,
+        payload=DownloadModelPayload(mode=mode),
+    )
     db.commit()
 
     try:

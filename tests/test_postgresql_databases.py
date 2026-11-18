@@ -455,7 +455,7 @@ def _refuse_migrations(monkeypatch) -> None:
     def refuse(_url):
         raise RuntimeError("migration refused")
 
-    monkeypatch.setattr(owner_module, "init_db", refuse)
+    monkeypatch.setattr(owner_module, "upgrade_to_head", refuse)
 
 
 def _drift_then_fail_the_recreation(owner, monkeypatch) -> BaseException:

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
+from support.object_store import an_object_store
 from support.redis_proxy import redis_proxy
 from support.web_app import BUILT_SHELL, TEST_SECRET, make_fake_async_redis, web_client
 
@@ -123,6 +124,7 @@ def _make_redis_ctx(tmp_path: Path, factory, fake_redis) -> tuple[AppContext, Pa
         ))
         session.commit()
     ctx = AppContext(
+        object_store=an_object_store(),
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=fake_redis, async_redis=make_fake_async_redis(),
     )
@@ -138,7 +140,6 @@ def test_health_reports_redis_ok(
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", return_value=False),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", return_value=False),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", return_value=0),
-        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", return_value=0),
         web_client(app) as client,
     ):
         resp = client.get("/health/details", headers=monitoring_headers)
@@ -187,6 +188,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory)
         ))
         session.commit()
     ctx = AppContext(
+        object_store=an_object_store(),
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=broken_redis, async_redis=make_fake_async_redis(),
     )

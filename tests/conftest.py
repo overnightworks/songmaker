@@ -58,6 +58,7 @@ from songmaker_cli.scheduler import (  # noqa: E402
 
 pytest_plugins = [
     "support.redis_server",
+    "support.object_store",
     "support.oidc_world",
     "support.fake_acestep_child",
     "support.admin_client_fixture",
@@ -69,6 +70,7 @@ pytest_plugins = [
     "support.database_case_record",
     "support.ffmpeg_binary",
     "support.node_id_record",
+    "support.score_jobs",
     "support.web_cluster_world",
     "pytester",
 ]
@@ -277,7 +279,11 @@ def make_stereo_wav_bytes():
 
 @pytest.fixture
 def fake_queue_stream_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    from support.object_store import isolate_queue_stream_keys
+
     import songmaker_cli.queue_streams as queue_streams
+
+    isolate_queue_stream_keys(monkeypatch)
 
     def _write_stream(_concat_path: Path, output_path: Path) -> None:
         output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
@@ -400,14 +406,14 @@ def extra_pg_factory(postgresql_databases):
 
     Every engine is disposed and its database dropped after the test.
     """
-    from songmaker_cli.db.engine import init_db
+    from support.postgresql import upgrade_to_head
 
     created = []
 
     def build():
         url = postgresql_databases.create_empty_database()
         created.append((url, None))
-        init_db(url).kw["bind"].dispose()
+        upgrade_to_head(url)
         factory = _session_factory_on(url)
         created[-1] = (url, factory)
         return factory

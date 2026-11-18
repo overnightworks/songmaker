@@ -145,7 +145,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ctx: AppContext = app.state.ctx
     registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     app.state.background_loop_registry = registry
-    cleanup_expired_queue_streams(ctx)
+    await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)
         if deleted:
@@ -424,9 +424,11 @@ def _include_routers(app: FastAPI) -> None:
 def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
     from songmaker_cli.db.database_url import connection_url_from_settings
     from songmaker_cli.db.engine import init_db
+    from songmaker_cli.object_store import object_store_of
     from songmaker_cli.redis_client import create_async_redis, create_redis, wait_for_redis
 
     settings = get_settings()
+    object_store = object_store_of(settings)
     redis_instance = create_redis(settings.redis_url)
     try:
         wait_for_redis(redis_instance, settings.redis_url.split("@")[-1])
@@ -440,6 +442,7 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
         async_redis=create_async_redis(settings.redis_url),
+        object_store=object_store,
         trusted_proxies=parse_trusted_proxies(settings),
     )
 

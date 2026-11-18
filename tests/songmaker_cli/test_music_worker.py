@@ -30,7 +30,7 @@ def _make_worker() -> MusicWorker:
     """Fresh worker with DB / dirs / job-validity stubbed."""
     worker = MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker.check_job_still_valid = MagicMock(return_value=True)
+    worker.claim_job = MagicMock(return_value=True)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
@@ -46,9 +46,9 @@ def _settings() -> Settings:
     )
 
 
-def test_generate_skips_completed_job() -> None:
+def test_generate_skips_a_job_it_cannot_claim() -> None:
     worker = _make_worker()
-    worker.check_job_still_valid = MagicMock(return_value=False)
+    worker.claim_job = MagicMock(return_value=False)
 
     with patch(
         "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
@@ -58,9 +58,9 @@ def test_generate_skips_completed_job() -> None:
     mock_run.assert_not_called()
 
 
-def test_train_lora_skips_a_job_that_is_already_terminal() -> None:
+def test_train_lora_skips_a_job_it_cannot_claim() -> None:
     worker = _make_worker()
-    worker.check_job_still_valid = MagicMock(return_value=False)
+    worker.claim_job = MagicMock(return_value=False)
 
     with patch(
         "songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock,
@@ -262,7 +262,7 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
         session.commit()
     settings = _settings().model_copy(update={"audio_dir": str(audio_dir)})
     worker = MusicWorker(settings)
-    # init_db would run the PostgreSQL migrations, which needs a live database.
+    # init_db checks a live PostgreSQL database.
     worker.get_db_factory = MagicMock(return_value=factory)
 
     removed = _run(worker.reference_remnant_cron(_mock_ctx()))

@@ -20,13 +20,15 @@ from typing import ClassVar
 
 from logline import StepTimer, configure, unit_trace
 from redis.asyncio import Redis as AsyncRedis
+from tandem import WakeChannel
 
 from songmaker_cli.arq_codec import TRACEPARENT_KWARG
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
-from songmaker_cli.db.queries.jobs import get_job
-from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
+from songmaker_cli.db.queries.jobs import claim_next_queued_job, claim_queued_job, get_job
+from songmaker_cli.job_queue import ClaimedJob, app_wake_channel
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
@@ -34,10 +36,15 @@ from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leas
 log = logging.getLogger(__name__)
 
 JOB_ENDED_EVENT = "arq_job.ended"
+JOB_FAILED_REASON = "job_failed"
+JOB_STATUS_UNREADABLE_REASON = "status_unreadable"
 
 
 def logged_job[Result](
-    job_name: str, job: Callable[..., Awaitable[Result]],
+    job_name: str,
+    job: Callable[..., Awaitable[Result]],
+    *,
+    status_of: Callable[[str], JobStatus | None] | None = None,
 ) -> Callable[..., Awaitable[Result]]:
     """Wrap an arq job so it runs in its enqueuer's trace and writes its one ``arq_job.ended`` line.
 
@@ -45,7 +52,12 @@ def logged_job[Result](
     ends with the job, so a failed job leaves nothing for the next one.
 
     The line carries the job's function name and, for a queued job, its job id (the first
-    argument; a cron job has none): ids only, never the job's content.
+    argument; a cron job has none): ids only, never the job's content. A job records its result
+    in its row and returns normally, so ``status_of`` names how that row reads once the job
+    returned: ``failed`` ends the line as failed (reason ``job_failed``) and ``cancelled`` as
+    cancelled; any other status, or none, leaves it ``ok``. A status that cannot be read never
+    fails the job, which finished: the line ends as failed, reason ``status_unreadable``, as a
+    warning, and a warning names the read's exception class.
     """
 
     @functools.wraps(job)
@@ -54,10 +66,32 @@ def logged_job[Result](
         if args:
             fields["job_id"] = args[0]
         with unit_trace(kwargs.pop(TRACEPARENT_KWARG, None)):
-            async with StepTimer(JOB_ENDED_EVENT, log, **fields):
-                return await job(ctx, *args, **kwargs)
+            async with StepTimer(JOB_ENDED_EVENT, log, **fields) as timer:
+                result = await job(ctx, *args, **kwargs)
+                if status_of is not None and args:
+                    status = await _read_status(status_of, args[0], timer)
+                    if status is JobStatus.FAILED:
+                        timer.fail(JOB_FAILED_REASON)
+                    elif status is JobStatus.CANCELLED:
+                        timer.end_cancelled()
+                return result
 
     return run
+
+
+async def _read_status(
+    status_of: Callable[[str], JobStatus | None], job_id: str, timer: StepTimer
+) -> JobStatus | None:
+    try:
+        return await asyncio.to_thread(status_of, job_id)
+    except Exception as error:
+        timer.handled()
+        timer.fail(JOB_STATUS_UNREADABLE_REASON)
+        log.warning(
+            "arq_job.status_unreadable",
+            extra={"job_id": job_id, "error_type": type(error).__name__},
+        )
+        return None
 
 
 class WorkerBase:
@@ -88,6 +122,7 @@ class WorkerBase:
         self.owner_id = str(uuid.uuid4())
         self.owner: JobOwner
         self._owner_redis: AsyncRedis | None = None
+        self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
 
     def worker_name(self) -> str:
@@ -107,12 +142,35 @@ class WorkerBase:
     def data_dir(self) -> Path:
         return Path(self._settings.data_dir)
 
-    def check_job_still_valid(self, job_id: str) -> bool:
+    def job_status(self, job_id: str) -> JobStatus | None:
+        """The status the job's row holds now, or none for a job without a row."""
         with self.get_db_factory()() as session:
             job = get_job(session, job_id)
-            if not job or job.status in JOB_TERMINAL_STATUSES:
-                return False
-        return True
+            return None if job is None else JobStatus(job.status)
+
+    def claim_job(self, job_id: str) -> bool:
+        """Claim the job's queued row for this process; false means another delivery owns it.
+
+        A job delivered twice, retried by the queue or already ended finds no queued row, and
+        its handler returns without running it.
+        """
+        with self.get_db_factory()() as session:
+            claimed = claim_queued_job(session, job_id, self.owner)
+            session.commit()
+        if not claimed:
+            log.info("Job %s is not queued; this delivery runs nothing", job_id)
+        return claimed
+
+    def claim_next_job(self, job_type: JobType) -> ClaimedJob | None:
+        """Claim the job of ``job_type`` that is due first for this process, or none.
+
+        The row's arguments are read before the claim commits, so the caller needs no session.
+        """
+        with self.get_db_factory()() as session:
+            job = claim_next_queued_job(session, self.owner, job_type)
+            claimed = None if job is None else ClaimedJob(job.id, job.payload)
+            session.commit()
+        return claimed
 
     async def on_startup(self, ctx) -> None:
         configure(self.service_name)
@@ -134,15 +192,23 @@ class WorkerBase:
             log.info("Database connection pool disposed")
 
     async def _start_owner_lease(self) -> None:
-        """Say this process lives, on a client of its own: arq's has no retry and no timeouts."""
+        """Say this process lives, on a client of its own: arq's has no retry and no timeouts.
+
+        The wake channel gets a second client: its quiet subscription must not end on the
+        owner client's socket timeout.
+        """
         self._owner_redis = create_async_redis(self._settings.redis_url)
+        wake_redis = create_async_redis(self._settings.redis_url, follows_wakes=True)
+        self.wake_channel = app_wake_channel(wake_redis)
         self._lease_stack = AsyncExitStack()
+        self._lease_stack.push_async_callback(wake_redis.aclose)
         try:
             self.owner = await self._lease_stack.enter_async_context(
                 keep_owner_lease(owner_leases(self._owner_redis), self.owner_id),
             )
         except BaseException:
             await self._owner_redis.aclose()
+            await self._lease_stack.aclose()
             raise
 
     async def _release_owner_lease(self) -> None:

@@ -109,7 +109,7 @@ class RepaintTaskParams(BaseModel):
     rehydrated in :meth:`MusicWorker.generate` via ``model_validate``.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     src_wav_path: str
     src_generation_id: str
@@ -126,7 +126,7 @@ class RepaintTaskParams(BaseModel):
 class CoverTaskParams(BaseModel):
     """Strict typed replacement for the dict-typed ``cover_params`` arq kwarg."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     src_wav_path: str
     src_generation_id: str

@@ -68,8 +68,8 @@ jobs:
       # apps/songmaker/web.yaml), against the empty database and before any web
       # process starts: a URL without the password, the password file under
       # /run/secrets, a writable /tmp on a read-only root, no capabilities, and
-      # none of the web service's other settings or secrets. The web image's own
-      # migration is proven apart from init_db.
+      # none of the web service's other settings or secrets. It proves the image's
+      # single head and the stored revision; the compose boot runs the same command again.
       - name: Migrate the empty database with the web image
         run: |
           set -euo pipefail

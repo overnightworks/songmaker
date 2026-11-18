@@ -35,6 +35,7 @@ from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
 from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import AceStepWorker, Job
+from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.health_api import (
     PROM_NEVER_FAILED_TIMESTAMP,
     _format_prometheus,
@@ -151,7 +152,6 @@ def _get_health(
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
-        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -218,6 +218,10 @@ def test_health_preserves_response_bytes(
         return_value=json.dumps({"loaded": [], "gpu_healthy": True}).encode()
         if worker_online else None,
     )
+    with health_client.app.state.ctx.db() as session:
+        for _ in range(2):
+            create_job(session, JobType.SCORE)
+        session.commit()
     registry = health_client.app.state.background_loop_registry
     registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
     for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
@@ -228,7 +232,6 @@ def test_health_preserves_response_bytes(
         patch.object(arq_mod, "is_music_worker_healthy", AsyncMock(return_value=True)),
         patch.object(arq_mod, "is_scoring_worker_healthy", AsyncMock(return_value=True)),
         patch.object(arq_mod, "get_music_queue_depth", AsyncMock(return_value=3)),
-        patch.object(arq_mod, "get_scoring_queue_depth", AsyncMock(return_value=2)),
     ):
         clock.now.return_value = now
         response = health_client.get("/health/details", headers=monitoring_headers)

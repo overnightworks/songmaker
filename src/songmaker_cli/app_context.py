@@ -10,11 +10,13 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
+from tandem import WakeChannel
 from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+from songmaker_cli.job_queue import app_wake_channel
 from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 if TYPE_CHECKING:
@@ -24,6 +26,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis as AsyncRedis
     from tandem import Leases
 
+    from songmaker_cli.object_store import ObjectStore
     from songmaker_cli.settings import Settings
 
 
@@ -36,15 +39,20 @@ class AppContext:
     redis: Redis
     async_redis: AsyncRedis
     """The asyncio client of the leases; the sync ``redis`` serves everything else."""
+    object_store: ObjectStore
+    """The bucket that holds what more than one web process needs."""
     trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     """Names this process on the jobs it runs; its lease in Redis says whether it lives."""
     owner_leases: Leases = field(init=False)
     owner: JobOwner = field(init=False)
     """This process as the owner of its jobs, set once its lease is held."""
+    wake_channel: WakeChannel = field(init=False)
+    """The app's wake channel: a job's cancel, and a queue's due row."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)
+        self.wake_channel = app_wake_channel(self.async_redis)
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:

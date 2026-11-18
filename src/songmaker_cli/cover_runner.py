@@ -6,17 +6,17 @@ import asyncio
 import json
 import logging
 import shutil
-import threading
 import uuid
 from collections.abc import Callable, Coroutine
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
 from PIL import Image
-from redis.exceptions import RedisError
 from sqlalchemy import or_
+from tandem import StoreError, Wake, WakeChannel
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.backend import TurnCaller, TurnProblem, run_cover_picture
@@ -25,7 +25,6 @@ from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
-    REDIS_KEY_PREFIX,
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
@@ -63,12 +62,10 @@ _PROBLEM_MESSAGES: Final[dict[AgentProblem, Message]] = {
 _PICTURE_REJECTED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "picture_rejected")
 _RUN_FAILED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "cover run failed")
 
-# A cancel commits to PostgreSQL, then names the job id on this channel: the process that
-# runs the cover picture or the co-writer turn receives it, reads the job and stops the
-# work. Delivery is at-most-once; the committed status is the truth the publication checks.
-COVER_CANCEL_CHANNEL: Final = f"{REDIS_KEY_PREFIX}:cover_cancel"
-_CANCEL_POLL_SECONDS: Final = 1.0
-_SUBSCRIPTION_CONFIRMATION_SECONDS: Final = 5.0
+# A cancel commits to PostgreSQL, then wakes every web process with the job id on the app's
+# wake channel: the process that runs the cover picture or the co-writer turn reads the job and
+# stops the work. A wake may be missed; the committed status is the truth the listener checks.
+_CANCEL_CHANNEL_READY_WITHIN: Final = timedelta(seconds=5)
 
 
 @dataclass(frozen=True)
@@ -81,51 +78,56 @@ class _CoverStart:
     session_id: str | None
 
 
-def publish_cover_cancel(redis, job_id: str) -> None:
+async def publish_cover_cancel(wake_channel: WakeChannel, job_id: str) -> None:
     """Tell every web process that a job's cancellation has committed.
 
-    Only the id travels. An unreachable Redis leaves the committed cancel standing: the
-    job then ends on its own and its publication refuses the cancelled job.
+    An unreachable Redis leaves the committed cancel standing: the job then ends on its own
+    and its publication refuses the cancelled job.
     """
     try:
-        redis.publish(COVER_CANCEL_CHANNEL, job_id)
-    except RedisError:
+        await wake_channel.publish(job_id)
+    except StoreError:
         log.warning("A job's cancel could not reach the process running it")
 
 
-def _subscribe_to_cancellations(redis):
-    """Subscribe to the cancel channel; ``None`` when Redis does not confirm it."""
-    pubsub = redis.pubsub()
-    try:
-        pubsub.subscribe(COVER_CANCEL_CHANNEL)
-        if pubsub.get_message(timeout=_SUBSCRIPTION_CONFIRMATION_SECONDS) is not None:
-            return pubsub
-        log.warning("Cancel channel not confirmed; a cancel will not stop the running job")
-    except RedisError:
-        log.warning("Cancel channel unreachable; a cancel will not stop the running job")
-    pubsub.close()
-    return None
+class _CancelListener:
+    """Hears the wake channel for one job and says whether its cancel committed."""
 
+    def __init__(self, db_factory, job_id: str) -> None:
+        self._db_factory = db_factory
+        self._job_id = job_id
+        self._woken = asyncio.Event()
+        self._lost = False
 
-def _wait_for_cancellation(pubsub, db_factory, job_id: str, stop: threading.Event) -> bool:
-    """Block until ``job_id`` is named and cancelled in the database, or ``stop`` is set."""
-    try:
-        while not stop.is_set():
-            message = pubsub.get_message(timeout=_CANCEL_POLL_SECONDS)
-            if (
-                message is not None
-                and message["type"] == "message"
-                and message["data"] == job_id
-                and _is_cancelled(db_factory, job_id)
-            ):
-                return True
-    except RedisError:
+    def on_wake(self, wake: Wake) -> None:
+        if wake.address == self._job_id:
+            self._woken.set()
+
+    def on_resync(self) -> None:
+        # A wake sent while the subscription was down is lost: read the job again.
+        self._woken.set()
+
+    def on_failed(self, _error: Exception) -> None:
         log.warning("Cancel channel lost; a cancel will not stop the running job")
-    except Exception:
-        log.exception("Cancel listener failed; a cancel will not stop the running job")
-    finally:
-        pubsub.close()
-    return False
+        self.give_up()
+
+    def give_up(self) -> None:
+        self._lost = True
+        self._woken.set()
+
+    async def heard_cancel(self) -> bool:
+        """Wait until the job is cancelled in the database; ``False`` once the channel is lost."""
+        try:
+            while True:
+                await self._woken.wait()
+                self._woken.clear()
+                if self._lost:
+                    return False
+                if await asyncio.to_thread(_is_cancelled, self._db_factory, self._job_id):
+                    return True
+        except Exception:
+            log.exception("Cancel listener failed; a cancel will not stop the running job")
+            return False
 
 
 _ENDED_WITHOUT_COVER: Final = (JobStatus.FAILED, JobStatus.CANCELLED)
@@ -250,32 +252,36 @@ async def run_claimed_cover_suggestion_job(app, job_id: str) -> None:
 async def run_until_cancelled(ctx, job_id: str, work: Callable[[], Coroutine]) -> asyncio.Task:
     """Run ``work`` as its own task, cancelled when a cancel of ``job_id`` is heard.
 
-    Returns the finished task. Subscribed before ``work`` starts: a cancel committed after
+    Returns the finished task. Following starts before ``work`` does: a cancel committed after
     its first read of the job is heard. A cancel stops the task, never the caller.
     """
-    pubsub = await asyncio.to_thread(_subscribe_to_cancellations, ctx.redis)
-    stop_listening = threading.Event()
+    listener = _CancelListener(ctx.db, job_id)
+    async with AsyncExitStack() as following:
+        try:
+            await following.enter_async_context(ctx.wake_channel.following(
+                on_resync=listener.on_resync,
+                on_wake=listener.on_wake,
+                on_failed=listener.on_failed,
+                ready_within=_CANCEL_CHANNEL_READY_WITHIN,
+            ))
+        except StoreError:
+            log.warning("Cancel channel unreachable; a cancel will not stop the running job")
+            listener.give_up()
+        return await _run_until_heard(listener, work)
+
+
+async def _run_until_heard(
+    listener: _CancelListener, work: Callable[[], Coroutine],
+) -> asyncio.Task:
     task = asyncio.create_task(work())
-    cancellation = (
-        None if pubsub is None else asyncio.ensure_future(asyncio.to_thread(
-            _wait_for_cancellation, pubsub, ctx.db, job_id, stop_listening,
-        ))
-    )
+    hearing = asyncio.create_task(listener.heard_cancel())
     try:
-        await asyncio.wait(
-            {task} if cancellation is None else {task, cancellation},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if (
-            not task.done()
-            and cancellation is not None
-            and cancellation.done()
-            and cancellation.result()
-        ):
+        await asyncio.wait({task, hearing}, return_when=asyncio.FIRST_COMPLETED)
+        if not task.done() and hearing.done() and hearing.result():
             task.cancel()
         await asyncio.wait({task})
     finally:
-        stop_listening.set()
+        hearing.cancel()
         if not task.done():
             task.cancel()
             await asyncio.wait({task})

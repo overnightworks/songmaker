@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from logline import REQUEST_EVENT, RequestLineMiddleware
 from logline.testing import configured
 from sqlalchemy.orm import Session
+from support.object_store import an_object_store
 from support.session_ids import a_session_id
 from support.web_app import (
     install_app_context,
@@ -44,6 +45,7 @@ def _build_auth_app(_db, tmp_path: Path, redis=None):
     if redis is None:
         redis = make_fake_redis()
     ctx = AppContext(
+        object_store=an_object_store(),
         db=_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
         signing_key=_TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
     )

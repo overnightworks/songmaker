@@ -47,6 +47,7 @@ from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     LORA_ACTIVE_STATUSES,
+    MODEL_DEFAULT_MODE,
     USER_LORA_AUDIO_EXTENSIONS,
     USER_LORA_MAX_SAMPLES,
     USER_LORA_MIN_SAMPLES_FOR_TRAINING,
@@ -79,6 +80,7 @@ from songmaker_cli.db.queries.loras import (
     update_user_lora_sample,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
+from songmaker_cli.job_payloads import LoraTrainingPayload
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
@@ -491,7 +493,12 @@ async def api_train_lora(
             409, "voiceRefusal.trainingQueueFull", waiting=str(max_queued_lora_training_jobs),
         )
 
-    job = create_job(session, JobType.LORA_TRAINING, user_id=user.id)
+    job = create_job(
+        session, JobType.LORA_TRAINING, user_id=user.id,
+        payload=LoraTrainingPayload(
+            lora_id=lora_id, user_id=user.id, target_mode=MODEL_DEFAULT_MODE,
+        ),
+    )
     update_user_lora(
         session, lora_id,
         status=LoraStatus.QUEUED, training_job_id=job.id, clear_error=True,

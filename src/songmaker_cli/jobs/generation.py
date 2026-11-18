@@ -30,7 +30,6 @@ from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import audio_file_path, build_ace_config, resolve_model_mode
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
-    ARQ_SCORING_QUEUE_NAME,
     WORKER_SHARED_TMP_DIRNAME,
 )
 from songmaker_cli.db.models import GenerationPreset
@@ -49,6 +48,8 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_payloads import ScorePayload
+from songmaker_cli.job_queue import JobQueue, app_wake_channel, publish_queue_wake
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.messages import message
@@ -71,6 +72,7 @@ from ._runtime import (
     VERSION_NOT_FOUND,
     GenerationSetupError,
     ReferenceDeletedDuringTake,
+    _defer_job,
     _job_is_terminal,
     _sanitize_error,
     _touch_heartbeat,
@@ -82,6 +84,7 @@ from .generation_failure import (
     running_failure_pair,
     select_generation_failure,
 )
+from .generation_request import GenerationJobRequest
 
 log = logging.getLogger(__name__)
 
@@ -200,41 +203,6 @@ class GenerationProgressTracker:
             **fields,
         )
         self.last_write = self.clock()
-
-
-@dataclass(frozen=True)
-class GenerationJobRequest:
-    """Keep audio_dir/data_dir out of queue_args() because the worker supplies its local paths."""
-
-    job_id: str
-    song_id: str
-    version_id: str
-    count: int
-    user_id: str
-    audio_dir: Path
-    data_dir: Path
-    seed: int | None
-    target_model: str
-    repaint_params: RepaintTaskParams | None
-    cover_params: CoverTaskParams | None
-
-    def with_takes_left(self, count: int) -> GenerationJobRequest:
-        return cast(GenerationJobRequest, replace(self, count=count))
-
-    def queue_args(
-        self,
-    ) -> tuple[str, str, str, int, str, int | None, str, dict | None, dict | None]:
-        return (
-            self.job_id,
-            self.song_id,
-            self.version_id,
-            self.count,
-            self.user_id,
-            self.seed,
-            self.target_model,
-            self.repaint_params.model_dump() if self.repaint_params is not None else None,
-            self.cover_params.model_dump() if self.cover_params is not None else None,
-        )
 
 
 @dataclass
@@ -659,58 +627,10 @@ def _create_auto_score_job(
     with db_factory() as session:
         if get_generation(session, gen_id) is None:
             return None
-        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id)
+        score = ScorePayload(gen_id=gen_id)
+        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id, payload=score)
         session.commit()
         return job.id
-
-
-async def _dispatch_auto_score(
-    redis: ArqRedis,
-    db_factory: sessionmaker[Session],
-    job_id: str,
-    gen_id: str,
-) -> None:
-    """Hand an auto-score job to the scoring queue, or fail it cleanly.
-
-    Never raises: this runs right after a generation has already succeeded,
-    and a scoring hiccup must not turn that success into a failure. A
-    scoring worker that is down when we check leaves this job FAILED with a
-    clear reason instead of queuing indefinitely — the generation still has
-    no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
-    once a worker comes back.
-
-    Health is checked via the passed-in ``redis`` connection, not the
-    process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
-    this runs inside the music worker process, which never calls
-    ``init_arq_pool()``.
-    """
-    try:
-        worker_healthy = await is_scoring_worker_healthy(redis)
-        if not worker_healthy:
-            _update_job(
-                db_factory,
-                job_id,
-                JobStatus.FAILED,
-                error_message=message("jobFailure.scoringWorkerDown"),
-                error_type="setup_error",
-            )
-            return
-        await redis.enqueue_job(
-            JobFunction.SCORE,
-            job_id,
-            gen_id,
-            None,
-            _queue_name=ARQ_SCORING_QUEUE_NAME,
-        )
-    except Exception:
-        log.exception("Auto-score dispatch failed for generation %s", gen_id)
-        _update_job(
-            db_factory,
-            job_id,
-            JobStatus.FAILED,
-            error_message=message("jobFailure.scoringEnqueueFailed"),
-            error_type="setup_error",
-        )
 
 
 async def _auto_score_generation(
@@ -719,20 +639,34 @@ async def _auto_score_generation(
     gen_id: str,
     song_id: str,
 ) -> None:
-    """Create and dispatch this generation's auto-score job, or do nothing.
+    """Queue this generation's auto-score job and wake the scoring queue, or do nothing.
 
     Never raises: called from the generation job's own success path, right
     after ``completed`` is already counted, so a problem here must stay a
     scoring-side concern and never turn a successful generation into a
     reported failure.
+
+    The scoring worker's health is checked before the row exists: the committed row is the queue
+    entry, a live worker may claim it at once, and the wake only makes it look sooner (a wake
+    that is lost is found by its poll). A worker that is down when we check gets no row; the
+    generation still has no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
+    once a worker comes back.
+
+    Health is checked via the passed-in ``redis`` connection, not the
+    process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
+    this runs inside the music worker process, which never calls
+    ``init_arq_pool()``.
     """
+    if not await is_scoring_worker_healthy(redis):
+        log.warning("Scoring worker not running; generation %s is left to the backfill", gen_id)
+        return
     try:
         job_id = await asyncio.to_thread(_create_auto_score_job, db_factory, gen_id, song_id)
     except Exception:
         log.exception("Auto-score job creation failed for generation %s", gen_id)
         return
     if job_id:
-        await _dispatch_auto_score(redis, db_factory, job_id, gen_id)
+        await publish_queue_wake(app_wake_channel(redis), JobQueue.SCORE)
 
 
 def _make_generation_progress_callback(
@@ -942,9 +876,8 @@ async def _admit_generation_worker_or_requeue(
 async def _requeue_generation(
     request: GenerationJobRequest, redis: ArqRedis, db_factory: sessionmaker[Session],
 ) -> None:
-    _update_job(
-        db_factory, request.job_id, JobStatus.QUEUED,
-        queue_reason_message=message("jobWait.voiceTraining"),
+    _defer_job(
+        db_factory, request.job_id, message("jobWait.voiceTraining"), request.payload(),
     )
     await redis.enqueue_job(
         JobFunction.GENERATE, *request.queue_args(),

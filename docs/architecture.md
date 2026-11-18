@@ -80,7 +80,7 @@ post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
 
-Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
+Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id` (a cron job has none), `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
 
 ## Job Routing
 
@@ -95,8 +95,8 @@ User clicks "Generate"                    User clicks "Score"
         ├── create Job record                     ├── create Job record
         │                                         │
         ▼                                         ▼
-  arq:queue:music                          arq:queue:scoring
-  (Redis sorted set)                       (Redis sorted set)
+  arq:queue:music                          jobs row + wake `queue/score`
+  (Redis sorted set)                       (PostgreSQL; the wake is a hint)
         │                                         │
         ▼                                         ▼
   Music Worker (orchestrator)              Scoring Worker
@@ -673,22 +673,26 @@ ffmpeg and request-session release through the shared builders;
 `tests/songmaker_cli/test_queue_streams_refusals.py` proves the unreadable-duration
 and scan-window refusals.
 
-Built snapshots live in `queue-streams/` under the data directory as
-`<id>.json` and `<id>.mp3`, a cache of the process that built them. Every build
-also publishes the manifest to Redis (`songmaker:queue-stream:manifest:<id>` and
-`songmaker:queue-stream:content:<hash>`, eight hours), and builds of one content
-hash are serialised across web processes by a tandem lock that the building process renews while ffmpeg runs, so a dead
-builder frees it within seconds, and whose waiters poll; neither the builder nor a waiter holds a database connection. A build reuses the unexpired snapshot Redis names for
-its content hash, whichever process built it; a process that serves the audio of a
-snapshot it has no file for rebuilds the file from the manifest's tracks under the
-same lock. The audio stays on each process's disk until audio moves to the object
-store. A snapshot lives eight hours. The sweep (at startup and in the
-maintenance loop) removes the files of expired or unreadable manifests, then
-every regular file of no live snapshot older than 24 hours (a running build's
-`.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
-snapshots once their audio exceeds 1 GiB; a build's own new snapshot is never
-evicted, and a running build's files never count or go.
-`tests/songmaker_cli/test_queue_streams_cache.py` proves each rule.
+Built snapshots live in the object store's bucket (`SONGMAKER_S3_BUCKET`, reached
+through `object_store.py`, the one module that owns boto3) under `queue-streams/` as
+`<id>.json` and `<id>.mp3`, so every web process serves a snapshot whichever process
+built it, and nothing of a snapshot touches the claim. A build renders the takes in a
+temporary directory and puts the mp3, then the manifest, in the bucket; the web refuses
+to start without the bucket name. The audio route streams the object from the bucket
+with `Cache-Control: no-store` and forwards the player's `Range` header, answering
+`206` or `416` as the store does. Redis keeps only
+`songmaker:queue-stream:content:<hash>` (eight hours), which names the snapshot to reuse,
+and builds of one content hash are serialised across web processes by a tandem lock that
+the building process renews while ffmpeg runs, so a dead builder frees it within
+seconds, and whose waiters poll; neither the builder nor a waiter holds a database
+connection. A build reuses the unexpired snapshot Redis names for its content hash. A
+snapshot lives eight hours. The sweep (at startup and in the maintenance loop) removes
+the objects of expired or unreadable manifests, then every object under the prefix of no
+live snapshot older than 24 hours, then evicts the oldest snapshots once their audio
+exceeds 1 GiB; a build's own new snapshot is never evicted. The bucket has no backup:
+a snapshot is rebuilt by the next request for its queue.
+`tests/songmaker_cli/test_queue_streams_cache.py` proves each rule against a real
+Garage, as `tests/songmaker_cli/test_object_store.py` does the adapter.
 
 Escape and Back close the same thing (#1182): the topmost open layer — a
 menu, picker, sheet, dialog, full Now Playing, the album
@@ -1049,11 +1053,11 @@ references, and `run_cover_picture` draws one picture through the picture
 agent file on the same `GatewayBackend` the turn uses, checking the group again
 at its start. The picture runs in its own task, so an explicit Cancel closes
 its request without stopping the runner. A Cancel may reach any web process, not
-the one that draws: once it commits, `POST /api/jobs/{id}/cancel` publishes the job
-id on the Redis channel `cover_runner.COVER_CANCEL_CHANNEL`, and the runner that draws
-the picture, subscribed since before the picture reads the job, reads the job from
+the one that draws: once it commits, `POST /api/jobs/{id}/cancel` wakes every
+web process with the job id on tandem's `WakeChannel`, and the runner that draws
+the picture, following the channel since before the picture reads the job, reads the job from
 PostgreSQL and cancels the picture when it is `cancelled`. Only the id travels and
-delivery is at-most-once; a missed signal leaves the picture to end alone, and its
+a wake is published once; a missed signal leaves the picture to end alone, and its
 publication refuses the cancelled job. A cancel of a co-writer turn travels the
 same way: the web process running the turn, which `POST /api/chat/turn` started, hears the
 chat job's id, reads the job and cancels the turn's task, which closes the gateway request
@@ -1221,7 +1225,7 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference: keep clears the stamp and unkeep of a kept row starts a fresh full countdown, stamping at once unless a link holds the row, both under the row lock, unused_since? — when it last became unused: set at upload and when a take delete, an in-place version edit, a version delete, a song cleanup, an album cleanup, the trash expiry's hard delete of an album or song or retention's final take deletion leaves it without a link (never overwritten, kept rows skipped), cleared under the row lock when a version or take links it; the daily unused-stamp reconciliation stamps unstamped, unkept, unlinked rows late and clears the stamps of kept or linked rows, each half under the rows' locks in its own transaction; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row; the list hands out `deletes_at` for each stamped row — the next daily run (`DAILY_CLEANUP_HOUR_UTC`) at or after the later of `unused_since` and the publication instant (`now` until published) plus `final_deletion_days`, none for a kept or linked row — and `countdown_epoch` when any row carries a date; the daily run deletes exactly the stamped, unkept, unlinked rows whose listed date has passed, under that same formula, each in its own transaction under its row lock (the row, then its file) and holding neither the owner lock nor the purge lock, so it adds no edge to the lock order. The publication instant lives in one global `rate_limit_settings` row (`reference_countdown_visible_since`, seeded by its migration with a fresh uuid4 `id` as the epoch, `value_text` empty): `POST /api/references/countdown-shown` with that epoch writes the server's instant into it once, answers 204 for the current epoch whether or not it wrote, and 409 for any other; nothing is published until a page posts the epoch, and a reader that finds the row missing, duplicated or malformed fails the list)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, completed_takes? — the takes a partial Generate finished, written with `take_count`, error_message? — the failure, stored as a `Message` token like the wait below and answered beside `error`, the agent's English sentence built from the token and the takes (`api_models/jobs.py`), error_type?, queue_reason_message? — the wait a queued job shows, stored as a `Message` token (a catalog key and its gap values; `db/message_column.py` checks it against the catalog on write only, so a row with a retired key still loads) and answered beside `queue_reason`, the same wait as the agent's English sentence, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start, owner_id? — the web or worker process that runs the job, never carried by an answer)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, completed_takes? — the takes a partial Generate finished, written with `take_count`, error_message? — the failure, stored as a `Message` token like the wait below and answered beside `error`, the agent's English sentence built from the token and the takes (`api_models/jobs.py`), error_type?, queue_reason_message? — the wait a queued job shows, stored as a `Message` token (a catalog key and its gap values; `db/message_column.py` checks it against the catalog on write only, so a row with a retired key still loads) and answered beside `queue_reason`, the same wait as the agent's English sentence, payload? — the arguments of the job's type as a typed record (`job_payloads.py`), never carried by an answer, run_after? — until when a queued job waits, read by the score and cover claims and enforced by the arq deferral for the music worker's types, never carried by an answer, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start, owner_id? — the web or worker process that runs the job, never carried by an answer)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
@@ -1473,11 +1477,11 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → rate limit check (per-user, advisory lock)
   → ownership check
   → model validation (if specified — reject 409 if active model doesn't match)
-  → create Job record + audit log entry
+  → create Job record (with its payload) + audit log entry
   → enqueue to arq (Redis-backed, music queue)
-  → music worker: run_generation_job()
+  → music worker: claim the Job's queued row (queued → running, else return), then run_generation_job()
     → pick then atomically Lua-admit one online acestep-worker for the full take series
-      → LoRA hold: keep the Job queued and defer a fresh ARQ envelope
+      → LoRA hold: put the Job back in the queue (`run_after` one poll ahead) and defer a fresh ARQ envelope
     → build config (model defaults + admin defaults + preset + song params)
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
@@ -1491,7 +1495,7 @@ Cancel (POST /api/jobs/{id}/cancel) sets status=cancelled and completed_at.
 `update_job_status` is a no-op once the job is already terminal, so progress
 callbacks and finalize cannot revive a cancelled job. The generation runner
 stops before setup, before each variant, after the worker returns, and before
-persist. Queued cancelled jobs are skipped by `check_job_still_valid`.
+persist. A cancelled job's row is no longer queued, so a handler's claim fails and it runs nothing.
 In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ```
 
@@ -1504,11 +1508,13 @@ and the worker stores what came back; no scoring run makes a coherence verdict.
 
 ```
 POST /api/generations/{id}/score
-  → rate limit check (per-user, advisory lock)
   → ownership check
-  → create Job record + audit log entry
-  → enqueue to arq (Redis-backed, scoring queue)
-  → scoring worker: run_scoring_job(device=SCORING_DEVICE)
+  → scoring worker health check (503 before any row exists: a committed row is claimable at once)
+  → rate limit check (per-user, advisory lock)
+  → create Job record (with its payload) + audit log entry, committed
+  → publish a wake on `queue/score` (no job travels in it)
+  → scoring worker: claim the due queued row (`claim_next_queued_job`), then
+    run_scoring_job(device=SCORING_DEVICE) from the row's payload
     → ScorerProcess.score() dispatches to a long-lived subprocess:
       Subprocess calls run_scoring_pipeline() with parallel execution:
         GPU scorers (audiobox) run sequentially
@@ -1560,7 +1566,7 @@ SIGKILLed and even the values the run did produce would be lost.
 ```
                          ┌─ arq:queue:music ──→ Music Worker(s)
   API ─→ route by type ──┤
-                         └─ arq:queue:scoring → Scoring Worker(s)
+                         └─ jobs rows (type score) + wake queue/score → Scoring Worker(s)
 
   Chat runs inline in the API process (no arq queue), as a task of its own:
   a client that disconnects stops listening, not the turn.
@@ -1591,6 +1597,8 @@ SIGKILLed and even the values the run did produce would be lost.
   Hugging Face Hub ([security](security.md))
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
+- Takes its jobs from PostgreSQL, not from arq ("Score job lifecycle" below); arq still
+  hosts the process, writes its health key and carries the `score` function
 
 **Shared infrastructure** (`worker_base.py`):
 - DB singleton with thread-safe initialization
@@ -1606,12 +1614,64 @@ SIGKILLed and even the values the run did produce would be lost.
   every `OWNER_LEASE_REFRESH_SECONDS`, ended at shutdown before the DB pool is
   disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
-  recovery below). Queued work remains in arq for a replacement worker to claim
-  after a deploy. A worker's arq connection retries a refused or lost connection for
+  recovery below). Queued work remains for a replacement worker to claim after a
+  deploy: in arq for the music worker, in its rows for the scoring worker. A worker's arq connection retries a refused or lost connection for
   `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
   process's arq pool fails fast. A stop signal ends that retry, so a worker
   stops within seconds during the outage.
+- A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
+  type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
+  the transaction that creates the row, before the arq enqueue, and `jobs.run_after` holds the time a
+  queued job waits until: now for a new job, one poll ahead for a put-back job; a claim clears it.
+  The score claim reads it (`claim_next_queued_job`); for the music worker's types the arq
+  deferral still enforces the wait. A requeue that sends fewer arguments (the takes a generate job has left) stores
+  them on the row in the same write. arq still carries the arguments a music-worker handler runs with; the
+  row's payload is the copy a claim from PostgreSQL reads, and the only copy a score job has. Cover and chat jobs run from their
+  own row and have no payload. Every arq handler (`WorkerBase.claim_job`) first moves its row from
+  queued to running by one conditional UPDATE that names the worker as owner
+  (`claim_queued_job`, the statement `claim_next_cover_job` shares), and returns without running
+  when the row is not queued: a message delivered twice, retried by arq or for a job that ended
+  or was cancelled runs the work once. A GPU-hold requeue writes the row back to queued, without
+  an owner and with `run_after`, before it enqueues the deferred message, whose handler claims the
+  row again.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
+
+**Score job lifecycle** (`job_queue.py`, `scoring_worker.py`). The row is the queue entry; no
+Redis key holds a score job, so a flush of Redis or a web process that dies after its commit
+loses none.
+
+1. The web process (or the music worker, for an auto-score) first checks that the scoring worker
+   lives (a committed row is claimable at once, so a refusal never follows it), then commits the
+   `queued` row with its `ScorePayload` and `run_after = now`, then publishes a wake on the app's wake channel
+   (tandem `WakeChannel`, address `queue/score`, built by `job_queue.app_wake_channel`). A wake that
+   cannot be sent is logged and costs nothing but the poll's delay.
+2. The scoring worker's `serve_queue` loop claims one due row at a time while it has a free
+   place (`SCORING_MAX_JOBS`, one capacity the loop and the arq handler below share): `claim_next_queued_job` selects the queued row of the type whose
+   `run_after` has passed, oldest first, with `FOR UPDATE SKIP LOCKED`, and moves it to
+   `running` in the same statement, writing the worker's owner id and lease generation
+   (`owner_columns`). Two workers never take one row; a cancelled row keeps its `run_after`
+   but is not queued, and a queued score row without a `run_after` (written before rows carried
+   arguments) is left to its arq message; a cover row without one has no message and is claimed.
+3. The loop looks for due rows when a wake for `queue/score` arrives, when the subscription
+   confirms (the first time and after every reconnect: `on_resync` only sets an event the loop
+   task reads), when a job ends, and every `QUEUE_POLL_INTERVAL_SECONDS` as the backstop; a lost wake delays a job
+   by at most that interval. A Redis that is down at start leaves the loop polling alone.
+4. It runs the job from the claimed row's payload and writes its one `arq_job.ended` line. A
+   claimed row whose payload is not a score payload fails as unexpected. A stop signal ends
+   the claiming at once, not when arq has drained its own jobs (the worker's own handler of the
+   signal cancels the loop), and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
+   running keeps its row, which the owner lease hands to the reaper.
+
+The worker keeps the arq `score` function for web processes that still enqueue score messages.
+Its handler claims its row by the same compare-and-set as every arq handler, so a row reached by
+a message and by the loop runs once, and it takes a place of the loop's capacity before it claims,
+so the two never run more jobs together than `SCORING_MAX_JOBS`. The function goes when the arq score queue goes.
+
+Recovery judges a score row by its owner stamp like every other row: a `running` row whose
+owner lease is gone fails with the restart verdict. A `running` score row with no owner id (a
+worker that did not stamp owners) has no owner verdict and is never claimed again; only its
+heartbeat bound (`SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS`) fails it. The queue depth in
+`/health/details` and `/metrics` counts the queued score rows.
 
 **Stale-job recovery** (web process — #446, #456): The lifecycle loop is the
 one periodic owner for every job type: `chat`, `generate`, `score`,
@@ -1931,10 +1991,10 @@ Album covers live as files on that same audio volume (`covers/{album_id}/` for o
 
 ## Connection budget
 
-A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine that `connect_db` opens in `db/engine.py`, plus one connection of headroom for the init-time engines that run before it. `init_db` opens those one at a time and disposes each before the next: the probe engine of `wait_for_database`, the inspect engine of `_run_migrations`, and Alembic's engine for the upgrade or stamp. All of them close before `connect_db` opens the pooled engine, so a process never holds more than its pool plus that one. The acestep-worker opens no database. The platform sets both pool values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
+A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW` + 1 PostgreSQL connections: the pooled engine that `connect_db` opens in `db/engine.py`, plus one connection of headroom for the init-time engines that run before it. `init_db` opens those one at a time and disposes each before the next: the probe engine of `wait_for_database` and the engine that reads the stored revision. All of them close before `connect_db` opens the pooled engine, so a process never holds more than its pool plus that one. The acestep-worker opens no database. The platform sets both pool values per Deployment and owns the sum: it checks every process's maximum, with one process per pod, against PostgreSQL's `max_connections`.
 
 ## Deploy
 
 The platform deploys songmaker through Flux from a release tag `vYYYY.MM.DD.N`; a merge to `main` alone deploys nothing. The operator dispatches the Release workflow (`.github/workflows/release.yml`) with a version: it gates main's head through quality, pushes the web, music worker, scoring worker and acestep worker images privately to GHCR with a signed provenance, and then sets the tag and the release; a pushed `v*` tag can never be moved or deleted.
 
-Every app process (web, music and scoring worker) runs `init_db` at start, which migrates to head under a PostgreSQL advisory lock, so a deploy needs no separate migration step. A migration that fails fails after the new web and workers have replaced the old ones: the new containers restart in a loop and the app is down. The data is safe, because a failed migration rolls back fully; recovery is a fixed release. Web, music and scoring have a 600 s start period, so a starter blocked behind a running migration stays "starting" and goes healthy when the migration ends; a migration that holds the lock longer turns the waiters unhealthy. The advisory lock has no `lock_timeout`, so a hung migration blocks every starter.
+Migrations have one owner: the migrate init container, which runs `alembic upgrade head` before any app process starts (the test stack's `songmaker-migrate` service, platform's init container in the deployment). The advisory lock `env.py` takes serialises concurrent upgrades, so two surge pods never migrate at once; it has no `lock_timeout`, so a hung migration blocks every other upgrade. Every app process (web, music and scoring worker) runs `init_db` at start, which waits for the database and compares its stored Alembic revision with the script head; it raises `DatabaseNotAtHeadError`, naming both revisions, when they differ or the database is unversioned, never migrates and never stamps, and the orchestrator restarts the process until the head matches. A migration that fails leaves the old processes serving and the new ones restarting; the data is safe, because a failed migration rolls back fully, and recovery is a fixed release. Migrations stay expand-then-contract, so the old processes run against the migrated schema.

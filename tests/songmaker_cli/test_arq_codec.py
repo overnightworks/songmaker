@@ -20,6 +20,7 @@ from songmaker_cli import arq_pool
 from songmaker_cli.arq_codec import deserialize_arq
 from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.job_types import JobFunction
+from songmaker_cli.job_types import JobStatus as RowStatus
 from songmaker_cli.music_worker import MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorkerSettings
 from songmaker_cli.worker_base import JOB_ENDED_EVENT, logged_job
@@ -286,9 +287,7 @@ class PickleSentinel:
 
 
 @pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
-def test_legacy_jobs_and_results_never_execute_pickle(
-    settings, redis_url, monkeypatch, tmp_path
-):
+def test_legacy_jobs_and_results_never_execute_pickle(settings, redis_url, monkeypatch, tmp_path):
     """1301-F1-CODEC-LEGACY / 1301-F1-CODEC-REJECT: rejection is visible and inert."""
     marker = tmp_path / "pickle-executed"
     payload = pickle.dumps(
@@ -387,32 +386,61 @@ def test_a_worker_beyond_the_servers_databases_fails_naming_both():
 
 
 @pytest.mark.parametrize(
-    ("raises", "outcome", "arguments", "logged_job_id"),
+    ("raises", "row_status", "outcome", "reason", "arguments", "logged_job_id"),
     [
-        (None, "ok", ("job-1", "private content"), "job-1"),
-        (ValueError("private content"), "failed", ("job-1", "private content"), "job-1"),
-        (None, "ok", (), None),
+        (None, RowStatus.COMPLETED, "ok", None, ("job-1", "private content"), "job-1"),
+        (
+            ValueError("private content"),
+            None,
+            "failed",
+            None,
+            ("job-1", "private content"),
+            "job-1",
+        ),
+        (None, None, "ok", None, (), None),
+        (None, RowStatus.FAILED, "failed", "job_failed", ("job-1", "private content"), "job-1"),
+        (None, RowStatus.CANCELLED, "cancelled", None, ("job-1", "private content"), "job-1"),
+        (
+            None,
+            OSError("private content"),
+            "failed",
+            "status_unreadable",
+            ("job-1", "private content"),
+            "job-1",
+        ),
     ],
+    ids=["completed", "raised", "cron", "row-failed", "row-cancelled", "status-unreadable"],
 )
 def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
-    raises, outcome, arguments, logged_job_id, redis_url, monkeypatch, caplog
+    raises, row_status, outcome, reason, arguments, logged_job_id, redis_url, monkeypatch, caplog
 ):
-    """A job ends with one line: its id (a cron job has none), duration and outcome, no content."""
+    """One line per job: its id (a cron job has none), duration and the outcome its row shows."""
 
     async def job(ctx, *job_arguments):
         if raises is not None:
             raise raises
+        return "probe result"
+
+    def read_status(_job_id):
+        if isinstance(row_status, Exception):
+            raise row_status
+        return row_status
 
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
             worker = codec_worker(
-                MusicWorkerSettings, redis_url, logged_job("probe", job), "probe"
+                MusicWorkerSettings,
+                redis_url,
+                logged_job("probe", job, status_of=read_status),
+                "probe",
             )
             try:
-                await pool.enqueue_job(
+                queued = await pool.enqueue_job(
                     "probe", *arguments, _queue_name=MusicWorkerSettings.queue_name
                 )
                 await worker.async_run()
+                if reason == "status_unreadable":
+                    assert await queued.result(timeout=1) == "probe result"
             finally:
                 await worker.close()
 
@@ -420,13 +448,24 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
         asyncio.run(asyncio.wait_for(scenario(), timeout=30))
 
     (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
-    assert (getattr(ended, "job_id", None), ended.job_function, ended.outcome) == (
-        logged_job_id, "probe", outcome,
-    )
+    assert (
+        getattr(ended, "job_id", None),
+        ended.job_function,
+        ended.outcome,
+        getattr(ended, "reason", None),
+    ) == (logged_job_id, "probe", outcome, reason)
     assert ended.duration_ms >= 0
     assert "private content" not in "".join(
         str(value) for value in vars(ended).values() if isinstance(value, str)
     )
+    if reason == "status_unreadable":
+        (warning,) = [
+            record
+            for record in caplog.records
+            if record.getMessage() == "arq_job.status_unreadable"
+        ]
+        assert (warning.job_id, warning.error_type) == ("job-1", "OSError")
+        assert ended.levelname == "WARNING"
 
 
 def test_a_job_runs_in_its_enqueuers_trace_and_a_failed_job_leaves_none_behind(
@@ -441,9 +480,7 @@ def test_a_job_runs_in_its_enqueuers_trace_and_a_failed_job_leaves_none_behind(
 
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
-            worker = codec_worker(
-                MusicWorkerSettings, redis_url, logged_job("probe", job), "probe"
-            )
+            worker = codec_worker(MusicWorkerSettings, redis_url, logged_job("probe", job), "probe")
             try:
                 with unit_trace(None):
                     enqueuer_traceparent = current_traceparent()
