@@ -1,0 +1,8 @@
+claim_id = "93b7cde561e841849f0277a6c2b08e1f"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "502451b59a6086b3f97df5aa672d5787994eab86"
+branch = "claude/issue-3269-a-python-type-checker-runs-in-ci"
+scope = [".github/workflows/ci.yml", "docs/testing.md", "pyproject.toml", "scripts/static_checks.sh", "scripts/type_check", "uv.lock"]
+opened_commit = "90aa619e677260a813a103afb461c96f2adc9a3a"
+whole_reason = "checker, its baseline and the CI wiring land together"
