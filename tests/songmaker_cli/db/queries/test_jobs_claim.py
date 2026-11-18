@@ -157,6 +157,20 @@ def test_only_the_asked_type_is_claimed(pg_factory) -> None:
         assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
 
 
+def test_a_claim_over_several_types_takes_the_job_due_first_whatever_its_type(pg_factory) -> None:
+    with pg_factory() as session:
+        later = _a_job_due_in(session, -1, JobType.GENERATE)
+        earlier = _a_job_due_in(session, -60, JobType.LORA_TRAINING)
+        _a_job_due_in(session, -120, JobType.SCORE)
+
+        types = (JobType.GENERATE, JobType.LORA_TRAINING)
+
+        order = [claim_next_queued_job(session, FIRST, *types).id for _ in range(2)]
+
+        assert order == [earlier.id, later.id]
+        assert claim_next_queued_job(session, FIRST, *types) is None
+
+
 def test_a_running_job_is_not_claimed_again(pg_factory) -> None:
     with pg_factory() as session:
         _a_job_due_in(session, -1)

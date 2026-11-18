@@ -21,7 +21,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import ClaimedJob, JobQueue, publish_queue_wake
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
-from songmaker_cli.music_worker import MusicWorker, MusicWorkerSettings
+from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring_worker import ScoringWorker, ScoringWorkerSettings
 from songmaker_cli.settings import get_settings
@@ -30,27 +30,11 @@ WAIT_SECONDS = 10
 PLACE_HELD_SECONDS = 0.5
 
 WORK = {
-    JobFunction.GENERATE: (
-        "songmaker_cli.music_worker.run_generation_job", AsyncMock,
-        ("song", "version", 1, "user", None, "turbo"),
-    ),
-    JobFunction.LORA_TRAINING: (
-        "songmaker_cli.music_worker.run_lora_training_job", AsyncMock, ("lora", "user"),
-    ),
-    JobFunction.LOAD_MODEL_ON_WORKER: (
-        "songmaker_cli.music_worker._load_model_on_worker_impl", AsyncMock, ("gpu", "turbo"),
-    ),
-    JobFunction.DOWNLOAD_MODEL_ON_WORKER: (
-        "songmaker_cli.music_worker._download_model_on_worker_impl", AsyncMock, ("turbo",),
-    ),
     JobFunction.SCORE: (
         "songmaker_cli.scoring_worker.run_scoring_job", MagicMock, ("take", None),
     ),
 }
-HANDLERS = {
-    function.name: function
-    for function in [*MusicWorkerSettings.functions, *ScoringWorkerSettings.functions]
-}
+HANDLERS = {function.name: function for function in ScoringWorkerSettings.functions}
 
 
 @pytest.fixture
@@ -146,17 +130,17 @@ def test_a_worker_claims_the_next_due_job_for_itself_with_the_payload_of_its_row
     payload = ScorePayload(gen_id="take", scorers=("silence",))
     job_id = _score_job_with_payload(pg_factory, payload)
 
-    claimed = scoring_worker.claim_next_job(JobType.SCORE)
+    claimed = scoring_worker.claim_next_job()
 
     with pg_factory() as session:
         row = get_job(session, job_id)
         assert (claimed, row.status, row.owner_id) == (
-            ClaimedJob(job_id, payload), JobStatus.RUNNING, "worker",
+            ClaimedJob(job_id, JobType.SCORE, payload), JobStatus.RUNNING, "worker",
         )
 
 
 def test_a_worker_with_no_due_job_claims_nothing(scoring_worker) -> None:
-    assert scoring_worker.claim_next_job(JobType.SCORE) is None
+    assert scoring_worker.claim_next_job() is None
 
 
 def test_a_claimed_score_job_asks_the_scorer_for_the_scorers_its_row_names(
@@ -166,7 +150,7 @@ def test_a_claimed_score_job_asks_the_scorer_for_the_scorers_its_row_names(
     take = a_scoreable_take(pg_factory, tmp_path)
     job_id = _score_job_with_payload(pg_factory, ScorePayload(gen_id=take, scorers=("silence",)))
 
-    claimed = scoring_worker.claim_next_job(JobType.SCORE)
+    claimed = scoring_worker.claim_next_job()
     asyncio.run(scoring_worker.run_claimed(claimed))
 
     assert scorer_requests.call_args.kwargs["scorers"] == ["silence"]
@@ -179,7 +163,7 @@ def test_a_claimed_score_job_without_a_score_payload_fails_and_runs_nothing(
 ) -> None:
     job_id = _score_job_with_payload(pg_factory, None)
 
-    asyncio.run(scoring_worker.run_claimed(ClaimedJob(job_id, None)))
+    asyncio.run(scoring_worker.run_claimed(ClaimedJob(job_id, JobType.SCORE, None)))
 
     scorer_requests.assert_not_called()
     with pg_factory() as session:
@@ -226,3 +210,37 @@ def test_a_legacy_score_message_and_the_loop_never_run_two_jobs_on_one_place(
         return status_while_place_held, status_after
 
     assert asyncio.run(scenario()) == (JobStatus.QUEUED, JobStatus.COMPLETED)
+
+
+@pytest.mark.parametrize("job_type", MusicWorker.job_types)
+def test_a_music_worker_claims_a_due_job_of_each_music_type(job_type, job_rows, pg_factory) -> None:
+    with pg_factory() as session:
+        job_id = create_job(session, job_type).id
+        session.commit()
+
+    claimed = MusicWorker().claim_next_job()
+
+    assert claimed == ClaimedJob(job_id, job_type, None)
+
+
+def test_a_music_worker_leaves_the_jobs_of_other_queues_alone(job_rows, pg_factory) -> None:
+    with pg_factory() as session:
+        create_job(session, JobType.SCORE)
+        session.commit()
+
+    assert MusicWorker().claim_next_job() is None
+
+
+def test_a_claimed_music_job_without_a_payload_fails_and_runs_nothing(
+    job_rows, pg_factory,
+) -> None:
+    job_id = job_rows()
+    music_worker = MusicWorker()
+    music_worker._arq_context = {"redis": AsyncMock()}
+
+    with patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as work:
+        asyncio.run(music_worker.run_claimed(music_worker.claim_next_job()))
+
+    work.assert_not_called()
+    with pg_factory() as session:
+        assert get_job(session, job_id).status == JobStatus.FAILED

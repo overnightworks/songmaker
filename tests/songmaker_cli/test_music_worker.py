@@ -7,15 +7,26 @@ import logging
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from support.job_owner import an_owner
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
+from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
-from songmaker_cli.job_types import JobFunction, JobStatus, JobType
+from songmaker_cli.job_payloads import (
+    DownloadModelPayload,
+    GeneratePayload,
+    LoadModelPayload,
+    LoraTrainingPayload,
+)
+from songmaker_cli.job_queue import ClaimedJob
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
+
+FOREVER_SECONDS = 3600
 
 
 def _run(coro):
@@ -26,11 +37,11 @@ def _mock_ctx():
     return {"redis": AsyncMock()}
 
 
-def _make_worker() -> MusicWorker:
-    """Fresh worker with DB / dirs / job-validity stubbed."""
-    worker = MusicWorker()
+def _make_worker(worker: MusicWorker | None = None) -> MusicWorker:
+    """A worker with DB / dirs stubbed and the arq context a started worker holds."""
+    worker = worker or MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker.claim_job = MagicMock(return_value=True)
+    worker._arq_context = _mock_ctx()
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
@@ -46,104 +57,101 @@ def _settings() -> Settings:
     )
 
 
-def test_generate_skips_a_job_it_cannot_claim() -> None:
+def _claimed(payload, job_id: str = "j1") -> ClaimedJob:
+    return ClaimedJob(job_id, JobType(payload.job_type), payload)
+
+
+A_GENERATE = GeneratePayload(
+    song_id="s1", version_id="v1", count=2, user_id="u1", seed=42, target_model="xl-sft",
+    task_params=None,
+)
+A_REPAINT = A_GENERATE.model_copy(update={"task_params": RepaintTaskParams(
+    src_wav_path="/x.wav", src_generation_id="g0", repainting_start=0.0, repainting_end=1.0,
+    lyrics="la", prompt="rock",
+)})
+A_LORA_TRAINING = LoraTrainingPayload(lora_id="l1", user_id="u1", target_mode="turbo")
+A_MODEL_LOAD = LoadModelPayload(worker_id="gpu", mode="turbo")
+A_MODEL_DOWNLOAD = DownloadModelPayload(mode="turbo")
+WORK = {
+    JobType.GENERATE: "songmaker_cli.music_worker.run_generation_job",
+    JobType.LORA_TRAINING: "songmaker_cli.music_worker.run_lora_training_job",
+    JobType.LOAD_MODEL_ON_WORKER: "songmaker_cli.music_worker._load_model_on_worker_impl",
+    JobType.DOWNLOAD_MODEL_ON_WORKER: "songmaker_cli.music_worker._download_model_on_worker_impl",
+}
+
+
+def _run_claimed(worker: MusicWorker, claimed: ClaimedJob) -> AsyncMock:
+    """Run the claimed row; returns the work of its type, which was replaced by a mock."""
+    with patch(WORK[claimed.job_type], new_callable=AsyncMock) as work:
+        _run(worker.run_claimed(claimed))
+    return work
+
+
+@pytest.mark.parametrize(
+    "payload", [A_GENERATE, A_LORA_TRAINING, A_MODEL_LOAD, A_MODEL_DOWNLOAD],
+    ids=lambda payload: payload.job_type,
+)
+def test_a_claimed_row_runs_the_work_of_its_type_for_this_worker(payload) -> None:
     worker = _make_worker()
-    worker.claim_job = MagicMock(return_value=False)
 
-    with patch(
-        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.generate(_mock_ctx(), "j1", "s1", "v1", 2, "u1", None, "sft"))
+    work = _run_claimed(worker, _claimed(payload))
 
-    mock_run.assert_not_called()
+    work.assert_awaited_once()
+    assert work.await_args.kwargs["owner"] is worker.owner
 
 
-def test_train_lora_skips_a_job_it_cannot_claim() -> None:
+def test_a_claimed_generation_runs_with_the_arguments_of_its_row() -> None:
     worker = _make_worker()
-    worker.claim_job = MagicMock(return_value=False)
 
-    with patch(
-        "songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.train_lora(_mock_ctx(), "j1", "lora1", "u1"))
+    work = _run_claimed(worker, _claimed(A_GENERATE))
 
-    mock_run.assert_not_called()
-
-
-def test_generate_runs_queued_job() -> None:
-    worker = _make_worker()
-    ctx = _mock_ctx()
-    with patch(
-        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.generate(ctx, "j1", "s1", "v1", 2, "u1", None, "sft"))
-
-    mock_run.assert_awaited_once()
-    kwargs = mock_run.await_args.kwargs
-    assert kwargs["redis"] is ctx["redis"]
-    assert kwargs["owner"] is worker.owner
-
-
-def test_generate_passes_seed_and_target_model() -> None:
-    worker = _make_worker()
-    with patch(
-        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.generate(
-            _mock_ctx(), "j1", "s1", "v1", 2, "u1", 42, "xl-sft",
-        ))
-
-    kwargs = mock_run.await_args.kwargs
-    assert kwargs["seed"] == 42
-    assert kwargs["target_model"] == "xl-sft"
-
-
-def test_train_lora_passes_the_explicit_training_configuration_and_target_mode() -> None:
-    worker = _make_worker()
-    with patch(
-        "songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.train_lora(_mock_ctx(), "j1", "l1", "u1", "turbo"))
-
-    assert mock_run.await_args.kwargs["training_config"] == worker._settings.lora_training_config
-    assert mock_run.await_args.kwargs["target_mode"] == "turbo"
-    assert mock_run.await_args.kwargs["owner"] is worker.owner
-
-
-def test_lora_training_uses_its_own_timeout() -> None:
-    lora_function = next(
-        function
-        for function in mw_mod.MusicWorkerSettings.functions
-        if function.name == JobType.LORA_TRAINING
+    assert work.await_args.args == ("j1", "s1", "v1", 2, "u1")
+    kwargs = work.await_args.kwargs
+    assert (kwargs["seed"], kwargs["target_model"], kwargs["redis"]) == (
+        42, "xl-sft", worker._arq_context["redis"],
     )
 
-    assert lora_function.timeout_s == mw_mod._settings.lora_training_job_timeout
-    assert mw_mod.MusicWorkerSettings.job_timeout == mw_mod._settings.arq_job_timeout
 
-
-def test_generate_passes_repaint_params() -> None:
-    from songmaker_cli.api_models import RepaintTaskParams
-
+def test_a_claimed_repaint_runs_with_the_task_of_its_row() -> None:
     worker = _make_worker()
-    repaint = {
-        "src_wav_path": "/x.wav",
-        "src_generation_id": "g0",
-        "repainting_start": 0.0,
-        "repainting_end": 1.0,
-        "lyrics": "la",
-        "prompt": "rock",
-    }
-    with patch(
-        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.generate(
-            _mock_ctx(), "j1", "s1", "v1", 1, "u1", None, "sft", repaint_params=repaint,
-        ))
 
-    kwargs = mock_run.await_args.kwargs
-    assert isinstance(kwargs["task_params"], RepaintTaskParams)
-    assert kwargs["task_params"].src_wav_path == "/x.wav"
-    assert kwargs["task_params"].repainting_end == 1.0
+    work = _run_claimed(worker, _claimed(A_REPAINT))
+
+    task = work.await_args.kwargs["task_params"]
+    assert isinstance(task, RepaintTaskParams)
+    assert (task.src_wav_path, task.repainting_end) == ("/x.wav", 1.0)
+
+
+def test_a_claimed_voice_training_runs_with_its_configuration_and_target_mode() -> None:
+    worker = _make_worker()
+
+    work = _run_claimed(worker, _claimed(A_LORA_TRAINING))
+
+    assert work.await_args.args[1:] == ("j1", "l1", "u1")
+    assert work.await_args.kwargs["training_config"] == worker._settings.lora_training_config
+    assert work.await_args.kwargs["target_mode"] == "turbo"
+
+
+@pytest.mark.parametrize("job_type", [JobType.GENERATE, JobType.LORA_TRAINING])
+def test_a_job_that_outlasts_its_time_limit_is_cut(job_type) -> None:
+    limits = {"arq_job_timeout": 0, "lora_training_job_timeout": 0}
+    worker = _make_worker(MusicWorker(get_settings().model_copy(update=limits)))
+
+    async def never_ends(*_args, **_kwargs) -> None:
+        await asyncio.sleep(FOREVER_SECONDS)
+
+    with patch(WORK[job_type], new=never_ends), pytest.raises(TimeoutError):
+        _run(worker.run_claimed(_claimed(A_GENERATE if job_type is JobType.GENERATE
+                                         else A_LORA_TRAINING)))
+
+
+def test_voice_training_has_its_own_longer_time_limit() -> None:
+    worker = MusicWorker()
+
+    assert worker._timeout_seconds(JobType.LORA_TRAINING) == (
+        worker._settings.lora_training_job_timeout
+    )
+    assert worker._timeout_seconds(JobType.GENERATE) == worker._settings.arq_job_timeout
 
 
 def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg_factory) -> None:
@@ -324,35 +332,8 @@ def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_delet
     assert changed == 2 + 1 + 4
 
 
-def test_music_worker_settings_functions() -> None:
-    from songmaker_cli.music_worker import MusicWorkerSettings
-    func_names = {f.name for f in MusicWorkerSettings.functions}
-    assert JobFunction.GENERATE in func_names
-    assert JobFunction.LOAD_MODEL_ON_WORKER in func_names
-    assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
-    assert JobFunction.LORA_TRAINING in func_names
-    assert len(MusicWorkerSettings.functions) == 4
-
-
-def test_music_worker_functions_registered_under_job_function_names() -> None:
-    """Regression: arq must register class methods under the plain JobFunction
-    names, not ``ClassName.method``. Enqueuers send the JobFunction name, and
-    arq looks up functions by name — any mismatch silently drops every job.
-    """
-    from arq.worker import Worker
-
+def test_arq_carries_only_the_cron_jobs_of_the_music_worker() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
 
-    async def _build_and_inspect() -> set[str]:
-        worker = Worker(
-            functions=MusicWorkerSettings.functions,
-            queue_name=MusicWorkerSettings.queue_name,
-            redis_settings=MusicWorkerSettings.redis_settings,
-            handle_signals=False,
-        )
-        return set(worker.functions.keys())
-
-    registered = asyncio.run(_build_and_inspect())
-    assert JobFunction.GENERATE in registered
-    assert JobFunction.LOAD_MODEL_ON_WORKER in registered
-    assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in registered
+    assert MusicWorkerSettings.functions == []
+    assert MusicWorkerSettings.cron_jobs

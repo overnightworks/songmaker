@@ -11,11 +11,13 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
+import signal
 import threading
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack
 from pathlib import Path
+from types import FrameType
 from typing import ClassVar
 
 from logline import StepTimer, configure, unit_trace
@@ -26,9 +28,16 @@ from songmaker_cli.arq_codec import TRACEPARENT_KWARG
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
-from songmaker_cli.db.queries.jobs import claim_next_queued_job, claim_queued_job, get_job
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    claim_next_queued_job,
+    claim_queued_job,
+    get_job,
+    update_job_status,
+)
 from songmaker_cli.job_queue import ClaimedJob, app_wake_channel
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
@@ -94,6 +103,12 @@ async def _read_status(
         return None
 
 
+def stop_claiming(queue_task: asyncio.Task[None]) -> None:
+    """Cancel the claiming loop once; a second cancel would cut the drain of its running jobs."""
+    if not queue_task.cancelling():
+        queue_task.cancel()
+
+
 class WorkerBase:
     """Base class for arq workers.
 
@@ -124,6 +139,7 @@ class WorkerBase:
         self._owner_redis: AsyncRedis | None = None
         self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
+        self._queue_task: asyncio.Task[None] | None = None
 
     def worker_name(self) -> str:
         """Return the stable, human-readable name derived from owned job types."""
@@ -161,16 +177,53 @@ class WorkerBase:
             log.info("Job %s is not queued; this delivery runs nothing", job_id)
         return claimed
 
-    def claim_next_job(self, job_type: JobType) -> ClaimedJob | None:
-        """Claim the job of ``job_type`` that is due first for this process, or none.
+    def fail_job_without_payload(self, job_id: str) -> None:
+        """End a claimed job whose row holds no arguments to run it with."""
+        log.error("Job %s has no payload to run", job_id)
+        with self.get_db_factory()() as session:
+            update_job_status(session, job_id, JobStatusUpdate(
+                JobStatus.FAILED, error_message=message("jobFailure.unexpected"),
+                error_type="setup_error",
+            ))
+            session.commit()
+
+    def claim_next_job(self) -> ClaimedJob | None:
+        """Claim the job of this worker's types that is due first for this process, or none.
 
         The row's arguments are read before the claim commits, so the caller needs no session.
         """
         with self.get_db_factory()() as session:
-            job = claim_next_queued_job(session, self.owner, job_type)
-            claimed = None if job is None else ClaimedJob(job.id, job.payload)
+            job = claim_next_queued_job(session, self.owner, *self.job_types)
+            claimed = None if job is None else ClaimedJob(job.id, JobType(job.type), job.payload)
             session.commit()
         return claimed
+
+    def start_serving(self, serving: Coroutine[None, None, None]) -> None:
+        """Run the claiming loop beside arq's own work until a stop signal or ``stop_serving``."""
+        self._queue_task = asyncio.create_task(serving)
+        self.stop_claiming_on_stop_signal(self._queue_task)
+
+    async def stop_serving(self) -> None:
+        """End the claiming and wait for its running jobs to finish or be cut at the drain limit."""
+        if self._queue_task is not None:
+            stop_claiming(self._queue_task)
+            await asyncio.gather(self._queue_task, return_exceptions=True)
+
+    def stop_claiming_on_stop_signal(self, queue_task: asyncio.Task[None]) -> None:
+        """End the claiming when a stop signal arrives, not when arq has drained its own jobs.
+
+        arq stops picking its messages at the signal but runs on_shutdown only after they
+        ended or ``job_completion_wait`` passed; without this the loop would go on starting
+        jobs until then. The event loop reads signals from its wakeup descriptor, so arq's handler
+        still runs beside this one.
+        """
+        loop = asyncio.get_running_loop()
+
+        def stop(_signal_number: int, _frame: FrameType | None) -> None:
+            loop.call_soon_threadsafe(stop_claiming, queue_task)
+
+        for stop_signal in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(stop_signal, stop)
 
     async def on_startup(self, ctx) -> None:
         configure(self.service_name)

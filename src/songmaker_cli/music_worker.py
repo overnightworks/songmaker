@@ -1,7 +1,10 @@
-"""arq music worker — runs GPU-bound generation jobs.
+"""Music worker — claims GPU-bound jobs from their rows and runs them.
 
 Started as a separate process:
     python -m songmaker_cli.arq_worker songmaker_cli.music_worker.MusicWorkerSettings
+
+arq hosts the process (its health key says the worker lives) and runs its cron jobs; the jobs
+of the music queue come from PostgreSQL, claimed by ``serve_queue``.
 """
 
 from __future__ import annotations
@@ -10,12 +13,24 @@ import asyncio
 import logging
 from datetime import UTC
 
-from arq import cron, func
+from arq import cron
 
-from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME, MODEL_DEFAULT_MODE
+from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+from songmaker_cli.job_payloads import (
+    DownloadModelPayload,
+    GeneratePayload,
+    JobPayload,
+    LoadModelPayload,
+    LoraTrainingPayload,
+)
+from songmaker_cli.job_queue import (
+    QUEUE_POLL_INTERVAL_SECONDS,
+    ClaimedJob,
+    JobQueue,
+    serve_queue,
+)
 from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
@@ -28,7 +43,7 @@ from songmaker_cli.jobs import (
     run_lora_training_job,
 )
 from songmaker_cli.redis_client import build_arq_redis_settings
-from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_base import WorkerBase, logged_job
 
@@ -37,77 +52,86 @@ log = logging.getLogger(__name__)
 
 class MusicWorker(WorkerBase):
     service_name = "songmaker-music-worker"
-    job_types = (
-        JobType.GENERATE,
-        JobType.LORA_TRAINING,
-        JobType.LOAD_MODEL_ON_WORKER,
-        JobType.DOWNLOAD_MODEL_ON_WORKER,
-    )
+    job_types = JobQueue.MUSIC.job_types
     queue_name = ARQ_MUSIC_QUEUE_NAME
 
-    async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
-                       requested_model, repaint_params=None, cover_params=None):
-        if not self.claim_job(job_id):
-            return
+    def __init__(self, settings=None) -> None:
+        super().__init__(settings)
+        self._places = asyncio.Semaphore(self._settings.music_max_jobs)
+        self._arq_context: dict = {}
+        self._run_logged = {
+            job_type: logged_job(
+                JobFunction(job_type), self._run_payload, status_of=self.job_status,
+            )
+            for job_type in self.job_types
+        }
 
-        task_params = None
-        if repaint_params is not None:
-            task_params = RepaintTaskParams.model_validate(repaint_params)
-        elif cover_params is not None:
-            task_params = CoverTaskParams.model_validate(cover_params)
+    async def run_claimed(self, claimed: ClaimedJob) -> None:
+        """Run the claimed row within its type's time limit."""
+        async with asyncio.timeout(self._timeout_seconds(claimed.job_type)):
+            await self._run_logged[claimed.job_type](
+                self._arq_context, claimed.job_id, claimed.payload,
+            )
 
-        await run_generation_job(
-            job_id, song_id, version_id, count, user_id,
-            db_factory=self.get_db_factory(),
-            audio_dir=self.audio_dir(),
-            data_dir=self.data_dir(),
-            owner=self.owner,
-            seed=seed,
-            task_params=task_params,
-            target_model=requested_model,
-            redis=ctx["redis"],
+    def _timeout_seconds(self, job_type: JobType) -> int:
+        if job_type is JobType.LORA_TRAINING:
+            return self._settings.lora_training_job_timeout
+        return self._settings.arq_job_timeout
+
+    async def _run_payload(self, ctx, job_id: str, payload: JobPayload | None) -> None:
+        match payload:
+            case GeneratePayload():
+                await run_generation_job(
+                    job_id, payload.song_id, payload.version_id, payload.count, payload.user_id,
+                    db_factory=self.get_db_factory(),
+                    audio_dir=self.audio_dir(),
+                    data_dir=self.data_dir(),
+                    owner=self.owner,
+                    seed=payload.seed,
+                    task_params=payload.task_params,
+                    target_model=payload.target_model,
+                    redis=ctx["redis"],
+                )
+            case LoraTrainingPayload():
+                await run_lora_training_job(
+                    ctx, job_id, payload.lora_id, payload.user_id,
+                    db_factory=self.get_db_factory(),
+                    audio_dir=self.audio_dir(),
+                    owner=self.owner,
+                    redis=ctx["redis"],
+                    target_mode=payload.target_mode,
+                    training_config=self._settings.lora_training_config,
+                )
+            case LoadModelPayload():
+                await _load_model_on_worker_impl(
+                    ctx, job_id, payload.worker_id, payload.mode,
+                    db_factory=self.get_db_factory(), owner=self.owner,
+                )
+            case DownloadModelPayload():
+                await _download_model_on_worker_impl(
+                    ctx, job_id, payload.mode,
+                    db_factory=self.get_db_factory(), owner=self.owner,
+                )
+            case _:
+                await asyncio.to_thread(self.fail_job_without_payload, job_id)
+
+    async def serve_queued_jobs(self) -> None:
+        """Claim and run the queued music jobs until cancelled."""
+        await serve_queue(
+            self.wake_channel, JobQueue.MUSIC,
+            claim=self.claim_next_job, run=self.run_claimed,
+            places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
+            drain_seconds=self._settings.arq_drain_timeout,
         )
 
-    async def train_lora(
-        self,
-        ctx,
-        job_id: str,
-        lora_id: str,
-        user_id: str,
-        target_mode: str = MODEL_DEFAULT_MODE,
-    ) -> None:
-        if not self.claim_job(job_id):
-            return
+    async def on_startup(self, ctx) -> None:
+        await super().on_startup(ctx)
+        self._arq_context = ctx
+        self.start_serving(self.serve_queued_jobs())
 
-        await run_lora_training_job(
-            ctx, job_id, lora_id, user_id,
-            db_factory=self.get_db_factory(),
-            audio_dir=self.audio_dir(),
-            owner=self.owner,
-            redis=ctx["redis"],
-            target_mode=target_mode,
-            training_config=self._settings.lora_training_config,
-        )
-
-    async def load_model_on_worker(
-        self, ctx, job_id: str, worker_id: str, mode: str,
-    ) -> None:
-        if not self.claim_job(job_id):
-            return
-
-        await _load_model_on_worker_impl(
-            ctx, job_id, worker_id, mode,
-            db_factory=self.get_db_factory(), owner=self.owner,
-        )
-
-    async def download_model_on_worker(self, ctx, job_id: str, mode: str) -> None:
-        if not self.claim_job(job_id):
-            return
-
-        await _download_model_on_worker_impl(
-            ctx, job_id, mode,
-            db_factory=self.get_db_factory(), owner=self.owner,
-        )
+    async def on_shutdown(self, ctx) -> None:
+        await self.stop_serving()
+        await super().on_shutdown(ctx)
 
     async def cleanup_files_cron(self, _ctx) -> None:
         from songmaker_cli.cleanup import run_cleanup_expired
@@ -156,46 +180,14 @@ _settings = get_settings()
 _music_worker = MusicWorker(_settings)
 
 
-def _music_worker_functions(worker: MusicWorker, settings: Settings):
-    functions = [
-        func(
-            logged_job(JobFunction.GENERATE, worker.generate, status_of=worker.job_status),
-            name=JobFunction.GENERATE,
-        ),
-        func(
-            logged_job(
-                JobFunction.LOAD_MODEL_ON_WORKER,
-                worker.load_model_on_worker,
-                status_of=worker.job_status,
-            ),
-            name=JobFunction.LOAD_MODEL_ON_WORKER,
-        ),
-        func(
-            logged_job(
-                JobFunction.DOWNLOAD_MODEL_ON_WORKER,
-                worker.download_model_on_worker,
-                status_of=worker.job_status,
-            ),
-            name=JobFunction.DOWNLOAD_MODEL_ON_WORKER,
-        ),
-        func(
-            logged_job(JobFunction.LORA_TRAINING, worker.train_lora, status_of=worker.job_status),
-            name=JobFunction.LORA_TRAINING,
-            timeout=settings.lora_training_job_timeout,
-        ),
-    ]
-    return functions
-
-
 class MusicWorkerSettings:
-    functions = _music_worker_functions(_music_worker, _settings)
+    functions = []
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)
     job_deserializer = staticmethod(deserialize_arq)
     redis_settings = build_arq_redis_settings(_settings.redis_url, ride_out_outage=True)
     queue_name = MusicWorker.queue_name
-    max_jobs = _settings.music_max_jobs
     job_timeout = _settings.arq_job_timeout
     job_completion_wait = _settings.arq_drain_timeout
     health_check_interval = MusicWorker.health_check_interval

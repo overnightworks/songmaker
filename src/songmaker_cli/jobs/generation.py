@@ -29,7 +29,6 @@ from songmaker_cli.api_models import (
 from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import audio_file_path, build_ace_config, resolve_model_mode
 from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
     WORKER_SHARED_TMP_DIRNAME,
 )
 from songmaker_cli.db.models import GenerationPreset
@@ -50,8 +49,7 @@ from songmaker_cli.generation_params import BaseGenerationParams, stored_config_
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import JobQueue, app_wake_channel, publish_queue_wake
-from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
-from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
+from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
@@ -869,19 +867,14 @@ async def _admit_generation_worker_or_requeue(
             db_factory=db_factory,
         )
     except AllWorkersHeld:
-        await _requeue_generation(request, redis, db_factory)
+        _requeue_generation(request, db_factory)
         return None
 
 
-async def _requeue_generation(
-    request: GenerationJobRequest, redis: ArqRedis, db_factory: sessionmaker[Session],
-) -> None:
+def _requeue_generation(request: GenerationJobRequest, db_factory: sessionmaker[Session]) -> None:
+    """Put the job back in its queue for one poll of the GPU hold, with the takes still missing."""
     _defer_job(
         db_factory, request.job_id, message("jobWait.voiceTraining"), request.payload(),
-    )
-    await redis.enqueue_job(
-        JobFunction.GENERATE, *request.queue_args(),
-        _queue_name=ARQ_MUSIC_QUEUE_NAME, _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
     )
 
 
@@ -963,7 +956,7 @@ async def _generate_variants(
                 index, count, ctx, progress,
             )
         except WorkerHeld:
-            await _requeue_generation(request.with_takes_left(count - completed), redis, db_factory)
+            _requeue_generation(request.with_takes_left(count - completed), db_factory)
             return
         if error is not None:
             progress.record_failure(error)

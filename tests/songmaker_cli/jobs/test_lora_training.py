@@ -43,6 +43,7 @@ from songmaker_cli.lifecycle import reap_stale_jobs
 from songmaker_cli.messages import message
 from songmaker_cli.scheduler import WorkerProtocolError
 from songmaker_cli.settings import Settings
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 TEST_SETTINGS = Settings(
@@ -944,8 +945,6 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
         )
         session.commit()
 
-    redis = MagicMock()
-    redis.enqueue_job = AsyncMock()
     with patch(
         "songmaker_cli.jobs.lora_training._reserve_lora_worker",
         AsyncMock(side_effect=AllWorkersHeld("held")),
@@ -958,11 +957,10 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=redis, owner=an_owner("o1"),
+                redis=MagicMock(), owner=an_owner("o1"),
             )
         )
 
-    redis.enqueue_job.assert_not_awaited()
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.FAILED
@@ -973,12 +971,8 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
 
 
 def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_factory) -> None:
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    from songmaker_cli.job_types import JobFunction
     from songmaker_cli.scheduler import AllWorkersHeld
 
-    redis = MagicMock()
-    redis.enqueue_job = AsyncMock()
     with patch(
         "songmaker_cli.jobs.lora_training._reserve_lora_worker",
         AsyncMock(side_effect=AllWorkersHeld("held")),
@@ -991,24 +985,15 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
                 seeded["user_id"],
                 db_factory=db_factory,
                 audio_dir=seeded["audio_dir"],
-                redis=redis,
+                redis=MagicMock(),
                 target_mode="turbo", owner=an_owner("o1"),
             )
         )
 
-    redis.enqueue_job.assert_awaited_once()
-    args, kwargs = redis.enqueue_job.await_args
-    assert args == (
-        JobFunction.LORA_TRAINING,
-        "job-1",
-        seeded["lora_id"],
-        seeded["user_id"],
-        "turbo",
-    )
-    assert kwargs == {"_queue_name": ARQ_MUSIC_QUEUE_NAME, "_defer_by": 5}
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.QUEUED
+        assert job.run_after > utcnow()
         assert job.queue_reason_message == message("jobWait.queuedGenerations")
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.QUEUED
     dataset_dir = (
@@ -1035,7 +1020,6 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
         session.commit()
 
     redis = MagicMock()
-    redis.enqueue_job = AsyncMock()
     materialize = MagicMock()
     with (
         patch(
@@ -1053,7 +1037,6 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
         )
 
     materialize.assert_not_called()
-    redis.enqueue_job.assert_awaited_once()
     with db_factory() as session:
         job = get_job(session, "job-1")
         assert job.status == JobStatus.QUEUED
@@ -1061,12 +1044,38 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.QUEUED
 
 
-def test_lora_defer_passes_do_not_sleep_or_hold_an_arq_slot(seeded, db_factory) -> None:
+def test_a_claimed_generation_that_has_not_started_a_take_defers_lora_training(
+    seeded, db_factory,
+) -> None:
+    with db_factory() as session:
+        session.add(Job(id="generation-claimed", type=JobType.GENERATE, status=JobStatus.RUNNING))
+        session.commit()
+    materialize = MagicMock()
+    with (
+        patch(
+            "songmaker_cli.jobs.lora_training.pick_worker",
+            AsyncMock(return_value=_FakeWorker()),
+        ),
+        patch("songmaker_cli.jobs.lora_training._materialize_dataset", materialize),
+    ):
+        _run(
+            run_lora_training_job(
+                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+                owner=an_owner("o1"),
+            )
+        )
+
+    materialize.assert_not_called()
+    with db_factory() as session:
+        assert get_job(session, "job-1").status == JobStatus.QUEUED
+
+
+def test_lora_defer_passes_do_not_sleep_in_their_place(seeded, db_factory) -> None:
     from songmaker_cli.scheduler import AllWorkersHeld
 
     async def exercise() -> None:
         redis = MagicMock()
-        redis.enqueue_job = AsyncMock()
         materialize = MagicMock()
         with (
             patch(
@@ -1076,7 +1085,7 @@ def test_lora_defer_passes_do_not_sleep_or_hold_an_arq_slot(seeded, db_factory) 
             patch("songmaker_cli.jobs.lora_training._materialize_dataset", materialize),
             patch(
                 "songmaker_cli.jobs.lora_training.asyncio.sleep",
-                AsyncMock(side_effect=AssertionError("defer must not sleep in its ARQ slot")),
+                AsyncMock(side_effect=AssertionError("defer must not sleep in its place")),
             ),
         ):
             for _ in range(1100):
@@ -1087,7 +1096,8 @@ def test_lora_defer_passes_do_not_sleep_or_hold_an_arq_slot(seeded, db_factory) 
                 )
 
         materialize.assert_not_called()
-        assert redis.enqueue_job.await_count == 1100
+        with db_factory() as session:
+            assert get_job(session, "job-1").status == JobStatus.QUEUED
 
     _run(exercise())
 
@@ -1781,12 +1791,12 @@ def test_race_owner_cancelled_while_awaiting_its_cancelled_operation_ends_cancel
     _run(exercise())
 
 
-def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
+def test_lora_reserve_checks_waiting_generations_after_selecting_the_worker(
     seeded,
     db_factory,
 ) -> None:
     from songmaker_cli.db.models import Job
-    from songmaker_cli.db.queries.jobs import count_queued_generation_jobs
+    from songmaker_cli.db.queries.jobs import count_generation_jobs_awaiting_the_gpu
     from songmaker_cli.job_types import JobFunction
     from songmaker_cli.jobs.lora_training import _reserve_lora_worker
     from songmaker_cli.scheduler import AllWorkersHeld
@@ -1811,7 +1821,7 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
 
     def count(session):
         assert picked
-        return count_queued_generation_jobs(session)
+        return count_generation_jobs_awaiting_the_gpu(session)
 
     redis = MagicMock()
     reservation = _reserve_lora_worker(
@@ -1821,7 +1831,7 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
     )
     with (
         patch("songmaker_cli.jobs.lora_training.pick_worker", pick),
-        patch("songmaker_cli.jobs.lora_training.count_queued_generation_jobs", count),
+        patch("songmaker_cli.jobs.lora_training.count_generation_jobs_awaiting_the_gpu", count),
     ):
         with pytest.raises(AllWorkersHeld):
             _run(reservation)

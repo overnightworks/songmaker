@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 import os
 from pathlib import Path
@@ -45,9 +44,9 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.workers import register_worker
-from songmaker_cli.job_payloads import ScorePayload
+from songmaker_cli.job_payloads import GeneratePayload, ScorePayload
 from songmaker_cli.job_queue import JobQueue
-from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
+from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.jobs import (
     _finalize_generation_job,
     _make_generation_progress_callback,
@@ -55,7 +54,7 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_scoring_job,
 )
-from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgressTracker
+from songmaker_cli.jobs.generation import GenerationProgressTracker
 from songmaker_cli.messages import message
 from songmaker_cli.scheduler import WorkerTaskFailed
 from songmaker_cli.scoring.models import (
@@ -65,6 +64,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
+from songmaker_cli.timestamps import utcnow
 
 
 async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None:
@@ -184,11 +184,9 @@ def test_generation_hold_defers_before_building_temporary_context(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from songmaker_cli.music_worker import MusicWorker
     from songmaker_cli.scheduler import AllWorkersHeld
 
     redis = MagicMock()
-    redis.enqueue_job = AsyncMock()
     build_context = MagicMock()
     with (
         patch(
@@ -214,14 +212,11 @@ def test_generation_hold_defers_before_building_temporary_context(
         )
 
     build_context.assert_not_called()
-    args, kwargs = redis.enqueue_job.await_args
-    inspect.signature(MusicWorker.generate).bind(MagicMock(), MagicMock(), *args[1:])
-    assert args[1:] == ("j1", "s1", "v1", 2, "u1", 17, "sft", None, None)
-    assert kwargs["_defer_by"] == 5
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "queued"
         assert job.queue_reason_message == message("jobWait.voiceTraining")
+        assert job.run_after > utcnow()
 
 
 @pytest.mark.parametrize(
@@ -259,68 +254,48 @@ def test_generation_hold_defers_before_building_temporary_context(
     ],
     ids=["generate", "repaint", "cover"],
 )
-def test_generation_request_roundtrip_and_requeue_preserve_values(
+def test_a_generation_the_hold_requeues_twice_keeps_the_arguments_of_its_row(
     seeded_db, tmp_path: Path, seed, repaint_params, cover_params,
 ) -> None:
-    from dataclasses import FrozenInstanceError
-
-    from arq.jobs import deserialize_job, serialize_job
-
+    from songmaker_cli.job_queue import ClaimedJob
     from songmaker_cli.music_worker import MusicWorker
     from songmaker_cli.scheduler import AllWorkersHeld
 
-    request = GenerationJobRequest(
-        job_id="j1",
-        song_id="s1",
-        version_id="v1",
-        count=2,
-        user_id="u1",
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        seed=seed,
-        target_model="sft",
-        repaint_params=repaint_params,
-        cover_params=cover_params,
+    payload = GeneratePayload(
+        song_id="s1", version_id="v1", count=2, user_id="u1", seed=seed,
+        target_model="sft", task_params=repaint_params or cover_params,
     )
-    with pytest.raises(FrozenInstanceError):
-        request.count = 3
-
-    redis = MagicMock()
-    redis.enqueue_job = AsyncMock()
+    with seeded_db() as session:
+        get_job(session, "j1").payload = payload
+        session.commit()
     worker = MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    expected_args = (
-        "j1", "s1", "v1", 2, "u1", seed, "sft",
-        repaint_params.model_dump() if repaint_params is not None else None,
-        cover_params.model_dump() if cover_params is not None else None,
-    )
-    queued_args = request.queue_args()
+    worker._arq_context = {"redis": MagicMock()}
     with (
         patch.object(worker, "get_db_factory", return_value=seeded_db),
-        patch.object(worker, "audio_dir", return_value=request.audio_dir),
-        patch.object(worker, "data_dir", return_value=request.data_dir),
+        patch.object(worker, "audio_dir", return_value=tmp_path / "audio"),
+        patch.object(worker, "data_dir", return_value=tmp_path / "data"),
         patch(
             "songmaker_cli.jobs.admit_generation_worker",
             AsyncMock(side_effect=AllWorkersHeld("held")),
         ),
     ):
         for _ in range(2):
-            payload = serialize_job(JobFunction.GENERATE, queued_args, {}, None, 0)
-            decoded = deserialize_job(payload)
-            assert decoded.function == JobFunction.GENERATE
-            assert decoded.args == expected_args
-            run_async(worker.generate({"redis": redis}, *decoded.args, **decoded.kwargs))
-            queued = redis.enqueue_job.await_args.args
-            assert queued[0] == JobFunction.GENERATE
-            queued_args = queued[1:]
-            assert queued_args == expected_args
+            with seeded_db() as session:
+                get_job(session, "j1").run_after = utcnow()
+                session.commit()
+            claimed = worker.claim_next_job()
+            assert claimed == ClaimedJob("j1", JobType.GENERATE, payload)
+            run_async(worker.run_claimed(claimed))
+            with seeded_db() as session:
+                requeued = get_job(session, "j1")
+                assert (requeued.status, requeued.payload) == (JobStatus.QUEUED, payload)
 
 
 def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path) -> None:
     from songmaker_cli.scheduler import AllWorkersHeld
 
     redis = MagicMock()
-    redis.enqueue_job = AsyncMock()
     admitted = AsyncMock(side_effect=[AllWorkersHeld("held"), MagicMock(id="w1")])
     dispatch = AsyncMock(return_value=make_generation_dto())
     with (
@@ -360,7 +335,6 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
 
     async def exercise() -> None:
         redis = SettledFakeAsyncRedis()
-        redis.enqueue_job = AsyncMock()
         await _seed_healthy_worker(redis, seeded_db)
         hold_token = await reserved_gpu_hold(redis, "w1")
 
@@ -405,7 +379,6 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
 
     async def exercise() -> None:
         redis = SettledFakeAsyncRedis()
-        redis.enqueue_job = AsyncMock()
         await _seed_healthy_worker(redis, seeded_db)
 
         async def pick_then_hold(session, pool, target_mode):
@@ -425,7 +398,6 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
             )
 
         build_context.assert_not_called()
-        redis.enqueue_job.assert_awaited_once()
         with seeded_db() as session:
             job = get_job(session, "j1")
             assert job.status == "queued"

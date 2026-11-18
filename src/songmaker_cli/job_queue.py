@@ -20,6 +20,7 @@ from tandem import StoreError, Wake, WakeChannel
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.job_payloads import JobPayload
+from songmaker_cli.job_types import JobType
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -33,9 +34,25 @@ _WAKE_READY_WITHIN: Final = timedelta(seconds=5)
 
 
 class JobQueue(StrEnum):
-    """A queue's address on the wake channel."""
+    """A queue's address on the wake channel; its job types are the rows its workers claim."""
 
     SCORE = "queue/score"
+    MUSIC = "queue/music"
+
+    @property
+    def job_types(self) -> tuple[JobType, ...]:
+        return _JOB_TYPES_OF_QUEUE[self]
+
+
+_JOB_TYPES_OF_QUEUE: Final = {
+    JobQueue.SCORE: (JobType.SCORE,),
+    JobQueue.MUSIC: (
+        JobType.GENERATE,
+        JobType.LORA_TRAINING,
+        JobType.LOAD_MODEL_ON_WORKER,
+        JobType.DOWNLOAD_MODEL_ON_WORKER,
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -43,6 +60,7 @@ class ClaimedJob:
     """A row this worker moved to running, read before its claim was committed."""
 
     job_id: str
+    job_type: JobType
     payload: JobPayload | None
 
 
