@@ -28,11 +28,7 @@ from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
-from songmaker_cli.constants import (
-    ARQ_SCORING_HEALTH_KEY,
-    ARQ_SCORING_QUEUE_NAME,
-    INTERNAL_TOKEN_HEADER,
-)
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.models import (
     Generation,
     Job,
@@ -718,7 +714,6 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
 
 
 async def _run_peer_generation(factory, peer, count):
-    await peer.redis.set(ARQ_SCORING_HEALTH_KEY, 1)
     await run_generation_job(
         "j1", "s1", "v1", count, "u1", db_factory=factory,
         audio_dir=peer.audio_dir, data_dir=peer.data_dir, redis=peer.redis,

@@ -26,10 +26,16 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def settled_fake_redis() -> fakeredis.aioredis.FakeRedis:
-    """A worker's Redis that has run longer than a GPU hold lasts, as it finds it in operation."""
+def settled_fake_redis(*live_keys: str) -> fakeredis.aioredis.FakeRedis:
+    """A worker's Redis that has run longer than a GPU hold lasts, as it finds it in operation.
+
+    Each of ``live_keys`` is set, as a process that is running sets its health key.
+    """
     server = fakeredis.FakeServer()
-    fakeredis.FakeRedis(server=server).set(*settled_epoch())
+    sync_client = fakeredis.FakeRedis(server=server)
+    sync_client.set(*settled_epoch())
+    for key in live_keys:
+        sync_client.set(key, 1)
     return fakeredis.aioredis.FakeRedis(server=server, decode_responses=False)
 
 
