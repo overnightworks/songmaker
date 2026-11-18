@@ -169,4 +169,9 @@ pythonpath = ["src"]
 [tool.mypy]
 files = ["src/songmaker_cli"]
 plugins = ["pydantic.mypy"]
+
+# Extras absent from the CI venv (audiobox_aesthetics, faster_whisper, torch) and scipy,
+# which ships no stubs, do not resolve.
+[[tool.mypy.overrides]]
+module = ["audiobox_aesthetics.infer", "faster_whisper", "torch", "scipy", "scipy.signal"]
 ignore_missing_imports = true
