@@ -88,16 +88,20 @@ async def serve_queue[Claimed](
     *,
     claim: Callable[[], Claimed | None],
     run: Callable[[Claimed], Coroutine[None, None, None]],
-    capacity: int,
+    places: asyncio.Semaphore,
+    poll_interval: float,
     drain_seconds: float,
 ) -> None:
-    """Claim and run the due jobs of ``queue``, at most ``capacity`` at a time, until cancelled.
+    """Claim and run the due jobs of ``queue``, one per free place of ``places``, until cancelled.
 
-    ``claim`` is a blocking call that returns one claimed job or none. A cancel stops the
-    claiming and waits up to ``drain_seconds`` for the running jobs; one still running then
+    ``places`` is the worker's one capacity: every path that runs a job in the process takes a
+    place from it, so the paths never run more jobs together than the worker has places for.
+    ``claim`` is a blocking call that returns one claimed job or none; the loop looks again
+    when a wake arrives or ``poll_interval`` seconds have passed without one. A cancel stops
+    the claiming and waits up to ``drain_seconds`` for the running jobs; one still running then
     keeps its row, which the owner's lease hands to the reaper.
     """
-    loop = _ClaimLoop(queue, claim, run, capacity)
+    loop = _ClaimLoop(queue, claim, run, places, poll_interval)
     try:
         async with AsyncExitStack() as following:
             try:
@@ -118,12 +122,14 @@ class _ClaimLoop[Claimed]:
         queue: JobQueue,
         claim: Callable[[], Claimed | None],
         run: Callable[[Claimed], Coroutine[None, None, None]],
-        capacity: int,
+        places: asyncio.Semaphore,
+        poll_interval: float,
     ) -> None:
         self.wakeup = _Wakeup(queue)
         self._claim = claim
         self._run = run
-        self._free_places = asyncio.Semaphore(capacity)
+        self._free_places = places
+        self._poll_interval = poll_interval
         self._running: set[asyncio.Task[None]] = set()
 
     async def claim_while_due(self) -> None:
@@ -164,7 +170,7 @@ class _ClaimLoop[Claimed]:
 
     async def _wait_for_wakeup(self) -> None:
         with suppress(TimeoutError):
-            await asyncio.wait_for(self.wakeup.event.wait(), QUEUE_POLL_INTERVAL_SECONDS)
+            await asyncio.wait_for(self.wakeup.event.wait(), self._poll_interval)
 
     async def drain(self, drain_seconds: float) -> None:
         if not self._running:

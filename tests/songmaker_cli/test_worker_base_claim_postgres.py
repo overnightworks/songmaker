@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.job_owner import an_owner
 from support.score_jobs import a_scoreable_take, queued_score_job
+from tandem.testing import FakeWakeBus
 
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
@@ -17,10 +19,14 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.job_payloads import ScorePayload
-from songmaker_cli.job_queue import ClaimedJob
+from songmaker_cli.job_queue import ClaimedJob, JobQueue, publish_queue_wake
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker, MusicWorkerSettings
+from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring_worker import ScoringWorker, ScoringWorkerSettings
+
+WAIT_SECONDS = 10
+PLACE_HELD_SECONDS = 0.5
 
 WORK = {
     JobFunction.GENERATE: (
@@ -172,3 +178,45 @@ def test_a_claimed_score_job_without_a_score_payload_fails_and_runs_nothing(
     scorer_requests.assert_not_called()
     with pg_factory() as session:
         assert get_job(session, job_id).status == JobStatus.FAILED
+
+
+def test_a_legacy_score_message_and_the_loop_never_run_two_jobs_on_one_place(
+    scoring_worker, pg_factory, scorer_requests, tmp_path, monkeypatch,
+) -> None:
+    monkeypatch.setattr(ScoringWorker, "audio_dir", lambda self: tmp_path)
+    take = a_scoreable_take(pg_factory, tmp_path)
+    scorer_running, scorer_may_finish = threading.Event(), threading.Event()
+
+    def score_when_released(*_args, **_kwargs) -> SongScores:
+        scorer_running.set()
+        scorer_may_finish.wait(WAIT_SECONDS)
+        return SongScores()
+
+    scorer_requests.side_effect = score_when_released
+    bus = FakeWakeBus()
+    scoring_worker.wake_channel = bus.pod()
+
+    async def scenario() -> tuple[JobStatus, JobStatus]:
+        legacy_job = _score_job_with_payload(pg_factory, ScorePayload(gen_id=take))
+        legacy = asyncio.create_task(scoring_worker.score(None, legacy_job, take, None))
+        await asyncio.to_thread(scorer_running.wait, WAIT_SECONDS)
+        serving = asyncio.create_task(scoring_worker.serve_queued_jobs())
+        await asyncio.sleep(0)
+        later_job = _score_job_with_payload(pg_factory, ScorePayload(gen_id=take))
+        await publish_queue_wake(bus.pod(), JobQueue.SCORE)
+        await asyncio.sleep(PLACE_HELD_SECONDS)
+        with pg_factory() as session:
+            status_while_place_held = get_job(session, later_job).status
+        scorer_may_finish.set()
+        await legacy
+        async with asyncio.timeout(WAIT_SECONDS):
+            while True:
+                with pg_factory() as session:
+                    status_after = get_job(session, later_job).status
+                if status_after == JobStatus.COMPLETED:
+                    break
+                await asyncio.sleep(PLACE_HELD_SECONDS / 10)
+        serving.cancel()
+        return status_while_place_held, status_after
+
+    assert asyncio.run(scenario()) == (JobStatus.QUEUED, JobStatus.COMPLETED)

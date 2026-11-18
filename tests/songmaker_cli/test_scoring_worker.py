@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from logline.testing import configured
 from support.job_owner import an_owner
+from tandem.testing import FakeWakeBus
 
 from songmaker_cli.scoring_worker import ScoringWorker
+
+STOP_WITHIN_SECONDS = 5
 
 
 def _run(coro):
@@ -176,3 +182,36 @@ def test_scoring_worker_functions_registered_under_job_function_names() -> None:
 
     registered = _asyncio.run(_build_and_inspect())
     assert JobFunction.SCORE in registered
+
+
+@pytest.fixture
+def stop_signal_handlers():
+    """Leave the process's handlers of the stop signals as the test found them."""
+    stop_signals = (signal.SIGINT, signal.SIGTERM)
+    before = {number: signal.getsignal(number) for number in stop_signals}
+    yield
+    for number, handler in before.items():
+        signal.signal(number, handler)
+
+
+def test_a_stop_signal_ends_the_claiming_though_the_loops_own_handler_still_gets_it(
+    stop_signal_handlers,
+) -> None:
+    worker = ScoringWorker()
+    worker.wake_channel = FakeWakeBus().pod()
+    worker.claim_next_job = MagicMock(return_value=None)
+
+    async def scenario() -> tuple[bool, bool]:
+        loop = asyncio.get_running_loop()
+        arq_was_told = asyncio.Event()
+        loop.add_signal_handler(signal.SIGTERM, arq_was_told.set)
+        queue_task = asyncio.create_task(worker.serve_queued_jobs())
+        worker.stop_claiming_on_stop_signal(queue_task)
+        os.kill(os.getpid(), signal.SIGTERM)
+        async with asyncio.timeout(STOP_WITHIN_SECONDS):
+            await arq_was_told.wait()
+            await asyncio.wait([queue_task])
+        loop.remove_signal_handler(signal.SIGTERM)
+        return arq_was_told.is_set(), queue_task.cancelled()
+
+    assert _run(scenario()) == (True, True)

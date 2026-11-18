@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 from functools import partial
+from types import FrameType
 
 from arq import func
 
@@ -19,7 +21,12 @@ from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, SCORING_SERVICE_NAME
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 from songmaker_cli.job_payloads import ScorePayload
-from songmaker_cli.job_queue import ClaimedJob, JobQueue, serve_queue
+from songmaker_cli.job_queue import (
+    QUEUE_POLL_INTERVAL_SECONDS,
+    ClaimedJob,
+    JobQueue,
+    serve_queue,
+)
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.messages import message
@@ -38,15 +45,18 @@ class ScoringWorker(WorkerBase):
     def __init__(self, settings=None) -> None:
         super().__init__(settings)
         self._queue_task: asyncio.Task[None] | None = None
+        # The one capacity of the process: the loop and the arq handler both take a place.
+        self._places = asyncio.Semaphore(self._settings.scoring_max_jobs)
         self._run_logged = logged_job(
             JobFunction.SCORE, self._run_claimed, status_of=self.job_status,
         )
 
     async def score(self, _ctx, job_id, gen_id, scorers):
         """The arq message of a web process that still enqueues score jobs."""
-        if not self.claim_job(job_id):
-            return
-        await self._score(job_id, gen_id, scorers)
+        async with self._places:
+            if not self.claim_job(job_id):
+                return
+            await self._score(job_id, gen_id, scorers)
 
     async def run_claimed(self, claimed: ClaimedJob) -> None:
         await self._run_logged(None, claimed.job_id, claimed.payload)
@@ -75,6 +85,15 @@ class ScoringWorker(WorkerBase):
             owner=self.owner, device=self._settings.scoring_device,
         )
 
+    async def serve_queued_jobs(self) -> None:
+        """Claim and run the queued score jobs until cancelled."""
+        await serve_queue(
+            self.wake_channel, JobQueue.SCORE,
+            claim=partial(self.claim_next_job, JobType.SCORE), run=self.run_claimed,
+            places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
+            drain_seconds=self._settings.arq_drain_timeout,
+        )
+
     async def on_startup(self, ctx) -> None:
         from songmaker_cli.scoring.subprocess_runner import (
             ScorerProcess,
@@ -85,13 +104,25 @@ class ScoringWorker(WorkerBase):
         set_scorer_process(scorer)
 
         await super().on_startup(ctx)
-        self._queue_task = asyncio.create_task(serve_queue(
-            self.wake_channel, JobQueue.SCORE,
-            claim=partial(self.claim_next_job, JobType.SCORE), run=self.run_claimed,
-            capacity=self._settings.scoring_max_jobs,
-            drain_seconds=self._settings.arq_drain_timeout,
-        ))
+        self._queue_task = asyncio.create_task(self.serve_queued_jobs())
+        self.stop_claiming_on_stop_signal(self._queue_task)
         log.info("Scorer subprocess manager initialized")
+
+    def stop_claiming_on_stop_signal(self, queue_task: asyncio.Task[None]) -> None:
+        """End the claiming when a stop signal arrives, not when arq has drained its own jobs.
+
+        arq stops picking its messages at the signal but runs on_shutdown only after they
+        ended or ``job_completion_wait`` passed; without this the loop would go on starting
+        jobs until then. The event loop reads signals from its wakeup descriptor, so arq's handler
+        still runs beside this one.
+        """
+        loop = asyncio.get_running_loop()
+
+        def stop(_signal_number: int, _frame: FrameType | None) -> None:
+            loop.call_soon_threadsafe(queue_task.cancel)
+
+        for stop_signal in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(stop_signal, stop)
 
     async def on_shutdown(self, ctx) -> None:
         from songmaker_cli.scoring.subprocess_runner import get_scorer_process

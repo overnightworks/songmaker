@@ -1642,7 +1642,7 @@ loses none.
    (tandem `WakeChannel`, address `queue/score`, built by `job_queue.app_wake_channel`). A wake that
    cannot be sent is logged and costs nothing but the poll's delay.
 2. The scoring worker's `serve_queue` loop claims one due row at a time while it has a free
-   place (`SCORING_MAX_JOBS`): `claim_next_queued_job` selects the queued row of the type whose
+   place (`SCORING_MAX_JOBS`, one capacity the loop and the arq handler below share): `claim_next_queued_job` selects the queued row of the type whose
    `run_after` has passed, oldest first, with `FOR UPDATE SKIP LOCKED`, and moves it to
    `running` in the same statement, writing the worker's owner id and lease generation
    (`owner_columns`). Two workers never take one row; a cancelled row keeps its `run_after`
@@ -1654,13 +1654,15 @@ loses none.
    by at most that interval. A Redis that is down at start leaves the loop polling alone.
 4. It runs the job from the claimed row's payload and writes its one `arq_job.ended` line. A
    claimed row whose payload is not a score payload fails as unexpected. A stop signal ends
-   the claiming and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still running keeps its
-   row, which the owner lease hands to the reaper.
+   the claiming at once, not when arq has drained its own jobs (the worker's own handler of the
+   signal cancels the loop), and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
+   running keeps its row, which the owner lease hands to the reaper.
 
 During the release that introduces this, web processes of the previous release still enqueue
 `score` messages in arq. The worker keeps the `score` function for them, and its handler claims
 its row by the same compare-and-set as every arq handler, so a row reached by a message and by
-the loop runs once. The function goes when the arq score queue goes.
+the loop runs once; the handler takes a place of the loop's capacity before it claims, so the two
+never run more jobs together than `SCORING_MAX_JOBS`. The function goes when the arq score queue goes.
 
 Recovery judges a score row by its owner stamp like every other row: a `running` row whose
 owner lease is gone fails with the restart verdict. A `running` score row with no owner id (a
