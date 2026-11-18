@@ -182,8 +182,9 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     return count_queued_jobs(session, JobType.LORA_TRAINING)
 
 
-# A row of these types has no arq message behind it: only a claim can run it.
-_TYPES_WITHOUT_QUEUE_MESSAGE: Final = frozenset({JobType.COVER})
+# A row of these types still has an arq message that runs it from its own arguments; a row of
+# any other type is run only by a claim.
+_TYPES_WITH_QUEUE_MESSAGE: Final = frozenset({JobType.SCORE})
 
 
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
@@ -196,12 +197,12 @@ def claim_next_queued_job(session: Session, owner: JobOwner, *job_types: JobType
 
     Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
     ``run_after`` and is never due. A queued job without one (written before rows carried
-    their arguments) is due for a type that has no queue message to run it; a score job
-    without one is left to its arq message, which runs it from its own arguments. SKIP
-    LOCKED makes competing workers take different rows instead of waiting on each other's.
+    their arguments) is due for a type that has no queue message to run it, and its claimer
+    fails it as having no payload; a score job without one is left to its arq message, which
+    runs it from its own arguments. SKIP LOCKED makes competing workers take different rows instead of waiting on each other's.
     """
     due = Job.run_after <= datetime.now(timezone.utc)
-    without_message = [t for t in job_types if t in _TYPES_WITHOUT_QUEUE_MESSAGE]
+    without_message = [t for t in job_types if t not in _TYPES_WITH_QUEUE_MESSAGE]
     if without_message:
         due = or_(due, and_(Job.run_after.is_(None), Job.type.in_(without_message)))
     candidate_id = (

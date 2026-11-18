@@ -139,13 +139,22 @@ def test_a_job_without_a_wait_is_left_to_its_queue_message(pg_factory) -> None:
         assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
 
 
-def test_a_cover_job_without_a_wait_is_claimed_as_no_queue_message_runs_it(pg_factory) -> None:
+@pytest.mark.parametrize(
+    "job_type",
+    [
+        JobType.COVER, JobType.GENERATE, JobType.LORA_TRAINING,
+        JobType.LOAD_MODEL_ON_WORKER, JobType.DOWNLOAD_MODEL_ON_WORKER,
+    ],
+)
+def test_a_job_without_a_wait_is_claimed_when_no_queue_message_runs_it(
+    pg_factory, job_type,
+) -> None:
     with pg_factory() as session:
-        job = _a_job_due_in(session, 0, JobType.COVER)
+        job = _a_job_due_in(session, 0, job_type)
         job.run_after = None
         session.flush()
 
-        claimed = claim_next_queued_job(session, FIRST, JobType.COVER)
+        claimed = claim_next_queued_job(session, FIRST, job_type)
 
         assert (claimed.id, claimed.status) == (job.id, JobStatus.RUNNING)
 
