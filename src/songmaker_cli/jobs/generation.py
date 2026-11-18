@@ -854,15 +854,6 @@ async def run_generation_job(
     seed: int | None = None,
     task_params: RepaintTaskParams | CoverTaskParams | None = None,
 ) -> None:
-    import structlog
-
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        job_id=job_id,
-        job_type=JobType.GENERATE,
-        song_id=song_id,
-    )
-
     repaint_params = task_params if isinstance(task_params, RepaintTaskParams) else None
     cover_params = task_params if isinstance(task_params, CoverTaskParams) else None
     task_type = (cover_params and "cover") or (repaint_params and "repaint") or "generate"

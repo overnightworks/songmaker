@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from logline.testing import configured
 from support.job_owner import an_owner
 
-import songmaker_cli.scoring_worker as sw_mod
 from songmaker_cli.scoring_worker import ScoringWorker
 
 
@@ -153,13 +152,6 @@ def test_scoring_worker_settings_functions() -> None:
     func_names = {f.name for f in ScoringWorkerSettings.functions}
     assert JobFunction.SCORE in func_names
     assert JobFunction.GENERATE not in func_names
-
-
-def test_scoring_worker_settings_uses_singleton_methods() -> None:
-    """The arq Settings shim must expose bound methods of _scoring_worker."""
-    from songmaker_cli.scoring_worker import ScoringWorkerSettings
-    for func in ScoringWorkerSettings.functions:
-        assert func.coroutine.__self__ is sw_mod._scoring_worker
 
 
 def test_scoring_worker_functions_registered_under_job_function_names() -> None:

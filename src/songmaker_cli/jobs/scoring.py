@@ -16,7 +16,7 @@ from songmaker_cli.db.queries.generations import (
     set_generation_transcript,
 )
 from songmaker_cli.db.queries.jobs import lock_active_job
-from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.messages import message
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
@@ -48,12 +48,6 @@ def run_scoring_job(
     device: str = "cpu",
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
-    import structlog
-
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        job_id=job_id, job_type=JobType.SCORE, generation_id=gen_id,
-    )
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
 
     try:

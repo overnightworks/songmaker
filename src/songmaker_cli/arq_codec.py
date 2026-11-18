@@ -6,8 +6,13 @@ import json
 import math
 from typing import Final
 
+from logline import current_traceparent
+
 # arq converts enqueue milliseconds to a datetime outside its job error handler.
 MAX_ENQUEUE_TIME_MS: Final = 253402300799999
+
+# The enqueuer's trace rides in the job's keyword arguments; the worker's job wrapper takes it out.
+TRACEPARENT_KWARG: Final = "traceparent"
 
 
 def _validate_json(value: object) -> None:
@@ -29,6 +34,9 @@ def _validate_json(value: object) -> None:
 
 
 def serialize_arq(data: dict[str, object]) -> bytes:
+    traceparent = current_traceparent()
+    if traceparent is not None:
+        data = {**data, "k": {**data["k"], TRACEPARENT_KWARG: traceparent}}
     _validate_json(data)
     text = json.dumps(data, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     return text.encode("utf-8")

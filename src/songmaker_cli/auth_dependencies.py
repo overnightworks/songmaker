@@ -6,8 +6,8 @@ before the endpoint runs. Stream callers own their explicit transaction.
 
 from __future__ import annotations
 
-import structlog
 from fastapi import Depends, Request
+from logline import set_sub
 from sqlalchemy.orm import Session
 from webauth.dependencies import current_user_dependency
 from webauth.middleware import is_resource_admission
@@ -22,13 +22,13 @@ def _session_record_store(db: Session = Depends(get_db_session)) -> DatabaseSess
     return DatabaseSessionRecordStore(db)
 
 
-def _bind_user_to_log_context(user: AuthenticatedUser) -> None:
-    structlog.contextvars.bind_contextvars(user_id=user.id)
+def _leave_the_request_line_to_authenticate_request(_user: AuthenticatedUser) -> None:
+    """The hook is handed no request, and the request line's sub needs its scope."""
 
 
 _auth_dependencies = current_user_dependency(
     session_store=_session_record_store,
-    on_authenticated=_bind_user_to_log_context,
+    on_authenticated=_leave_the_request_line_to_authenticate_request,
 )
 
 
@@ -62,4 +62,6 @@ def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:
     yield dependency stays open until the whole response finishes — which for
     a stream means holding a pooled connection for its entire lifetime.
     """
-    return _auth_dependencies.current_user(request, DatabaseSessionRecordStore(db))
+    user = _auth_dependencies.current_user(request, DatabaseSessionRecordStore(db))
+    set_sub(request.scope, user.id)
+    return user

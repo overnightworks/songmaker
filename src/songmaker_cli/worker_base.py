@@ -9,16 +9,19 @@ whose lease is gone; no worker fails another's jobs.
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import threading
 import uuid
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import ClassVar
 
-from logline import configure
+from logline import StepTimer, configure, unit_trace
 from redis.asyncio import Redis as AsyncRedis
 
+from songmaker_cli.arq_codec import TRACEPARENT_KWARG
 from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
@@ -29,6 +32,32 @@ from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
 
 log = logging.getLogger(__name__)
+
+JOB_ENDED_EVENT = "arq_job.ended"
+
+
+def logged_job[Result](
+    job_name: str, job: Callable[..., Awaitable[Result]],
+) -> Callable[..., Awaitable[Result]]:
+    """Wrap an arq job so it runs in its enqueuer's trace and writes its one ``arq_job.ended`` line.
+
+    A job enqueued outside a trace, a cron job included, starts a trace of its own; the trace
+    ends with the job, so a failed job leaves nothing for the next one.
+
+    The line carries the job's function name and, for a queued job, its job id (the first
+    argument; a cron job has none): ids only, never the job's content.
+    """
+
+    @functools.wraps(job)
+    async def run(ctx, *args, **kwargs) -> Result:
+        fields = {"job_function": job_name}
+        if args:
+            fields["job_id"] = args[0]
+        with unit_trace(kwargs.pop(TRACEPARENT_KWARG, None)):
+            async with StepTimer(JOB_ENDED_EVENT, log, **fields):
+                return await job(ctx, *args, **kwargs)
+
+    return run
 
 
 class WorkerBase:
