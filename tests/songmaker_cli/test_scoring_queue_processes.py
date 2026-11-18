@@ -10,6 +10,7 @@ from support.app_processes import WorkerProcess, poll_until
 from support.score_jobs import queued_score_job
 
 from songmaker_cli.db.models import Job
+from songmaker_cli.constants import REDIS_SOCKET_TIMEOUT_SECONDS
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus
 from songmaker_cli.worker_base import JOB_ENDED_EVENT
@@ -18,6 +19,8 @@ JOB_COUNT = 8
 START_MARGIN_SECONDS = 20.0
 RUN_MARGIN_SECONDS = 2.0
 MISSING_GENERATION_KEY = "jobFailure.scoringGenerationMissing"
+SUBSCRIPTION_CONFIRMED_EVENT = "wake_subscription.confirmed"
+QUIET_INTERVALS = 3
 
 
 @pytest.fixture
@@ -54,6 +57,11 @@ def _times_run(workers: list[WorkerProcess], job_id: str) -> int:
                and entry.get("job_id") == job_id)
 
 
+def _subscriptions_confirmed(worker: WorkerProcess) -> int:
+    """How often Redis confirmed the worker's wake subscription: once, then once per resync."""
+    return worker.log_text().count(SUBSCRIPTION_CONFIRMED_EVENT)
+
+
 def _owners(factory, job_ids: list[str]) -> set[str | None]:
     with factory() as session:
         return {session.get(Job, job_id).owner_id for job_id in job_ids}
@@ -79,6 +87,7 @@ def test_a_job_queued_with_no_wake_is_claimed_within_one_poll_interval(web_clust
     assert poll_until(
         lambda: _times_run([worker], first) == 1, deadline_seconds=START_MARGIN_SECONDS,
     ), worker.log_tail()
+    subscriptions = _subscriptions_confirmed(worker)
 
     [job_id] = _queue_score_jobs(factory, 1)
 
@@ -86,6 +95,24 @@ def test_a_job_queued_with_no_wake_is_claimed_within_one_poll_interval(web_clust
         lambda: _ended_without_a_take(factory, [job_id]),
         deadline_seconds=QUEUE_POLL_INTERVAL_SECONDS + RUN_MARGIN_SECONDS,
     ), worker.log_tail()
+    assert _subscriptions_confirmed(worker) == subscriptions, worker.log_tail()
+
+
+def test_an_idle_scoring_worker_follows_the_wake_channel_without_subscribing_again(
+    web_cluster,
+) -> None:
+    cluster, _ = web_cluster
+    worker = cluster.start_scoring_worker("scoring")
+    assert poll_until(
+        lambda: _subscriptions_confirmed(worker) == 1, deadline_seconds=START_MARGIN_SECONDS,
+    ), worker.log_tail()
+
+    resubscribed = poll_until(
+        lambda: _subscriptions_confirmed(worker) > 1,
+        deadline_seconds=REDIS_SOCKET_TIMEOUT_SECONDS * QUIET_INTERVALS,
+    )
+
+    assert not resubscribed, worker.log_tail()
 
 
 def test_two_scoring_workers_run_each_job_exactly_once(web_cluster) -> None:
