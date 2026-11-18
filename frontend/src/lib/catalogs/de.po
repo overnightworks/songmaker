@@ -6014,6 +6014,14 @@ msgstr ""
 "Diese Seite braucht das Netzwerk. Sie öffnet sich von selbst, sobald du "
 "wieder online bist."
 
+msgctxt "routeError.notFound"
+msgid "Not Found"
+msgstr "Nicht gefunden"
+
+msgctxt "routeError.failed"
+msgid "Internal Error"
+msgstr "Interner Fehler"
+
 msgctxt "aiNotice.generated"
 msgid "KI-generiert"
 msgstr "KI-generiert"

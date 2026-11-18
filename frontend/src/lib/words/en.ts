@@ -1418,6 +1418,8 @@ export type Words = {
     readonly "versions.loadFailed": string;
     readonly "account.themeSaveFailed": string;
     readonly "routeError.offline": string;
+    readonly "routeError.notFound": string;
+    readonly "routeError.failed": string;
     readonly "aiNotice.generated": string;
     readonly "aiNotice.writing": string;
     readonly "player.detailLoading": string;
@@ -3134,6 +3136,8 @@ export const words: Words = {
     "versions.loadFailed": "Could not load versions",
     "account.themeSaveFailed": "Saving the theme failed",
     "routeError.offline": "This page needs the network. It opens by itself when you are back online.",
+    "routeError.notFound": "Not Found",
+    "routeError.failed": "Internal Error",
     "aiNotice.generated": "KI-generiert",
     "aiNotice.writing": "Du schreibst mit einer KI",
     "player.detailLoading": "Loading...",

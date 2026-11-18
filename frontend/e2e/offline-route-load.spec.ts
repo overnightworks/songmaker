@@ -31,7 +31,7 @@ test('a section opened offline shows the offline state and opens by itself after
 		page.getByRole('alert').filter({ hasText: words['routeError.offline'] })
 	).toBeVisible();
 	await expect(page.getByRole('heading', { name: '500', exact: true })).toHaveCount(0);
-	await expect(page.getByText('Internal Error', { exact: true })).toHaveCount(0);
+	await expect(page.getByText(words['routeError.failed'], { exact: true })).toHaveCount(0);
 
 	await regainNetwork(page, context);
 

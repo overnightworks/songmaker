@@ -5821,6 +5821,14 @@ msgctxt "routeError.offline"
 msgid "This page needs the network. It opens by itself when you are back online."
 msgstr ""
 
+msgctxt "routeError.notFound"
+msgid "Not Found"
+msgstr ""
+
+msgctxt "routeError.failed"
+msgid "Internal Error"
+msgstr ""
+
 msgctxt "aiNotice.generated"
 msgid "KI-generiert"
 msgstr ""

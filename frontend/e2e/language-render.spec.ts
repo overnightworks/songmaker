@@ -4,7 +4,7 @@
 // its box. Behaviour stays with the other specs, which run in the source language.
 
 import { expect, test, type Page } from './coverage-test';
-import { words } from '../src/lib/words/en';
+import { words, type Key } from '../src/lib/words/en';
 import { languages, loadWords, sourceLanguage, type Language } from '../src/lib/words/index';
 import { escapeForRegExp, shellOf, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist, type SeededLibrary } from './seed';
@@ -28,6 +28,8 @@ interface Surface {
 	open: (page: Page, library: SeededLibrary, language: Language) => Promise<void>;
 	/** Opened without a session: the page a person meets before signing in. */
 	signedOut?: boolean;
+	/** Keys of the framework's own English text the page must show in the language's words instead: the pass finds no English text by itself. */
+	says?: Key[];
 }
 
 function address(path: (library: SeededLibrary) => string): Surface['open'] {
@@ -100,7 +102,11 @@ const surfaces: Surface[] = [
 			await page.goto(`/playlist/${playlist.slug}`);
 		}
 	},
-	{ name: 'an unknown address', open: address(() => '/no-such-page') },
+	{
+		name: 'an unknown address',
+		open: address(() => '/no-such-page'),
+		says: ['routeError.notFound']
+	},
 	{ name: 'the shared album', open: address((library) => library.albumShareUrl), signedOut: true },
 	{ name: 'the shared song', open: address((library) => library.songShareUrl), signedOut: true },
 	{ name: 'the shared take', open: address((library) => library.takeShareUrl), signedOut: true },
@@ -192,6 +198,10 @@ for (const language of languages.filter((offered) => offered !== sourceLanguage)
 
 					await expect(page.locator('html')).toHaveAttribute('lang', language);
 					await expect(page.getByText(await stillLoading(language))).toHaveCount(0);
+					const text = await loadWords(language);
+					for (const key of surface.says ?? []) {
+						await expect(page.getByText(text[key] as string, { exact: true })).toBeVisible();
+					}
 					await expect
 						.poll(() => page.evaluate(renderFaults, Object.keys(words)))
 						.toEqual({

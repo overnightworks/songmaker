@@ -1705,6 +1705,8 @@ const translated = {
     "versions.loadFailed": "Versionen konnten nicht geladen werden",
     "account.themeSaveFailed": "Das Design konnte nicht gespeichert werden",
     "routeError.offline": "Diese Seite braucht das Netzwerk. Sie öffnet sich von selbst, sobald du wieder online bist.",
+    "routeError.notFound": "Nicht gefunden",
+    "routeError.failed": "Interner Fehler",
     "aiNotice.generated": "KI-generiert",
     "aiNotice.writing": "Du schreibst mit einer KI",
     "player.detailLoading": "Wird geladen...",
