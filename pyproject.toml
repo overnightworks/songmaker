@@ -88,6 +88,7 @@ dev = [
     "pytest-xdist>=3.8,<4",
     "packaging>=24.1",
     "ruff>=0.4,<1",
+    "mypy>=1.13,<3",
     "import-linter>=2.0,<3",
     "fakeredis[lua]>=2.0,<3",
     # Carries a static GPL build of ffmpeg for the tests that run the real binary
@@ -164,3 +165,8 @@ pythonpath = ["src"]
 # External tools (must be on system PATH):
 #   ffmpeg      — MP3 encoding; the tests take theirs from the dev extra's imageio-ffmpeg
 # ---------------------------------------------------------------
+
+[tool.mypy]
+files = ["src/songmaker_cli"]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
