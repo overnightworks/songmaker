@@ -86,11 +86,9 @@ const surfaces: Surface[] = [
 			// The phone keeps the right panel shut behind a trigger named for the queue tab.
 			await expect(
 				isPhone
-					? page
-							.getByRole('dialog')
-							.getByRole('button', {
-								name: new RegExp(`${escapeForRegExp(text['nowPlaying.queueTab'])}$`)
-							})
+					? page.getByRole('dialog').getByRole('button', {
+							name: new RegExp(`${escapeForRegExp(text['nowPlaying.queueTab'])}$`)
+						})
 					: page.getByRole('tab', { name: text['nowPlaying.takeTab'] })
 			).toBeVisible();
 		}
