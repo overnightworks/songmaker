@@ -267,7 +267,7 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
         if value is not UNSET and column.name != "owner":
             setattr(job, column.name, value)
     owner = None if status == JobStatus.QUEUED else update.owner
-    if owner is not UNSET:
+    if not isinstance(owner, _Unset):
         for column_name, value in owner_columns(owner).items():
             setattr(job, column_name, value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):

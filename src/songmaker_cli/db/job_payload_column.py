@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
+from pydantic import JsonValue
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
@@ -21,8 +20,8 @@ class JobPayloadColumn(TypeDecorator[JobPayload]):
     impl = JSONB(none_as_null=True)
     cache_ok = True
 
-    def process_bind_param(self, value: JobPayload | None, dialect: Dialect) -> Any:
+    def process_bind_param(self, value: JobPayload | None, dialect: Dialect) -> JsonValue:
         return None if value is None else JOB_PAYLOAD_ADAPTER.dump_python(value, mode="json")
 
-    def process_result_value(self, value: Any, dialect: Dialect) -> JobPayload | None:
+    def process_result_value(self, value: JsonValue, dialect: Dialect) -> JobPayload | None:
         return None if value is None else JOB_PAYLOAD_ADAPTER.validate_python(value)

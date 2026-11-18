@@ -20,7 +20,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-NEW_COLUMN_TYPES = {
+NEW_COLUMN_TYPES: dict[str, sa.types.TypeEngine] = {
     'payload': postgresql.JSONB(),
     'run_after': sa.DateTime(timezone=True),
 }

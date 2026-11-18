@@ -123,7 +123,6 @@ src/songmaker_cli/cowriter/turn_context.py :: union-attr :: Item "None" of "Albu
 src/songmaker_cli/cowriter/turn_context.py :: union-attr :: Item "None" of "Album | None" has no attribute "title"
 src/songmaker_cli/db/message_column.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `value`
 src/songmaker_cli/db/queries/jobs.py :: arg-type :: Argument 1 to "JobOwnerStamp" has incompatible type "str | None"; expected "str"
-src/songmaker_cli/db/queries/jobs.py :: arg-type :: Argument 1 to "owner_columns" has incompatible type "JobOwner | _Unset"; expected "JobOwner | None"
 src/songmaker_cli/db/queries/jobs.py :: assignment :: Incompatible types in assignment (expression has type "ColumnElement[bool]", variable has type "BinaryExpression[bool]")
 src/songmaker_cli/db/queries/jobs.py :: attr-defined :: "Result[*tuple[Any, ...]]" has no attribute "rowcount"
 src/songmaker_cli/db/queries/library.py :: assignment :: Incompatible types in assignment (expression has type "datetime", variable has type "str")
