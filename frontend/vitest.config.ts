@@ -38,7 +38,13 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			include: ['src/**/*.{ts,svelte}'],
-			exclude: ['src/lib/index.ts', 'src/lib/api/types.ts', 'src/service-worker.ts'],
+			exclude: [
+				'src/lib/index.ts',
+				'src/lib/api/types.ts',
+				// Written by design-catalogs and proven by its --check.
+				'src/lib/words/**',
+				'src/service-worker.ts'
+			],
 			reporter: ['text', 'text-summary', 'lcov'],
 			reportsDirectory: '../reports/frontend-coverage',
 			thresholds: {

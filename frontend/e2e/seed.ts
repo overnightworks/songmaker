@@ -11,6 +11,7 @@ import { expect, request, type APIRequestContext, type Cookie } from '@playwrigh
 import type { JobItem } from '../src/lib/api/types';
 import { words } from '../src/lib/words/en';
 import { PROBE_STACK_TARGET, requiredAdminUsername, requiredEnv } from './required-env';
+import { seedSongAndTakeShares, type ShareLink, type SongAndTakeShares } from './seed-shares';
 
 const execFileAsync = promisify(execFile);
 
@@ -156,7 +157,7 @@ interface CreatedSong extends CreatedResource {
 type VersionResource = CreatedResource;
 
 /** Seeded once per run: nothing the flows do mutates it. */
-export interface SeededLibrary {
+export interface SeededLibrary extends SongAndTakeShares {
 	albumTitle: string;
 	/** Number of songs in the primary album, for its rendered summary. */
 	albumSongCount: number;
@@ -201,10 +202,6 @@ interface CreatedResource {
 
 interface CreatedPlaylist extends CreatedResource {
 	slug: string;
-}
-
-interface ShareLink {
-	share_slug: string;
 }
 
 function seededSong(songIdByTitle: Map<string, string>, title: string): SeededSong {
@@ -303,7 +300,7 @@ async function archivePreviousE2EAlbums(): Promise<void> {
 	}
 }
 
-class SeedApi {
+export class SeedApi {
 	constructor(private readonly api: APIRequestContext) {}
 
 	/** Seeds from a context that already carries a seeded session (`seedAccount`). */
@@ -448,6 +445,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
+	const songAndTakeShares = await seedSongAndTakeShares(seed, BASE_URL, albumSongs[2]);
 	const sharedPlaylist = await seed.postJson<CreatedPlaylist>('/api/playlists', {
 		title: `${PLAYLIST_TITLE_PREFIX} shared ${runMarker()}`
 	});
@@ -487,6 +485,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumTracks: albumSongs.map((song) => song.track),
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
+		...songAndTakeShares,
 		playlistShareUrl: `${BASE_URL}/share/playlist/${playlistShare.share_slug}`,
 		pickedSongTitle,
 		listenReorderSongs,

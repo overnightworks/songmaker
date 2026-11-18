@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { pageParts, pageText, messageText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
-import { sourceLanguage } from '#lib/words/index.ts';
+import { languages, loadWords, sourceLanguage } from '#lib/words/index.ts';
 
 it('reads a key without gaps as its text', () => {
 	expect(pageText('homeWrite.label')).toBe(words['homeWrite.label']);
@@ -98,3 +98,10 @@ it('refuses a read before the words are loaded and answers after the load', asyn
 	await fresh.loadPageWords(sourceLanguage);
 	expect(fresh.pageText('homeWrite.label')).toBe(words['homeWrite.label']);
 });
+
+it.each(languages.filter((language) => language !== sourceLanguage))(
+	'offers every sentence of the source language in %s',
+	async (language) => {
+		expect(Object.keys(await loadWords(language)).sort()).toEqual(Object.keys(words).sort());
+	}
+);
