@@ -26,7 +26,7 @@ from songmaker_cli.job_types import (
 )
 from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
-from songmaker_cli.timestamps import aware_timestamp
+from songmaker_cli.timestamps import aware_timestamp, utcnow
 from songmaker_cli.worker_liveness import (
     JobOwner,
     JobOwnerStamp,
@@ -55,7 +55,8 @@ def create_job(
     """Add the job's row; the payload is stored with it, in the transaction that creates it."""
     job = Job(
         type=job_type, user_id=user_id, song_id=song_id, album_id=album_id,
-        version_id=version_id, session_id=session_id, payload=payload, **owner_columns(owner),
+        version_id=version_id, session_id=session_id, payload=payload, run_after=utcnow(),
+        **owner_columns(owner),
     )
     session.add(job)
     session.flush()
