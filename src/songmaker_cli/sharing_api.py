@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from http import HTTPStatus
 from pathlib import Path
 from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_helpers import (
     audio_file_response,
-    audio_response,
     cover_file_response,
     raise_audio_file_http_error,
 )
@@ -47,11 +47,14 @@ from songmaker_cli.db.queries.sharing import (
     shared_song_take_stored_path,
 )
 from songmaker_cli.db.queries.songs import get_song_by_slug
+from songmaker_cli.object_store import ObjectMissingError, ObjectRangeError
 from songmaker_cli.queue_streams import (
+    QUEUE_STREAM_AUDIO_CONTENT_TYPE,
+    QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL,
     QUEUE_STREAM_NOT_FOUND_DETAIL,
     QueueStreamManifest,
     load_queue_stream_manifest,
-    queue_stream_audio_path,
+    queue_stream_audio_object_key,
 )
 from songmaker_cli.shared_access import (
     NOT_FOUND_DETAIL,
@@ -349,10 +352,33 @@ def get_shared_queue_stream_audio(
     request: Request,
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
-) -> FileResponse:
+) -> StreamingResponse:
     check_shared_rate_limit(request)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     _validate_shared_queue_manifest(manifest, db)
-    return audio_response(
-        queue_stream_audio_path(ctx, snapshot_id), QUEUE_STREAM_AUDIO_CACHE_CONTROL,
+    return _queue_stream_audio_response(ctx, snapshot_id, request.headers.get("range"))
+
+
+def _queue_stream_audio_response(
+    ctx: AppContext, snapshot_id: str, byte_range: str | None,
+) -> StreamingResponse:
+    """Stream the snapshot's audio from the bucket, a byte range of it when the player asks."""
+    try:
+        audio = ctx.object_store.open(queue_stream_audio_object_key(snapshot_id), byte_range)
+    except ObjectMissingError as exc:
+        raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL) from exc  # unread: share
+    except ObjectRangeError as exc:
+        raise HTTPException(416, "Requested range not satisfiable") from exc  # unread: share
+    headers = {
+        "Cache-Control": QUEUE_STREAM_AUDIO_CACHE_CONTROL,
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(audio.length),
+    }
+    if audio.content_range is not None:
+        headers["Content-Range"] = audio.content_range
+    return StreamingResponse(
+        audio.chunks(),
+        status_code=HTTPStatus.OK if audio.content_range is None else HTTPStatus.PARTIAL_CONTENT,
+        media_type=QUEUE_STREAM_AUDIO_CONTENT_TYPE,
+        headers=headers,
     )

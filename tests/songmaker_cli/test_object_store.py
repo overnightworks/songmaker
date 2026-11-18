@@ -8,12 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from songmaker_cli.object_store import (
-    ObjectMissingError,
-    ObjectRangeError,
-    ObjectStore,
-    object_store_of,
-)
+from songmaker_cli import server
+from songmaker_cli.object_store import ObjectMissingError, ObjectRangeError, ObjectStore
 from songmaker_cli.settings import Settings
 
 PAYLOAD = bytes(range(256)) * 40
@@ -83,11 +79,14 @@ def test_a_range_beyond_the_object_is_refused(object_store: ObjectStore, prefix:
         object_store.open(f"{prefix}short", "bytes=100-200")
 
 
-def test_a_web_process_without_a_bucket_name_refuses_to_start() -> None:
+def test_a_web_process_without_a_bucket_name_refuses_to_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
     settings = Settings(
         database_url="postgresql://x", redis_url="redis://x", session_secret="s",
         songmaker_internal_token="t",
     )
+    monkeypatch.setattr(server, "get_settings", lambda: settings)
 
     with pytest.raises(ValueError, match="SONGMAKER_S3_BUCKET"):
-        object_store_of(settings)
+        server._create_default_context(tmp_path, tmp_path)

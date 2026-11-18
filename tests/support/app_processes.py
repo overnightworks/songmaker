@@ -35,6 +35,7 @@ from pydantic_settings import BaseSettings
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
+from support.object_store import configured_bucket
 from tandem import Leases
 from tandem.testing import settle_epoch
 
@@ -54,9 +55,10 @@ LOOPBACK: Final = "127.0.0.1"
 PR_SET_PDEATHSIG: Final = 1
 LOG_TAIL_BYTES: Final = 4000
 # The test runner's variables a child needs to start and to be measured: the interpreter's
-# search path and coverage's hook (`patch = subprocess` reads COVERAGE_*). Nothing else leaks in.
+# search path, coverage's hook (`patch = subprocess` reads COVERAGE_*) and the object store's
+# endpoint, region and credentials file (AWS_*). Nothing else leaks in.
 INHERITED_VARIABLES: Final = ("PATH", "HOME", "LANG", "VIRTUAL_ENV")
-INHERITED_PREFIX: Final = "COVERAGE_"
+INHERITED_PREFIXES: Final = ("COVERAGE_", "AWS_")
 OIDC_CLIENT_ID: Final = "songmaker-test"
 TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
 MUSIC_WORKER_SETTINGS: Final = "songmaker_cli.music_worker.MusicWorkerSettings"
@@ -178,6 +180,7 @@ class WebProcesses:
             "allowed_hosts": LOOPBACK,
             "cookie_secure": "false",
             "audio_dir": str(self.audio_dir),
+            "songmaker_s3_bucket": configured_bucket(),
         }
         environment = {environment_name(Settings, field): value for field, value in values.items()}
         if self._stand_ins is not None:
@@ -279,7 +282,7 @@ def _inherited_environment() -> dict[str, str]:
     return {
         key: value
         for key, value in os.environ.items()
-        if key in INHERITED_VARIABLES or key.startswith(INHERITED_PREFIX)
+        if key in INHERITED_VARIABLES or key.startswith(INHERITED_PREFIXES)
     }
 
 

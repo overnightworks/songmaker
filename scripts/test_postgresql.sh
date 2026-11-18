@@ -8,7 +8,10 @@
 # below is test-only. Tests in each xdist worker get their own databases from
 # tests/support/postgresql.py. A second container runs Compose's Redis image pin the same
 # way (loopback port, no persistence, no volume) and is named to the tests by TEST_REDIS_URL;
-# each xdist worker selects its own database on it (tests/support/redis_server.py).
+# each xdist worker selects its own database on it (tests/support/redis_server.py). A third
+# runs Compose's Garage image pin on loopback ports with the test store's configuration
+# (docker/garage); docker/garage/make_bucket.sh makes its bucket and key, and the tests read
+# them from TEST_S3_BUCKET and the AWS_* variables (tests/support/object_store.py).
 # The run does not use probe-run; it checks the load
 # and caps pytest instead:
 #   setpriv --pdeathsig TERM timeout -k 30 1200
@@ -62,9 +65,15 @@ redis_image=$("$python" -c '
 import yaml
 print(yaml.safe_load(open("docker/docker-compose.test.yml"))["services"]["redis"]["image"])
 ')
+garage_image=$("$python" -c '
+import yaml
+print(yaml.safe_load(open("docker/docker-compose.test.yml"))["services"]["garage"]["image"])
+')
 suffix=$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
 container="songmaker-test-postgresql-$suffix"
 redis_container="songmaker-test-redis-$suffix"
+garage_container="songmaker-test-garage-$suffix"
+s3_dir=$(mktemp -d)
 password=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 pytest_pid=
 
@@ -97,6 +106,8 @@ teardown() {
     local removed=0
     remove_container "$container" || removed=1
     remove_container "$redis_container" || removed=1
+    remove_container "$garage_container" || removed=1
+    rm -rf "$s3_dir"
     ((removed == 0)) || exit 1
     exit "$status"
 }
@@ -129,6 +140,15 @@ capped_docker "$DOCKER_START_SECONDS" run --detach --rm --name "$redis_container
     "$CONTAINER_LIFETIME_SECONDS" docker-entrypoint.sh redis-server \
     --save "" --appendonly no > /dev/null
 
+# The RPC secret and the admin token are this container's own; nothing outside reaches the RPC port.
+garage_secret=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+capped_docker "$DOCKER_START_SECONDS" run --detach --rm --name "$garage_container" \
+    --publish 127.0.0.1::3900 --publish 127.0.0.1::3903 \
+    --env GARAGE_CONFIG_FILE=/etc/garage/garage.toml \
+    --env GARAGE_RPC_SECRET="$garage_secret" --env GARAGE_ADMIN_TOKEN="$garage_secret" \
+    --volume "$project_root/docker/garage/garage.toml:/etc/garage/garage.toml:ro" \
+    "$garage_image" /garage server --single-node > /dev/null
+
 wait_until_ready() {
     local name=$1 label=$2
     shift 2
@@ -144,12 +164,22 @@ wait_until_ready() {
 wait_until_ready "$container" PostgreSQL pg_isready --quiet --host 127.0.0.1 --username songmaker_test
 wait_until_ready "$redis_container" Redis redis-cli ping
 
+s3_port=$(capped_docker "$DOCKER_CALL_SECONDS" port "$garage_container" 3900/tcp | head -n 1)
+s3_port=${s3_port##*:}
+admin_port=$(capped_docker "$DOCKER_CALL_SECONDS" port "$garage_container" 3903/tcp | head -n 1)
+admin_port=${admin_port##*:}
+bucket=songmaker-test
+ADMIN_URL="http://127.0.0.1:$admin_port" ADMIN_TOKEN="$garage_secret" BUCKET="$bucket" \
+    CREDENTIALS_FILE="$s3_dir/credentials" sh docker/garage/make_bucket.sh
+
 port=$(capped_docker "$DOCKER_CALL_SECONDS" port "$container" 5432/tcp | head -n 1)
 port=${port##*:}
 redis_port=$(capped_docker "$DOCKER_CALL_SECONDS" port "$redis_container" 6379/tcp | head -n 1)
 redis_port=${redis_port##*:}
 
-TEST_REDIS_URL="redis://127.0.0.1:$redis_port" \
+TEST_S3_BUCKET="$bucket" AWS_ENDPOINT_URL_S3="http://127.0.0.1:$s3_port" AWS_DEFAULT_REGION=garage \
+    AWS_SHARED_CREDENTIALS_FILE="$s3_dir/credentials" \
+    TEST_REDIS_URL="redis://127.0.0.1:$redis_port" \
     TEST_DATABASE_URL="postgresql://songmaker_test:$password@127.0.0.1:$port/songmaker_test" \
     env --default-signal=INT setpriv --pdeathsig TERM timeout -k "$KILL_AFTER_SECONDS" "$CAP_SECONDS" \
     "$python" -m pytest -n auto "$@" &

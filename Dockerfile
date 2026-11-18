@@ -73,13 +73,13 @@ RUN groupadd --gid 1000 songmaker \
 # The web consumer owns the mounted CLI profile directories; Compose mounts
 # the binaries and credential mirrors read-only.
 RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
-# Both are volume mount points and the only paths under /app the web process
+# The audio directory is a volume mount point and the only path under /app the web process
 # writes. Docker seeds an empty named volume from whichever image mounts it
 # first — as root when that image lacks the directory, which the app can never
 # chown back under cap_drop: ALL. Code, scripts, the virtual environment and
 # the frontend build stay root-owned: the app's user reads them and cannot
 # rewrite them.
-RUN install -d -o songmaker -g songmaker /app/data/queue-streams /app/data/audio
+RUN install -d -o songmaker -g songmaker /app/data/audio
 # After the last RUN so the node and uv layers stay cached across releases.
 ARG SERVICE_VERSION
 ARG SONGMAKER_COMMIT

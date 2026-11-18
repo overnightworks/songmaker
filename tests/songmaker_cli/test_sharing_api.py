@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
+from support.object_store import an_object_store
 from support.web_app import (
     BUILT_SHELL,
     TEST_ORIGIN,
@@ -1971,6 +1972,7 @@ def _shared_app_with_small_budget(
         audio_dir = client.app.state.ctx.audio_dir
         data_dir = client.app.state.ctx.data_dir
         ctx = AppContext(
+            object_store=an_object_store(),
             db=client.app.state.ctx.db,
             audio_dir=audio_dir,
             data_dir=data_dir,
@@ -2055,6 +2057,7 @@ def test_share_album_ownership_enforced(tmp_path: Path, pg_factory) -> None:
         session.commit()
 
     ctx = AppContext(
+        object_store=an_object_store(),
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET,
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
