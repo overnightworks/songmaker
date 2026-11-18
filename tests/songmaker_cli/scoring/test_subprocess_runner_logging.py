@@ -13,10 +13,6 @@ from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.scoring.subprocess_runner import ScorerProcess
 
 
-def _ignore_progress(_completed: int, _total: int, _scorer: str) -> None:
-    return None
-
-
 def test_a_scorer_failing_in_the_child_is_one_json_line_with_its_exception(
     tmp_path: Path, capfd: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -28,7 +24,7 @@ def test_a_scorer_failing_in_the_child_is_one_json_line_with_its_exception(
     try:
         sp.score(
             mp3, scorers=["audiobox"], config=PipelineConfig(device="cpu"),
-            on_progress=_ignore_progress,
+            on_progress=lambda _completed, _total, _scorer: None,
         )
     finally:
         sp.shutdown()
