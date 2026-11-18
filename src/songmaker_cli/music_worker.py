@@ -152,17 +152,28 @@ _music_worker = MusicWorker(_settings)
 
 def _music_worker_functions(worker: MusicWorker, settings: Settings):
     functions = [
-        func(logged_job(JobFunction.GENERATE, worker.generate), name=JobFunction.GENERATE),
         func(
-            logged_job(JobFunction.LOAD_MODEL_ON_WORKER, worker.load_model_on_worker),
+            logged_job(JobFunction.GENERATE, worker.generate, status_of=worker.job_status),
+            name=JobFunction.GENERATE,
+        ),
+        func(
+            logged_job(
+                JobFunction.LOAD_MODEL_ON_WORKER,
+                worker.load_model_on_worker,
+                status_of=worker.job_status,
+            ),
             name=JobFunction.LOAD_MODEL_ON_WORKER,
         ),
         func(
-            logged_job(JobFunction.DOWNLOAD_MODEL_ON_WORKER, worker.download_model_on_worker),
+            logged_job(
+                JobFunction.DOWNLOAD_MODEL_ON_WORKER,
+                worker.download_model_on_worker,
+                status_of=worker.job_status,
+            ),
             name=JobFunction.DOWNLOAD_MODEL_ON_WORKER,
         ),
         func(
-            logged_job(JobFunction.LORA_TRAINING, worker.train_lora),
+            logged_job(JobFunction.LORA_TRAINING, worker.train_lora, status_of=worker.job_status),
             name=JobFunction.LORA_TRAINING,
             timeout=settings.lora_training_job_timeout,
         ),
