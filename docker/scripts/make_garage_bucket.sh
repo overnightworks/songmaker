@@ -14,13 +14,20 @@ done
 
 # call <path> <json>: prints the answer without whitespace; a failed call stops the script.
 call() {
-  printf '%s' "$2" | curl --silent --fail --max-time 30 --request POST \
+  answer=$(printf '%s' "$2" | curl --silent --fail --max-time 30 --request POST \
     --header "Authorization: Bearer $ADMIN_TOKEN" --header 'Content-Type: application/json' \
-    --data-binary @- "$ADMIN_URL$1" | tr -d ' \n'
+    --data-binary @- "$ADMIN_URL$1") || return 1
+  printf '%s' "$answer" | tr -d ' \n'
+}
+# A store that already holds the bucket (a second run against the same node) keeps it.
+existing_bucket() {
+  answer=$(curl --silent --fail --max-time 30 --header "Authorization: Bearer $ADMIN_TOKEN" \
+    "$ADMIN_URL/v2/GetBucketInfo?globalAlias=$BUCKET") || return 1
+  printf '%s' "$answer" | tr -d ' \n'
 }
 field() { printf '%s' "$1" | grep -o "\"$2\":\"[^\"]*\"" | head -n 1 | cut -d '"' -f 4; }
 
-bucket=$(field "$(call /v2/CreateBucket "{\"globalAlias\":\"$BUCKET\"}")" id)
+bucket=$(field "$(existing_bucket || call /v2/CreateBucket "{\"globalAlias\":\"$BUCKET\"}")" id)
 key=$(call /v2/CreateKey '{"name":"test"}')
 key_id=$(field "$key" accessKeyId)
 secret=$(field "$key" secretAccessKey)
