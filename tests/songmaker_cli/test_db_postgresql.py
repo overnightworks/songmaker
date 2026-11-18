@@ -431,9 +431,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         session.commit()
 
     ctx = AppContext(
-        object_store=an_object_store(),
-        db=pg_factory,
-        audio_dir=tmp_path / "audio",
+        object_store=an_object_store(), db=pg_factory, audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=b"test",
         redis=None, async_redis=make_fake_async_redis(),  # type: ignore[arg-type]

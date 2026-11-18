@@ -59,7 +59,7 @@ def ctx(tmp_path: Path, pg_factory, monkeypatch) -> AppContext:
     )
 
 
-def _store(ctx: AppContext) -> AgedObjectStore:
+def _aged_store(ctx: AppContext) -> AgedObjectStore:
     assert isinstance(ctx.object_store, AgedObjectStore)
     return ctx.object_store
 
@@ -78,7 +78,7 @@ def _snapshot_keys(snapshot_id: str) -> set[str]:
 def _plant(ctx: AppContext, name: str, age: timedelta, size: int = 1) -> str:
     key = f"{queue_streams.QUEUE_STREAM_KEY_PREFIX}{name}"
     ctx.object_store.put_bytes(key, b"x" * size, content_type="application/octet-stream")
-    _store(ctx).age(key, age)
+    _aged_store(ctx).age(key, age)
     return key
 
 
@@ -168,7 +168,7 @@ def test_a_build_passes_over_an_unreadable_record(ctx) -> None:
 def test_the_sweep_keeps_every_object_of_a_live_snapshot_however_old(ctx) -> None:
     live = _build_snapshot(ctx)
     for key in _snapshot_keys(live):
-        _store(ctx).age(key, PAST_ORPHAN_AGE)
+        _aged_store(ctx).age(key, PAST_ORPHAN_AGE)
 
     cleanup_expired_queue_streams(ctx)
 
@@ -234,7 +234,7 @@ def test_eviction_removes_the_oldest_snapshot_first_and_stops_once_the_cache_fit
     middle = _build_snapshot(ctx, "middle")
     newest = _build_snapshot(ctx, "newest")
     for index, snapshot_id in enumerate((oldest, middle, newest)):
-        _store(ctx).age(queue_stream_audio_object_key(snapshot_id), timedelta(hours=3 - index))
+        _aged_store(ctx).age(queue_stream_audio_object_key(snapshot_id), timedelta(hours=3 - index))
     one_snapshot = next(
         entry.size for entry in ctx.object_store.list(queue_streams.QUEUE_STREAM_KEY_PREFIX)
         if entry.key == queue_stream_audio_object_key(newest)

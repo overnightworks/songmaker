@@ -10,7 +10,7 @@
 # way (loopback port, no persistence, no volume) and is named to the tests by TEST_REDIS_URL;
 # each xdist worker selects its own database on it (tests/support/redis_server.py). A third
 # runs Compose's Garage image pin on loopback ports with the test store's configuration
-# (docker/garage); docker/garage/make_bucket.sh makes its bucket and key, and the tests read
+# (docker/garage); docker/scripts/make_garage_bucket.sh makes its bucket and key, and the tests read
 # them from TEST_S3_BUCKET and the AWS_* variables (tests/support/object_store.py).
 # The run does not use probe-run; it checks the load
 # and caps pytest instead:
@@ -170,7 +170,7 @@ admin_port=$(capped_docker "$DOCKER_CALL_SECONDS" port "$garage_container" 3903/
 admin_port=${admin_port##*:}
 bucket=songmaker-test
 ADMIN_URL="http://127.0.0.1:$admin_port" ADMIN_TOKEN="$garage_secret" BUCKET="$bucket" \
-    CREDENTIALS_FILE="$s3_dir/credentials" sh docker/garage/make_bucket.sh
+    CREDENTIALS_FILE="$s3_dir/credentials" sh docker/scripts/make_garage_bucket.sh
 
 port=$(capped_docker "$DOCKER_CALL_SECONDS" port "$container" 5432/tcp | head -n 1)
 port=${port##*:}

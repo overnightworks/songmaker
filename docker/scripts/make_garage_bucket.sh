@@ -1,14 +1,14 @@
 #!/bin/sh
 # Makes the test store's bucket and a key that may read and write it, and writes the key to a
 # credentials file in the shape the AWS SDKs read (AWS_SHARED_CREDENTIALS_FILE). Needs curl.
-#   ADMIN_URL=http://garage:3903 ADMIN_TOKEN=... BUCKET=songmaker-test CREDENTIALS_FILE=/path sh make_bucket.sh
+#   ADMIN_URL=http://garage:3903 ADMIN_TOKEN=... BUCKET=songmaker-test CREDENTIALS_FILE=/path sh make_garage_bucket.sh
 set -eu
 umask 077
 : "${ADMIN_URL:?}" "${ADMIN_TOKEN:?}" "${BUCKET:?}" "${CREDENTIALS_FILE:?}"
 
 deadline=$(($(date +%s) + 60))
 until curl --silent --fail --max-time 5 --output /dev/null "$ADMIN_URL/health"; do
-  [ "$(date +%s)" -lt "$deadline" ] || { echo "make_bucket: the store was not healthy within 60 seconds" >&2; exit 1; }
+  [ "$(date +%s)" -lt "$deadline" ] || { echo "make_garage_bucket: the store was not healthy within 60 seconds" >&2; exit 1; }
   sleep 1
 done
 
