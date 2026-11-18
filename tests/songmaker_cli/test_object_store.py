@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from botocore.exceptions import ClientError
+from pydantic import ValidationError
 
 from songmaker_cli import object_store as object_store_module
 from songmaker_cli import server
@@ -117,7 +118,7 @@ def test_a_web_process_without_a_platform_store_variable_refuses_to_start(
         ))
 
 
-@pytest.mark.parametrize("credentials_file", [None, "absent", ""])
+@pytest.mark.parametrize("credentials_file", [None, "absent", "."])
 def test_a_web_process_without_a_readable_credentials_file_refuses_to_start(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, credentials_file: str | None,
 ) -> None:
@@ -135,7 +136,7 @@ def test_a_web_process_without_a_readable_credentials_file_refuses_to_start(
         ))
 
 
-def test_platform_store_variables_that_only_an_env_file_supplies_refuse_to_start(
+def test_settings_reject_platform_store_variables_that_an_env_file_supplies(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     for variable in ("AWS_ENDPOINT_URL_S3", "AWS_DEFAULT_REGION", "AWS_SHARED_CREDENTIALS_FILE"):
@@ -149,11 +150,11 @@ def test_platform_store_variables_that_only_an_env_file_supplies_refuse_to_start
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="AWS_|aws_"):
-        object_store_of(Settings(
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        Settings(
             _env_file=env_file, database_url="postgresql://x", redis_url="redis://x",
             session_secret="s", songmaker_internal_token="t", songmaker_s3_bucket="b",
-        ))
+        )
 
 
 def test_a_store_error_that_is_not_a_missing_key_or_range_reaches_the_caller_unchanged(
