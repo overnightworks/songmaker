@@ -171,6 +171,8 @@ class Settings(BaseSettings):
     songmaker_internal_token: Annotated[SecretStr, Field(min_length=1)]
     # Optional so direct runs and tests start; /metrics answers 503 while unset.
     songmaker_monitoring_token: SecretStr | None = None
+    # The object store's bucket; only the web process uses the store, and it refuses to start without one.
+    songmaker_s3_bucket: str | None = None
 
     @field_validator("songmaker_commit", mode="before")
     @classmethod
