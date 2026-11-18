@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from support.job_owner import an_owner
@@ -68,19 +68,16 @@ def test_every_registered_job_ends_its_line_failed_when_its_row_failed(
     assert (ended.job_function, ended.outcome) == (function.name, "failed")
 
 
-def test_a_music_job_ends_its_line_failed_when_its_row_failed(job_rows, caplog) -> None:
-    job_id = job_rows(JobStatus.FAILED)
+def test_a_music_job_ends_its_line_failed_when_its_run_failed_the_row(job_rows, caplog) -> None:
+    job_id = job_rows(JobStatus.RUNNING)
     claimed = ClaimedJob(
         job_id, JobType.LORA_TRAINING,
-        LoraTrainingPayload(lora_id="lora", user_id="user", target_mode="turbo"),
+        LoraTrainingPayload(lora_id="missing-voice", user_id="user", target_mode="turbo"),
     )
     worker = MusicWorker()
     worker._arq_context = {"redis": AsyncMock()}
 
-    with (
-        caplog.at_level("INFO"),
-        patch("songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock),
-    ):
+    with caplog.at_level("INFO"):
         asyncio.run(worker.run_claimed(claimed))
 
     (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
