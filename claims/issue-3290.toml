@@ -3,6 +3,6 @@ agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
 role = "builder"
 base = "3345a87cb5a3261b02c45f4f4bcb6f7eda03061d"
 branch = "claude/issue-3290-every-job-s-arguments-are-stored-on-its"
-scope = ["docs/architecture.md", "src/songmaker_cli", "tests"]
+scope = [".importlinter", "docs/architecture.md", "src/songmaker_cli", "tests"]
 opened_commit = "2742da3bfd16c4acb8e7c53dc4dc2369fc43eb7d"
 whole_reason = "the payload is written at every enqueue site and claimed in every handler, which spans the API modules, jobs, queries and the migration"
