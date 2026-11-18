@@ -148,10 +148,11 @@ def test_a_job_that_outlasts_its_own_time_limit_is_cut(payload, own_limit, other
     async def outlasts_a_zero_limit(*_args, **_kwargs) -> None:
         await asyncio.sleep(RUNS_LONGER_THAN_ZERO_SECONDS)
 
+    running = worker.run_claimed(_claimed(payload))
     with patch(WORK[JobType(payload.job_type)], new=outlasts_a_zero_limit), pytest.raises(
         TimeoutError,
     ):
-        _run(worker.run_claimed(_claimed(payload)))
+        _run(running)
 
 
 def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg_factory) -> None:
