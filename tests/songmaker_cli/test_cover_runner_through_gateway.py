@@ -11,8 +11,7 @@ import asyncio
 import base64
 import json
 import logging
-import threading
-import types
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib.resources import files
@@ -33,7 +32,6 @@ from agents.backend.gateway import GatewayBackend
 from agents.turn import FailureCode, Principal, RejectionCode, person_fingerprint
 from fastapi.testclient import TestClient
 from PIL import Image
-from redis.exceptions import RedisError
 from support.cover_album_world import declared_suggest_refusal
 from support.cowriter_gateway import (
     A_REFRESH_TOKEN,
@@ -47,6 +45,7 @@ from support.cowriter_gateway import (
 from support.fake_oidc_issuer import USER_ACCESS_TOKEN, Person
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from support.xmp_packet import read_digital_source_type
+from tandem import StoreError
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli import cover_runner
@@ -474,57 +473,37 @@ def test_cancel_during_the_picture_closes_the_request_and_the_next_job_runs(worl
     assert world.job(second).status == JobStatus.COMPLETED
 
 
-class _ChannelLostAfterSubscribing:
-    """A pub/sub whose subscription is confirmed once and whose connection then fails."""
+def _redis_refuses_every_wake_publication(wake_channel, monkeypatch) -> None:
+    async def refuse(_address: str) -> None:
+        raise StoreError("connection refused", outage=True)
 
-    confirmed = False
-
-    def subscribe(self, _channel: str) -> None:
-        pass
-
-    def get_message(self, timeout: float = 0.0) -> dict[str, str]:
-        if not self.confirmed:
-            self.confirmed = True
-            return {"type": "subscribe"}
-        raise RedisError("connection lost")
-
-    def close(self) -> None:
-        pass
+    monkeypatch.setattr(wake_channel, "publish", refuse)
 
 
-class _SubscriptionNeverConfirmed(_ChannelLostAfterSubscribing):
-    def get_message(self, timeout: float = 0.0) -> None:
-        return None
+def _redis_does_not_confirm_the_subscription(wake_channel, monkeypatch) -> None:
+    @asynccontextmanager
+    async def refuse(**_handlers):
+        raise StoreError("subscription not confirmed", outage=True)
+        yield
+
+    monkeypatch.setattr(wake_channel, "following", refuse)
 
 
-class _SubscribeRefused(_ChannelLostAfterSubscribing):
-    def subscribe(self, _channel: str) -> None:
-        raise RedisError("connection refused")
+def _redis_loses_the_channel_after_subscribing(wake_channel, monkeypatch) -> None:
+    @asynccontextmanager
+    async def lose(*, on_resync, on_failed, **_handlers):
+        on_resync()
+        on_failed(StoreError("connection lost", outage=True))
+        yield
+
+    monkeypatch.setattr(wake_channel, "following", lose)
 
 
-def _redis_refuses_to_publish(redis, monkeypatch) -> None:
-    def refuse(*_arguments) -> None:
-        raise RedisError("connection refused")
-
-    monkeypatch.setattr(redis, "publish", refuse)
-
-
-def _redis_pubsub_is(pubsub_class):
-    def break_pubsub(redis, monkeypatch) -> None:
-        monkeypatch.setattr(redis, "pubsub", pubsub_class)
-
-    return break_pubsub
-
-
-class _RedisRefusingEveryPublication:
-    def publish(self, *_arguments) -> None:
-        raise RedisError("connection refused")
-
-
-def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(caplog):
+def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(world, monkeypatch, caplog):
     forged_id = "job\nforged log line"
+    _redis_refuses_every_wake_publication(world.app.state.ctx.cancel_wake, monkeypatch)
 
-    cover_runner.publish_cover_cancel(_RedisRefusingEveryPublication(), forged_id)
+    asyncio.run(cover_runner.publish_cover_cancel(world.app.state.ctx.cancel_wake, forged_id))
 
     assert "forged" not in caplog.text
 
@@ -532,19 +511,18 @@ def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(caplog):
 @pytest.mark.parametrize(
     "break_redis",
     [
-        _redis_refuses_to_publish,
-        _redis_pubsub_is(_SubscribeRefused),
-        _redis_pubsub_is(_SubscriptionNeverConfirmed),
-        _redis_pubsub_is(_ChannelLostAfterSubscribing),
+        _redis_refuses_every_wake_publication,
+        _redis_does_not_confirm_the_subscription,
+        _redis_loses_the_channel_after_subscribing,
     ],
-    ids=["publish_refused", "subscribe_refused", "subscription_unconfirmed", "channel_lost"],
+    ids=["publish_refused", "subscription_unconfirmed", "channel_lost"],
 )
 def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
     world, monkeypatch, break_redis,
 ):
     held = HeldGateway(picture(_image_bytes("PNG")))
     world.stack.uses(held)
-    break_redis(world.app.state.ctx.redis, monkeypatch)
+    break_redis(world.app.state.ctx.cancel_wake, monkeypatch)
     job_id = world.queue()
 
     async def scenario() -> bool:
@@ -559,50 +537,6 @@ def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
 
     assert world.job(job_id).status == JobStatus.CANCELLED
     assert world.suggestions() == []
-
-
-def _runner_log_levels(caplog) -> list[int]:
-    return [record.levelno for record in caplog.records if record.name == cover_runner.log.name]
-
-
-@pytest.mark.parametrize(
-    "pubsub_class", [_SubscribeRefused, _SubscriptionNeverConfirmed],
-    ids=["subscribe_refused", "subscription_unconfirmed"],
-)
-def test_a_subscription_redis_does_not_confirm_is_logged_and_gives_no_listener(
-    pubsub_class, caplog,
-):
-    with caplog.at_level(logging.WARNING, logger=cover_runner.log.name):
-        listener = cover_runner._subscribe_to_cancellations(
-            types.SimpleNamespace(pubsub=pubsub_class),
-        )
-
-    assert listener is None
-    assert _runner_log_levels(caplog) == [logging.WARNING]
-
-
-class _PubsubNamingTheJob:
-    def __init__(self, job_id: str) -> None:
-        self.job_id = job_id
-
-    def get_message(self, timeout: float = 0.0) -> dict[str, str]:
-        return {"type": "message", "data": self.job_id}
-
-    def close(self) -> None:
-        pass
-
-
-def test_a_listener_that_fails_hears_no_cancel_and_logs_it(caplog):
-    def database_is_down():
-        raise RuntimeError("database unavailable")
-
-    with caplog.at_level(logging.WARNING, logger=cover_runner.log.name):
-        heard = cover_runner._wait_for_cancellation(
-            _PubsubNamingTheJob("job"), database_is_down, "job", threading.Event(),
-        )
-
-    assert heard is False
-    assert _runner_log_levels(caplog) == [logging.ERROR]
 
 
 def test_a_cancel_between_the_start_and_the_picture_sends_no_request(world, monkeypatch):

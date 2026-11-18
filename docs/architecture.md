@@ -1049,11 +1049,11 @@ references, and `run_cover_picture` draws one picture through the picture
 agent file on the same `GatewayBackend` the turn uses, checking the group again
 at its start. The picture runs in its own task, so an explicit Cancel closes
 its request without stopping the runner. A Cancel may reach any web process, not
-the one that draws: once it commits, `POST /api/jobs/{id}/cancel` publishes the job
-id on the Redis channel `cover_runner.COVER_CANCEL_CHANNEL`, and the runner that draws
-the picture, subscribed since before the picture reads the job, reads the job from
+the one that draws: once it commits, `POST /api/jobs/{id}/cancel` wakes every
+web process with the job id on tandem's `WakeChannel`, and the runner that draws
+the picture, following the channel since before the picture reads the job, reads the job from
 PostgreSQL and cancels the picture when it is `cancelled`. Only the id travels and
-delivery is at-most-once; a missed signal leaves the picture to end alone, and its
+a wake is published once; a missed signal leaves the picture to end alone, and its
 publication refuses the cancelled job. A cancel of a co-writer turn travels the
 same way: the web process running the turn, which `POST /api/chat/turn` started, hears the
 chat job's id, reads the job and cancels the turn's task, which closes the gateway request

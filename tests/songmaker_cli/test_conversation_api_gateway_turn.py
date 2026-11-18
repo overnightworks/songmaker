@@ -691,17 +691,19 @@ def test_a_turns_cover_keeps_its_session_when_another_session_of_the_person_ends
 
 
 class _ContextWhoseCancelsAreLost:
-    """A context whose Redis hears no cancel, so the cancelled turn runs on."""
+    """A context whose wake channel delivers no cancel, so the cancelled turn runs on."""
 
-    class redis:  # noqa: N801
+    class cancel_wake:  # noqa: N801
         @staticmethod
-        def publish(*_arguments) -> None:
+        async def publish(_address: str) -> None:
             return None
 
 
 def test_a_cancelled_turn_that_asks_late_creates_no_cover_for_any_session(world):
     """Turn A (S1) is held and cancelled, the cancel lost; its reply arrives during turn B (S2)."""
     import asyncio
+
+    from anyio import to_thread
 
     from songmaker_cli.api_models import ChatTurnV2Request
     from songmaker_cli.conversation_api import api_chat_turn
@@ -726,7 +728,9 @@ def test_a_cancelled_turn_that_asks_late_creates_no_cover_for_any_session(world)
             while not gateway.requests:
                 await asyncio.sleep(0)
             chat_job = canceller.query(Job).filter_by(type="chat").one()
-            api_cancel_job(chat_job.id, _TURN_PERSON, canceller, _ContextWhoseCancelsAreLost())
+            await to_thread.run_sync(
+                api_cancel_job, chat_job.id, _TURN_PERSON, canceller, _ContextWhoseCancelsAreLost(),
+            )
             second = await api_chat_turn(
                 ChatTurnV2Request(message="b"),
                 request_in_session(app, second_session), _TURN_PERSON, turn_b,
