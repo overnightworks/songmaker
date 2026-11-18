@@ -319,7 +319,6 @@ def test_health_endpoint_is_not_exempt_from_ip_rate_limit(
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
-        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
         for _ in range(2):
             ip_limited_client.get("/health")

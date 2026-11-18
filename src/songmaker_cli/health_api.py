@@ -28,12 +28,14 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.db.queries.auth import count_active_sessions
 from songmaker_cli.db.queries.jobs import (
+    count_queued_jobs,
     count_total_queued_jobs,
     job_counts_by_type_and_status,
     job_duration_stats,
     last_job_failure_time,
 )
 from songmaker_cli.db.queries.workers import list_worker_identities
+from songmaker_cli.job_types import JobType
 from songmaker_cli.request_policies import HEALTH_DETAILS_PATH
 
 PROM_HTTP_REQUESTS_TOTAL: Final[str] = "songmaker_http_requests_total"
@@ -306,9 +308,9 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         last_job_failure = last_job_failure_time(session)
         active_sessions = count_active_sessions(session)
         acestep_workers = list_worker_identities(session)
+        scoring_queue_depth = count_queued_jobs(session, JobType.SCORE)
 
     music_queue_depth = await arq_pool.get_music_queue_depth()
-    scoring_queue_depth = await arq_pool.get_scoring_queue_depth()
 
     pool = arq_pool.get_arq_pool()
     background_loop_metrics = request.app.state.background_loop_registry.loop_health()
@@ -380,16 +382,17 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
     music_running = await arq_pool.is_music_worker_healthy()
     scoring_running = await arq_pool.is_scoring_worker_healthy()
     music_queue_depth = await arq_pool.get_music_queue_depth()
-    scoring_queue_depth = await arq_pool.get_scoring_queue_depth()
 
     config = settings.get_settings()
     acestep_workers = []
     active_jobs_count = 0
+    scoring_queue_depth = 0
     if db_ok:
         # With the database down nothing is readable, and `db_ok` names the outage.
         with ctx.db() as session:
             acestep_workers = list_worker_identities(session)
             active_jobs_count = count_total_queued_jobs(session)
+            scoring_queue_depth = count_queued_jobs(session, JobType.SCORE)
     queue_depth_cap_reached = active_jobs_count >= config.max_queue_depth
     workers_total = len(acestep_workers)
     workers_online = 0

@@ -149,21 +149,22 @@ def count_total_queued_jobs(session: Session) -> int:
     )
 
 
-def count_queued_generation_jobs(session: Session) -> int:
+def count_queued_jobs(session: Session, job_type: JobType) -> int:
+    """Count the waiting jobs of one type, running jobs excluded."""
     return (
         session.query(Job)
-        .filter(Job.status == JobStatus.QUEUED, Job.type == JobType.GENERATE)
+        .filter(Job.status == JobStatus.QUEUED, Job.type == job_type)
         .count()
     )
+
+
+def count_queued_generation_jobs(session: Session) -> int:
+    return count_queued_jobs(session, JobType.GENERATE)
 
 
 def count_queued_lora_training_jobs(session: Session) -> int:
     """Count globally waiting LoRA trainings, excluding running jobs."""
-    return (
-        session.query(Job)
-        .filter(Job.status == JobStatus.QUEUED, Job.type == JobType.LORA_TRAINING)
-        .count()
-    )
+    return count_queued_jobs(session, JobType.LORA_TRAINING)
 
 
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:

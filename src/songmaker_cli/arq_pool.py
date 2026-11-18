@@ -15,7 +15,6 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_HEALTH_KEY,
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_HEALTH_KEY,
-    ARQ_SCORING_QUEUE_NAME,
 )
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
@@ -84,12 +83,3 @@ async def get_music_queue_depth() -> int:
         return await get_arq_pool().zcard(ARQ_MUSIC_QUEUE_NAME)
     except Exception:
         return 0
-
-
-async def get_scoring_queue_depth() -> int:
-    try:
-        return await get_arq_pool().zcard(ARQ_SCORING_QUEUE_NAME)
-    except Exception:
-        return 0
-
-
