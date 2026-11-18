@@ -13,6 +13,7 @@ Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -136,6 +137,14 @@ def _find_env_file() -> Path | None:
         if (parent / "pyproject.toml").exists():
             return None
     return None
+
+
+def process_environment_variable(name: str) -> str | None:
+    """A variable of the process environment, which the env file does not feed.
+
+    botocore reads the platform's store variables from here alone, so the web checks it too.
+    """
+    return os.environ.get(name) or None
 
 
 def _split_token_clients(value: str) -> list[str]:

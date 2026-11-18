@@ -21,6 +21,8 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from botocore.response import StreamingBody
 
+from songmaker_cli.settings import process_environment_variable
+
 if TYPE_CHECKING:
     from songmaker_cli.settings import Settings
 
@@ -136,9 +138,9 @@ def object_store_of(settings: Settings) -> ObjectStore:
     if not settings.songmaker_s3_bucket:
         raise ValueError("SONGMAKER_S3_BUCKET names the object store's bucket and is required")
     for variable in _PLATFORM_STORE_VARIABLES:
-        if not os.environ.get(variable):
+        if not process_environment_variable(variable):
             raise ValueError(f"{variable} is set by the platform and is required")
-    credentials_file = os.environ.get(_CREDENTIALS_FILE_VARIABLE)
+    credentials_file = process_environment_variable(_CREDENTIALS_FILE_VARIABLE)
     if not credentials_file or not _is_readable_file(credentials_file):
         raise ValueError(f"{_CREDENTIALS_FILE_VARIABLE} must name a readable credentials file")
     return ObjectStore(settings.songmaker_s3_bucket)

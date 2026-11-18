@@ -135,6 +135,27 @@ def test_a_web_process_without_a_readable_credentials_file_refuses_to_start(
         ))
 
 
+def test_platform_store_variables_that_only_an_env_file_supplies_refuse_to_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    for variable in ("AWS_ENDPOINT_URL_S3", "AWS_DEFAULT_REGION", "AWS_SHARED_CREDENTIALS_FILE"):
+        monkeypatch.delenv(variable, raising=False)
+    credentials = tmp_path / "credentials"
+    credentials.write_text("[default]\n", encoding="utf-8")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "AWS_ENDPOINT_URL_S3=http://store.invalid\nAWS_DEFAULT_REGION=garage\n"
+        f"AWS_SHARED_CREDENTIALS_FILE={credentials}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="AWS_|aws_"):
+        object_store_of(Settings(
+            _env_file=env_file, database_url="postgresql://x", redis_url="redis://x",
+            session_secret="s", songmaker_internal_token="t", songmaker_s3_bucket="b",
+        ))
+
+
 def test_a_store_error_that_is_not_a_missing_key_or_range_reaches_the_caller_unchanged(
     prefix: str,
 ) -> None:
