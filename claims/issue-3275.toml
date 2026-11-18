@@ -1,8 +1,0 @@
-claim_id = "84504f5b01374caa8a68d5dcd30cb35b"
-agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
-role = "builder"
-base = "d3afadcec23ad058f7737d18b7bffaffa7644057"
-branch = "claude/issue-3275-songmaker-pins-agents-v0-59-0-with-tande"
-scope = ["docker/docker-compose.test.yml", "docs", "pyproject.toml", "src/songmaker_cli", "tests/songmaker_cli", "tests/support", "uv.lock"]
-opened_commit = "d49b34e8f61e7a008dcb9a6b87b355d3fa97e8ff"
-whole_reason = "one consistent pin set: agents, tandem, logline, their host changes and the AGENT__BACKEND key across stack, settings and docs"
