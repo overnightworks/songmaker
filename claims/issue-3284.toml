@@ -1,0 +1,8 @@
+claim_id = "3eb1aa936b2c44d7b950df82c38de40c"
+agent = "Claude 0173f3be-bc50-4c2b-84fd-dda8994f4a13"
+role = "builder"
+base = "d3afadcec23ad058f7737d18b7bffaffa7644057"
+branch = "claude/issue-3284-the-cover-runner-hears-cancels-through-t"
+scope = ["src/songmaker_cli/cover_runner.py", "src/songmaker_cli/jobs_api.py", "tests/songmaker_cli"]
+opened_commit = "e93f9a968a6c112bd9af5b814694ee727de6bc80"
+whole_reason = "the cancel channel's two-process tests sit across the test package"
