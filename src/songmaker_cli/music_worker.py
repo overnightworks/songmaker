@@ -152,7 +152,10 @@ _music_worker = MusicWorker(_settings)
 
 def _music_worker_functions(worker: MusicWorker, settings: Settings):
     functions = [
-        func(logged_job(JobFunction.GENERATE, worker.generate, status_of=worker.job_status), name=JobFunction.GENERATE),
+        func(
+            logged_job(JobFunction.GENERATE, worker.generate, status_of=worker.job_status),
+            name=JobFunction.GENERATE,
+        ),
         func(
             logged_job(
                 JobFunction.LOAD_MODEL_ON_WORKER,
