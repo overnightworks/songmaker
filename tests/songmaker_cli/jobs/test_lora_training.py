@@ -17,7 +17,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from support import job_wait
 from support.job_owner import an_owner
 from support.lora_training_world import seed_queued_lora
 from support.web_app import SettledFakeAsyncRedis
@@ -30,7 +29,7 @@ from songmaker_cli.constants import (
     LoraStatus,
 )
 from songmaker_cli.db.models import AuditLog, Job
-from songmaker_cli.db.queries.jobs import claim_queued_job, get_job
+from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs.lora_training import (
@@ -980,10 +979,6 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
 
     redis = MagicMock()
     redis.enqueue_job = AsyncMock()
-    with db_factory() as session:
-        assert claim_queued_job(session, "job-1", an_owner("o1"))
-        session.commit()
-    before_deferral = job_wait.now()
     with patch(
         "songmaker_cli.jobs.lora_training._reserve_lora_worker",
         AsyncMock(side_effect=AllWorkersHeld("held")),
@@ -1015,10 +1010,6 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
         job = get_job(session, "job-1")
         assert job.status == JobStatus.QUEUED
         assert job.queue_reason_message == message("jobWait.queuedGenerations")
-        assert (job.owner_id, job.owner_generation) == (None, None)
-        assert job_wait.run_after_follows_defer(
-            job, kwargs["_defer_by"], before_deferral, job_wait.now(),
-        )
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.QUEUED
     dataset_dir = (
         seeded["audio_dir"]

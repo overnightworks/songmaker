@@ -33,7 +33,7 @@ class GeneratePayload(_Payload):
 class ScorePayload(_Payload):
     job_type: Literal[JobType.SCORE] = JobType.SCORE
     gen_id: str
-    scorers: list[str] | None
+    scorers: list[str] | None = None
 
 
 class LoraTrainingPayload(_Payload):

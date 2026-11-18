@@ -178,7 +178,9 @@ def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
         .limit(1)
         .scalar_subquery()
     )
-    claimed_id = _claim_queued_row(session, owner, Job.id == candidate_id, Job.type == JobType.COVER)
+    claimed_id = _claim_queued_row(
+        session, owner, Job.id == candidate_id, Job.type == JobType.COVER,
+    )
     return None if claimed_id is None else session.get(Job, claimed_id)
 
 

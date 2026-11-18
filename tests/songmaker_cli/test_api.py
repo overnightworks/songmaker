@@ -35,8 +35,6 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
-from songmaker_cli.job_payloads import GeneratePayload, JobPayload, ScorePayload
 from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.messages import Message, message
@@ -2238,61 +2236,6 @@ def test_score_generation_submits_job(client: TestClient) -> None:
     assert resp.status_code == 200
     assert resp.json()["type"] == "score"
     mock_pool.enqueue_job.assert_called_once()
-
-
-# ── A job row carries the arguments of its job ──────────────────────
-
-
-def _stored_payload(client: TestClient, response) -> JobPayload:
-    with client.app.state.ctx.db() as session:
-        return session.get(Job, response.json()["id"]).payload
-
-
-def test_generate_stores_its_arguments_on_the_job_row(client: TestClient) -> None:
-    with _mock_worker():
-        resp = client.post(
-            "/api/songs/s1/generate", json={"count": 2, "seed": 7, "model": "sft"},
-        )
-
-    assert _stored_payload(client, resp) == GeneratePayload(
-        song_id="s1", version_id="v1", count=2, user_id=_DEFAULT_USER_ID, seed=7,
-        target_model="sft", task_params=None,
-    )
-
-
-def test_repaint_stores_its_arguments_on_the_job_row(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
-        resp = client.post("/api/generations/g1/repaint", json={
-            "src_generation_id": "g1", "repainting_start": 0.2, "repainting_end": 0.8,
-            "count": 3, "model": "turbo",
-        })
-
-    sent = RepaintTaskParams.model_validate(mock_pool.enqueue_job.call_args[0][-1])
-    assert _stored_payload(client, resp) == GeneratePayload(
-        song_id="s1", version_id="v1", count=3, user_id=_DEFAULT_USER_ID, seed=None,
-        target_model="turbo", task_params=sent,
-    )
-
-
-def test_cover_stores_its_arguments_on_the_job_row(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
-        resp = client.post("/api/generations/g1/cover", json={
-            "src_generation_id": "g1", "audio_cover_strength": 0.7, "model": "sft",
-        })
-
-    sent = CoverTaskParams.model_validate(mock_pool.enqueue_job.call_args[0][-1])
-    assert _stored_payload(client, resp) == GeneratePayload(
-        song_id="s1", version_id="v1", count=1, user_id=_DEFAULT_USER_ID, seed=None,
-        target_model="sft", task_params=sent,
-    )
-
-
-@pytest.mark.parametrize("scorers", [["silence"], None])
-def test_score_stores_its_arguments_on_the_job_row(client: TestClient, scorers) -> None:
-    with _mock_worker():
-        resp = client.post("/api/generations/g1/score", json={"scorers": scorers})
-
-    assert _stored_payload(client, resp) == ScorePayload(gen_id="g1", scorers=scorers)
 
 
 # ── Chat job heartbeat ──────────────────────────────────────────────

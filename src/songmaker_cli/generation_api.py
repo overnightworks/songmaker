@@ -381,6 +381,23 @@ def api_last_failed_generation(
     return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
 
 
+def _repaint_task(
+    req: RepaintRequest, gen_id: str, source_wav: Path, lyrics: str, prompt: str,
+) -> RepaintTaskParams:
+    return RepaintTaskParams(
+        src_wav_path=str(source_wav),
+        src_generation_id=gen_id,
+        repainting_start=req.repainting_start,
+        repainting_end=req.repainting_end,
+        lyrics=lyrics,
+        prompt=prompt,
+        repaint_mode=req.repaint_mode,
+        repaint_strength=req.repaint_strength,
+        repaint_latent_crossfade_frames=req.repaint_latent_crossfade_frames,
+        repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
+    )
+
+
 _REPAINT_TAKE_DESCRIPTION = (
     "Queue a job that repaints a time span of one of the person's own takes as a new take. "
     "Counts against the generation limit."
@@ -420,18 +437,7 @@ async def api_repaint_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    repaint_task = RepaintTaskParams(
-        src_wav_path=str(wav_path),
-        src_generation_id=gen_id,
-        repainting_start=req.repainting_start,
-        repainting_end=req.repainting_end,
-        lyrics=lyrics,
-        prompt=prompt,
-        repaint_mode=req.repaint_mode,
-        repaint_strength=req.repaint_strength,
-        repaint_latent_crossfade_frames=req.repaint_latent_crossfade_frames,
-        repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
-    )
+    repaint_task = _repaint_task(req, gen_id, wav_path, lyrics, prompt)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
         payload=GeneratePayload(

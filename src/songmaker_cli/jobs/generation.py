@@ -661,10 +661,8 @@ def _create_auto_score_job(
     with db_factory() as session:
         if get_generation(session, gen_id) is None:
             return None
-        job = create_job(
-            session, JobType.SCORE, user_id=None, song_id=song_id,
-            payload=ScorePayload(gen_id=gen_id, scorers=None),
-        )
+        score = ScorePayload(gen_id=gen_id)
+        job = create_job(session, JobType.SCORE, user_id=None, song_id=song_id, payload=score)
         session.commit()
         return job.id
 

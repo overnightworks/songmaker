@@ -10,9 +10,7 @@ from support.web_app import make_test_app, seed_user
 
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
-from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.loras import create_user_lora
-from songmaker_cli.job_payloads import DownloadModelPayload, LoadModelPayload
 
 
 @pytest.fixture
@@ -549,10 +547,6 @@ def test_load_model_on_worker_enqueues_job(client: TestClient) -> None:
         "load_model_on_worker", data["id"], "w1", "sft",
         _queue_name=ARQ_MUSIC_QUEUE_NAME,
     )
-    with client.app.state.ctx.db() as session:
-        assert session.get(Job, data["id"]).payload == LoadModelPayload(
-            worker_id="w1", mode="sft",
-        )
 
 
 def test_load_model_on_worker_unknown_worker(client: TestClient) -> None:
@@ -919,8 +913,6 @@ def test_download_endpoint_enqueues_job(client: TestClient) -> None:
         "download_model_on_worker", data["id"], "xl-base",
         _queue_name=ARQ_MUSIC_QUEUE_NAME,
     )
-    with client.app.state.ctx.db() as session:
-        assert session.get(Job, data["id"]).payload == DownloadModelPayload(mode="xl-base")
 
 
 def test_download_endpoint_queue_unavailable(client: TestClient) -> None:

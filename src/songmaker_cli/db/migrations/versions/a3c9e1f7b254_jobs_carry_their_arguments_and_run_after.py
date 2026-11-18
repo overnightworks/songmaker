@@ -20,11 +20,17 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+NEW_COLUMN_TYPES = {
+    'payload': postgresql.JSONB(),
+    'run_after': sa.DateTime(timezone=True),
+}
+
+
 def upgrade() -> None:
-    op.add_column('jobs', sa.Column('payload', postgresql.JSONB(), nullable=True))
-    op.add_column('jobs', sa.Column('run_after', sa.DateTime(timezone=True), nullable=True))
+    for name, column_type in NEW_COLUMN_TYPES.items():
+        op.add_column('jobs', sa.Column(name, column_type, nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column('jobs', 'run_after')
-    op.drop_column('jobs', 'payload')
+    for name in reversed(NEW_COLUMN_TYPES):
+        op.drop_column('jobs', name)

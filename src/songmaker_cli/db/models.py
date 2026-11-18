@@ -223,9 +223,7 @@ class Generation(ShareMixin, Base):
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=JobStatus.COMPLETED)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        TZDateTime, nullable=True, index=True,
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True, index=True)
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
     model_mode: Mapped[str] = mapped_column(
@@ -754,9 +752,7 @@ class UserLora(Base):
     error_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        TZDateTime, nullable=True, index=True,
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True, index=True)
 
     samples: Mapped[list[UserLoraSample]] = relationship(
         back_populates="user_lora",
