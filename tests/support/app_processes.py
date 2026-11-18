@@ -190,7 +190,6 @@ class WebProcesses:
         prefix = environment_name(Settings, "agent")
         return {
             environment_name(Settings, "oidc_issuer"): stand_ins.issuer_url,
-            f"{prefix}__BACKEND": agent.backend.value,
             f"{prefix}__GATEWAY__ORIGIN": agent.gateway.origin,
             f"{prefix}__GATEWAY__KEY_FILE": str(agent.gateway.key_file),
             f"{prefix}__API_GROUP": agent.api_group,
