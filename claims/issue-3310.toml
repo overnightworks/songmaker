@@ -1,0 +1,7 @@
+claim_id = "addffcb15d454b37b7475b39ab7e965b"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "98824823e5b5f0023b895ebf2a5b1a20e902f05b"
+branch = "claude/issue-3310-pin-fleet-packages-by-git-tag-the-one-fo"
+scope = ["pyproject.toml", "uv.lock"]
+opened_commit = "70141fb17281a638dd911cbcf747a8c5ef82e8c1"
