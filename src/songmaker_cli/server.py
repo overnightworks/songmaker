@@ -64,6 +64,7 @@ from songmaker_cli.lifecycle import (
 )
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
+from songmaker_cli.middleware.preflight_client_address import PreflightClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.page_language import PageShell
@@ -263,7 +264,9 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
 def _install_request_line(app: FastAPI) -> None:
     """Add the request line outside every other layer, so a request the security layers refuse
     leaves its line too and the trace covers them. webauth's layers give it the person and the
-    client the trusted-proxy decider resolves."""
+    client the trusted-proxy decider resolves; PreflightClientAddressMiddleware sits just inside it
+    for the one request webauth's ClientAddressMiddleware never sees, a CORS preflight."""
+    app.add_middleware(PreflightClientAddressMiddleware)
     app.add_middleware(RequestLineMiddleware)
 
 
@@ -318,7 +321,7 @@ def create_app(
     mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   0. RequestLineMiddleware      -- see _install_request_line
+    #   0. RequestLineMiddleware, PreflightClientAddressMiddleware -- see _install_request_line
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
