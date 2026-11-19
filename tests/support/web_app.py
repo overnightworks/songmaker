@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -119,12 +120,27 @@ def refusal_body(key: Key, **values: str) -> dict[str, object]:
     }
 
 
+class _SettledReleasesTestClient(TestClient):
+    """A client whose request that is not entered ends only after its stream slot releases ran.
+
+    That request runs on a loop of its own, which cancels a background release not yet done."""
+
+    @contextlib.contextmanager
+    def _portal_factory(self):
+        with super()._portal_factory() as portal:
+            yield portal
+            if self.portal is None:
+                ctx = getattr(self.app.state, "ctx", None)
+                if ctx is not None:
+                    portal.call(ctx.slot_releases.drain)
+
+
 def web_client(app, **kwargs) -> TestClient:
     """Build a TestClient that reaches a songmaker web app over its real HTTPS origin.
 
     A request naming neither `Origin` nor `Sec-Fetch-Site` carries what a same-origin
     browser sends; one naming either goes out as written."""
-    client = TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    client = _SettledReleasesTestClient(app, base_url=TEST_ORIGIN, **kwargs)
     client.event_hooks = {"request": [_add_same_origin_fetch_metadata]}
     return client
 
