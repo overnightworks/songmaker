@@ -1,0 +1,8 @@
+claim_id = "3da2392603fc46f2a4006bc379260f86"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "8a953d252e48f3679acc07fb9c285bc5c1272140"
+branch = "claude/issue-3316-songmaker-takes-webauth-0-42-0-and-drops"
+scope = ["docs/architecture.md", "docs/security.md", "frontend/e2e/support", "pyproject.toml", "src/songmaker_cli", "tests", "uv.lock"]
+opened_commit = "db9526eb72a61771f78293caac68e74bf7f1880f"
+whole_reason = "the pin, the stack's order, the config that loses trusted_proxies, the deleted stopgap, every reader of resolve_client_ip and the tests and documents that name them change together"
