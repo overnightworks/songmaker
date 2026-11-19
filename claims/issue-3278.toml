@@ -1,8 +1,0 @@
-claim_id = "79d2ca54ccfa4ac59e9d7c69abd20e08"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "a078a0f08742fb87226efc66bb270b7052ba1478"
-branch = "claude/issue-3278-songmaker-s-interface-speaks-german-for"
-scope = [".github/workflows", "docs/testing.md", "frontend/e2e/README.md", "frontend/e2e/language-render.spec.ts", "frontend/e2e/offline-route-load.spec.ts", "frontend/e2e/seed-shares.ts", "frontend/e2e/seed.ts", "frontend/src/lib/catalogs", "frontend/src/lib/utils/page-words.test.ts", "frontend/src/lib/utils/page-words.ts", "frontend/src/lib/words", "frontend/src/routes/+error.svelte", "frontend/src/routes/error.test.ts", "frontend/tests", "frontend/vitest.config.ts", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "sonar-project.properties", "src/songmaker_cli/page_language.py", "src/songmaker_cli/words.py", "tests/songmaker_cli/test_page_language.py"]
-opened_commit = "f755418a34df5409b4faabdea607ec5394e41e51"
-whole_reason = "a language is one catalog plus its declaration, generated modules, the render pass job and its coverage wiring"
