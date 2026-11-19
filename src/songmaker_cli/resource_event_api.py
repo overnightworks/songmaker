@@ -41,7 +41,7 @@ from songmaker_cli.db.queries.resource_events import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
-from songmaker_cli.redis_client import release_slot_in_background, take_stream_slot
+from songmaker_cli.redis_client import take_stream_slot
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
@@ -413,7 +413,7 @@ async def _held_resource_event_generator(
         ):
             yield frame
     finally:
-        release_slot_in_background(slots, slot_token, subject="Resource stream")
+        ctx.slot_releases.release_in_background(slots, slot_token, subject="Resource stream")
 
 
 @router.get(

@@ -3256,7 +3256,6 @@ def test_stream_job_slot_is_taken_and_released_around_the_stream(
     """
     import asyncio
 
-    from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
@@ -3292,7 +3291,7 @@ def test_stream_job_slot_is_taken_and_released_around_the_stream(
 
         await app(_job_stream_scope(job_id, cookie=cookie), _receive, _send)
 
-        await redis_client.drain_slot_releases()
+        await ctx.slot_releases.drain()
 
         return response_status["status"]
 
@@ -4223,7 +4222,6 @@ def test_s8_stream_error_only_changes(client, before, after):
     """S8-C: The real SSE route emits error-only and type-only changes."""
     import asyncio
 
-    from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx = client.app.state.ctx
@@ -4265,7 +4263,7 @@ def test_s8_stream_error_only_changes(client, before, after):
         try:
             await client.app(_job_stream_scope(job_id, cookie=cookie), receive, send)
         finally:
-            await redis_client.drain_slot_releases()
+            await ctx.slot_releases.drain()
         assert status == 200
         first, second = frames[:2]
         assert _stream_fields(first) == _reported_frame(before)
@@ -4288,7 +4286,6 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
         WorkerStream,
     )
 
-    from songmaker_cli import redis_client
     from songmaker_cli.acestep_state import read_queue_depth
     from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
@@ -4367,7 +4364,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     async with asyncio.timeout(PEER_CLEANUP_DEADLINE_SECONDS):
                         await server.stop()
                 finally:
-                    await redis_client.drain_slot_releases()
+                    await ctx.slot_releases.drain()
 
     asyncio.run(drive())
 
@@ -4376,7 +4373,6 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
     """S9-B, S9-D: A real saved take survives and does not hide its own OOM partial."""
     from support.worker_http_peer import WorkerScenario, WorkerStream
 
-    from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
 
@@ -4402,7 +4398,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
                     redis=peer.redis, target_model="sft", owner=an_owner("o1"),
                 )
         finally:
-            await redis_client.drain_slot_releases()
+            await ctx.slot_releases.drain()
 
     asyncio.run(drive())
     response = client.get("/api/songs/s1/last-failed-generation")
