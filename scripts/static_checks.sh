@@ -39,7 +39,7 @@ quality() {
 gate "CI and compose pin the same Postgres and Redis images" python scripts/check_pinned_images_match.py
 gate "Every requirement is cited by a test" python scripts/check_requirement_citations.py
 gate "Ruff lint" ruff check src/ tests/
-gate "Type check and ANN401 ratchet (mypy, baseline only shrinks)" python scripts/check_type_findings.py
+gate "Type check, ANN401 and nested-Any ratchet (mypy, baseline only shrinks)" python scripts/check_type_findings.py
 gate "Test helper duplication ratchet" scripts/test_helper_ratchet.sh
 gate "No silent-fallback smell check" python scripts/check_no_silent_fallbacks.py src/
 gate "No unreferenced backend symbols" python scripts/check_dead_symbols.py
