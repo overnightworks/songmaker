@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
+from datetime import timedelta
 from time import monotonic
 from typing import Final
 
@@ -13,6 +14,7 @@ from anyio import from_thread
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from tandem.slots import Slots
 from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
@@ -50,15 +52,12 @@ from songmaker_cli.job_types import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
+from songmaker_cli.redis_client import release_slot_in_background, take_stream_slot
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
 log = logging.getLogger(__name__)
-
-REDIS_JOB_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:job-stream:user"
-REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 
 SSE_POLL_INTERVAL_SECONDS = 1
 
@@ -70,15 +69,16 @@ SSE_POLL_INTERVAL_SECONDS = 1
 # any drop and resets its attempt counter on the next message, so a forced
 # close here is a cheap, already-handled event, not a new failure mode.
 JOB_STREAM_CONNECTION_SECONDS: Final[int] = RESOURCE_EVENT_STREAM_CONNECTION_SECONDS
-JOB_STREAM_LEASE_SECONDS: Final[int] = JOB_STREAM_CONNECTION_SECONDS + 5
+JOB_STREAM_SLOT_FAMILY: Final[str] = "job-stream"
+JOB_STREAM_SLOT_LASTS: Final[timedelta] = timedelta(seconds=JOB_STREAM_CONNECTION_SECONDS + 5)
 JOB_STREAM_LIMIT_DETAIL: Final[str] = "Too many job streams"
 JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 
-# The job SSE stream fails closed, same as the resource-event stream's lease
-# (resource_event_api._acquire_stream_lease): an unenforced concurrency lease
+# The job SSE stream fails closed, same as the resource-event stream's slot
+# (resource_event_api._take_stream_slot): an unenforced concurrency cap
 # could let a runaway client open unbounded streams. Enforced by hand in
-# _acquire_job_stream_lease's try/except below; api_helpers' enforce_rate_limit
-# meters a request budget, not a concurrency lease.
+# _take_job_stream_slot's try/except below; api_helpers' enforce_rate_limit
+# meters a request budget, not a concurrency cap.
 
 
 _GET_JOB_DESCRIPTION = (
@@ -128,7 +128,7 @@ def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
     # (non-async) `def`, so FastAPI thread-offloads the whole handler body
     # (unlike an `async def`, whose body runs directly on the loop); auth
     # and the access check run as plain function calls against ONE
-    # short-lived `ctx.db()` session that closes before the lease is
+    # short-lived `ctx.db()` session that closes before the slot is
     # acquired or the StreamingResponse is even constructed -- nothing left
     # tied to the response lifecycle holds a connection.
     ctx: AppContext = request.app.state.ctx
@@ -136,9 +136,9 @@ def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
         user = authenticate_request(request, session)
         _check_job_access(session, job_id, user)
         session.commit()
-    limiter, lease_token = _acquire_job_stream_lease(request, user.id)
+    slots, slot_token = _take_job_stream_slot(request, user.id)
     return StreamingResponse(
-        _leased_job_event_generator(ctx, limiter, lease_token, user.id, job_id),
+        _held_job_event_generator(ctx, slots, slot_token, job_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -223,28 +223,22 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
         await asyncio.sleep(min(SSE_POLL_INTERVAL_SECONDS, max(deadline - monotonic(), 0)))
 
 
-def _get_job_stream_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
-    def _build() -> RedisConcurrentLeaseLimiter:
-        ctx: AppContext = request.app.state.ctx
-        settings = get_settings()
-        return RedisConcurrentLeaseLimiter(
-            ctx.redis,
-            scope_prefix=REDIS_JOB_STREAM_LEASE_USER_PREFIX,
-            global_key=REDIS_JOB_STREAM_LEASE_GLOBAL_KEY,
-            max_per_scope=settings.job_stream_lease_max_per_user,
-            max_global=settings.job_stream_lease_max_global,
-            lease_seconds=JOB_STREAM_LEASE_SECONDS,
-        )
-    return get_cached_limiter(request, "_job_stream_lease_limiter", _build)
-
-
-def _acquire_job_stream_lease(
-    request: Request,
-    user_id: str,
-) -> tuple[RedisConcurrentLeaseLimiter, str]:
+def _take_job_stream_slot(request: Request, user_id: str) -> tuple[Slots, str]:
     try:
-        limiter = _get_job_stream_lease_limiter(request)
-        token = limiter.acquire(user_id)
+        slots = get_cached_limiter(request, "_job_stream_slots", lambda: Slots(
+            request.app.state.ctx.async_redis,
+            key_prefix=REDIS_KEY_PREFIX,
+            family=JOB_STREAM_SLOT_FAMILY,
+            lasts=JOB_STREAM_SLOT_LASTS,
+        ))
+        settings = get_settings()
+        token = from_thread.run(
+            take_stream_slot,
+            slots,
+            user_id,
+            settings.job_stream_lease_max_per_user,
+            settings.job_stream_lease_max_global,
+        )
     except Exception as exc:
         log.warning("Job stream limiter unavailable")
         raise HTTPException(503, JOB_STREAM_LIMITER_UNAVAILABLE) from exc  # unread: sse
@@ -254,21 +248,20 @@ def _acquire_job_stream_lease(
             JOB_STREAM_LIMIT_DETAIL,
             headers={"Retry-After": "5"},
         )
-    return limiter, token
+    return slots, token
 
 
-async def _leased_job_event_generator(
+async def _held_job_event_generator(
     ctx: AppContext,
-    limiter: RedisConcurrentLeaseLimiter,
-    lease_token: str,
-    user_id: str,
+    slots: Slots,
+    slot_token: str,
     job_id: str,
 ) -> AsyncGenerator[str, None]:
     try:
         async for frame in _job_event_generator(ctx, job_id):
             yield frame
     finally:
-        release_lease_in_background(limiter, user_id, lease_token, subject="Job stream")
+        release_slot_in_background(slots, slot_token, subject="Job stream")
 
 
 # The jobs whose running work another web process stops when it hears their cancel.

@@ -1264,7 +1264,7 @@ ledger.
 ### Web background loops
 
 After stopping its background loops, `server._lifespan` awaits
-`redis_client.drain_lease_releases()` so pending Redis lease releases finish before
+`redis_client.drain_slot_releases()` so pending stream-slot releases finish before
 the event loop closes.
 
 `GET /api/resource-events/stream` is the authenticated read side. Its auth check and

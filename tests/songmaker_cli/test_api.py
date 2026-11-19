@@ -3245,7 +3245,7 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
         assert get_job(session, job_id).status == "running"
 
 
-def test_stream_job_lease_is_acquired_and_released_around_the_stream(
+def test_stream_job_slot_is_taken_and_released_around_the_stream(
     client: TestClient,
 ) -> None:
     """Keep one event loop alive through the response and its background lease release.
@@ -3266,18 +3266,17 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
         session.commit()
         job_id = job.id
 
-    acquire_calls: list[str] = []
-    release_calls: list[tuple[str, str]] = []
+    release_calls: list[str] = []
 
-    class _Limiter:
-        def acquire(self, user_id: str) -> str:
-            acquire_calls.append(user_id)
-            return "lease-token"
+    class _Slots:
+        async def take(self, _limits: dict[str, int]) -> str:
+            return "slot-token"
 
-        def release(self, user_id: str, token: str) -> None:
-            release_calls.append((user_id, token))
+        async def release(self, token: str) -> bool:
+            release_calls.append(token)
+            return True
 
-    client.app.state._job_stream_lease_limiter = _Limiter()
+    client.app.state._job_stream_slots = _Slots()
     cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
     app = client.app
 
@@ -3293,18 +3292,17 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
 
         await app(_job_stream_scope(job_id, cookie=cookie), _receive, _send)
 
-        await redis_client.drain_lease_releases()
+        await redis_client.drain_slot_releases()
 
         return response_status["status"]
 
     status = asyncio.run(asyncio.wait_for(_drive(), timeout=5))
 
     assert status == 200
-    assert acquire_calls == [_DEFAULT_USER_ID]
-    assert release_calls == [(_DEFAULT_USER_ID, "lease-token")]
+    assert release_calls == ["slot-token"]
 
 
-def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
+def test_stream_job_rejects_when_the_cap_is_reached(client: TestClient) -> None:
     from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
@@ -3313,18 +3311,18 @@ def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
         session.commit()
         job_id = job.id
 
-    class _ExhaustedLimiter:
-        def acquire(self, _user_id: str) -> str | None:
+    class _FullSlots:
+        async def take(self, _limits: dict[str, int]) -> None:
             return None
 
-    client.app.state._job_stream_lease_limiter = _ExhaustedLimiter()
+    client.app.state._job_stream_slots = _FullSlots()
 
     _authenticate_job_stream_client(client)
     resp = client.get(f"/api/jobs/{job_id}/stream")
     assert resp.status_code == 429
 
 
-def test_stream_job_lease_fails_closed_when_limiter_errors(client: TestClient) -> None:
+def test_stream_job_fails_closed_when_the_slot_store_errors(client: TestClient) -> None:
     from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
@@ -3333,11 +3331,11 @@ def test_stream_job_lease_fails_closed_when_limiter_errors(client: TestClient) -
         session.commit()
         job_id = job.id
 
-    class _BrokenLimiter:
-        def acquire(self, _user_id: str) -> str:
+    class _BrokenSlots:
+        async def take(self, _limits: dict[str, int]) -> str:
             raise ConnectionError("redis unavailable")
 
-    client.app.state._job_stream_lease_limiter = _BrokenLimiter()
+    client.app.state._job_stream_slots = _BrokenSlots()
 
     _authenticate_job_stream_client(client)
     resp = client.get(f"/api/jobs/{job_id}/stream")
@@ -4267,7 +4265,7 @@ def test_s8_stream_error_only_changes(client, before, after):
         try:
             await client.app(_job_stream_scope(job_id, cookie=cookie), receive, send)
         finally:
-            await redis_client.drain_lease_releases()
+            await redis_client.drain_slot_releases()
         assert status == 200
         first, second = frames[:2]
         assert _stream_fields(first) == _reported_frame(before)
@@ -4369,7 +4367,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     async with asyncio.timeout(PEER_CLEANUP_DEADLINE_SECONDS):
                         await server.stop()
                 finally:
-                    await redis_client.drain_lease_releases()
+                    await redis_client.drain_slot_releases()
 
     asyncio.run(drive())
 
@@ -4404,7 +4402,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
                     redis=peer.redis, target_model="sft", owner=an_owner("o1"),
                 )
         finally:
-            await redis_client.drain_lease_releases()
+            await redis_client.drain_slot_releases()
 
     asyncio.run(drive())
     response = client.get("/api/songs/s1/last-failed-generation")

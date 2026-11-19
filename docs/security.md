@@ -275,12 +275,12 @@ window. CI overrides it to 200 in `docker/docker-compose.test.yml`, the same sha
 `IP_RATE_LIMIT`'s own override — the e2e suite reuses one seeded user across
 every browser context, so its stream opens are additive against this one
 per-user budget in a way real production traffic across many users never is.
-Redis leases cap live streams at six per user and at most 12
+A tandem `Slots` family caps live streams at six per user and at most 12
 globally, reduced automatically when the configured DB pool has less spare capacity.
 If reserving one non-stream DB slot leaves no capacity, stream admission returns 503.
-Acquire is one Lua operation across user and global sorted sets; UUID lease members
-carry absolute expiry scores and release targets that exact token on disconnect. A
-crashed process cannot retain a slot beyond 65 seconds. Lease release runs off the async loop; the
+One take holds a slot in the person's pool and the global pool, or in neither, and never
+waits; the release on disconnect names that take's token. A
+crashed process cannot retain a slot beyond 65 seconds, and a Redis restart can overshoot a cap for as long. Slot release runs off the response path; the
 Redis client bounds connect and socket waits to two seconds, with expiry as the final
 fallback. Redis failure returns 503 rather than opening an unbounded poller.
 
@@ -306,7 +306,7 @@ closed). `api_stream_job` is now a plain (non-`async`) `def`, so FastAPI
 thread-offloads the whole handler body, exactly like
 `api_stream_resource_events`; auth (`authenticate_request(request, session)` from `auth_dependencies.py`)
 and the access check run as plain function calls against one short-lived
-`ctx.db()` session that closes before the lease is acquired or the
+`ctx.db()` session that closes before the slot is taken or the
 `StreamingResponse` is even constructed, and every poll opens and closes
 its own short-lived session the same way. No open job stream pins a pool
 connection for longer than one query, at any point in the request.
@@ -315,16 +315,17 @@ The stream has the same kind of bounded lifetime as the resource-event
 stream: a 60-second wall (`JOB_STREAM_CONNECTION_SECONDS`) after which it
 closes; the frontend's `EventSource` reconnect with backoff (`jobs.ts`)
 already handles the drop and resets its retry count on the next message. A
-Redis lease (`RedisConcurrentLeaseLimiter`, the same class the
-resource-event stream uses) caps concurrent job streams per user
+tandem `Slots` family (the same primitive the
+resource-event stream uses, one family each) caps concurrent job streams per user
 (`job_stream_lease_max_per_user`, default 10 — matches
 `max_user_active_jobs`) and globally (`job_stream_lease_max_global`,
-default 40). Unlike the resource-event lease, this one is not sized against
+default 40); a slot ends with its stream and at the latest 5 seconds after the
+wall. Unlike the resource-event cap, this one is not sized against
 spare DB pool capacity — precisely because no job stream holds a pool
 connection for its lifetime, there is no pool share to compute. It is a
 flat, hard concurrency cap against a runaway client opening far more
 streams than any real page load does. Redis failure fails closed (503),
-matching the resource-event lease.
+matching the resource-event cap.
 
 ## Security Headers
 
@@ -432,7 +433,7 @@ takes no request-scoped `Depends()` at all (neither `get_db_session` nor
 `get_current_user`, which itself takes `get_db_session` — see "Job streams" above)
 and no poll holds a DB session across a `send()` or a sleep, so a stuck slow-reader
 `send()` pins neither a pool connection nor a blocked thread — only the ASGI
-connection itself, capped in turn by the Redis lease's concurrent-stream ceiling. This
+connection itself, capped in turn by the slots' concurrent-stream ceiling. This
 remaining send-side gap is tracked by #331.
 Two earlier attempts (2026-09-01 and 2026-09-02) still had a `Depends()`-held
 session somewhere in the request -- first directly, then one level up through

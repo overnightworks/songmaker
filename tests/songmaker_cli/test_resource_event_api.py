@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from logline import RequestLineMiddleware
 from sqlalchemy import event as sqlalchemy_event
 from support.resource_event_world import _authenticated_clients, _collect, _create_event, _parse_sse
-from support.web_app import make_fake_redis, web_client
+from support.web_app import web_client
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
 import songmaker_cli.redis_client as redis_client
@@ -34,7 +34,6 @@ from songmaker_cli.db.queries.resource_events import (
 )
 from songmaker_cli.middleware.preflight_client_address import PreflightClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
-from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.resource_event_api import POSTGRES_BIGINT_MAX
 from songmaker_cli.settings import get_settings
 
@@ -671,61 +670,19 @@ def test_event_query_pages_and_rejects_non_positive_limit(tmp_path: Path, pg_fac
             list_resource_events_after(session, users["alice"], 0, limit=0)
 
 
-def test_concurrent_lease_limiter_enforces_scope_global_release_and_pruning() -> None:
-    redis = make_fake_redis()
-    limiter = RedisConcurrentLeaseLimiter(
-        redis,
-        scope_prefix=resource_api.REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
-        global_key=resource_api.REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
-        max_per_scope=2,
-        max_global=3,
-        lease_seconds=65,
-    )
-    alice_one = limiter.acquire("alice")
-    alice_two = limiter.acquire("alice")
-    assert alice_one
-    assert alice_two
-    assert alice_one != alice_two
-    assert limiter.acquire("alice") is None
-    bob_one = limiter.acquire("bob")
-    assert bob_one
-    assert limiter.acquire("carol") is None
-
-    limiter.release("alice", alice_one)
-    carol_one = limiter.acquire("carol")
-    assert carol_one
-    assert (
-        redis.zscore(
-            f"{resource_api.REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX}:alice",
-            alice_two,
-        )
-        is not None
-    )
-
-    limiter.release("carol", carol_one)
-    stale_key = f"{resource_api.REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX}:dave"
-    redis.zadd(stale_key, {"expired-token": 0})
-    redis.zadd(resource_api.REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY, {"expired-global": 0})
-    dave_one = limiter.acquire("dave")
-    assert dave_one
-    assert redis.zscore(stale_key, "expired-token") is None
-    global_key = resource_api.REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY
-    assert redis.zscore(global_key, "expired-global") is None
-
-
 def test_disconnect_releases_lease_off_loop_and_contains_failure(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     release_started = threading.Event()
     allow_release = threading.Event()
-    release_calls: list[tuple[str, str]] = []
+    release_calls: list[str] = []
 
-    class _SlowFailingLimiter:
-        def release(self, user_id: str, token: str) -> None:
-            release_calls.append((user_id, token))
+    class _SlowFailingSlots:
+        async def release(self, token: str) -> bool:
+            release_calls.append(token)
             release_started.set()
-            allow_release.wait(timeout=1)
+            await asyncio.to_thread(allow_release.wait, 1)
             raise ConnectionError("redis unavailable")
 
     async def _finite_stream(*_args, **_kwargs):
@@ -734,10 +691,10 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
     monkeypatch.setattr(resource_api, "_resource_event_generator", _finite_stream)
 
     async def _run() -> float:
-        generator = resource_api._leased_resource_event_generator(
+        generator = resource_api._held_resource_event_generator(
             SimpleNamespace(),
-            _SlowFailingLimiter(),
-            "lease-token",
+            _SlowFailingSlots(),
+            "slot-token",
             "alice-id",
             None,
             0,
@@ -750,7 +707,7 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
         close_duration = loop.time() - started_at
         assert await asyncio.to_thread(release_started.wait, 1)
         allow_release.set()
-        await redis_client.drain_lease_releases()
+        await redis_client.drain_slot_releases()
         return close_duration
 
     try:
@@ -759,8 +716,8 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
     finally:
         allow_release.set()
     assert close_duration < 0.1
-    assert release_calls == [("alice-id", "lease-token")]
-    assert "Resource stream lease release failed" in caplog.text
+    assert release_calls == ["slot-token"]
+    assert "Resource stream hold release failed" in caplog.text
 
 
 _HANG_GUARD_SECONDS = 30
@@ -800,28 +757,29 @@ def _resource_event_stream_scope(client: TestClient) -> dict:
     }
 
 
-def _stub_one_frame_stream(app, monkeypatch) -> tuple[threading.Event, list[tuple[str, str]]]:
+def _stub_one_frame_stream(app, monkeypatch) -> tuple[threading.Event, list[str]]:
     released = threading.Event()
-    release_calls: list[tuple[str, str]] = []
+    release_calls: list[str] = []
 
     class _OpenLimiter:
         def is_allowed(self, _user_id: str, *, limit: int, window_seconds: int) -> bool:
             return True
 
-    class _Limiter:
-        def acquire(self, _user_id: str) -> str:
-            return "lease-token"
+    class _Slots:
+        async def take(self, _limits: dict[str, int]) -> str:
+            return "slot-token"
 
-        def release(self, user_id: str, token: str) -> None:
-            release_calls.append((user_id, token))
+        async def release(self, token: str) -> bool:
+            release_calls.append(token)
             released.set()
+            return True
 
     async def _one_frame(*_args, **_kwargs):
         yield "event: hello\ndata: {}\n\n"
 
     monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
     app.state._resource_stream_open_limiter = _OpenLimiter()
-    app.state._resource_stream_lease_limiter = _Limiter()
+    app.state._resource_stream_slots = _Slots()
     return released, release_calls
 
 
@@ -880,7 +838,7 @@ class _OuterDeadlineArmedAtResponseStart:
 
 async def _wait_for_released_lease(released: threading.Event) -> None:
     assert await asyncio.to_thread(released.wait, 1)
-    await redis_client.drain_lease_releases()
+    await redis_client.drain_slot_releases()
 
 
 def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease(
@@ -931,7 +889,7 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
         assert body_send_started.is_set()
         assert body_send_cancelled.is_set()
         await _wait_for_released_lease(released)
-        assert release_calls == [(user_ids["alice"], "lease-token")]
+        assert release_calls == ["slot-token"]
 
     asyncio.run(_run())
 
@@ -947,19 +905,19 @@ def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
         def is_allowed(self, _user_id: str, *, limit: int, window_seconds: int) -> bool:
             return True
 
-    class _Limiter:
-        def acquire(self, _user_id: str) -> str:
-            return "lease-token"
+    class _Slots:
+        async def take(self, _limits: dict[str, int]) -> str:
+            return "slot-token"
 
-        def release(self, _user_id: str, _token: str) -> None:
-            return None
+        async def release(self, _token: str) -> bool:
+            return True
 
     async def _one_frame(*_args, **_kwargs):
         yield "event: hello\ndata: {}\n\n"
 
     monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
     app.state._resource_stream_open_limiter = _OpenLimiter()
-    app.state._resource_stream_lease_limiter = _Limiter()
+    app.state._resource_stream_slots = _Slots()
 
     async def _run() -> list[dict]:
         messages: list[dict] = []
@@ -1018,7 +976,7 @@ def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lea
         await outer_deadline.run(clients["alice"], _receive, _send)
         assert terminal_attempts == 1
         await _wait_for_released_lease(released)
-        assert release_calls == [(user_ids["alice"], "lease-token")]
+        assert release_calls == ["slot-token"]
 
     asyncio.run(_run())
 
@@ -1062,7 +1020,7 @@ def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease
         assert synthetic_send_cancelled.is_set()
         assert terminal_attempts == 1
         await _wait_for_released_lease(released)
-        assert release_calls == [(user_ids["alice"], "lease-token")]
+        assert release_calls == ["slot-token"]
 
     asyncio.run(_run())
 

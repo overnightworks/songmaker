@@ -1,9 +1,15 @@
-"""Regression coverage for background lease cleanup."""
+"""Regression coverage for the background release of stream slots."""
 
 import asyncio
 import signal
 
-from songmaker_cli.redis_client import _LEASE_RELEASE_TASKS, drain_lease_releases
+import pytest
+
+from songmaker_cli.redis_client import (
+    _SLOT_RELEASE_TASKS,
+    drain_slot_releases,
+    release_slot_in_background,
+)
 
 
 def test_drain_returns_when_completed_task_discard_callback_is_pending():
@@ -14,15 +20,15 @@ def test_drain_returns_when_completed_task_discard_callback_is_pending():
     async def drain_completed_release():
         task = asyncio.create_task(completed_release())
         await task
-        _LEASE_RELEASE_TASKS.add(task)
-        task.add_done_callback(_LEASE_RELEASE_TASKS.discard)
+        _SLOT_RELEASE_TASKS.add(task)
+        task.add_done_callback(_SLOT_RELEASE_TASKS.discard)
         try:
-            await drain_lease_releases()
+            await drain_slot_releases()
         finally:
-            _LEASE_RELEASE_TASKS.discard(task)
+            _SLOT_RELEASE_TASKS.discard(task)
 
     def deadline_expired(signum, frame):
-        raise TimeoutError("Lease drain did not return within two seconds")
+        raise TimeoutError("Slot drain did not return within two seconds")
 
     # An event-loop timeout cannot interrupt the original non-yielding spin.
     previous_handler = signal.signal(signal.SIGALRM, deadline_expired)
@@ -32,3 +38,24 @@ def test_drain_returns_when_completed_task_discard_callback_is_pending():
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous_handler)
+
+
+@pytest.mark.parametrize("outcome", [False, ConnectionError("redis unavailable")])
+def test_a_release_that_returns_false_or_raises_is_logged_and_harms_nothing(
+    outcome: bool | Exception, caplog: pytest.LogCaptureFixture,
+) -> None:
+    class _Slots:
+        async def release(self, _token: str) -> bool:
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    async def release_and_drain() -> None:
+        release_slot_in_background(_Slots(), "secret-token", subject="Test stream")
+        await drain_slot_releases()
+
+    with caplog.at_level("WARNING", logger="songmaker_cli.redis_client"):
+        asyncio.run(release_and_drain())
+
+    assert "Test stream" in caplog.text
+    assert "secret-token" not in caplog.text
