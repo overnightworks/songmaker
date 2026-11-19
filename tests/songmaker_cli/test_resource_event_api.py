@@ -32,7 +32,6 @@ from songmaker_cli.db.models import Job, ResourceEvent, ResourceEventCursor, Use
 from songmaker_cli.db.queries.resource_events import (
     list_resource_events_after,
 )
-from songmaker_cli.middleware.client_address import ClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
 from songmaker_cli.resource_event_api import POSTGRES_BIGINT_MAX
@@ -774,10 +773,7 @@ def _set_resource_stream_deadline(app, deadline_seconds: float) -> None:
     ]
     assert len(deadline_middleware) == 1
     outside_deadline = app.user_middleware[: app.user_middleware.index(deadline_middleware[0])]
-    assert {middleware.cls for middleware in outside_deadline} == {
-        RequestLineMiddleware,
-        ClientAddressMiddleware,
-    }
+    assert {middleware.cls for middleware in outside_deadline} == {RequestLineMiddleware}
     deadline_middleware[0].kwargs["deadline_seconds"] = deadline_seconds
     app.middleware_stack = app.build_middleware_stack()
 

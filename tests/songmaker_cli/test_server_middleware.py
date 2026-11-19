@@ -29,6 +29,7 @@ from support.web_app import (
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.middleware import (
     BodySizeLimitMiddleware,
+    ClientAddressMiddleware,
     CsrfOriginMiddleware,
     IpRateLimitMiddleware,
     PathRefusalMiddleware,
@@ -37,7 +38,6 @@ from webauth.middleware import (
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
-from songmaker_cli.middleware.client_address import ClientAddressMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
@@ -293,11 +293,11 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
 
     assert _middleware_classes(client) == [
         RequestLineMiddleware,
-        ClientAddressMiddleware,
         ResourceStreamDeadlineMiddleware,
         SelectiveGZipMiddleware,
         CORSMiddleware,
         SecurityHeadersMiddleware,
+        ClientAddressMiddleware,
         PathRefusalMiddleware,
         BodySizeLimitMiddleware,
         IpRateLimitMiddleware,

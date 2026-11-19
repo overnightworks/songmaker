@@ -62,7 +62,6 @@ from songmaker_cli.lifecycle import (
     session_cleanup_loop,
     stale_job_reaper_loop,
 )
-from songmaker_cli.middleware.client_address import ClientAddressMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
@@ -263,9 +262,8 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
 
 def _install_request_line(app: FastAPI) -> None:
     """Add the request line outside every other layer, so a request the security layers refuse
-    leaves its line too and the trace covers them; ClientAddressMiddleware sits just inside it
-    and names the client the trusted-proxy decider resolves."""
-    app.add_middleware(ClientAddressMiddleware)
+    leaves its line too and the trace covers them. webauth's layers give it the person and the
+    client the trusted-proxy decider resolves."""
     app.add_middleware(RequestLineMiddleware)
 
 
@@ -320,19 +318,20 @@ def create_app(
     mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   0. RequestLineMiddleware, ClientAddressMiddleware -- see _install_request_line
+    #   0. RequestLineMiddleware      -- see _install_request_line
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
-    #   5. PathRefusalMiddleware      -- refuse a route path with a control character
-    #   6. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   7. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   8. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
+    #   5. ClientAddressMiddleware    -- webauth's: the request line's ip, ahead of every refusal
+    #   6. PathRefusalMiddleware      -- refuse a route path with a control character
+    #   7. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   8. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   9. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
     #                                    resource token skips CSRF
-    #   9. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #  10. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  11. HttpMetricsMiddleware      -- count the requests that passed the security checks
+    #  10. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #  11. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  12. HttpMetricsMiddleware      -- count the requests that passed the security checks
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the outermost security layer) and outside everything else, on purpose:
