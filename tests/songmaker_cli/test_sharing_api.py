@@ -23,9 +23,9 @@ from support.web_app import (
     make_test_app,
     seed_session,
     seed_user,
+    trust_proxies,
     web_client,
 )
-from webauth.proxies import TrustedProxies
 
 from songmaker_cli.api_models.playlists import SharedPlaylistEntryResponse
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
@@ -1958,9 +1958,7 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
 
 
 @contextmanager
-def _shared_app_with_small_budget(
-    client: TestClient, tmp_path: Path, trusted_proxies: TrustedProxies = TrustedProxies(),
-):
+def _shared_app_with_small_budget(client: TestClient, tmp_path: Path, trusted_proxies: str):
     """An app of its own, budget 2, so one test's listeners cannot spill into
     another's. The limiter is built at app creation from SHARING_RATE_LIMIT."""
     import songmaker_cli.constants as consts
@@ -1976,9 +1974,11 @@ def _shared_app_with_small_budget(
             data_dir=data_dir,
             signing_key=TEST_SECRET,
             redis=make_fake_redis(),
-            trusted_proxies=trusted_proxies, async_redis=make_fake_async_redis(),
+            async_redis=make_fake_async_redis(),
         )
-        yield create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
+        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
+        trust_proxies(app, trusted_proxies)
+        yield app
     finally:
         consts.SHARING_RATE_LIMIT = old_limit
 
@@ -2014,9 +2014,7 @@ def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path, pg_fac
     client, _ = _make_sharing_app(tmp_path, pg_factory)
     slug = _shared_album_slug(client)
 
-    with _shared_app_with_small_budget(
-        client, tmp_path, TrustedProxies.parse(_PROXY_NETWORK),
-    ) as app:
+    with _shared_app_with_small_budget(client, tmp_path, _PROXY_NETWORK) as app:
         listener = web_client(app, cookies={}, client=(_TRUSTED_PEER, 55000))
 
         def _listen(forwarded_for: str) -> int:

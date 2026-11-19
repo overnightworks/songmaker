@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from logline import RequestLineMiddleware, configure, set_route
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from webauth.middleware import install_web_auth_middleware
+from webauth.middleware import ClientAddressMiddleware, install_web_auth_middleware
 
 from songmaker_cli.agent.mcp import (
     build_protected_resource,
@@ -64,7 +64,6 @@ from songmaker_cli.lifecycle import (
 )
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
-from songmaker_cli.middleware.preflight_client_address import PreflightClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.page_language import PageShell
@@ -261,12 +260,12 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
     return exact_paths
 
 
-def _install_request_line(app: FastAPI) -> None:
+def _install_request_line(app: FastAPI, settings: Settings) -> None:
     """Add the request line outside every other layer, so a request the security layers refuse
-    leaves its line too and the trace covers them. webauth's layers give it the person and the
-    client the trusted-proxy decider resolves; PreflightClientAddressMiddleware sits just inside it
-    for the one request webauth's ClientAddressMiddleware never sees, a CORS preflight."""
-    app.add_middleware(PreflightClientAddressMiddleware)
+    leaves its line too and the trace covers them. webauth's layers give it the person; the
+    client address writer sits immediately inside it and outside CORS, so a preflight CORS answers
+    itself, and every refusal, names the client the trusted proxies resolve."""
+    app.add_middleware(ClientAddressMiddleware, trusted_proxies=parse_trusted_proxies(settings))
     app.add_middleware(RequestLineMiddleware)
 
 
@@ -321,19 +320,18 @@ def create_app(
     mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   0. RequestLineMiddleware, PreflightClientAddressMiddleware -- see _install_request_line
+    #   0. RequestLineMiddleware, ClientAddressMiddleware -- see _install_request_line
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
-    #   5. ClientAddressMiddleware    -- webauth's: the request line's ip, ahead of every refusal
-    #   6. PathRefusalMiddleware      -- refuse a route path with a control character
-    #   7. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   8. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   9. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified token skips CSRF
-    #  10. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #  11. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  12. HttpMetricsMiddleware      -- count the requests that passed the security checks
+    #   5. PathRefusalMiddleware      -- refuse a route path with a control character
+    #   6. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   7. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   8. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified token skips CSRF
+    #   9. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #  10. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  11. HttpMetricsMiddleware      -- count the requests that passed the security checks
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the outermost security layer) and outside everything else, on purpose:
@@ -372,7 +370,7 @@ def create_app(
         compresslevel=GZIP_COMPRESS_LEVEL,
     )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
-    _install_request_line(app)
+    _install_request_line(app, settings)
 
     # Starlette builds the middleware stack at the first request, so the routes added here
     # still sit behind the whole block above.
@@ -444,7 +442,6 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         redis=redis_instance,
         async_redis=create_async_redis(settings.redis_url),
         object_store=object_store,
-        trusted_proxies=parse_trusted_proxies(settings),
     )
 
 
@@ -502,8 +499,8 @@ def run_server(
     # proxy_headers=False: uvicorn's own X-Forwarded-For/-Proto handling would
     # rewrite the peer address and the scheme before any application code sees
     # them, from *any* peer unless forwarded_allow_ips is kept in sync with
-    # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (see
-    # auth.resolve_client_ip), so uvicorn must hand over the connection as it is.
+    # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (webauth's
+    # ClientAddressMiddleware applies it), so uvicorn must hand over the connection as it is.
     uvicorn.run(
         app,
         host=settings.host,

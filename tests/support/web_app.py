@@ -17,7 +17,9 @@ from support.object_store import an_object_store
 from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
 from tandem.testing import settle_epoch
+from webauth.middleware import ClientAddressMiddleware
 from webauth.ports import AuthenticatedUser
+from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
@@ -267,6 +269,13 @@ def make_test_app(
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})
     return client, factory
+
+
+def trust_proxies(app: FastAPI, networks: str) -> None:
+    """Serve ``app`` as if it sat behind ``networks``: the client address writer trusts them."""
+    (writer,) = (layer for layer in app.user_middleware if layer.cls is ClientAddressMiddleware)
+    writer.kwargs["trusted_proxies"] = TrustedProxies.parse(networks)
+    app.middleware_stack = app.build_middleware_stack()
 
 
 def make_authenticated_user(
