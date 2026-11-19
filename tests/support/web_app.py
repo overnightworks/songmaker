@@ -72,8 +72,11 @@ class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
         return fakeredis.FakeAsyncRedis(server=self.server)
 
     async def execute_command(self, *args, **options):
-        """Run the command, then free the idle connection: a request of a ``TestClient`` that is
-        not entered runs on a loop of its own, and a fake's connection serves only its first."""
+        """Run the command on a fresh connection, then free the idle one: a request of a
+        ``TestClient`` that is not entered runs on a loop of its own, a fake's connection serves
+        only its first, and a background task that the ending loop cancelled can leave its
+        connection idle without having freed it."""
+        await self.connection_pool.disconnect(inuse_connections=False)
         try:
             return await super().execute_command(*args, **options)
         finally:
