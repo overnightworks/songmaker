@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 from fastapi import HTTPException, Request
-from webauth.proxies import resolve_client_ip
+from webauth.proxies import client_address
 from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
@@ -61,7 +61,7 @@ def check_rate_limit(
 ) -> None:
     try:
         enforce_rate_limit(
-            limiter, resolve_client_ip(request),
+            limiter, client_address(request),
             policy=_SHARED_LIMITER_FAILURE_POLICY,
             limit=limit,
             window_seconds=window_seconds,

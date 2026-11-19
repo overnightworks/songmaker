@@ -37,7 +37,7 @@ from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
 from webauth.ports import AccountKind
 
-from songmaker_cli.app_context import AppContext, build_web_auth_config, parse_trusted_proxies
+from songmaker_cli.app_context import AppContext, build_web_auth_config
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore, DatabaseSubjectUserStore
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.queries.auth import get_user_by_username
@@ -64,7 +64,6 @@ def _auth_config(session_factory, async_redis: AsyncRedis) -> WebAuthConfig:
         redis=create_redis(settings.redis_url),
         async_redis=async_redis,
         object_store=object_store_of(settings),
-        trusted_proxies=parse_trusted_proxies(settings),
     )
     return build_web_auth_config(context, settings)
 
