@@ -17,12 +17,9 @@ from support.resource_event_world import _authenticated_clients, _collect, _crea
 from support.web_app import web_client
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
+import songmaker_cli.redis_client as redis_client
 import songmaker_cli.resource_event_api as resource_api
-from songmaker_cli.api_models import (
-    GenerationCreatedResourceEvent,
-    ResourceHelloEvent,
-)
-from songmaker_cli.app_context import AppContext
+from songmaker_cli.api_models import GenerationCreatedResourceEvent, ResourceHelloEvent
 from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
     RESOURCE_EVENT_STREAM_PATH,
@@ -34,7 +31,6 @@ from songmaker_cli.db.queries.resource_events import (
 )
 from songmaker_cli.middleware.preflight_client_address import PreflightClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
-from songmaker_cli.redis_client import SlotReleases
 from songmaker_cli.resource_event_api import POSTGRES_BIGINT_MAX
 from songmaker_cli.settings import get_settings
 
@@ -692,7 +688,7 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
     monkeypatch.setattr(resource_api, "_resource_event_generator", _finite_stream)
 
     async def _run() -> float:
-        ctx = SimpleNamespace(slot_releases=SlotReleases())
+        ctx = SimpleNamespace(slot_releases=redis_client.SlotReleases())
         generator = resource_api._held_resource_event_generator(
             ctx,
             _SlowFailingSlots(),
@@ -838,9 +834,9 @@ class _OuterDeadlineArmedAtResponseStart:
         return self._outer_delay
 
 
-async def _wait_for_released_lease(ctx: AppContext, released: threading.Event) -> None:
+async def _wait_for_released_lease(releases, released: threading.Event) -> None:
     assert await asyncio.to_thread(released.wait, 1)
-    await ctx.slot_releases.drain()
+    await releases.drain()
 
 
 def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease(
@@ -890,7 +886,7 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
         ] == [{"type": "http.response.body", "body": b"", "more_body": False}]
         assert body_send_started.is_set()
         assert body_send_cancelled.is_set()
-        await _wait_for_released_lease(clients["alice"].app.state.ctx, released)
+        await _wait_for_released_lease(clients["alice"].app.state.ctx.slot_releases, released)
         assert release_calls == ["slot-token"]
 
     asyncio.run(_run())
@@ -977,7 +973,7 @@ def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lea
 
         await outer_deadline.run(clients["alice"], _receive, _send)
         assert terminal_attempts == 1
-        await _wait_for_released_lease(clients["alice"].app.state.ctx, released)
+        await _wait_for_released_lease(clients["alice"].app.state.ctx.slot_releases, released)
         assert release_calls == ["slot-token"]
 
     asyncio.run(_run())
@@ -1021,7 +1017,7 @@ def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease
         assert outer_deadline.armed_delay == configured_deadline_seconds
         assert synthetic_send_cancelled.is_set()
         assert terminal_attempts == 1
-        await _wait_for_released_lease(clients["alice"].app.state.ctx, released)
+        await _wait_for_released_lease(clients["alice"].app.state.ctx.slot_releases, released)
         assert release_calls == ["slot-token"]
 
     asyncio.run(_run())

@@ -52,7 +52,7 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1180
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1839
 "tests/songmaker_cli/test_admin_api.py" = 999
-"tests/songmaker_cli/test_api.py" = 4546
+"tests/songmaker_cli/test_api.py" = 4542
 "tests/songmaker_cli/test_db.py" = 2429
 "tests/songmaker_cli/test_db_postgresql.py" = 831
 "tests/songmaker_cli/test_jobs.py" = 3052
@@ -60,7 +60,7 @@
 "tests/songmaker_cli/test_lora_api.py" = 1170
 "tests/songmaker_cli/test_playlist_api.py" = 1100
 "tests/songmaker_cli/test_queue_streams.py" = 2196
-"tests/songmaker_cli/test_resource_event_api.py" = 1112
+"tests/songmaker_cli/test_resource_event_api.py" = 1110
 "tests/songmaker_cli/test_scheduler.py" = 1279
 "tests/songmaker_cli/test_server.py" = 1817
 "tests/songmaker_cli/test_sharing_api.py" = 2484
@@ -139,7 +139,7 @@
 "test_list_workers_last_error_transport" = 60
 
 [function_lines."tests/songmaker_cli/test_api.py"]
-"test_s8_live_stream_during_second_take" = 94
+"test_s8_live_stream_during_second_take" = 93
 "test_s8_live_stream_during_second_take.drive" = 68
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
 
