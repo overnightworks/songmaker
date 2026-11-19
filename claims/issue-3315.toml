@@ -3,6 +3,6 @@ agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
 role = "builder"
 base = "98824823e5b5f0023b895ebf2a5b1a20e902f05b"
 branch = "claude/issue-3315-a-pending-slot-release-of-another-event"
-scope = ["src/songmaker_cli/app_context.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/server.py", "tests/songmaker_cli", "tests/support"]
+scope = ["docs/architecture.md", "src/songmaker_cli/app_context.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/server.py", "tests/songmaker_cli", "tests/support"]
 opened_commit = "273eb0b746949df4fc84579d1636d499c0cbae48"
 whole_reason = "the task set's owner, its two callers, the lifespan drain and their tests change together"
