@@ -1,8 +1,0 @@
-claim_id = "03224c29553945159c05ac09d13f2dbe"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "98824823e5b5f0023b895ebf2a5b1a20e902f05b"
-branch = "claude/issue-3292-a-new-nested-dict-str-any-in-src-is-red"
-scope = ["docs/testing.md", "scripts/check_type_findings.py", "scripts/check_type_findings.txt", "scripts/static_checks.sh", "tests/scripts/test_check_type_findings.py"]
-opened_commit = "c9c0572f12948c94afda555e8595f31ea4d8b831"
-whole_reason = "the check, its baseline, its test, the gate label and the document that names the gate change together"
