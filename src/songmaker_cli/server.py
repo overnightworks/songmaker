@@ -327,8 +327,7 @@ def create_app(
     #   6. PathRefusalMiddleware      -- refuse a route path with a control character
     #   7. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   8. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   9. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
-    #                                    resource token skips CSRF
+    #   9. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified token skips CSRF
     #  10. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
     #  11. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
     #  12. HttpMetricsMiddleware      -- count the requests that passed the security checks
