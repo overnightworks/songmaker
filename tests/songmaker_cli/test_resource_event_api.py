@@ -1052,14 +1052,14 @@ def test_per_user_open_rate_is_bounded(tmp_path, monkeypatch: pytest.MonkeyPatch
     clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     open_limit = get_settings().resource_event_stream_open_limit
-    monkeypatch.setattr(resource_api, "_resource_stream_caps", lambda: (open_limit + 1,) * 2)
-    get = clients["alice"].get
-    statuses = [get("/api/resource-events/stream").status_code for _ in range(open_limit + 1)]
-    assert statuses == [200] * open_limit + [429]
+    responses = [clients["alice"].get("/api/resource-events/stream") for _ in range(open_limit + 1)]
+    assert all(response.status_code == 200 for response in responses[:-1])
+    assert responses[-1].status_code == 429
 
 
 def test_per_user_open_rate_reads_settings_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     """The limit is a settings field, not the constant it used to be
     (issue #294): a `RESOURCE_EVENT_STREAM_OPEN_LIMIT` env override, the
