@@ -1,0 +1,8 @@
+claim_id = "c94930fe085549508ea63bbf7e5a61d3"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "93265e823c6f095762b2e01ffc5353b49b32a920"
+branch = "claude/issue-3283-songmaker-takes-webauth-0-41-0"
+scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/auth_dependencies.py", "src/songmaker_cli/middleware", "src/songmaker_cli/server.py", "tests/songmaker_cli", "uv.lock"]
+opened_commit = "b0c0f3a79fe98793c59e042d5d24b4e8d09d3ba5"
+whole_reason = "the pin and the writers it makes redundant change together, so no field has two owners"
