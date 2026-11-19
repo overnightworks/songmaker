@@ -52,7 +52,7 @@ from songmaker_cli.job_types import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.redis_client import release_slot_in_background, take_stream_slot
+from songmaker_cli.redis_client import take_stream_slot
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
@@ -261,7 +261,7 @@ async def _held_job_event_generator(
         async for frame in _job_event_generator(ctx, job_id):
             yield frame
     finally:
-        release_slot_in_background(slots, slot_token, subject="Job stream")
+        ctx.slot_releases.release_in_background(slots, slot_token, subject="Job stream")
 
 
 # The jobs whose running work another web process stops when it hears their cancel.

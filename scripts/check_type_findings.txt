@@ -1,4 +1,7 @@
+src/acestep_worker/heartbeat.py :: nested-any :: dict[str, Any] in `module`
+src/acestep_worker/models.py :: nested-any :: dict[str, Any] in `WorkerTaskEvent`
 src/acestep_worker/registry_client.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `sleeper`
+src/acestep_worker/registry_client.py :: nested-any :: dict[str, Any] in `WorkerRegistration.to_payload`
 src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `_acquire_training_model`
 src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `_lokr_training_config`
 src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `_stage_lora_dataset`
@@ -13,7 +16,9 @@ src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing
 src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `loaded`
 src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `loaded`
 src/acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `scan_result`
+src/acestep_worker/wrapper.py :: nested-any :: dict[str, Any] in `build_state_payload`
 src/songmaker_cli/acestep_state.py :: misc :: Incompatible types in "await" (actual type "Awaitable[str] | str", expected type "Awaitable[Any]")
+src/songmaker_cli/acestep_state.py :: nested-any :: dict[str, Any] in `read_worker_state`
 src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "cancel"
 src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "cancelling"
 src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "uncancel"
@@ -118,10 +123,15 @@ src/songmaker_cli/conversation_api.py :: pydantic-orm :: "ConversationResponse" 
 src/songmaker_cli/covers.py :: arg-type :: Argument 2 to "save" of "Image" has incompatible type "**dict[str, object]"; expected "str | None"
 src/songmaker_cli/covers.py :: arg-type :: Argument 2 to "save" of "Image" has incompatible type "**dict[str, object]"; expected "str | None"
 src/songmaker_cli/covers.py :: arg-type :: Argument 2 to "save" of "Image" has incompatible type "**dict[str, object]"; expected "str | None"
+src/songmaker_cli/cowriter/tools.py :: nested-any :: dict[str, Any] in `CowriterTool`
+src/songmaker_cli/cowriter/tools.py :: nested-any :: dict[str, Any] in `_object`
+src/songmaker_cli/cowriter/tools.py :: nested-any :: dict[str, Any] in `_object`
+src/songmaker_cli/cowriter/tools.py :: nested-any :: dict[str, Any] in `execute_cowriter_tool`
 src/songmaker_cli/cowriter/turn_context.py :: union-attr :: Item "None" of "Album | None" has no attribute "id"
 src/songmaker_cli/cowriter/turn_context.py :: union-attr :: Item "None" of "Album | None" has no attribute "id"
 src/songmaker_cli/cowriter/turn_context.py :: union-attr :: Item "None" of "Album | None" has no attribute "title"
 src/songmaker_cli/db/message_column.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `value`
+src/songmaker_cli/db/message_column.py :: nested-any :: dict[str, Any] in `MessageColumn.process_bind_param`
 src/songmaker_cli/db/queries/jobs.py :: arg-type :: Argument 1 to "JobOwnerStamp" has incompatible type "str | None"; expected "str"
 src/songmaker_cli/db/queries/jobs.py :: assignment :: Incompatible types in assignment (expression has type "ColumnElement[bool]", variable has type "BinaryExpression[bool]")
 src/songmaker_cli/db/queries/jobs.py :: attr-defined :: "Result[*tuple[Any, ...]]" has no attribute "rowcount"
@@ -152,6 +162,8 @@ src/songmaker_cli/jobs/generation.py :: ANN401 :: Dynamically typed expressions 
 src/songmaker_cli/jobs/generation.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `**overrides`
 src/songmaker_cli/jobs/generation.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `**overrides`
 src/songmaker_cli/jobs/generation.py :: arg-type :: Argument "base_params" to "GenerationContext" has incompatible type "BaseGenerationParams"; expected "dict[Any, Any]"
+src/songmaker_cli/jobs/generation.py :: nested-any :: dict[str, Any] in `_apply_cover_overrides`
+src/songmaker_cli/jobs/generation.py :: nested-any :: dict[str, Any] in `_apply_repaint_overrides`
 src/songmaker_cli/jobs/lora_training.py :: arg-type :: Argument 1 to "_iterate_task_events" has incompatible type "_WorkerHandle"; expected "_PickedWorker"
 src/songmaker_cli/jobs/lora_training.py :: attr-defined :: "Redis" has no attribute "enqueue_job"
 src/songmaker_cli/jobs_api.py :: arg-type :: Argument 2 to "can_access_album" has incompatible type "AuthenticatedUser"; expected "Actor"
