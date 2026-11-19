@@ -368,14 +368,14 @@ LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
 
 
 class LimiterFailurePolicy(StrEnum):
-    """Named fallback for when a rate limiter's Redis backend errors.
+    """Named fallback for when a rate/lease limiter's Redis backend errors.
 
     FAIL_OPEN lets the request through — used for public, unauthenticated
     endpoints (album/song/playlist share pages) where blocking real traffic
     on a transient Redis outage outweighs the abuse risk. FAIL_CLOSED
     rejects the request with 503 — used where an unenforced limit could let
     resource exhaustion through unbounded (queue-stream creation, the
-    resource-event SSE stream's connection slot).
+    resource-event SSE stream's connection lease).
     """
 
     FAIL_OPEN = "fail_open"
