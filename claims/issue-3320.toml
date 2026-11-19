@@ -1,0 +1,8 @@
+claim_id = "a6e928a09a9a42eca130bb1c7fea57d9"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "9c61b63e1311ad918972e3d4d42e2e8335b28a27"
+branch = "claude/issue-3320-migration-tests-state-the-single-chain-a"
+scope = ["tests/songmaker_cli/db", "tests/support"]
+opened_commit = "342a247e4a34f66c8187aa741f010bae1c9e1c6e"
+whole_reason = "the per-revision assertions sit in fifteen modules of one directory and the shared contract in the support directory"
