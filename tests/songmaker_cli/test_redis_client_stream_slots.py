@@ -14,8 +14,6 @@ from songmaker_cli.settings import get_settings
 
 JOB_STREAM_PER_PERSON_CAP = 2
 JOB_STREAM_GLOBAL_CAP = 3
-RESOURCE_STREAM_PER_PERSON_CAP = 6
-RESOURCE_STREAM_GLOBAL_CAP = 12
 
 
 class _AlwaysOpen:
@@ -30,7 +28,7 @@ def stream_family(
     """The family's endpoint-side take with its per-person and global cap.
 
     The job streams' caps come in through configuration; the resource streams run
-    with their production caps.
+    with the caps their module declares.
     """
     if request.param == "job-stream":
         monkeypatch.setenv("JOB_STREAM_LEASE_MAX_PER_USER", str(JOB_STREAM_PER_PERSON_CAP))
@@ -39,8 +37,8 @@ def stream_family(
         return jobs_api._take_job_stream_slot, JOB_STREAM_PER_PERSON_CAP, JOB_STREAM_GLOBAL_CAP
     return (
         resource_event_api._take_stream_slot,
-        RESOURCE_STREAM_PER_PERSON_CAP,
-        RESOURCE_STREAM_GLOBAL_CAP,
+        resource_event_api.RESOURCE_EVENT_STREAM_MAX_PER_USER,
+        resource_event_api.RESOURCE_EVENT_STREAM_MAX_GLOBAL,
     )
 
 
