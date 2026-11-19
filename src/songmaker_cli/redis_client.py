@@ -172,7 +172,7 @@ async def take_stream_slot(
 ) -> str | None:
     """Hold one slot in the person's pool and in the global pool, or in neither.
 
-    Returns the token for ``release_slot_in_background``, or None when a pool is at its cap.
+    Returns the token for ``SlotReleases.release_in_background``, or None when a pool is at its cap.
     """
     return await slots.take({GLOBAL_SLOT_POOL: global_cap, f"person:{user_id}": per_person_cap})
 
