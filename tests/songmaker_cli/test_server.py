@@ -678,8 +678,8 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
     assert mock_run.call_args.kwargs["proxy_headers"] is False
 
 
-def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, pg_factory) -> None:
-    from songmaker_cli.redis_client import release_lease_in_background
+def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg_factory) -> None:
+    from songmaker_cli.redis_client import release_slot_in_background
     from songmaker_cli.server import _lifespan
 
     mock_app = MagicMock(**{"state.mcp_front": None})
@@ -691,11 +691,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, p
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
 
-    released_leases = []
-
-    class Limiter:
-        def release(self, user_id: str, token: str) -> None:
-            released_leases.append((user_id, token))
+    slots = MagicMock(release=AsyncMock(return_value=True))
 
     async def _run():
         cleanup_started = asyncio.Event()
@@ -706,7 +702,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, p
             try:
                 await asyncio.Future()
             except asyncio.CancelledError:
-                release_lease_in_background(Limiter(), "alice", "lease-token", subject="Test")
+                release_slot_in_background(slots, "slot-token", subject="Test")
                 cleanup_cancelled.set()
                 raise
 
@@ -732,7 +728,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, p
         cleanup.assert_called_once_with(mock_app.state.ctx)
         cleanup_loop.assert_awaited_once_with(mock_app)
         assert cleanup_cancelled.is_set()
-        assert released_leases == [("alice", "lease-token")]
+        slots.release.assert_awaited_once_with("slot-token")
 
     asyncio.run(_run())
 

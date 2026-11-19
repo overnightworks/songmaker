@@ -7,12 +7,15 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from datetime import timedelta
 from time import monotonic
 from typing import Annotated, Final
 
+from anyio import from_thread
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from tandem.slots import Slots
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.agent.mcp import Exclusion, exclude_route
@@ -38,7 +41,7 @@ from songmaker_cli.db.queries.resource_events import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
-from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
+from songmaker_cli.redis_client import release_slot_in_background, take_stream_slot
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
@@ -53,7 +56,8 @@ RESOURCE_EVENT_STREAM_POLL_SECONDS: Final[float] = 1.0
 RESOURCE_EVENT_STREAM_PAGE_SIZE: Final[int] = 100
 RESOURCE_EVENT_STREAM_MAX_PER_USER: Final[int] = 6
 RESOURCE_EVENT_STREAM_MAX_GLOBAL: Final[int] = 12
-RESOURCE_EVENT_STREAM_LEASE_SECONDS: Final[int] = 65
+RESOURCE_EVENT_STREAM_SLOT_FAMILY: Final[str] = "resource-stream"
+RESOURCE_EVENT_STREAM_SLOT_LASTS: Final[timedelta] = timedelta(seconds=65)
 RESOURCE_EVENT_STREAM_LIMIT_DETAIL: Final[str] = "Too many resource streams"
 RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Resource stream limiter unavailable"
 RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE: Final[str] = (
@@ -62,8 +66,6 @@ RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE: Final[str] = (
 LAST_EVENT_ID_INVALID: Final[str] = "Last-Event-ID must be a non-negative decimal"
 POSTGRES_BIGINT_MAX: Final[int] = (1 << 63) - 1
 REDIS_RL_RESOURCE_STREAM_PREFIX: Final[str] = "rl:resource-stream"
-REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX: Final[str] = f"{REDIS_KEY_PREFIX}:resource-stream:user"
-REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY: Final[str] = f"{REDIS_KEY_PREFIX}:resource-stream:global"
 LAST_EVENT_ID_OUT_OF_RANGE: Final[str] = "Last-Event-ID is beyond the event sequence range"
 
 
@@ -342,32 +344,19 @@ def _get_open_limiter(request: Request) -> RedisRateLimitBackend:
     return get_cached_limiter(request, "_resource_stream_open_limiter", _build)
 
 
-def _get_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
-    def _build() -> RedisConcurrentLeaseLimiter:
-        ctx: AppContext = request.app.state.ctx
-        settings = get_settings()
-        pool_capacity = settings.database_pool_size + settings.database_max_overflow
-        spare_capacity = pool_capacity - 1
-        if spare_capacity <= 0:
-            raise HTTPException(503, RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE)  # unread: sse
-        global_limit = min(RESOURCE_EVENT_STREAM_MAX_GLOBAL, spare_capacity)
-        return RedisConcurrentLeaseLimiter(
-            ctx.redis,
-            scope_prefix=REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
-            global_key=REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
-            max_per_scope=min(RESOURCE_EVENT_STREAM_MAX_PER_USER, global_limit),
-            max_global=global_limit,
-            lease_seconds=RESOURCE_EVENT_STREAM_LEASE_SECONDS,
-        )
-
-    return get_cached_limiter(request, "_resource_stream_lease_limiter", _build)
+def _resource_stream_caps() -> tuple[int, int]:
+    """The per-person and the global cap, never above the spare database connections."""
+    settings = get_settings()
+    pool_capacity = settings.database_pool_size + settings.database_max_overflow
+    spare_capacity = pool_capacity - 1
+    if spare_capacity <= 0:
+        raise HTTPException(503, RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE)  # unread: sse
+    global_cap = min(RESOURCE_EVENT_STREAM_MAX_GLOBAL, spare_capacity)
+    return min(RESOURCE_EVENT_STREAM_MAX_PER_USER, global_cap), global_cap
 
 
-def _acquire_stream_lease(
-    request: Request,
-    user_id: str,
-) -> tuple[RedisConcurrentLeaseLimiter, str]:
-    """Check the open-connection rate limit, then acquire a lease.
+def _take_stream_slot(request: Request, user_id: str) -> tuple[Slots, str]:
+    """Check the open-connection rate limit, then take a slot.
 
     Fails closed: either the limiter itself erroring out or saying no
     rejects the request rather than letting an unmetered stream through.
@@ -383,8 +372,14 @@ def _acquire_stream_lease(
                 RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
                 headers={"Retry-After": str(RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS)},
             )
-        limiter = _get_lease_limiter(request)
-        token = limiter.acquire(user_id)
+        per_person_cap, global_cap = _resource_stream_caps()
+        slots = get_cached_limiter(request, "_resource_stream_slots", lambda: Slots(
+            request.app.state.ctx.async_redis,
+            key_prefix=REDIS_KEY_PREFIX,
+            family=RESOURCE_EVENT_STREAM_SLOT_FAMILY,
+            lasts=RESOURCE_EVENT_STREAM_SLOT_LASTS,
+        ))
+        token = from_thread.run(take_stream_slot, slots, user_id, per_person_cap, global_cap)
     except HTTPException:
         raise
     except Exception as exc:
@@ -396,13 +391,13 @@ def _acquire_stream_lease(
             RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
             headers={"Retry-After": "5"},
         )
-    return limiter, token
+    return slots, token
 
 
-async def _leased_resource_event_generator(
+async def _held_resource_event_generator(
     ctx: AppContext,
-    limiter: RedisConcurrentLeaseLimiter,
-    lease_token: str,
+    slots: Slots,
+    slot_token: str,
     user_id: str,
     last_event_id: int | None,
     high_water_mark: int,
@@ -418,7 +413,7 @@ async def _leased_resource_event_generator(
         ):
             yield frame
     finally:
-        release_lease_in_background(limiter, user_id, lease_token, subject="Resource stream")
+        release_slot_in_background(slots, slot_token, subject="Resource stream")
 
 
 @router.get(
@@ -450,12 +445,12 @@ def api_stream_resource_events(
         session.commit()
 
     cursor = parse_last_event_id(request.headers.get("last-event-id") or last_event_id)
-    limiter, lease_token = _acquire_stream_lease(request, user.id)
+    slots, slot_token = _take_stream_slot(request, user.id)
     return StreamingResponse(
-        _leased_resource_event_generator(
+        _held_resource_event_generator(
             ctx,
-            limiter,
-            lease_token,
+            slots,
+            slot_token,
             user.id,
             cursor,
             high_water_mark,

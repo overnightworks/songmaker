@@ -225,9 +225,6 @@ src/songmaker_cli/playlist_api.py :: pydantic-orm :: "PlaylistResponse" does not
 src/songmaker_cli/playlist_api.py :: pydantic-orm :: "PlaylistResponse" does not have from_attributes=True
 src/songmaker_cli/playlist_api.py :: union-attr :: Item "None" of "Playlist | None" has no attribute "entries"
 src/songmaker_cli/queue_streams.py :: arg-type :: Argument 2 to "_stored_manifest" has incompatible type "Awaitable[Any] | Any"; expected "str"
-src/songmaker_cli/redis_client.py :: arg-type :: Argument 5 to "eval" of "ScriptCommands" has incompatible type "int"; expected "str"
-src/songmaker_cli/redis_client.py :: arg-type :: Argument 6 to "eval" of "ScriptCommands" has incompatible type "int"; expected "str"
-src/songmaker_cli/redis_client.py :: arg-type :: Argument 7 to "eval" of "ScriptCommands" has incompatible type "int"; expected "str"
 src/songmaker_cli/redis_client.py :: return-value :: Incompatible return value type (got "Awaitable[Any] | Any", expected "bool")
 src/songmaker_cli/reference_api.py :: arg-type :: Argument 1 to "from_orm" of "ReferenceRecordingResponse" has incompatible type "ReferenceRecording | None"; expected "ReferenceRecording"
 src/songmaker_cli/reference_api.py :: arg-type :: Argument 2 to "can_access_album" has incompatible type "AuthenticatedUser"; expected "Actor"

@@ -1468,8 +1468,8 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-tandem"
-version = "0.12.1"
-source = { git = "https://github.com/overnightworks/tandem?rev=v0.12.1#43d63463fa8b149e4ba97b1e238bda423ea092e4" }
+version = "0.13.0"
+source = { git = "https://github.com/overnightworks/tandem?rev=v0.13.0#bee7191ed54c2715c9bcd6f1b997defcde2dc892" }
 dependencies = [
     { name = "overnightworks-logline" },
     { name = "redis" },
@@ -1477,12 +1477,13 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.40.1"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.40.1#afdd45531ee0bd1b23724a3daef86bb4f9dc42eb" }
+version = "0.41.1"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.41.1#9c14a806c194fdb1726f2b916c372675ac449827" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
     { name = "fastapi" },
+    { name = "overnightworks-logline" },
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "starlette" },
@@ -2324,9 +2325,9 @@ requires-dist = [
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", url = "https://github.com/overnightworks/design/releases/download/v0.33.1/overnightworks_design-0.33.1-py3-none-any.whl" },
     { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
     { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
-    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.12.1" },
-    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.12.1" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.40.1" },
+    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.13.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.13.0" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.41.1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },

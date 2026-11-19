@@ -22,10 +22,7 @@ from support.app_processes import (
 from support.job_owner import an_owner, create_job_of_owner
 from support.web_cluster_world import start_owner
 
-from songmaker_cli.constants import (
-    BACKGROUND_LOOP_FAILURE_THRESHOLD,
-    REDIS_KEY_PREFIX,
-)
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
@@ -40,13 +37,11 @@ from songmaker_cli.job_timing import (
 )
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import OWNER_REAPER_FAILURE_MESSAGE
-from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.worker_liveness import JobOwner
 
 MARGIN_SECONDS = 5.0
 CRASH_DEADLINE_SECONDS = 30.0
 LOOP_FAILING_DEADLINE_SECONDS = 40.0
-PREVIOUS_RELEASE_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -136,33 +131,6 @@ def test_a_process_that_starts_ends_the_jobs_of_an_owner_that_is_gone_and_no_liv
         jobs_of_a.staging_dir.is_dir(),
     ) == ([JobStatus.RUNNING] * 2, True, True)
 
-
-def test_an_owner_of_the_previous_release_keeps_its_jobs_when_a_process_starts(
-    web_cluster, redis_client,
-) -> None:
-    cluster, factory = web_cluster
-    previous_owner = uuid.uuid4().hex
-    redis_client.set(
-        old_owner_key(REDIS_KEY_PREFIX, previous_owner), "1", ex=PREVIOUS_RELEASE_SECONDS,
-    )
-    # A previous release stores no generation with a job.
-    jobs = _seed_running_jobs(factory, cluster, previous_owner)
-
-    start_owner(cluster, redis_client, "a")
-
-    assert _statuses(factory, jobs.ids) == [JobStatus.RUNNING] * 2
-
-
-def test_a_process_shows_the_previous_release_its_old_key_until_it_stops(
-    web_cluster, redis_client,
-) -> None:
-    cluster, _ = web_cluster
-    process, owner = start_owner(cluster, redis_client, "a")
-    key = old_owner_key(REDIS_KEY_PREFIX, owner)
-
-    assert redis_client.exists(key) == 1
-    process.stop()
-    assert redis_client.exists(key) == 0
 
 
 @pytest.fixture
