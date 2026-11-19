@@ -1,4 +1,4 @@
-"""Redis client utilities — connection, health, concurrency leases, and metrics."""
+"""Redis client utilities — connection, health, stream slots, and metrics."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import logging
 import math
 import socket
 import time
-import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -27,6 +26,7 @@ from songmaker_cli.constants import (
 if TYPE_CHECKING:
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
+    from tandem.slots import Slots
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,8 @@ _WAKE_KEEPALIVE_OPTIONS = {
     socket.TCP_KEEPINTVL: 10,
     socket.TCP_KEEPCNT: 3,
 }
-_LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
+GLOBAL_SLOT_POOL = "global"
+_SLOT_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 
 class RedisConnectionSettings(BaseSettings):
@@ -167,111 +168,38 @@ def wait_for_redis(
             return
 
 
-class RedisConcurrentLeaseLimiter:
-    """Atomic expiring per-scope and global concurrency leases."""
+async def take_stream_slot(
+    slots: Slots, user_id: str, per_person_cap: int, global_cap: int,
+) -> str | None:
+    """Hold one slot in the person's pool and in the global pool, or in neither.
 
-    _LUA_ACQUIRE = """
-    local redis_time = redis.call('TIME')
-    local now = tonumber(redis_time[1]) + (tonumber(redis_time[2]) / 1000000)
-    local lease_seconds = tonumber(ARGV[1])
-    local scope_max = tonumber(ARGV[2])
-    local global_max = tonumber(ARGV[3])
-    local token = ARGV[4]
-    local expires_at = now + lease_seconds
-
-    redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
-    redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now)
-    if redis.call('ZCARD', KEYS[1]) >= scope_max then return 0 end
-    if redis.call('ZCARD', KEYS[2]) >= global_max then return 0 end
-
-    redis.call('ZADD', KEYS[1], expires_at, token)
-    redis.call('ZADD', KEYS[2], expires_at, token)
-    redis.call('EXPIRE', KEYS[1], math.ceil(lease_seconds) + 1)
-    redis.call('EXPIRE', KEYS[2], math.ceil(lease_seconds) + 1)
-    return 1
+    Returns the token for ``release_slot_in_background``, or None when a pool is at its cap.
     """
-
-    _LUA_RELEASE = """
-    redis.call('ZREM', KEYS[1], ARGV[1])
-    redis.call('ZREM', KEYS[2], ARGV[1])
-    return 1
-    """
-
-    def __init__(
-        self,
-        redis: Redis,
-        *,
-        scope_prefix: str,
-        global_key: str,
-        max_per_scope: int,
-        max_global: int,
-        lease_seconds: int,
-    ) -> None:
-        self._redis = redis
-        self._scope_prefix = scope_prefix
-        self._global_key = global_key
-        self._max_per_scope = max_per_scope
-        self._max_global = max_global
-        self._lease_seconds = lease_seconds
-
-    def _scope_key(self, scope_id: str) -> str:
-        return f"{self._scope_prefix}:{scope_id}"
-
-    def acquire(self, scope_id: str) -> str | None:
-        token = uuid.uuid4().hex
-        acquired = self._redis.eval(
-            self._LUA_ACQUIRE,
-            2,
-            self._scope_key(scope_id),
-            self._global_key,
-            self._lease_seconds,
-            self._max_per_scope,
-            self._max_global,
-            token,
-        )
-        return token if acquired == 1 else None
-
-    def release(self, scope_id: str, token: str) -> None:
-        self._redis.eval(
-            self._LUA_RELEASE,
-            2,
-            self._scope_key(scope_id),
-            self._global_key,
-            token,
-        )
+    return await slots.take({GLOBAL_SLOT_POOL: global_cap, f"person:{user_id}": per_person_cap})
 
 
-async def _release_lease(
-    limiter: RedisConcurrentLeaseLimiter,
-    user_id: str,
-    lease_token: str,
-    *,
-    subject: str,
-) -> None:
+async def _release_slot(slots: Slots, token: str, *, subject: str) -> None:
     try:
-        await asyncio.to_thread(limiter.release, user_id, lease_token)
+        released = await slots.release(token)
     except Exception:
-        log.warning("%s lease release failed", subject)
+        log.warning("%s hold release failed", subject)
+        return
+    if not released:
+        log.warning("%s hold had already ended at its release", subject)
 
 
-def release_lease_in_background(
-    limiter: RedisConcurrentLeaseLimiter,
-    user_id: str,
-    lease_token: str,
-    *,
-    subject: str,
-) -> None:
-    task = asyncio.create_task(_release_lease(limiter, user_id, lease_token, subject=subject))
-    _LEASE_RELEASE_TASKS.add(task)
-    task.add_done_callback(_LEASE_RELEASE_TASKS.discard)
+def release_slot_in_background(slots: Slots, token: str, *, subject: str) -> None:
+    task = asyncio.create_task(_release_slot(slots, token, subject=subject))
+    _SLOT_RELEASE_TASKS.add(task)
+    task.add_done_callback(_SLOT_RELEASE_TASKS.discard)
 
 
-async def drain_lease_releases() -> None:
-    """Wait for pending background lease releases before closing their event loop."""
-    while _LEASE_RELEASE_TASKS:
-        pending = tuple(_LEASE_RELEASE_TASKS)
+async def drain_slot_releases() -> None:
+    """Wait for pending background slot releases before closing their event loop."""
+    while _SLOT_RELEASE_TASKS:
+        pending = tuple(_SLOT_RELEASE_TASKS)
         await asyncio.gather(*pending)
-        _LEASE_RELEASE_TASKS.difference_update(pending)
+        _SLOT_RELEASE_TASKS.difference_update(pending)
 
 
 class RedisHttpMetrics:

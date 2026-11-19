@@ -168,17 +168,17 @@ def test_second_gap_in_one_stream_ends_it_after_the_first_resync(
     assert [frame["event"] for frame in frames] == ["hello", "resync"]
 
 
-def test_stream_at_its_concurrent_lease_limit_is_refused_with_retry_after(
+def test_stream_at_its_cap_is_refused_with_retry_after(
     tmp_path: Path,
     pg_factory,
 ) -> None:
     clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
 
-    class _FullLeaseLimiter:
-        def acquire(self, _scope: str) -> None:
+    class _FullSlots:
+        async def take(self, _limits: dict[str, int]) -> None:
             return None
 
-    clients["alice"].app.state._resource_stream_lease_limiter = _FullLeaseLimiter()
+    clients["alice"].app.state._resource_stream_slots = _FullSlots()
     response = clients["alice"].get(RESOURCE_EVENT_STREAM_PATH)
     assert response.status_code == 429
     assert response.json()["detail"] == resource_api.RESOURCE_EVENT_STREAM_LIMIT_DETAIL
