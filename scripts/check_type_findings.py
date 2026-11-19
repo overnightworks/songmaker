@@ -1,4 +1,9 @@
-"""Run mypy and ruff's ANN401 over src/ against the committed baseline of today's findings.
+"""Run mypy, ruff's ANN401 and a nested-Any scan over src/ against the committed baseline.
+
+ANN401 covers a direct `Any` parameter or return; the nested-Any scan covers the rest of the
+contract's debt: `Any` as the value type of a `dict[str, Any]` anywhere in an annotation,
+alias or field, however deep inside another generic. Its finding names the enclosing class or
+function (`module` at top level), so a repeated one repeats its line.
 
 A finding is `path :: code :: message`, without its line number, so edits above it do not
 change it; a repeated finding repeats its line. The check is red on a finding the baseline
@@ -9,6 +14,7 @@ lacks and on a baseline entry no longer found, so the baseline only shrinks.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -63,8 +69,47 @@ def ann401_findings(root: Path, run: ToolRunner) -> list[str]:
     ]
 
 
+def is_any(node: ast.expr) -> bool:
+    return (isinstance(node, ast.Name) and node.id == "Any") or (
+        isinstance(node, ast.Attribute) and node.attr == "Any"
+    )
+
+
+def is_dict_of_any(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "dict"
+        and isinstance(node.slice, ast.Tuple)
+        and len(node.slice.elts) == 2
+        and is_any(node.slice.elts[1])
+    )
+
+
+def nested_any_in(tree: ast.AST, scope: tuple[str, ...] = ()) -> list[str]:
+    scopes = []
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            scopes += nested_any_in(node, (*scope, node.name))
+        else:
+            scopes += nested_any_in(node, scope)
+        if is_dict_of_any(node):
+            scopes.append(".".join(scope) or "module")
+    return scopes
+
+
+def nested_any_findings(root: Path) -> list[str]:
+    return [
+        SEPARATOR.join((str(path.relative_to(root)), "nested-any", f"dict[str, Any] in `{scope}`"))
+        for path in sorted((root / "src").rglob("*.py"))
+        for scope in nested_any_in(ast.parse(path.read_text()))
+    ]
+
+
 def current_findings(root: Path, run: ToolRunner) -> Counter[str]:
-    return Counter(mypy_findings(root, run) + ann401_findings(root, run))
+    return Counter(
+        mypy_findings(root, run) + ann401_findings(root, run) + nested_any_findings(root)
+    )
 
 
 def main(argv: Sequence[str], root: Path, baseline: Path, run: ToolRunner) -> int:
