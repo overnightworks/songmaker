@@ -17,6 +17,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 from songmaker_cli.job_queue import app_wake_channel
+from songmaker_cli.redis_client import SlotReleases
 from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 if TYPE_CHECKING:
@@ -41,7 +42,6 @@ class AppContext:
     """The asyncio client of the leases; the sync ``redis`` serves everything else."""
     object_store: ObjectStore
     """The bucket that holds what more than one web process needs."""
-    trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     """Names this process on the jobs it runs; its lease in Redis says whether it lives."""
     owner_leases: Leases = field(init=False)
@@ -49,6 +49,8 @@ class AppContext:
     """This process as the owner of its jobs, set once its lease is held."""
     wake_channel: WakeChannel = field(init=False)
     """The app's wake channel: a job's cancel, and a queue's due row."""
+    slot_releases: SlotReleases = field(default_factory=SlotReleases)
+    """The stream slot releases still running; the lifespan drains them before its loop closes."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)
@@ -78,7 +80,6 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     return WebAuthConfig(
         session_secret=SecretStr(ctx.signing_key.decode()),
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
-        trusted_proxies=ctx.trusted_proxies,
         allowed_hosts_exact=frozenset(allowed_hosts(settings)),
         session_lifetime=SessionLifetime(
             idle_seconds=settings.session_idle_seconds,

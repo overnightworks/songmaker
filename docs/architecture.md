@@ -1170,14 +1170,14 @@ derives the sign-in routes' rules itself, ahead of songmaker's: `no-store`, the
 sign-in budget on start, callback and logout, and the back-channel path's
 exemption from the rate limit and the origin check with its 32 KiB body cap.
 No middleware reads songmaker's settings.
-The pure-ASGI request order, outside to inside, is RequestLine → PreflightClientAddress →
-ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → ClientAddress → BodySize →
+The pure-ASGI request order, outside to inside, is RequestLine → ClientAddress →
+ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → BodySize →
 IpRateLimit → [BearerGate →] CsrfOrigin → TrustedHost → HttpMetrics → Router. The request line sits
-outside the security layers, so a refused request leaves its line too. webauth fills its `ip`
-(ClientAddress, the address `resolve_client_ip` decides, ahead of every library refusal) and its
-`sub` (the gates and `current_user`, the stream endpoints' `authenticate_request` included).
-CORS answers a preflight itself, outside ClientAddress, so songmaker's own PreflightClientAddress
-writes the `ip` of a preflight alone and no request has two writers. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
+outside the security layers, so a refused request leaves its line too. webauth's ClientAddress, which
+`server.create_app` adds with `TRUSTED_PROXIES` immediately inside the request line, decides the
+client address once, ahead of CORS and every library refusal, so the line's `ip` names the forwarded
+client of a preflight CORS answers itself, as it does that of every other request; webauth fills the line's `sub`
+(the gates and `current_user`, the stream endpoints' `authenticate_request` included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
@@ -1264,7 +1264,7 @@ ledger.
 ### Web background loops
 
 After stopping its background loops, `server._lifespan` awaits
-`redis_client.drain_slot_releases()` so pending stream-slot releases finish before
+`ctx.slot_releases.drain()` so pending stream-slot releases finish before
 the event loop closes.
 
 `GET /api/resource-events/stream` is the authenticated read side. Its auth check and
