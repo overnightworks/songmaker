@@ -10,9 +10,12 @@ from fastapi import HTTPException
 
 from songmaker_cli import jobs_api, resource_event_api
 from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.settings import get_settings
 
-PER_PERSON_CAP = 2
-GLOBAL_CAP = 3
+JOB_STREAM_PER_PERSON_CAP = 2
+JOB_STREAM_GLOBAL_CAP = 3
+RESOURCE_STREAM_PER_PERSON_CAP = 6
+RESOURCE_STREAM_GLOBAL_CAP = 12
 
 
 class _AlwaysOpen:
@@ -21,27 +24,31 @@ class _AlwaysOpen:
 
 
 @pytest.fixture(params=["job-stream", "resource-stream"])
-def take_slot(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Callable:
-    """The family's endpoint-side take, with the family's caps set to the two cap constants."""
-    settings = SimpleNamespace(
-        job_stream_lease_max_per_user=PER_PERSON_CAP,
-        job_stream_lease_max_global=GLOBAL_CAP,
-        database_pool_size=10,
-        database_max_overflow=5,
-        resource_event_stream_open_limit=100,
-    )
-    monkeypatch.setattr(jobs_api, "get_settings", lambda: settings)
-    monkeypatch.setattr(resource_event_api, "get_settings", lambda: settings)
-    monkeypatch.setattr(resource_event_api, "RESOURCE_EVENT_STREAM_MAX_PER_USER", PER_PERSON_CAP)
-    monkeypatch.setattr(resource_event_api, "RESOURCE_EVENT_STREAM_MAX_GLOBAL", GLOBAL_CAP)
+def stream_family(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, fresh_settings: None,
+) -> tuple[Callable, int, int]:
+    """The family's endpoint-side take with its per-person and global cap.
+
+    The job streams' caps come in through configuration; the resource streams run
+    with their production caps.
+    """
     if request.param == "job-stream":
-        return jobs_api._take_job_stream_slot
-    return resource_event_api._take_stream_slot
+        monkeypatch.setenv("JOB_STREAM_LEASE_MAX_PER_USER", str(JOB_STREAM_PER_PERSON_CAP))
+        monkeypatch.setenv("JOB_STREAM_LEASE_MAX_GLOBAL", str(JOB_STREAM_GLOBAL_CAP))
+        get_settings.cache_clear()
+        return jobs_api._take_job_stream_slot, JOB_STREAM_PER_PERSON_CAP, JOB_STREAM_GLOBAL_CAP
+    return (
+        resource_event_api._take_stream_slot,
+        RESOURCE_STREAM_PER_PERSON_CAP,
+        RESOURCE_STREAM_GLOBAL_CAP,
+    )
 
 
 def test_streams_are_capped_per_person_and_globally_and_a_release_admits_again(
-    take_slot: Callable, redis_url: str,
+    stream_family: tuple[Callable, int, int], redis_url: str,
 ) -> None:
+    take_slot, per_person_cap, global_cap = stream_family
+
     async def scenario() -> None:
         async_redis = create_async_redis(redis_url)
         state = SimpleNamespace(
@@ -60,9 +67,11 @@ def test_streams_are_capped_per_person_and_globally_and_a_release_admits_again(
 
         try:
             alice_slots, alice_token = await take("alice")
-            await take("alice")
+            for _ in range(per_person_cap - 1):
+                await take("alice")
             assert await refused("alice") == 429
-            await take("bob")
+            for _ in range(global_cap - per_person_cap):
+                await take("bob")
             assert await refused("carol") == 429
             assert await alice_slots.release(alice_token)
             await take("carol")
