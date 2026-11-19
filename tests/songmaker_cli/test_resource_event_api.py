@@ -1054,6 +1054,10 @@ def test_per_user_open_rate_is_bounded(tmp_path, monkeypatch: pytest.MonkeyPatch
     clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     open_limit = get_settings().resource_event_stream_open_limit
+    # Finished streams free their slots in a background task; lifting the
+    # concurrent caps keeps a late release from answering 429 before the rate does.
+    uncapped = (open_limit + 1, open_limit + 1)
+    monkeypatch.setattr(resource_api, "_resource_stream_caps", lambda: uncapped)
     responses = [clients["alice"].get("/api/resource-events/stream") for _ in range(open_limit + 1)]
     assert all(response.status_code == 200 for response in responses[:-1])
     assert responses[-1].status_code == 429
