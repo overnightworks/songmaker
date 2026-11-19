@@ -1,0 +1,8 @@
+claim_id = "b6d9859c09644c60a996b3c08c82b068"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "93265e823c6f095762b2e01ffc5353b49b32a920"
+branch = "claude/issue-3228-the-old-owner-lease-keys-are-no-longer-w"
+scope = [".importlinter", "docs/architecture.md", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/owner_lease_old_key.py", "src/songmaker_cli/worker_liveness.py", "tests/songmaker_cli/test_lifecycle_owner_loops.py", "tests/songmaker_cli/test_server_owner_recovery.py", "tests/songmaker_cli/test_worker_liveness_owner_lease.py"]
+opened_commit = "8afef8112419690c2843f832b4ea3338b46da7ec"
+whole_reason = "the module, its one caller, its import-linter entry, its tests and its two document sentences leave together"
