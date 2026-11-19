@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,7 +11,6 @@ import pytest
 from fastapi.testclient import TestClient
 from support.fake_oidc_issuer import a_fake_issuer
 from support.web_app import make_test_app, seed_user, trust_proxies, web_client
-from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.middleware import IpRateLimitMiddleware
 from webauth.policies import RateLimitBudget, RateLimitPolicy
 
