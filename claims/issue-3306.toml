@@ -1,0 +1,8 @@
+claim_id = "c9d557a0b8694ea78e91b9ba235fd99a"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "93265e823c6f095762b2e01ffc5353b49b32a920"
+branch = "claude/issue-3306-open-streams-are-capped-through-tandem-s"
+scope = ["docs/architecture.md", "docs/security.md", "pyproject.toml", "quality/baseline.toml", "scripts/check_type_findings.txt", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/server.py", "tests/songmaker_cli", "uv.lock"]
+opened_commit = "5c802f2f62fbfd5968beaa298218bf1d2ae01787"
+whole_reason = "the pin, both stream endpoints and the deleted limiter change together; a half swap would count one cap in two places for good"
