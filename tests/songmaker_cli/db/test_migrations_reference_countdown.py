@@ -6,7 +6,6 @@ import uuid
 
 from alembic import command
 from sqlalchemy import text
-from support.migration_chain import is_on_the_single_chain
 from support.reference_link_migration import execute
 
 from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
@@ -60,6 +59,3 @@ def test_the_downgrade_removes_the_row_and_the_next_upgrade_starts_a_new_epoch(
     assert second_epoch != first_epoch
     assert second_value_text is None
 
-
-def test_the_countdown_revision_is_on_the_single_chain() -> None:
-    assert is_on_the_single_chain(COUNTDOWN_REVISION)

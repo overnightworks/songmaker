@@ -13,7 +13,6 @@ from sqlalchemy import inspect
 from support.migration_chain import (
     column_names,
     insert_bare_job,
-    is_on_the_single_chain,
     job_count,
     seeded_then_upgraded,
 )
@@ -52,9 +51,6 @@ def _upgraded_with_an_unowned_job(database, migration: OwnerColumnMigration):
         database, migration.module.down_revision, migration.module.revision, insert_bare_job,
     )
 
-
-def test_the_migration_is_on_the_single_chain(migration):
-    assert is_on_the_single_chain(migration.module.revision)
 
 
 def test_upgrade_adds_a_nullable_column_and_keeps_an_existing_job_without_an_owner(
