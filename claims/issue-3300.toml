@@ -3,6 +3,6 @@ agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
 role = "builder"
 base = "2ff551d237748c464d38490400f98a33a13d3f07"
 branch = "claude/issue-3300-the-music-worker-and-cover-jobs-claim-th"
-scope = [".importlinter", "docs/acestep.md", "docs/architecture.md", "scripts/check_type_findings.txt", "scripts/test_helper_ratchet.txt", "src/songmaker_cli", "tests"]
+scope = [".importlinter", "docs/acestep.md", "docs/architecture.md", "scripts/check_type_findings.txt", "scripts/seed_e2e_job_states.py", "scripts/test_helper_ratchet.txt", "src/songmaker_cli", "tests"]
 opened_commit = "a4b5aebd8961ab7aad3de2eb53ad7c7f41e8b371"
 whole_reason = "the claim, the worker loop, the requeue and the enqueue sites change together across queries, worker and API modules"
