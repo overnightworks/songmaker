@@ -102,8 +102,11 @@ from songmaker_cli.db.queries.songs import create_song, get_song, update_song
 from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import utcnow
 
 GENERATION_ERROR_TYPE = "generation_error"
+# A queued job the stack's music worker must not claim: its run_after lies beyond any e2e run.
+QUEUED_JOB_DEFERRED_FOR = timedelta(days=1)
 
 
 def _resolve_audio_dir() -> Path:
@@ -360,7 +363,10 @@ def cmd_set_completed(session: Session, args: argparse.Namespace) -> None:
 
 
 def cmd_set_queued(session: Session, args: argparse.Namespace) -> None:
-    """Create a genuine queued job; its position is computed by the job API."""
+    """Create a genuine queued job that is not due, so no worker claims it.
+
+    The job API computes its position.
+    """
     owner = get_user_by_username(session, args.owner_username)
     if owner is None:
         raise SystemExit(f"No user named {args.owner_username!r}")
@@ -368,6 +374,7 @@ def cmd_set_queued(session: Session, args: argparse.Namespace) -> None:
         session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id,
         version_id=_latest_version_id(session, args.song_id),
     )
+    job.run_after = utcnow() + QUEUED_JOB_DEFERRED_FOR
     session.commit()
     print(job.id)
 
