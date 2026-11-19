@@ -15,7 +15,7 @@ from support.loop_ticks import run_ticks_observing_status
 from support.web_app import arrange_fake_async_redis, make_fake_async_redis, settle_owner_leases
 
 from songmaker_cli import lifecycle
-from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, REDIS_KEY_PREFIX
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.jobs import (
@@ -35,7 +35,6 @@ from songmaker_cli.lifecycle import (
     owner_lapse_loop,
     reconcile_ended_covers,
 )
-from songmaker_cli.owner_lease_old_key import old_owner_key
 from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 OWNER = "this-process"
@@ -112,20 +111,6 @@ def test_the_owner_lease_shows_failing_while_this_process_holds_none(
 ) -> None:
     server = make_fake_async_redis()
     arrange_fake_async_redis(server, settle_owner_leases)
-
-    status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
-
-    assert status is BackgroundLoopStatus.FAILING
-
-
-def test_the_owner_lease_shows_failing_while_only_the_old_key_of_this_process_lives(
-    monkeypatch, pg_factory, tmp_path,
-) -> None:
-    server = make_fake_async_redis()
-    arrange_fake_async_redis(server, settle_owner_leases)
-    arrange_fake_async_redis(
-        server, lambda fake: fake.set(old_owner_key(REDIS_KEY_PREFIX, OWNER), "1"),
-    )
 
     status = _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path)
 

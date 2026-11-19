@@ -449,8 +449,7 @@ class OwnerLeaseNotAliveError(Exception):
 async def record_own_owner_lease_health(ctx: AppContext, registry: BackgroundLoopRegistry) -> None:
     """Show whether tandem's lease of this process is live; tandem only logs a failed renewal.
 
-    The roster is read from the lease alone, for a live old key must not hide a lease whose
-    renewals fail.
+    The roster is read from the lease alone.
     """
     try:
         if ctx.owner_id not in (await ctx.owner_leases.live()).holders:
