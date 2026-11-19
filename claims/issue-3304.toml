@@ -1,8 +1,0 @@
-claim_id = "f334e89e8c4340cfbe301c6cbc1c395d"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "98824823e5b5f0023b895ebf2a5b1a20e902f05b"
-branch = "claude/issue-3304-a-cover-take-s-source-copy-is-removed-af"
-scope = ["src/songmaker_cli/jobs/generation.py", "tests"]
-opened_commit = "5f8b170ab8b5dd180901364ff78b387bdc4d3239"
-whole_reason = "the fix and its regression test through a cover job sit in the job module and the tests directory"
