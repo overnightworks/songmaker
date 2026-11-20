@@ -313,7 +313,7 @@
 				/>
 			{:else if shownSlot?.kind === 'making'}
 				<div class="stage-making" role="status">
-					<span class="stage-ring" aria-hidden="true"></span>
+					<span class="stage-ring ring-turn" aria-hidden="true"></span>
 					<span
 						>{pageText('albumCover.suggesting')}{#if shownSlot.startedAt}<CoverRunElapsed
 								startedAt={shownSlot.startedAt}
@@ -530,7 +530,7 @@
 		border: 3px solid var(--border);
 		border-top-color: var(--accent);
 		border-radius: 50%;
-		animation: rotate 2.4s linear infinite;
+		--ring-turn: 2.4s;
 	}
 
 	.cover-failure {
@@ -647,12 +647,6 @@
 	@media (max-width: 768px) {
 		.cover-action.cover-use {
 			margin-left: auto;
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.stage-ring {
-			animation: none;
 		}
 	}
 </style>

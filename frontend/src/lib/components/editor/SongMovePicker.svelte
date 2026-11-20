@@ -111,7 +111,7 @@
 					>
 						{@render albumFace(album)}
 						{#if busy}
-							<span class="pk-spin" aria-hidden="true"></span>
+							<span class="pk-spin ring-turn" aria-hidden="true"></span>
 							<span class="pk-run" aria-hidden="true"></span>
 						{:else if failed}
 							<Icon name="circle-alert" size={16} class="pk-warn" />
@@ -262,7 +262,7 @@
 		border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
 		border-top-color: var(--accent);
 		border-radius: 50%;
-		animation: rotate 0.9s linear infinite;
+		--ring-turn: 0.9s;
 	}
 
 	.pk-run {
@@ -285,12 +285,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.pk-spin,
 		.pk-run {
 			animation: none;
-		}
-
-		.pk-run {
 			left: 0;
 			width: 100%;
 			opacity: 0.5;

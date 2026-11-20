@@ -16,7 +16,7 @@
 <!-- The cover button's accessible name says what the mark shows, without the ticking time. -->
 {#if running}
 	<span class="cover-mark" aria-hidden="true">
-		<span class="mark-ring"></span>
+		<span class="mark-ring ring-turn"></span>
 		{#if startedAt}<CoverRunElapsed {startedAt} separated={false} />{/if}
 	</span>
 {:else if waiting > 0}
@@ -53,7 +53,7 @@
 		border-radius: 50%;
 		border: 2px solid color-mix(in srgb, white 30%, transparent);
 		border-top-color: white;
-		animation: rotate 2.4s linear infinite;
+		--ring-turn: 2.4s;
 	}
 
 	.mark-dot {
@@ -61,11 +61,5 @@
 		height: 6px;
 		border-radius: 50%;
 		background: var(--accent);
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.mark-ring {
-			animation: none;
-		}
 	}
 </style>
