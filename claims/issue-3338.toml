@@ -3,5 +3,6 @@ agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
 role = "builder"
 base = "7bb0c1ec6d96e669c1431994cae43553b1b89c93"
 branch = "claude/issue-3338-the-failed-library-card-stands-inside-th"
-scope = ["frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts"]
+scope = ["frontend/src/app.css", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts"]
 opened_commit = "a1904f0b5c7d67e4e8091c806281b82df5369898"
+whole_reason = "the Library page's gutter gets one owner that the wall and the failure card both use"
