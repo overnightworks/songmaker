@@ -18,7 +18,6 @@ from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
     check_own_generation_access,
-    generation_not_found,
     lock_lora_capacity,
     unique_lora_slug_under_capacity_lock,
     voice_sample_not_found,
@@ -272,8 +271,6 @@ def api_add_sample_from_generation(
         source = resolve_audio_path(ctx.audio_dir, generation.mp3_path)
     except (AudioFileNotFoundError, AudioPathRejectedError) as exc:
         raise Refusal(404, "generationRefusal.audioMissing") from exc
-    if not source.is_file():
-        raise generation_not_found()
 
     if count_user_lora_samples(session, lora_id) >= USER_LORA_MAX_SAMPLES:
         raise Refusal(409, "voiceRefusal.sampleLimit", maximum=str(USER_LORA_MAX_SAMPLES))

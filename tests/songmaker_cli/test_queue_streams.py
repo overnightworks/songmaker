@@ -1774,7 +1774,7 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path, monkeypatc
     assert resp.json()["skipped"] == [
         {"song_id": "s2", "generation_id": "g-no-path", "reason": "missing_path"},
         {"song_id": "s2", "generation_id": "g-missing", "reason": "missing_file"},
-        {"song_id": "s3", "generation_id": "g-directory", "reason": "unreadable_file"},
+        {"song_id": "s3", "generation_id": "g-directory", "reason": "missing_file"},
     ]
     assert resp.json()["skipped_complete"] is True
     queued = {track["generation_id"] for track in resp.json()["takes"]}

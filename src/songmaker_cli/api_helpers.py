@@ -488,6 +488,10 @@ def can_access_album(album: Album | None, user: Actor, *, require_owner: bool = 
     return album is not None and album.created_by == user.id
 
 
+def album_not_found() -> Refusal:
+    return Refusal(404, "albumRefusal.notFound")
+
+
 def song_not_found() -> Refusal:
     return Refusal(404, "songRefusal.notFound")
 
@@ -533,7 +537,7 @@ def check_album_access(
     album: Album | None, user: AuthenticatedUser, *, require_owner: bool = False,
 ) -> Album:
     if not album or not can_access_album(album, user, require_owner=require_owner):
-        raise Refusal(404, "albumRefusal.notFound")
+        raise album_not_found()
     return album
 
 

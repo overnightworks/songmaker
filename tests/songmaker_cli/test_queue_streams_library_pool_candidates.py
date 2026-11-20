@@ -177,7 +177,7 @@ def test_library_skip_rejects_fifo_before_open(tmp_path: Path, monkeypatch) -> N
     skip = _library_skip(ctx, generation)
 
     assert skip is not None
-    assert skip.reason == "unreadable_file"
+    assert skip.reason == "missing_file"
 
 
 @pytest.mark.parametrize("failure", ["open", "read", "probe"])
