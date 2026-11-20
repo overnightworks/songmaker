@@ -1,10 +1,8 @@
 """A stream slot release left pending on one application's loop leaves another application alone."""
 
 import asyncio
-import gc
 from pathlib import Path
 
-import pytest
 from support.web_app import BUILT_SHELL, make_app_context, make_fake_redis, web_client
 
 from songmaker_cli.server import create_app
@@ -19,7 +17,7 @@ def _end_loop_as_asyncio_run_does(loop: asyncio.AbstractEventLoop) -> None:
 
 
 def test_an_app_starts_and_stops_after_another_apps_loop_ended_with_a_release_pending(
-    tmp_path: Path, pg_factory, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path, pg_factory, no_task_left_pending: None,
 ) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     audio_dir = tmp_path / "audio"
@@ -56,7 +54,3 @@ def test_an_app_starts_and_stops_after_another_apps_loop_ended_with_a_release_pe
             assert client.get("/api/health").status_code < 500
     finally:
         _end_loop_as_asyncio_run_does(first_loop)
-
-    del first_ctx
-    gc.collect()
-    assert [record.getMessage() for record in caplog.records if record.name == "asyncio"] == []

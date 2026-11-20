@@ -8,7 +8,6 @@ fake issuer's. Matrix cells T1 to T26 of the work item are named in the case ids
 from __future__ import annotations
 
 import asyncio
-import gc
 from contextlib import suppress
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -465,7 +464,7 @@ async def _read_stream_until(
 
 
 def test_t24_the_event_streams_admit_a_token_and_keep_their_per_person_filter(
-    token_world: TokenWorld, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    token_world: TokenWorld, no_task_left_pending: None,
 ) -> None:
     with token_world.factory() as session:
         seed_user(session, "bob", user_id=TokenWorld.BOB)
@@ -479,20 +478,28 @@ def test_t24_the_event_streams_admit_a_token_and_keep_their_per_person_filter(
             )
             session.commit()
     headers = token_world.bearer(TokenWorld.ALICE)
-    releases = SlotReleases()
-    monkeypatch.setattr(token_world.client.app.state.ctx, "slot_releases", releases)
+    released_slots: list[str] = []
+
+    class _HeldSlots:
+        async def take(self, _limits: dict[str, int]) -> str:
+            return "slot-token"
+
+        async def release(self, token: str) -> bool:
+            await asyncio.sleep(0.05)  # a store round trip: a release the loop drops never lands
+            released_slots.append(token)
+            return True
+
+    app = token_world.client.app
+    app.state._resource_stream_slots = _HeldSlots()
 
     status, frames = asyncio.run(_read_stream_until(
-        token_world.client.app, releases, "/api/resource-events/stream",
+        app, app.state.ctx.slot_releases, "/api/resource-events/stream",
         {**headers, "Last-Event-ID": "0"}, until="take-alices",
     ))
     foreign_job = token_world.client.get("/api/jobs/bobs-job/stream", headers=headers)
-    monkeypatch.undo()
-    del releases
-    gc.collect()
 
     assert (status, "event: generation.created" in frames, "take-bobs" in frames) == (
         200, True, False,
     )
     assert foreign_job.status_code == 404
-    assert [record.getMessage() for record in caplog.records if record.name == "asyncio"] == []
+    assert released_slots == ["slot-token"]
