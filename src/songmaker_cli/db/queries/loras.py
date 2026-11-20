@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import or_
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.constants import (
@@ -20,11 +20,10 @@ from songmaker_cli.messages import Message
 
 def lora_slug_taken(session: Session, user_id: str, slug: str) -> bool:
     """Whether the musician already holds a LoRA under this slug."""
-    return (
-        session.query(UserLora)
-        .filter(UserLora.user_id == user_id, UserLora.slug == slug)
-        .first()
-        is not None
+    return bool(
+        session.scalar(
+            select(exists().where(UserLora.user_id == user_id, UserLora.slug == slug)),
+        ),
     )
 
 
