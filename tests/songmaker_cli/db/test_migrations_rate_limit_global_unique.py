@@ -47,7 +47,7 @@ def _seed_duplicates(engine) -> None:
     )
 
 
-def _rows(engine) -> dict[str, tuple]:
+def _rate_limit_rows(engine) -> dict[str, tuple]:
     with engine.connect() as connection:
         return {
             row[0]: tuple(row[1:]) for row in connection.execute(text(
@@ -58,13 +58,15 @@ def _rows(engine) -> dict[str, tuple]:
 
 def _countdown_row(engine) -> tuple:
     rows = [
-        (row_id, *rest) for row_id, rest in _rows(engine).items() if rest[1] == COUNTDOWN_KEY
+        (row_id, *rest)
+        for row_id, rest in _rate_limit_rows(engine).items()
+        if rest[1] == COUNTDOWN_KEY
     ]
     assert len(rows) == 1
     return rows[0]
 
 
-def _upgraded(reference_link_database):
+def _upgraded_with_duplicates(reference_link_database):
     return seeded_then_upgraded(
         reference_link_database, PREVIOUS_REVISION, UNIQUE_REVISION, _seed_duplicates,
     )
@@ -73,10 +75,10 @@ def _upgraded(reference_link_database):
 def test_the_upgrade_keeps_the_newest_global_row_of_each_key_and_every_other_row(
     reference_link_database,
 ) -> None:
-    engine = _upgraded(reference_link_database)
+    engine = _upgraded_with_duplicates(reference_link_database)
 
-    assert set(_rows(engine)) >= {"key-newest", "tie-b", "key-override", "lone"}
-    assert {"key-old", "key-middle", "tie-a"}.isdisjoint(_rows(engine))
+    assert set(_rate_limit_rows(engine)) >= {"key-newest", "tie-b", "key-override", "lone"}
+    assert {"key-old", "key-middle", "tie-a"}.isdisjoint(_rate_limit_rows(engine))
 
 
 def test_the_upgrade_leaves_the_countdown_row_untouched(reference_link_database) -> None:
@@ -94,7 +96,7 @@ def test_the_upgrade_leaves_the_countdown_row_untouched(reference_link_database)
 def test_a_second_global_row_of_one_key_is_refused_after_the_upgrade(
     reference_link_database,
 ) -> None:
-    engine = _upgraded(reference_link_database)
+    engine = _upgraded_with_duplicates(reference_link_database)
 
     with pytest.raises(IntegrityError):
         _insert_row(engine, "again", None, KEY, 8, "2026-02-01T00:00:00Z")
@@ -103,21 +105,21 @@ def test_a_second_global_row_of_one_key_is_refused_after_the_upgrade(
 def test_a_per_user_row_of_a_key_with_a_global_row_is_still_accepted_after_the_upgrade(
     reference_link_database,
 ) -> None:
-    engine = _upgraded(reference_link_database)
+    engine = _upgraded_with_duplicates(reference_link_database)
 
     _insert_row(engine, "other-override", "u2", KEY, 8, "2026-02-01T00:00:00Z")
 
-    assert "other-override" in _rows(engine)
+    assert "other-override" in _rate_limit_rows(engine)
 
 
 def test_the_downgrade_allows_a_second_global_row_again_and_restores_no_deleted_row(
     reference_link_database,
 ) -> None:
-    engine = _upgraded(reference_link_database)
+    engine = _upgraded_with_duplicates(reference_link_database)
     config = reference_link_database[0]
 
     command.downgrade(config, PREVIOUS_REVISION)
     _insert_row(engine, "again", None, KEY, 8, "2026-02-01T00:00:00Z")
 
-    assert set(_rows(engine)) >= {"key-newest", "tie-b", "key-override", "lone", "again"}
-    assert {"key-old", "key-middle", "tie-a"}.isdisjoint(_rows(engine))
+    assert set(_rate_limit_rows(engine)) >= {"key-newest", "tie-b", "key-override", "lone", "again"}
+    assert {"key-old", "key-middle", "tie-a"}.isdisjoint(_rate_limit_rows(engine))

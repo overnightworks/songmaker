@@ -560,10 +560,8 @@ class UserSession(Base):
 class RateLimitSetting(Base):
     __tablename__ = "rate_limit_settings"
     __table_args__ = (
-        UniqueConstraint(
-            "user_id", "setting_key", name="uq_rate_limit_user_key",
-            postgresql_nulls_not_distinct=True,
-        ),
+        UniqueConstraint("user_id", "setting_key", name="uq_rate_limit_user_key",
+                         postgresql_nulls_not_distinct=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

@@ -25,10 +25,10 @@ COLUMNS = ['user_id', 'setting_key']
 
 
 def upgrade() -> None:
-    op.execute(f'LOCK TABLE {TABLE} IN ACCESS EXCLUSIVE MODE')
+    op.execute('LOCK TABLE rate_limit_settings IN ACCESS EXCLUSIVE MODE')
     op.execute(
-        f'DELETE FROM {TABLE} WHERE user_id IS NULL AND id NOT IN ('
-        f'SELECT DISTINCT ON (setting_key) id FROM {TABLE} WHERE user_id IS NULL '
+        'DELETE FROM rate_limit_settings WHERE user_id IS NULL AND id NOT IN ('
+        'SELECT DISTINCT ON (setting_key) id FROM rate_limit_settings WHERE user_id IS NULL '
         'ORDER BY setting_key, updated_at DESC, id DESC)'
     )
     op.drop_constraint(CONSTRAINT, TABLE, type_='unique')
