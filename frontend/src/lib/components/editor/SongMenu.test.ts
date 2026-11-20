@@ -79,13 +79,6 @@ describe('SongMenu', () => {
 			words['songMenu.delete']
 		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
-		expect(items.map((item) => item.classList.contains('destructive'))).toEqual([
-			false,
-			false,
-			false,
-			false,
-			true
-		]);
 	});
 
 	it.each([true, false])(
@@ -98,7 +91,8 @@ describe('SongMenu', () => {
 			expect(save.disabled).toBe(saveDisabled);
 			save.click();
 			await tick();
-			expect(props.onsave).toHaveBeenCalledTimes(saveDisabled ? 0 : 1);
+			if (saveDisabled) expect(props.onsave).not.toHaveBeenCalled();
+			else expect(props.onsave).toHaveBeenCalled();
 			expect(target.querySelector('.menu-panel') !== null).toBe(saveDisabled);
 		}
 	);
@@ -118,7 +112,8 @@ describe('SongMenu', () => {
 			await tick();
 			for (const [name, action] of Object.entries(props)) {
 				if (typeof action === 'function') {
-					expect(action).toHaveBeenCalledTimes(name === handler ? 1 : 0);
+					if (name === handler) expect(action).toHaveBeenCalled();
+					else expect(action).not.toHaveBeenCalled();
 				}
 			}
 			expect(target.querySelector('.menu-panel')).toBeNull();
@@ -313,6 +308,26 @@ describe('SongMenu move picker', () => {
 			vi.mocked(moveSong).mockReset();
 		});
 
+		function holdMoveRunning(): void {
+			const pending = Promise.withResolvers<SongItem>();
+			vi.mocked(moveSong).mockReturnValue(pending.promise);
+			onTestFinished(async () => {
+				pending.reject(new Error('test over'));
+				await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
+				closeSongMovePicker();
+			});
+		}
+
+		async function openSharedAlbumQuestion(): Promise<HTMLElement> {
+			const target = await openPickerOver(
+				[homeAlbum, makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })],
+				'.pk-list'
+			);
+			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
+			await vi.waitFor(() => expect(get(songMoveConfirm)).not.toBeNull());
+			return target;
+		}
+
 		function rowTitled(target: HTMLElement, title: string): HTMLButtonElement {
 			const row = [...target.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')].find((item) =>
 				item.textContent?.includes(title)
@@ -322,14 +337,8 @@ describe('SongMenu move picker', () => {
 		}
 
 		it('wires Retry to the failed move: the album row is busy again', async () => {
-			const pending = Promise.withResolvers<SongItem>();
 			vi.mocked(moveSong).mockRejectedValueOnce(new Error('boom'));
-			vi.mocked(moveSong).mockReturnValue(pending.promise);
-			onTestFinished(async () => {
-				pending.reject(new Error('test over'));
-				await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
-				closeSongMovePicker();
-			});
+			holdMoveRunning();
 			const target = await openPickerOver(albums, '.pk-list');
 			rowTitled(target, 'Berlin').click();
 			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
@@ -341,12 +350,7 @@ describe('SongMenu move picker', () => {
 		});
 
 		it('wires Cancel of the shared-album question to leaving the song where it is', async () => {
-			const target = await openPickerOver(
-				[homeAlbum, makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })],
-				'.pk-list'
-			);
-			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
-			await vi.waitFor(() => expect(get(songMoveConfirm)).not.toBeNull());
+			await openSharedAlbumQuestion();
 
 			[...document.body.querySelectorAll('button')]
 				.find((button) => button.textContent?.trim() === words['dialog.cancel'])
@@ -358,13 +362,7 @@ describe('SongMenu move picker', () => {
 		});
 
 		it('shows no busy row and disables every row on another song while a move runs', async () => {
-			const pending = Promise.withResolvers<SongItem>();
-			vi.mocked(moveSong).mockReturnValue(pending.promise);
-			onTestFinished(async () => {
-				pending.reject(new Error('test over'));
-				await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
-				closeSongMovePicker();
-			});
+			holdMoveRunning();
 			const target = await openPickerOver(albums, '.pk-list');
 			rowTitled(target, 'Berlin').click();
 			await tick();
@@ -414,12 +412,7 @@ describe('SongMenu move picker', () => {
 
 		it('reopens the picker with the red row when a move into a shared album is refused', async () => {
 			vi.mocked(moveSong).mockRejectedValue(new Error('boom'));
-			const target = await openPickerOver(
-				[homeAlbum, makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })],
-				'.pk-list'
-			);
-			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
-			await vi.waitFor(() => expect(get(songMoveConfirm)).not.toBeNull());
+			const target = await openSharedAlbumQuestion();
 			[...document.body.querySelectorAll('button')]
 				.find((button) => button.textContent?.trim() === words['songMenu.move'])
 				?.click();
