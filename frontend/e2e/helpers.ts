@@ -6,7 +6,6 @@ import {
 	type Locator,
 	type Page,
 	type Request,
-	type Response,
 	type TestInfo
 } from '@playwright/test';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
@@ -18,6 +17,7 @@ import {
 } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
 import { words, type Key } from '../src/lib/words/en';
+import { completesTheTake, NavigationCutoffs } from './request-outcomes';
 import { openSearchSheet, searchSheet } from './phone-search';
 import { routerHistoryEntryOf } from '../src/lib/test-utils/router-history-layout';
 
@@ -636,26 +636,6 @@ export function coversPath(refusal: ExpectedRefusal, pathname: string): boolean 
 	return refusal.path.endsWith('/') ? pathname.startsWith(refusal.path) : pathname === refusal.path;
 }
 
-const BYTE_RANGE_SERVED = /^bytes (\d+)-(\d+)\/(\d+)$/;
-const BYTE_RANGE_TO_THE_END = /^bytes=\d+-$/;
-
-// The deck resumes a cancelled take with a range request from where the cancel
-// cut it (`continuousDeck.ts`), and the browser reads a playing element with
-// open-ended ranges too. Only a GET that asked for the take to its end and was
-// answered with the whole take, or with the part from the cut to its last byte,
-// completes it: the player's HEAD probe of the take, the one-byte reads seen
-// beside it, and an answer that names no known end deliver nothing.
-function completesTheTake(response: Response): boolean {
-	const request = response.request();
-	if (request.method() !== 'GET') return false;
-	const asked = request.headers()['range'];
-	if (asked !== undefined && !BYTE_RANGE_TO_THE_END.test(asked)) return false;
-	if (response.status() === 200) return true;
-	if (response.status() !== 206) return false;
-	const served = BYTE_RANGE_SERVED.exec(response.headers()['content-range'] ?? '');
-	return served !== null && Number(served[2]) + 1 === Number(served[3]);
-}
-
 /**
  * Fails the flow on a rate-limited or failed response, on a browser console
  * error, and on an uncaught page exception — and counts what the flow costs
@@ -666,6 +646,7 @@ export class FlowGuard {
 	private readonly takesBeingAbandoned = new Set<string>();
 	private readonly completingResponses = new WeakSet<Request>();
 	private readonly refusedAsExpected = new WeakSet<Request>();
+	private readonly navigationCutoffs: NavigationCutoffs;
 	private pendingIssuerNavigation: string | undefined;
 	private successorPath: string | undefined;
 	private abortedSuccessorUrls: string[] = [];
@@ -676,6 +657,7 @@ export class FlowGuard {
 		private readonly page: Page,
 		options: FlowGuardOptions = {}
 	) {
+		this.navigationCutoffs = new NavigationCutoffs(page);
 		const refusalsExpectedOn = options.refusalsExpectedOn ?? [];
 		const losesNetworkOnPurpose = options.losesNetworkOnPurpose ?? false;
 		const refusalIsExpected = (url: string, status: number): boolean => {
@@ -698,7 +680,8 @@ export class FlowGuard {
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
 				this.forgivesAbandonedTake(request.url()) ||
-				this.refusedAsExpected.has(request);
+				this.refusedAsExpected.has(request) ||
+				this.navigationCutoffs.cuts(request);
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
