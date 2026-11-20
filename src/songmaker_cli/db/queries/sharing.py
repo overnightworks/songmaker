@@ -19,7 +19,7 @@ from songmaker_cli.db.models import (
 )
 
 
-def _lock_entity[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
+def lock_and_reload[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
     """Lock the row and reload it, so a share toggle that commits first is seen.
 
     The lock is limited to the row (`of=model_class`) because a take's eager join to its
@@ -38,7 +38,7 @@ def _lock_entity[T: ShareMixin](session: Session, model_class: type[T], entity_i
 
 
 def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
-    entity = _lock_entity(session, model_class, entity_id)
+    entity = lock_and_reload(session, model_class, entity_id)
     if not entity.share_slug:
         entity.share_slug = str(uuid.uuid4())
     entity.is_shared = True
@@ -47,7 +47,7 @@ def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity
 
 
 def disable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
-    entity = _lock_entity(session, model_class, entity_id)
+    entity = lock_and_reload(session, model_class, entity_id)
     entity.share_slug = None
     entity.is_shared = False
     session.flush()

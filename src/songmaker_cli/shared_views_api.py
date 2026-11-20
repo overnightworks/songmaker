@@ -354,8 +354,6 @@ def get_shared_playlist_stream(
     sources = []
     for entry in presented_playlist_entries(playlist):
         gen = entry.generation
-        if not is_playable_take(gen):
-            continue
         audio_url = _shared_audio_url(
             f"/shared/playlist/{slug}/audio", gen,
         )
