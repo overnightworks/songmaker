@@ -293,6 +293,27 @@ def next_track_number(session: Session, album_id: str) -> int:
     return (max_track[0] + 1) if max_track else INITIAL_TRACK_NUMBER
 
 
+def song_slug_taken(
+    session: Session,
+    album_id: str,
+    slug: str,
+    exclude_song_id: str | None = None,
+) -> bool:
+    """Whether a song of the album, soft-deleted ones included, holds this slug.
+
+    Pass exclude_song_id when the song already owns a row, so a rename or a
+    move does not collide with itself.
+    """
+    query = (
+        session.query(Song)
+        .execution_options(include_deleted=True)
+        .filter(Song.album_id == album_id, Song.slug == slug)
+    )
+    if exclude_song_id is not None:
+        query = query.filter(Song.id != exclude_song_id)
+    return query.first() is not None
+
+
 def create_song(
     session: Session,
     title: str,

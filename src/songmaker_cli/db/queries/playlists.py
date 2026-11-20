@@ -94,6 +94,20 @@ def playlist_holds_song(session: Session, playlist: Playlist, song: Song) -> boo
     return bool(session.scalar(select(playlist_holds_song_clause(playlist.id, song.id))))
 
 
+def playlist_slug_taken(
+    session: Session, slug: str, exclude_playlist_id: str | None = None,
+) -> bool:
+    """Whether a playlist holds this slug; the slug is global.
+
+    Pass exclude_playlist_id when the playlist already owns a row, so a
+    rename does not collide with itself.
+    """
+    query = session.query(Playlist).filter(Playlist.slug == slug)
+    if exclude_playlist_id is not None:
+        query = query.filter(Playlist.id != exclude_playlist_id)
+    return query.first() is not None
+
+
 def create_playlist(session: Session, title: str, user_id: str, slug: str) -> Playlist:
     """Create a playlist.
 

@@ -18,6 +18,16 @@ from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
 from songmaker_cli.messages import Message
 
 
+def lora_slug_taken(session: Session, user_id: str, slug: str) -> bool:
+    """Whether the musician already holds a LoRA under this slug."""
+    return (
+        session.query(UserLora)
+        .filter(UserLora.user_id == user_id, UserLora.slug == slug)
+        .first()
+        is not None
+    )
+
+
 def create_user_lora(
     session: Session, user_id: str, name: str, slug: str,
     *, model_mode: str = MODEL_DEFAULT_MODE,
