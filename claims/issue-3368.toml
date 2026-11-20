@@ -3,6 +3,6 @@ agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
 role = "builder"
 base = "eb8e9f7cdd3f09354329a22da2fcded4f9e04231"
 branch = "claude/issue-3368-rate-limit-null-user-unique"
-scope = ["src/songmaker_cli/db/migrations/versions/b64e2a7c9d10_rate_limit_user_key_treats_null_users_as_equal.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/rate_limits.py", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/db/test_migrations_rate_limit_global_unique.py", "tests/songmaker_cli/test_rate_limit_upsert_race_postgres.py"]
+scope = ["src/songmaker_cli/db/migrations/versions/b64e2a7c9d10_rate_limit_user_key_treats_null_users_as_equal.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/rate_limits.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/db/test_migrations_rate_limit_global_unique.py", "tests/songmaker_cli/test_rate_limit_upsert_race_postgres.py", "tests/songmaker_cli/test_reference_api_countdown.py", "tests/songmaker_cli/test_settings_api_rate_limit_upsert_race_postgres.py"]
 opened_commit = "ff24f6944c2dae5cde1981ec69a1bcd51ac4bf55"
 whole_reason = "the migration, model, upsert and the route's key order change together to make one rate limit row per key, with their two tests"
