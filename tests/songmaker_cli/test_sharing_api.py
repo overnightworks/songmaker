@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
+from support.library_rows import a_song, a_take, a_version, an_album
 from support.object_store import an_object_store
 from support.web_app import (
     BUILT_SHELL,
@@ -35,7 +36,7 @@ from songmaker_cli.covers import (
     PLAYLIST_COVER_DIRNAME,
     SONG_COVER_DIRNAME,
 )
-from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User
 
 # The four share endpoints require PUBLIC_BASE_URL (#339); conftest.py sets
 # the test-wide default ("Required env vars for Settings construction at
@@ -49,15 +50,10 @@ _TRUSTED_PEER = "172.18.0.1"
 def _seed_sharing_data(session) -> None:
     admin = User(username="admin", role="admin")
     session.add(admin)
-    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(
-        Song(id="s1", title="Song One", album_id="test_album", track_number=1, slug="song-one"),
-    )
-    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="Hello"))
-    session.add(Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
-    ))
+    an_album(session, "test_album", title="Test Album", artist="Test Artist")
+    a_song(session, "s1", "test_album", title="Song One", slug="song-one")
+    a_version(session, "v1", "s1", lyrics="Hello")
+    a_take(session, "g1", "s1", owner="admin_user", version_id="v1", seed=42, is_picked=True)
 
 
 def _make_sharing_app(tmp_path: Path, factory) -> tuple[TestClient, Path]:
@@ -93,44 +89,28 @@ def _seed_mixed_playability_album(session) -> None:
     admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(
-        Song(
-            id="s_playable", title="Has A Take", album_id="test_album", track_number=1,
-            slug="has-a-take",
-        ),
-    )
-    session.add(Generation(
-        id="g_playable", song_id="s_playable", generation_number=1,
-        mp3_path="admin_user/g_playable.mp3", seed=1, is_picked=True,
-    ))
-    session.add(Song(
-        id="s_no_gen", title="No Generation At All", album_id="test_album", track_number=2,
+    owner = "admin_user"
+    a_song(session, "s_playable", "test_album", title="Has A Take", slug="has-a-take")
+    a_take(session, "g_playable", "s_playable", owner=owner, is_picked=True)
+    a_song(
+        session, "s_no_gen", "test_album", title="No Generation At All", track_number=2,
         slug="no-generation-at-all",
-    ))
-    session.add(Song(
-        id="s_archived_only", title="Only Archived Take", album_id="test_album", track_number=3,
+    )
+    a_song(
+        session, "s_archived_only", "test_album", title="Only Archived Take", track_number=3,
         slug="only-archived-take",
-    ))
-    session.add(Generation(
-        id="g_archived", song_id="s_archived_only", generation_number=1,
-        mp3_path="admin_user/g_archived.mp3", seed=1, is_archived=True,
-    ))
-    session.add(Song(
-        id="s_unpicked_take", title="Unpicked But Playable", album_id="test_album", track_number=4,
+    )
+    a_take(session, "g_archived", "s_archived_only", owner=owner, is_archived=True)
+    a_song(
+        session, "s_unpicked_take", "test_album", title="Unpicked But Playable", track_number=4,
         slug="unpicked-but-playable",
-    ))
-    session.add(Generation(
-        id="g_unpicked", song_id="s_unpicked_take", generation_number=1,
-        mp3_path="admin_user/g_unpicked.mp3", seed=1, is_picked=False,
-    ))
-    session.add(Song(
-        id="s_empty_mp3", title="Picked Take With Empty File",
-        album_id="test_album", track_number=5, slug="picked-take-with-empty-file",
-    ))
-    session.add(Generation(
-        id="g_empty_mp3", song_id="s_empty_mp3", generation_number=1,
-        mp3_path="", seed=1, is_picked=True,
-    ))
+    )
+    a_take(session, "g_unpicked", "s_unpicked_take", owner=owner, is_picked=False)
+    a_song(
+        session, "s_empty_mp3", "test_album", title="Picked Take With Empty File", track_number=5,
+        slug="picked-take-with-empty-file",
+    )
+    a_take(session, "g_empty_mp3", "s_empty_mp3", owner=owner, mp3_path="", is_picked=True)
 
 
 def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path, pg_factory) -> None:
@@ -393,11 +373,10 @@ def _add_second_shared_audio_take(
     is_picked: bool,
     created_at: datetime | None = None,
 ) -> None:
-    session.add(Generation(
-        id="g2", song_id="s1", version_id="v1", generation_number=2,
-        mp3_path="admin_user/g2.mp3", seed=43, is_picked=is_picked,
-        created_at=created_at,
-    ))
+    a_take(
+        session, "g2", "s1", owner="admin_user", version_id="v1", generation_number=2, seed=43,
+        is_picked=is_picked, created_at=created_at,
+    )
 
 
 @pytest.mark.parametrize(
@@ -1130,10 +1109,7 @@ def _audio_urls_in(payload) -> list[str]:
 def _add_unshared_take_of_the_same_creator(session, *, mp3_path: str) -> None:
     session.add(Album(id="other_album", title="Other Album", artist="Test Artist"))
     session.add(Song(id="s9", title="Song Nine", album_id="other_album", track_number=1))
-    session.add(Generation(
-        id="gx", song_id="s9", generation_number=1,
-        mp3_path=mp3_path, is_picked=True,
-    ))
+    a_take(session, "gx", "s9", owner="", seed=None, mp3_path=mp3_path, is_picked=True)
 
 
 def _assert_plays_with_ranges(listener: TestClient, audio_url: str) -> None:
@@ -1248,25 +1224,15 @@ def _seed_multi_track_album(session) -> None:
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     for i in range(4):
         song_id = f"s{i}"
-        session.add(Song(
-            id=song_id, title=f"Song {i}", album_id="test_album", track_number=i,
-            slug=f"song-{i}",
-        ))
-        session.add(Version(
-            id=f"v{i}", song_id=song_id, version_number=1,
-            lyrics=f"Lyrics {i}", audio_duration=100 + i,
-        ))
-        session.add(Generation(
-            id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
-            mp3_path=f"admin_user/g{i}.mp3", seed=1, is_picked=True,
+        a_song(
+            session, song_id, "test_album", title=f"Song {i}", track_number=i, slug=f"song-{i}",
+        )
+        a_version(session, f"v{i}", song_id, lyrics=f"Lyrics {i}", audio_duration=100 + i)
+        a_take(
+            session, f"g{i}", song_id, owner="admin_user", version_id=f"v{i}", is_picked=True,
             audio_duration_sec=100 + i,
-        ))
-    session.add(
-        Song(
-            id="s_no_pick", title="No Pick", album_id="test_album", track_number=4,
-            slug="no-pick",
-        ),
-    )
+        )
+    a_song(session, "s_no_pick", "test_album", title="No Pick", track_number=4, slug="no-pick")
 
 
 def test_shared_album_view_includes_pick_media(tmp_path: Path, pg_factory) -> None:
@@ -1318,18 +1284,13 @@ def test_shared_album_view_warms_versions_in_one_query(tmp_path: Path, pg_factor
 def _seed_song_with_pick(session) -> None:
     admin = User(username="admin", role="admin")
     session.add(admin)
-    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
-    session.add(
-        Song(id="s1", title="Song One", album_id="test_album", track_number=1, slug="song-one"),
-    )
-    session.add(Version(
-        id="v1", song_id="s1", version_number=1, lyrics="Hello", audio_duration=180,
-    ))
-    session.add(Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
+    an_album(session, "test_album", title="Test Album", artist="Test Artist")
+    a_song(session, "s1", "test_album", title="Song One", slug="song-one")
+    a_version(session, "v1", "s1", lyrics="Hello", audio_duration=180)
+    a_take(
+        session, "g1", "s1", owner="admin_user", version_id="v1", seed=42, is_picked=True,
         audio_duration_sec=180.0,
-    ))
+    )
 
 
 def test_shared_song_view_includes_pick_media(tmp_path: Path, pg_factory) -> None:
@@ -1580,19 +1541,14 @@ def _seed_playlist_with_entries(session) -> None:
     session.add(Playlist(id="pl1", title="My Playlist"))
     for i in range(3):
         song_id = f"s{i}"
-        session.add(Song(
-            id=song_id, title=f"Song {i}", album_id="test_album", track_number=i,
-            slug=f"song-{i}",
-        ))
-        session.add(Version(
-            id=f"v{i}", song_id=song_id, version_number=1,
-            lyrics=f"Lyrics {i}", audio_duration=100 + i,
-        ))
-        session.add(Generation(
-            id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
-            mp3_path=f"admin_user/g{i}.mp3", seed=1,
+        a_song(
+            session, song_id, "test_album", title=f"Song {i}", track_number=i, slug=f"song-{i}",
+        )
+        a_version(session, f"v{i}", song_id, lyrics=f"Lyrics {i}", audio_duration=100 + i)
+        a_take(
+            session, f"g{i}", song_id, owner="admin_user", version_id=f"v{i}",
             audio_duration_sec=100 + i,
-        ))
+        )
         session.add(PlaylistEntry(id=f"e{i}", playlist_id="pl1", generation_id=f"g{i}", position=i))
 
 
@@ -1608,26 +1564,17 @@ def _add_mosaic_album(session, index: int) -> str:
     album_id = f"mosaic-album-{index}"
     song_id = f"mosaic-song-{index}"
     generation_id = f"mosaic-generation-{index}"
-    session.add(Album(
-        id=album_id,
-        title=f"Mosaic Album {index}",
-        artist="Test Artist",
+    an_album(
+        session, album_id, title=f"Mosaic Album {index}", artist="Test Artist",
         cover_key=f"mosaic-{index}.png",
-    ))
-    session.add(Song(
-        id=song_id,
-        title=f"Mosaic Song {index}",
-        album_id=album_id,
-        track_number=1,
-        slug=f"mosaic-song-{index}",
-    ))
-    session.add(Generation(
-        id=generation_id,
-        song_id=song_id,
-        generation_number=1,
+    )
+    a_song(
+        session, song_id, album_id, title=f"Mosaic Song {index}", slug=f"mosaic-song-{index}",
+    )
+    a_take(
+        session, generation_id, song_id, owner="admin_user", seed=index,
         mp3_path=f"admin_user/mosaic-{index}.mp3",
-        seed=index,
-    ))
+    )
     session.add(PlaylistEntry(
         id=f"mosaic-entry-{index}",
         playlist_id="pl1",
@@ -1774,9 +1721,7 @@ def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(
         album = session.get(Album, "test_album")
         assert album is not None
         album.cover_key = "album.png"
-        session.add(Album(
-            id="foreign-album", title="Foreign", artist="Other", cover_key="foreign.png",
-        ))
+        an_album(session, "foreign-album", title="Foreign", artist="Other", cover_key="foreign.png")
         session.commit()
     _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "test_album")
     _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "foreign-album")
@@ -1838,9 +1783,7 @@ def test_shared_playlist_serves_no_cover_of_a_non_member_album(tmp_path, pg_fact
         member = session.get(Album, "test_album")
         assert member is not None
         member.cover_key = "member.png"
-        session.add(Album(
-            id="foreign-album", title="Foreign", artist="Other", cover_key="foreign.png",
-        ))
+        an_album(session, "foreign-album", title="Foreign", artist="Other", cover_key="foreign.png")
         session.commit()
     for album_id in ("test_album", "foreign-album"):
         _write_cover_variants(client.app.state.ctx.audio_dir, "covers", album_id)
@@ -2203,51 +2146,19 @@ def _seed_song_with_two_takes(session) -> None:
     admin = User(username="admin", role="admin")
     session.add(admin)
     session.flush()
-    session.add(
-        Album(
-            id="test_album",
-            title="Test Album",
-            artist="Test Artist",
-            created_by=admin.id,
-        )
+    an_album(
+        session, "test_album", title="Test Album", artist="Test Artist", created_by=admin.id,
     )
-    session.add(
-        Song(id="s1", title="Song One", album_id="test_album", track_number=1, slug="song-one"),
-    )
-    session.add(
-        Version(
-            id="v1",
-            song_id="s1",
-            version_number=1,
-            lyrics="the lantern hums",
-            audio_duration=187,
-        )
-    )
+    a_song(session, "s1", "test_album", title="Song One", slug="song-one")
+    a_version(session, "v1", "s1", lyrics="the lantern hums", audio_duration=187)
     session.add(Playlist(id="pl1", title="My Playlist", created_by=admin.id))
-    session.add(
-        Generation(
-            id="g1",
-            song_id="s1",
-            version_id="v1",
-            generation_number=1,
-            mp3_path="admin_user/g1.mp3",
-            seed=1,
-            is_picked=True,
-            whisper_text="the lantern hums",
-            whisper_cues=_SUNG_CUES,
-        )
+    a_take(
+        session, "g1", "s1", owner="admin_user", version_id="v1", is_picked=True,
+        whisper_text="the lantern hums", whisper_cues=_SUNG_CUES,
     )
-    session.add(
-        Generation(
-            id="g2",
-            song_id="s1",
-            version_id="v1",
-            generation_number=2,
-            mp3_path="admin_user/g2.mp3",
-            seed=2,
-            whisper_text="a different rendition",
-            whisper_cues=_OTHER_TAKE_CUES,
-        )
+    a_take(
+        session, "g2", "s1", owner="admin_user", version_id="v1", generation_number=2, seed=2,
+        whisper_text="a different rendition", whisper_cues=_OTHER_TAKE_CUES,
     )
     session.add(PlaylistEntry(id="e1", playlist_id="pl1", generation_id="g1", position=0))
 
