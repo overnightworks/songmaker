@@ -14,7 +14,6 @@ from tandem import Liveness
 from acestep_worker.heartbeat import (
     GPU_HOLD_LASTS,
     HeartbeatLoop,
-    gpu_hold_blocks_generation,
     gpu_hold_locks,
     queue_depth_key,
     reserve_gpu_hold,
