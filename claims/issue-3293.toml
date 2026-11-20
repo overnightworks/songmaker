@@ -1,7 +1,0 @@
-claim_id = "e423048d7bb84e19b282caf62cb224f8"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "98824823e5b5f0023b895ebf2a5b1a20e902f05b"
-branch = "claude/issue-3293-the-queue-stream-build-lock-test-holds-u"
-scope = ["src/songmaker_cli/queue_stream_build_lock.py", "tests/songmaker_cli/test_queue_stream_build_lock.py"]
-opened_commit = "c2af6a5710a4240abfbe806119855e7a2a71b9cf"
