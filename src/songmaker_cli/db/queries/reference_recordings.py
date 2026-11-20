@@ -368,12 +368,11 @@ def owner_reference_usage(session: Session, user_id: str) -> ReferenceUsage:
 
 class CountdownRowFault(StrEnum):
     MISSING = "missing"
-    DUPLICATE = "duplicate"
     MALFORMED = "malformed"
 
 
 class CountdownRowUnusable(RuntimeError):
-    """The publication row is missing, duplicated or holds no ISO-8601 UTC instant."""
+    """The publication row is missing or holds no ISO-8601 UTC instant."""
 
     def __init__(self, fault: CountdownRowFault, row_count: int) -> None:
         super().__init__(f"reference countdown row {fault.value}")
@@ -396,15 +395,14 @@ _COUNTDOWN_ROWS = (
 def get_countdown_publication(session: Session) -> CountdownPublication:
     """The countdown row's epoch and the instant a page first showed it, None until then.
 
-    Fails loud on a missing or duplicated row and on a value that is not an ISO-8601 UTC
-    instant; the log carries the row count and the fault kind only (the exception message).
+    Fails loud on a missing row and on a value that is not an ISO-8601 UTC instant; the
+    unique key on (user_id, setting_key) admits at most one row. The log carries the row
+    count and the fault kind only (the exception message).
     """
-    rows = session.scalars(select(RateLimitSetting).where(*_COUNTDOWN_ROWS)).all()
+    row = session.scalars(select(RateLimitSetting).where(*_COUNTDOWN_ROWS)).one_or_none()
     try:
-        if len(rows) != 1:
-            fault = CountdownRowFault.MISSING if not rows else CountdownRowFault.DUPLICATE
-            raise CountdownRowUnusable(fault, len(rows))
-        [row] = rows
+        if row is None:
+            raise CountdownRowUnusable(CountdownRowFault.MISSING, 0)
         return CountdownPublication(row.id, _published_instant(row.value_text))
     except CountdownRowUnusable as unusable:
         log.exception("Reference countdown row unusable (rows=%d)", unusable.row_count)
