@@ -192,7 +192,7 @@ def add_album_to_playlist(
     session: Session,
     playlist_id: str,
     album_id: str,
-    is_readable: Callable[[Generation], bool] | None = None,
+    is_readable: Callable[[Generation], bool],
 ) -> PlaylistAlbumAddResult:
     album = (
         session.query(Album)
@@ -212,7 +212,7 @@ def add_album_to_playlist(
         playable = presented_take(song.generations)
         if playable is None:
             reason = PLAYLIST_SKIP_NO_PLAYABLE
-        elif is_readable is not None and not is_readable(playable):
+        elif not is_readable(playable):
             reason = PLAYLIST_SKIP_MISSING_AUDIO
         else:
             chosen[song.id] = playable
