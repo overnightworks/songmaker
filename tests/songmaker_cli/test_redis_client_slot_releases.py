@@ -39,13 +39,13 @@ def test_an_app_starts_and_stops_after_another_apps_loop_ended_with_a_release_pe
     )
     first_loop = asyncio.new_event_loop()
 
-    async def _leave_a_release_pending() -> None:
-        first_ctx.slot_releases.release_in_background(
+    async def _leave_a_release_pending(ctx) -> None:
+        ctx.slot_releases.release_in_background(
             _NeverReleasingSlots(), "slot-token", subject="Test",
         )
         await asyncio.sleep(0)
 
-    first_loop.run_until_complete(_leave_a_release_pending())
+    first_loop.run_until_complete(_leave_a_release_pending(first_ctx))
 
     second_ctx = make_app_context(
         db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
