@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Final
 
 from PIL import Image
-from sqlalchemy import or_
 from tandem import StoreError, Wake, WakeChannel
 from webauth.ports import AuthenticatedUser
 
@@ -29,10 +28,13 @@ from songmaker_cli.constants import (
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
 from songmaker_cli.covers import CoverRejectedError, ai_mark_png_info, decode_cover_image
-from songmaker_cli.db.models import AlbumCoverSuggestion, Job
+from songmaker_cli.db.models import AlbumCoverSuggestion
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import get_user
-from songmaker_cli.db.queries.cover_suggestions import delete_job_cover_suggestions
+from songmaker_cli.db.queries.cover_suggestions import (
+    delete_job_cover_suggestions,
+    list_ended_cover_job_ids,
+)
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     claim_next_cover_job,
@@ -42,7 +44,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_timing import JOB_HEARTBEAT_INTERVAL_SECONDS
-from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs._runtime import _touch_heartbeat, _update_job
 from songmaker_cli.messages import Message, message
 from songmaker_cli.worker_liveness import JobOwner
@@ -148,20 +150,9 @@ def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
         for path in (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(_STAGING_DIRECTORY_PATTERN)
     ]
     with db_factory() as session:
-        ended_job_ids = {
-            job_id for (job_id,) in session.query(Job.id).filter(
-                Job.type == JobType.COVER,
-                Job.status.in_(_ENDED_WITHOUT_COVER),
-                or_(
-                    Job.id.in_(staged_job_ids),
-                    Job.id.in_(
-                        session.query(AlbumCoverSuggestion.job_id).filter(
-                            AlbumCoverSuggestion.job_id.isnot(None),
-                        ),
-                    ),
-                ),
-            )
-        }
+        ended_job_ids = list_ended_cover_job_ids(
+            session, _ENDED_WITHOUT_COVER, staged_job_ids,
+        )
         staging_dirs = [cover_staging_path(audio_dir, job_id) for job_id in ended_job_ids]
         suggestion_paths = delete_job_cover_suggestions(session, list(ended_job_ids))
         session.commit()

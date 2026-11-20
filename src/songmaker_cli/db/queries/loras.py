@@ -54,6 +54,12 @@ def get_user_lora(
     return query.filter(UserLora.id == lora_id).first()
 
 
+def get_user_lora_model_mode(session: Session, lora_id: str) -> str:
+    return session.execute(
+        select(UserLora.model_mode).where(UserLora.id == lora_id),
+    ).scalar_one()
+
+
 def list_user_loras_for_user(
     session: Session, user_id: str, *, include_deleted: bool = False,
 ) -> list[UserLora]:
