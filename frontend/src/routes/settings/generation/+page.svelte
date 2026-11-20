@@ -203,6 +203,7 @@
 					aria-checked={$defaultConfig === option.id}
 					tabindex={index === tabbableIndex ? 0 : -1}
 					class="default-chip"
+					data-hitbox="text"
 					class:shared={option.shared}
 					class:active={$defaultConfig === option.id}
 					class:unavailable={option.unavailable}
@@ -218,7 +219,8 @@
 	<section>
 		<div class="section-header">
 			<h2>{pageText('generationPage.myPresets')}</h2>
-			<button class="add-btn" onclick={openNewPreset}>{pageText('generationPage.newPreset')}</button
+			<button class="add-btn" data-hitbox="text" onclick={openNewPreset}
+				>{pageText('generationPage.newPreset')}</button
 			>
 		</div>
 
@@ -271,16 +273,23 @@
 						<span class="preset-mode-tag">{preset.model_mode}</span>
 						<button
 							class="preset-action"
+							data-hitbox="text"
 							onclick={() => handleToggleDefault(preset.id, preset.is_default)}
 						>
 							{pageText(
 								preset.is_default ? 'generationPage.unsetDefault' : 'generationPage.setDefault'
 							)}
 						</button>
-						<button class="preset-action" onclick={() => openEditPreset(preset.id)}
-							>{pageText('generationPage.edit')}</button
+						<button
+							class="preset-action"
+							data-hitbox="text"
+							onclick={() => openEditPreset(preset.id)}>{pageText('generationPage.edit')}</button
 						>
-						<button class="preset-action delete" onclick={() => (presetPendingDelete = preset)}>
+						<button
+							class="preset-action delete"
+							data-hitbox="text"
+							onclick={() => (presetPendingDelete = preset)}
+						>
 							{pageText('generationPage.delete')}
 						</button>
 					</div>
