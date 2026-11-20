@@ -22,6 +22,10 @@ def get_version(session: Session, version_id: str, song_id: str) -> Version | No
     )
 
 
+def get_version_by_id(session: Session, version_id: str) -> Version | None:
+    return session.get(Version, version_id)
+
+
 def lock_song_and_find_version(
     session: Session, song_id: str, version_id: str,
 ) -> Version | None:

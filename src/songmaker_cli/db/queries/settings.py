@@ -68,6 +68,10 @@ def get_preset(session: Session, preset_id: str, user_id: str) -> GenerationPres
     )
 
 
+def get_preset_by_id(session: Session, preset_id: str) -> GenerationPreset | None:
+    return session.get(GenerationPreset, preset_id)
+
+
 def name_exists(session: Session, user_id: str, model_mode: str, name: str) -> bool:
     return (
         session.query(GenerationPreset)
@@ -139,7 +143,7 @@ def effective_default_config(session: Session, user: User) -> str | None:
     config = user.default_generation_config
     if config is None:
         return None
-    if config in VALID_BUILTIN_CONFIGS or session.get(GenerationPreset, config) is not None:
+    if config in VALID_BUILTIN_CONFIGS or get_preset_by_id(session, config) is not None:
         return config
     return None
 
