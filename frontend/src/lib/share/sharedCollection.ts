@@ -202,9 +202,13 @@ export function trackPlaybackInfo(
 
 // The stand-in for a collection with nothing to play: one take named like the
 // collection, so the player page shows its cover and title and the unplayable
-// state.
-export function unplayableCollectionInfo(collection: SharedCollectionView): PlaybackInfo {
-	return trackPlaybackInfo(collection, {
+// state. An album's line under the title is the one its playable share shows
+// (`albumSubtitle`), not its own title again.
+export function unplayableCollectionInfo(
+	collection: SharedCollectionView,
+	albumSubtitle: string
+): PlaybackInfo {
+	const info = trackPlaybackInfo(collection, {
 		key: collection.kind,
 		title: collection.title,
 		subtitle: null,
@@ -215,4 +219,5 @@ export function unplayableCollectionInfo(collection: SharedCollectionView): Play
 		cues: null,
 		cover: collection.cover
 	});
+	return collection.kind === 'album' ? { ...info, artist: '', albumTitle: albumSubtitle } : info;
 }

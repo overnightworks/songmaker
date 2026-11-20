@@ -26,8 +26,6 @@ For anyone building or reviewing public shares and administration: the ruled pro
 
 ### REQ-SHARE-23: A playlist public share presents the take of each playlist entry that still has a take; it does not substitute a different take for a missing entry.
 
-### REQ-SHARE-28: A public share without a playable take, song, album or playlist alike, shows its cover, title, AI mark, a dimmed Play and the no-audio sentence on the player page, with no song list or now-playing line.
-
 ### REQ-SHARE-24: A public share does not include scores or edit history.
 
 ### REQ-SHARE-25: A musician who is not an administrator cannot reach another musician's private albums, songs, takes, or playlists except through a currently active public share.
@@ -35,6 +33,8 @@ For anyone building or reviewing public shares and administration: the ruled pro
 ### REQ-SHARE-26: An agent with its own account can enable a public share of its own song.
 
 ### REQ-SHARE-27: A person's own agent cannot enable a public share.
+
+### REQ-SHARE-28: A public share without a playable take, song, album or playlist alike, shows its cover, title, AI mark, a dimmed Play and the no-audio sentence on the player page, with no song list or now-playing line.
 
 ### REQ-ADMIN-01: A user has exactly one role: administrator or user.
 

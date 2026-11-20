@@ -46,7 +46,13 @@
 	const isCollection = $derived(view?.kind === 'album' || view?.kind === 'playlist');
 	// A collection without a playable take reads as one unplayable song named
 	// like the collection: no queue, no now-playing line, no side controls.
-	const hasQueue = $derived(isCollection && tracks.length > 0);
+	const nothingToPlay = $derived(tracks.length === 0);
+	const hasQueue = $derived(isCollection && !nothingToPlay);
+	const albumSubtitle = $derived(
+		view?.artist
+			? pageText('share.albumSubtitle', { artist: view.artist })
+			: pageText('share.albumSubtitleNoArtist')
+	);
 	const subtitleByEntryId = $derived(
 		view?.kind === 'playlist'
 			? new Map(tracks.map((track) => [track.key, track.albumTitle ?? '']))
@@ -67,9 +73,7 @@
 					subtitle:
 						view.kind === 'playlist'
 							? pageText('share.playlistSubtitle', tracks.length)
-							: view.artist
-								? pageText('share.albumSubtitle', { artist: view.artist })
-								: pageText('share.albumSubtitleNoArtist'),
+							: albumSubtitle,
 					nowPlaying: pageText('share.nowPlaying', {
 						title: stagedTrack.title,
 						position: String(Math.max(0, playback.queue.currentIndex) + 1),
@@ -81,7 +85,7 @@
 	const stagedInfo = $derived.by(() => {
 		if (!view) return null;
 		if (stagedTrack) return trackPlaybackInfo(view, stagedTrack);
-		return isCollection ? unplayableCollectionInfo(view) : null;
+		return isCollection ? unplayableCollectionInfo(view, albumSubtitle) : null;
 	});
 
 	$effect(() => {
@@ -213,7 +217,7 @@
 			onTogglePlay={() => playback.play()}
 			onSeek={(seconds) => playback.seek(seconds)}
 			ended={playback.ended}
-			unplayableNotice={tracks.length === 0 ? pageText('share.noAudio') : null}
+			unplayableNotice={nothingToPlay ? pageText('share.noAudio') : null}
 			showTakeLabel={false}
 			lyricsEmptyLabel={pageText('share.noLyrics')}
 			lyricsCues={stagedTrack?.cues ?? null}

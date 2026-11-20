@@ -472,6 +472,17 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		}
 	);
 
+	it.runIf(kind === 'album')(
+		'REQ-SHARE-28 an album without a playable song shows the artist line a playable album shows, not its own title twice',
+		async () => {
+			stubLayout(true);
+			const target = await renderCollection({ tracks: [] });
+			const shownText = target.textContent ?? '';
+			expect(shownText).toContain(words['share.albumSubtitle']({ artist: 'Felix' }));
+			expect(shownText.split('Open Windows')).toHaveLength(2);
+		}
+	);
+
 	it('1374_rule_14 C3 seeking before Play readies song 1 paused', async () => {
 		stubLayout(true);
 		const target = await renderCollection({
