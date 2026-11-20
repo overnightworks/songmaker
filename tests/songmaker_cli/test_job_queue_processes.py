@@ -122,8 +122,10 @@ def test_two_workers_run_each_job_exactly_once(queue, web_cluster) -> None:
 
     job_ids = queue.queue_jobs(factory, JOB_COUNT)
 
+    # The worker commits the job's end before it logs `arq_job.ended`: wait for both.
     assert poll_until(
-        lambda: queue.ended_without_running(factory, job_ids),
+        lambda: queue.ended_without_running(factory, job_ids)
+        and all(times_run(workers, job_id) >= 1 for job_id in job_ids),
         deadline_seconds=QUEUE_POLL_INTERVAL_SECONDS * JOB_COUNT + START_MARGIN_SECONDS,
     ), [worker.log_tail() for worker in workers]
     assert [times_run(workers, job_id) for job_id in job_ids] == [1] * JOB_COUNT
