@@ -1,0 +1,8 @@
+claim_id = "daf10d6284c542249593f590f36c5a92"
+agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
+role = "builder"
+base = "f10bb79544212f153bb1f4b58c278cf16615929e"
+branch = "claude/issue-3372-the-eight-other-songmaker-cli-modules-re"
+scope = ["src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/queue_streams.py", "src/songmaker_cli/server.py", "src/songmaker_cli/worker_liveness.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_health_api.py"]
+opened_commit = "482b88457002f2b213dda90b9a5f4273824f2fe0"
+whole_reason = "one clock owner replaces inline datetime.now across the remaining modules"
