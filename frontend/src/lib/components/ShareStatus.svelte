@@ -1,5 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import { SIGN_IN_PATH } from '#lib/api/fetch.ts';
 	import type { SharedCollectionKind } from '#lib/api/shared.ts';
 	import type { Key } from '#lib/words/en.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
@@ -64,7 +65,7 @@
 	<h1 bind:this={headingElement} tabindex="-1">{heading}</h1>
 	{#if kind === 'missing'}
 		<p>{pageText('shareStatus.invalidLink')}</p>
-		<a class="primary" href="/login"
+		<a class="primary" href={SIGN_IN_PATH}
 			>{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a
 		>
 	{:else if kind === 'error'}
@@ -74,7 +75,7 @@
 				>{pageText('shareStatus.retry')}</button
 			>
 		{/if}
-		<a href="/login">{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a>
+		<a href={SIGN_IN_PATH}>{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a>
 	{/if}
 </section>
 
