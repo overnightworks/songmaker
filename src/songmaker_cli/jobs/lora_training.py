@@ -15,7 +15,6 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
-from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.audio_paths import confined_under
@@ -30,10 +29,13 @@ from songmaker_cli.constants import (
     LoraStatus,
     ResourceType,
 )
-from songmaker_cli.db.models import UserLora
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.jobs import count_generation_jobs_awaiting_the_gpu, get_job
-from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
+from songmaker_cli.db.queries.loras import (
+    get_user_lora_model_mode,
+    list_active_user_loras,
+    update_user_lora,
+)
 from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS, STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import JobStatus, JobType
@@ -1289,9 +1291,7 @@ def _save_lora_model_mode(
     completed_model_mode: str,
 ) -> str:
     with db_factory() as session:
-        previous_model_mode = session.execute(
-            select(UserLora.model_mode).where(UserLora.id == lora_id),
-        ).scalar_one()
+        previous_model_mode = get_user_lora_model_mode(session, lora_id)
         update_user_lora(session, lora_id, model_mode=completed_model_mode)
         session.commit()
     return previous_model_mode

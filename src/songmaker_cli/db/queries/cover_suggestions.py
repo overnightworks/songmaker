@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
+
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.models import AlbumCoverSuggestion
+from songmaker_cli.db.models import AlbumCoverSuggestion, Job
+from songmaker_cli.job_types import JobStatus, JobType
 
 
 def list_album_cover_suggestions(
@@ -27,6 +30,26 @@ def get_album_cover_suggestion(
         .filter_by(album_id=album_id, id=suggestion_id)
         .first()
     )
+
+
+def list_ended_cover_job_ids(
+    session: Session, ended_statuses: Collection[JobStatus], staged_job_ids: Collection[str],
+) -> set[str]:
+    """Ids of cover jobs in an ended status that are staged or made a suggestion."""
+    return {
+        job_id for (job_id,) in session.query(Job.id).filter(
+            Job.type == JobType.COVER,
+            Job.status.in_(ended_statuses),
+            or_(
+                Job.id.in_(staged_job_ids),
+                Job.id.in_(
+                    session.query(AlbumCoverSuggestion.job_id).filter(
+                        AlbumCoverSuggestion.job_id.isnot(None),
+                    ),
+                ),
+            ),
+        )
+    }
 
 
 def delete_named_cover_suggestions(

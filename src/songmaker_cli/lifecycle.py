@@ -23,6 +23,10 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_RETENTION_DAYS,
 )
 from songmaker_cli.cover_runner import reconcile_reaped_cover_jobs
+from songmaker_cli.db.queries.generations import (
+    list_scored_generation_ids,
+    list_unscored_generation_ids,
+)
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
@@ -122,17 +126,7 @@ def _pick_unscored_generations(session: Session, limit: int) -> list[tuple[str, 
     predate auto-scoring) drains before generations an auto-score attempt
     recently failed to reach.
     """
-    from songmaker_cli.db.models import Generation, Score
-
-    rows = (
-        session.query(Generation.id, Generation.song_id)
-        .outerjoin(Score, Score.generation_id == Generation.id)
-        .filter(Score.id.is_(None))
-        .order_by(Generation.created_at.asc())
-        .limit(limit)
-        .all()
-    )
-    return [(gen_id, song_id) for gen_id, song_id in rows]
+    return list_unscored_generation_ids(session, limit)
 
 
 def _backfill_attempt_key(gen_id: str) -> str:
@@ -188,21 +182,13 @@ async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: ArqRedis) ->
     immediately if it were ever to regress.
     """
     from songmaker_cli.constants import SCORE_BACKFILL_TRACKED_SET_KEY
-    from songmaker_cli.db.models import Score
-
     tracked_raw = await redis.smembers(SCORE_BACKFILL_TRACKED_SET_KEY)
     if not tracked_raw:
         return
     tracked_ids = [decode_redis_text(gen_id) for gen_id in tracked_raw]
 
     with ctx.db() as session:
-        resolved = {
-            gen_id for (gen_id,) in
-            session.query(Score.generation_id)
-            .filter(Score.generation_id.in_(tracked_ids))
-            .distinct()
-            .all()
-        }
+        resolved = list_scored_generation_ids(session, tracked_ids)
 
     for gen_id in resolved:
         await redis.delete(_backfill_attempt_key(gen_id))

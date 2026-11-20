@@ -110,6 +110,31 @@ _GENERATION_FILE_SUFFIXES: Final = (
 )
 
 
+def list_unscored_generation_ids(session: Session, limit: int) -> list[tuple[str, str]]:
+    """Return (generation_id, song_id) for up to ``limit`` scoreless generations, oldest first."""
+    rows = (
+        session.query(Generation.id, Generation.song_id)
+        .outerjoin(Score, Score.generation_id == Generation.id)
+        .filter(Score.id.is_(None))
+        .order_by(Generation.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+    return [(gen_id, song_id) for gen_id, song_id in rows]
+
+
+def list_scored_generation_ids(
+    session: Session, generation_ids: Collection[str | None],
+) -> set[str]:
+    return {
+        gen_id for (gen_id,) in
+        session.query(Score.generation_id)
+        .filter(Score.generation_id.in_(generation_ids))
+        .distinct()
+        .all()
+    }
+
+
 def generation_file_set(audio_rel: str) -> list[str]:
     """Return every file a take owns, as audio-dir-relative names."""
     stem = audio_rel.removesuffix(".mp3").removesuffix(".wav")
