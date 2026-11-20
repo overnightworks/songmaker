@@ -1,8 +1,0 @@
-claim_id = "cb6bf73a6b3042388f2d63dbc4044920"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "7bb0c1ec6d96e669c1431994cae43553b1b89c93"
-branch = "claude/issue-3339-a-shared-album-or-playlist-without-a-pla"
-scope = ["docs/sharing.md", "frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/share/sharedCollection.ts", "scripts/style-literals.txt"]
-opened_commit = "6e81788e36613e83a5e5eaa338cd69bdfb4f174d"
-whole_reason = "the shared page component, its share helper, its tests and e2e spec, the style-literal ratchet and the sharing document"
