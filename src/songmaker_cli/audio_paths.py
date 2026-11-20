@@ -60,12 +60,12 @@ def canonical_audio_filename(audio_dir: Path, filename: str) -> str | None:
 
 
 def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
-    """Return an existing audio file constrained to ``audio_dir``."""
+    """Return an existing regular audio file constrained to ``audio_dir``."""
     audio_path = _resolved_within_root(audio_dir, relative_path)
     if audio_path is None:
         log.warning("Audio path traversal denied")
         raise AudioPathRejectedError("audio path escapes the audio root")
-    if not audio_path.exists():
+    if not audio_path.is_file():
         raise AudioFileNotFoundError(relative_path)
     return audio_path
 

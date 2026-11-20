@@ -29,6 +29,7 @@ from support.web_app import (
     web_client,
 )
 
+from songmaker_cli.audio_api import router as audio_router
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -73,6 +74,7 @@ def world(tmp_path: Path, pg_factory) -> dict[str, TestClient]:
             session.add(User(id=user_id, username=user_id, role="user"))
         session.flush()
         session.add(Album(id="album", title="Album", artist="Band", created_by=OWNER_ID))
+        session.add(Album(id="empty-album", title="Empty", artist="Band", created_by=OWNER_ID))
         session.add(Song(id="song", title="Song", album_id="album", slug="song"))
         session.add(Version(id="version", song_id="song", version_number=1))
         for number, (take_id, stored_path) in enumerate((
@@ -130,28 +132,37 @@ def test_a_foreign_take_answers_the_body_of_a_missing_one(
     assert foreign.json()["detail"] == "Generation not found"
 
 
-def _after_the_take_is_read(statement: str) -> bool:
-    return "FROM generations" in statement
+GONE_RESOURCES = {
+    "take": (Generation, "take", "FROM generations", "generationRefusal.notFound"),
+    "album": (Album, "empty-album", "FROM albums", "albumRefusal.notFound"),
+    "playlist": (Playlist, "playlist", "FROM playlists", "playlistRefusal.notFound"),
+}
 
 
 @pytest.mark.parametrize(
-    ("method", "path", "arguments"),
+    ("method", "path", "arguments", "gone"),
     [
-        ("post", "/api/generations/take/rate", {"json": {"rating": 80}}),
-        ("post", "/api/generations/take/pick", {}),
-        ("post", "/api/generations/take/keep", {}),
-        ("post", "/api/generations/take/share", {}),
-        ("delete", "/api/generations/take/share", {}),
-        ("delete", "/api/generations/take", {}),
+        ("post", "/api/generations/take/rate", {"json": {"rating": 80}}, "take"),
+        ("post", "/api/generations/take/pick", {}, "take"),
+        ("post", "/api/generations/take/keep", {}, "take"),
+        ("post", "/api/generations/take/share", {}, "take"),
+        ("delete", "/api/generations/take/share", {}, "take"),
+        ("delete", "/api/generations/take", {}, "take"),
         ("post", "/api/playlists/playlist/entries/generation",
-         {"json": {"generation_id": "take"}}),
+         {"json": {"generation_id": "take"}}, "take"),
+        ("post", "/api/albums/empty-album/share", {}, "album"),
+        ("delete", "/api/albums/empty-album/share", {}, "album"),
     ],
-    ids=["rate", "pick", "keep", "share", "unshare", "delete", "playlist-add"],
+    ids=[
+        "rate", "pick", "keep", "share", "unshare", "delete", "playlist-add",
+        "album-share", "album-unshare",
+    ],
 )
-def test_a_take_deleted_after_the_access_check_reads_like_a_missing_one(
-    world: dict[str, TestClient], pg_factory, method: str, path: str, arguments: dict,
+def test_a_resource_deleted_after_the_access_check_reads_like_a_missing_one(
+    world: dict[str, TestClient], pg_factory, method: str, path: str, arguments: dict, gone: str,
 ) -> None:
-    pause = StatementPause(_after_the_take_is_read)
+    model, resource_id, read_marker, refusal_key = GONE_RESOURCES[gone]
+    pause = StatementPause(lambda statement: read_marker in statement)
     answers: dict[str, object] = {}
     request = in_thread(answers, "request", lambda: getattr(world[OWNER_ID], method)(
         path, **arguments,
@@ -159,9 +170,9 @@ def test_a_take_deleted_after_the_access_check_reads_like_a_missing_one(
     pause.install(pg_factory)
     try:
         request.start()
-        assert pause.reached.wait(WAIT_SECONDS), "The request never read the take"
+        assert pause.reached.wait(WAIT_SECONDS), "The request never read the resource"
         with pg_factory() as deleter:
-            deleter.delete(deleter.get(Generation, "take"))
+            deleter.delete(deleter.get(model, resource_id))
             deleter.commit()
     finally:
         pause.release.set()
@@ -171,53 +182,75 @@ def test_a_take_deleted_after_the_access_check_reads_like_a_missing_one(
     response = answers["request"]
     assert not isinstance(response, BaseException), response
     assert response.status_code == 404
-    assert response.json() == refusal_body("generationRefusal.notFound")
+    assert response.json() == refusal_body(refusal_key)
 
 
 @pytest.mark.parametrize(
-    ("path", "arguments"),
+    ("path", "arguments", "gone"),
     [
-        ("/api/generations/take/share", {}),
-        ("/api/playlists/playlist/entries/generation", {"json": {"generation_id": "take"}}),
+        ("/api/generations/take/share", {}, "take"),
+        ("/api/playlists/playlist/entries/generation", {"json": {"generation_id": "take"}}, "take"),
+        ("/api/playlists/playlist/share", {}, "playlist"),
+        ("/api/albums/empty-album/share", {}, "album"),
     ],
-    ids=["share", "playlist-add"],
+    ids=["share", "playlist-add", "playlist-share", "album-share"],
 )
-def test_a_take_deleted_right_after_the_commit_reads_like_a_missing_one(
-    world: dict[str, TestClient], pg_factory, path: str, arguments: dict,
+def test_a_resource_deleted_right_after_the_commit_reads_like_a_missing_one(
+    world: dict[str, TestClient], pg_factory, path: str, arguments: dict, gone: str,
 ) -> None:
-    take_deleted = threading.Event()
+    model, resource_id, _, refusal_key = GONE_RESOURCES[gone]
+    resource_deleted = threading.Event()
     request_sessions: list[Session] = []
 
-    def delete_the_take() -> None:
+    def delete_the_resource() -> None:
         with pg_factory() as deleter:
-            deleter.delete(deleter.get(Generation, "take"))
+            deleter.delete(deleter.get(model, resource_id))
             deleter.commit()
-        take_deleted.set()
+        resource_deleted.set()
 
     def is_the_request_commit(session: Session) -> bool:
-        if not wrote_to_tables(session, "generations", "playlist_entries"):
+        if not wrote_to_tables(
+            session, "generations", "playlist_entries", "playlists", "albums",
+        ):
             return False
         request_sessions.append(session)
         return True
 
-    def hold_the_request_until_the_take_is_gone(session: Session) -> None:
+    def hold_the_request_until_the_resource_is_gone(session: Session) -> None:
         if session in request_sessions:
-            assert take_deleted.wait(WAIT_SECONDS), "The take was never deleted"
+            assert resource_deleted.wait(WAIT_SECONDS), "The resource was never deleted"
 
-    event.listen(pg_factory, "after_commit", hold_the_request_until_the_take_is_gone)
+    event.listen(pg_factory, "after_commit", hold_the_request_until_the_resource_is_gone)
     try:
         answers = race(
             pg_factory,
             lambda: world[OWNER_ID].post(path, **arguments),
-            delete_the_take,
+            delete_the_resource,
             CommitPause(is_the_request_commit),
         )
     finally:
-        event.remove(pg_factory, "after_commit", hold_the_request_until_the_take_is_gone)
+        event.remove(pg_factory, "after_commit", hold_the_request_until_the_resource_is_gone)
 
     response = answers["first"]
     assert response.status_code == 404
-    assert response.json() == refusal_body("generationRefusal.notFound")
+    assert response.json() == refusal_body(refusal_key)
+
+
+@pytest.mark.parametrize("name", ["%2E", "folder.mp3"])
+def test_an_audio_name_that_is_a_folder_reads_like_a_missing_file(
+    tmp_path: Path, pg_factory, name: str,
+) -> None:
+    ctx = make_router_ctx(tmp_path, db=pg_factory)
+    (ctx.audio_dir / OWNER_ID / "folder.mp3").mkdir(parents=True)
+    app = make_router_app(ctx, user=make_authenticated_user(OWNER_ID, username=OWNER_ID))
+    app.include_router(audio_router)
+    client = web_client(app)
+
+    response = client.get(f"/audio/{OWNER_ID}/{name}")
+    missing = client.get(f"/audio/{OWNER_ID}/no-such-file.mp3")
+
+    assert response.status_code == missing.status_code == 404
+    assert response.json() == missing.json()
 
 
 def test_a_take_deleted_right_after_measuring_its_length_still_answers_with_what_was_read(
@@ -324,7 +357,7 @@ def test_a_sample_the_person_cannot_reach_answers_the_body_of_a_missing_one(
     [
         ("take-without-file", "generationRefusal.audioMissing"),
         ("take-outside", "generationRefusal.audioMissing"),
-        ("take-on-a-folder", "generationRefusal.notFound"),
+        ("take-on-a-folder", "generationRefusal.audioMissing"),
         (MISSING_ID, "generationRefusal.notFound"),
     ],
 )

@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
@@ -448,10 +449,11 @@ def api_share_playlist(
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
     share_url = public_share_url(ShareKind.PLAYLIST, playlist.share_slug)
     session.commit()
-    return ShareResponse(
-        share_url=share_url,
-        share_slug=playlist.share_slug,
-    )
+    try:
+        share_slug = playlist.share_slug
+    except ObjectDeletedError as exc:
+        raise playlist_not_found() from exc
+    return ShareResponse(share_url=share_url, share_slug=share_slug)
 
 
 _UNSHARE_PLAYLIST_DESCRIPTION = (

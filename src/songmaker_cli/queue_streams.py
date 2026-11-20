@@ -662,12 +662,6 @@ def _library_skip(ctx: AppContext, generation: Generation) -> QueueStreamSkipRes
             reason="missing_file",
         )
     try:
-        if not audio_path.is_file():
-            return QueueStreamSkipResponse(
-                song_id=generation.song_id,
-                generation_id=generation.id,
-                reason="unreadable_file",
-            )
         with audio_path.open("rb") as audio_file:
             audio_file.read(1)
         probe_audio_duration(audio_path)
