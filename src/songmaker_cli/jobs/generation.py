@@ -31,7 +31,7 @@ from songmaker_cli.config import audio_file_path, build_ace_config, resolve_mode
 from songmaker_cli.constants import (
     WORKER_SHARED_TMP_DIRNAME,
 )
-from songmaker_cli.db.models import GenerationPreset
+from songmaker_cli.db.queries.auth import get_user
 from songmaker_cli.db.queries.generations import create_generation, get_generation
 from songmaker_cli.db.queries.jobs import create_job, lock_active_job
 from songmaker_cli.db.queries.reference_recordings import lock_and_mark_reference_used
@@ -290,16 +290,16 @@ def _load_preset_params(
     db_factory: sessionmaker[Session],
 ) -> BaseGenerationParams | None:
     from songmaker_cli.config import get_builtin_defaults, resolve_model_mode
-    from songmaker_cli.db.models import User
+    from songmaker_cli.db.queries.settings import get_preset_by_id
 
     with db_factory() as session:
-        user = session.get(User, user_id)
+        user = get_user(session, user_id)
         config = effective_default_config(session, user) if user else None
         builtins = get_builtin_defaults()
         job_mode = resolve_model_mode(model_name)
         if config in builtins and config == job_mode:
             return BaseGenerationParams.model_validate(builtins[config])
-        preset = session.get(GenerationPreset, config) if config else None
+        preset = get_preset_by_id(session, config) if config else None
         if preset is None or preset.model_mode != job_mode:
             preset = get_default_preset(session, user_id, job_mode)
         return BaseGenerationParams.model_validate(preset.params or {}) if preset else None
