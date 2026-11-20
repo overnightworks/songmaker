@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select, update
@@ -16,6 +16,7 @@ from songmaker_cli.db.models import (
     UserSession,
 )
 from songmaker_cli.theme_types import ThemeChoice
+from songmaker_cli.timestamps import utcnow
 
 if TYPE_CHECKING:
     from pydantic import SecretStr
@@ -164,7 +165,7 @@ def delete_session(session: Session, session_id: str) -> None:
 
 
 def count_active_sessions(session: Session) -> int:
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     return session.query(UserSession).filter(UserSession.expires_at > now).count()
 
 
@@ -176,7 +177,7 @@ def delete_user_sessions(session: Session, user_id: str) -> int:
 
 
 def delete_expired_sessions(session: Session) -> int:
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     count = session.query(UserSession).filter(UserSession.expires_at <= now).delete()
     session.flush()
     return count

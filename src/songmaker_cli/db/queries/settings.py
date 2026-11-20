@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
@@ -16,6 +14,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, User
 from songmaker_cli.db.queries.rate_limits import get_rate_limit_setting, upsert_rate_limit_setting
+from songmaker_cli.timestamps import utcnow
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -118,7 +117,7 @@ def update_preset(
         set_default_preset(session, preset)
     elif is_default is False:
         preset.is_default = False
-    preset.updated_at = datetime.now(timezone.utc)
+    preset.updated_at = utcnow()
     session.flush()
     return preset
 
@@ -162,7 +161,7 @@ def get_default_preset(
 def set_default_preset(session: Session, preset: GenerationPreset) -> None:
     _clear_default(session, preset.created_by, preset.model_mode)
     preset.is_default = True
-    preset.updated_at = datetime.now(timezone.utc)
+    preset.updated_at = utcnow()
     session.flush()
 
 
@@ -191,7 +190,7 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
     )
     if preset:
         preset.params = params
-        preset.updated_at = datetime.now(timezone.utc)
+        preset.updated_at = utcnow()
     else:
         preset = GenerationPreset(
             name=PRESET_GLOBAL_DEFAULTS_NAME,

@@ -17,7 +17,7 @@ chat mention resolution, playlist traversal, sharing, and search.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Iterator
 
 from sqlalchemy import event
@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 
 from songmaker_cli.db.models import Album, Song
 from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import utcnow
 
 INCLUDE_DELETED_OPTION = "include_deleted"
 _SESSION_FLAG = "include_deleted"
@@ -48,7 +49,7 @@ def soft_delete_cutoff(now: datetime) -> datetime:
 
 def ensure_within_restore_window(entity: str, row_id: str, deleted_at: datetime) -> None:
     """Raise RestoreWindowExpiredError when the row was deleted before the cutoff."""
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     if deleted_at < soft_delete_cutoff(now):
         raise RestoreWindowExpiredError(
             entity, row_id, (now - deleted_at).days, get_settings().final_deletion_days,

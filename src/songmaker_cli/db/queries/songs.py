@@ -6,7 +6,7 @@ import contextlib
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Final
 
 from sqlalchemy import func, update
@@ -41,6 +41,7 @@ from songmaker_cli.db.queries.sharing import (
 )
 from songmaker_cli.db.soft_delete import ensure_within_restore_window, include_deleted
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.timestamps import utcnow
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def record_playlist_listen(session: Session, playlist: Playlist, *, song: Song) 
         update(Playlist)
         .where(Playlist.id == playlist.id)
         .values(
-            last_played_at=datetime.now(timezone.utc),
+            last_played_at=utcnow(),
             last_played_song_id=song.id,
             updated_at=Playlist.updated_at,
         ),
@@ -418,7 +419,7 @@ def update_song(
     """
     song = lock_song_row(session, song_id)
 
-    song.updated_at = datetime.now(timezone.utc)
+    song.updated_at = utcnow()
 
     prev = song.latest_version
     content = _VersionContent(
@@ -509,7 +510,7 @@ def soft_delete_song(session: Session, song_id: str) -> datetime:
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     song.deleted_at = now
     session.flush()
     return now

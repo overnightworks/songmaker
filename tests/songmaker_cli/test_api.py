@@ -2290,7 +2290,7 @@ def test_generation_estimate_leaves_the_model_load_out(
             return clock[0]
 
     monkeypatch.setattr(job_models, "datetime", SteppedDatetime)
-    monkeypatch.setattr(job_queries, "datetime", SteppedDatetime)
+    monkeypatch.setattr(job_queries, "utcnow", lambda: clock[0])
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")

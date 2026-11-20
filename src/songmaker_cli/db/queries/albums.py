@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -19,6 +19,7 @@ from songmaker_cli.db.queries.sharing import (
     playable_take_filter,
 )
 from songmaker_cli.db.soft_delete import ensure_within_restore_window, include_deleted
+from songmaker_cli.timestamps import utcnow
 
 
 def list_albums(
@@ -218,7 +219,7 @@ def soft_delete_album(session: Session, album_id: str) -> datetime:
     album = get_album(session, album_id)
     if not album:
         raise ValueError(f"Album not found: {album_id}")
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     album.deleted_at = now
     for song in album.songs:
         song.deleted_at = now
@@ -285,7 +286,7 @@ def archive_album(session: Session, album_id: str) -> Album:
     if not album:
         raise ValueError(f"Album not found: {album_id}")
     album.is_archived = True
-    album.archived_at = datetime.now(timezone.utc)
+    album.archived_at = utcnow()
     session.flush()
     return album
 

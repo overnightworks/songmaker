@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -12,6 +10,7 @@ from songmaker_cli.db.models import (
     Conversation,
     ConversationSummary,
 )
+from songmaker_cli.timestamps import utcnow
 
 
 def get_conversation(
@@ -67,7 +66,7 @@ def archive_conversation(
     if conversation is None:
         raise ValueError(f"Conversation not found: {conversation_id}")
     if conversation.archived_at is None:
-        conversation.archived_at = datetime.now(timezone.utc)
+        conversation.archived_at = utcnow()
         session.flush()
     return conversation
 
@@ -110,7 +109,7 @@ def append_message(
     session.add(msg)
     # Touch the conversation so list ordering reflects the new activity.
     session.query(Conversation).filter_by(id=conversation_id).update(
-        {"updated_at": datetime.now(timezone.utc)},
+        {"updated_at": utcnow()},
     )
     session.flush()
     return msg
