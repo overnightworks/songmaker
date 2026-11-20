@@ -6,6 +6,14 @@ import { currentUser } from '#lib/stores/auth.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
 import { words } from '#lib/words/en.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '#lib/test-utils/hitbox.ts';
 
 import GenerationSettingsPage from './+page.svelte';
 
@@ -105,6 +113,8 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	currentUser.set(null);
 	vi.unstubAllGlobals();
+	clearHitboxStyles();
+	clearPointer();
 });
 
 async function saveNewPreset(target: HTMLElement, name: string): Promise<void> {
@@ -121,6 +131,27 @@ async function saveNewPreset(target: HTMLElement, name: string): Promise<void> {
 }
 
 describe('generation settings', () => {
+	it('gives every chip and preset button the touch target on a coarse pointer', async () => {
+		injectHitboxStyles();
+		setPointer('coarse');
+		const { target } = await openPageAs(makeAuthUser(), new Set(), {
+			...RESPONSES,
+			[PRESETS_PATH]: [
+				{
+					...savedPreset(JSON.stringify({ name: 'Warm', model_mode: MODEL, params: {} })),
+					id: 'a'
+				}
+			]
+		});
+		await vi.waitFor(() => expect(target.querySelectorAll('.preset-action')).toHaveLength(3));
+
+		const controls = target.querySelectorAll('.default-chip, .add-btn, .preset-action');
+		expect(controls.length).toBeGreaterThan(3);
+		for (const control of controls) {
+			expect(minHeightPx(control, control.className)).toBe(HITBOX_FREQUENT_PX);
+		}
+	});
+
 	it.each([
 		['a non-admin', makeAuthUser()],
 		['an administrator', makeAuthUser({ role: 'admin' })]
