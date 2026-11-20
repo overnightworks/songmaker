@@ -22,6 +22,7 @@
 	import { fetchGenerationDefaults } from '#lib/api/client.ts';
 	import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
+	import PresetMenu from '#lib/components/PresetMenu.svelte';
 	import ParamControls from '#lib/components/ParamControls.svelte';
 	import { pageText } from '#lib/utils/page-words.ts';
 
@@ -219,9 +220,9 @@
 	<section>
 		<div class="section-header">
 			<h2>{pageText('generationPage.myPresets')}</h2>
-			<button class="add-btn" data-hitbox="text" onclick={openNewPreset}
-				>{pageText('generationPage.newPreset')}</button
-			>
+			<button class="pill-action" data-hitbox="text" onclick={openNewPreset}>
+				{pageText('generationPage.newPreset')}
+			</button>
 		</div>
 
 		{#if showPresetForm}
@@ -280,18 +281,11 @@
 								preset.is_default ? 'generationPage.unsetDefault' : 'generationPage.setDefault'
 							)}
 						</button>
-						<button
-							class="preset-action"
-							data-hitbox="text"
-							onclick={() => openEditPreset(preset.id)}>{pageText('generationPage.edit')}</button
-						>
-						<button
-							class="preset-action delete"
-							data-hitbox="text"
-							onclick={() => (presetPendingDelete = preset)}
-						>
-							{pageText('generationPage.delete')}
-						</button>
+						<PresetMenu
+							name={preset.name}
+							onedit={() => openEditPreset(preset.id)}
+							ondelete={() => (presetPendingDelete = preset)}
+						/>
 					</div>
 				{/each}
 			</div>
@@ -467,22 +461,6 @@
 
 	.section-header h2 {
 		margin-bottom: 0;
-	}
-
-	.add-btn {
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: var(--btn-font-size-sm);
-		cursor: pointer;
-		font-family: var(--font-display);
-	}
-
-	.add-btn:hover {
-		border-color: var(--accent);
-		color: var(--accent);
 	}
 
 	.panel {
