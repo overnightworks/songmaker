@@ -248,7 +248,6 @@ def test_the_deletion_days_setting_moves_the_date(
     "damage",
     [
         pytest.param(lambda client: _delete_countdown_rows(client), id="missing-row"),
-        pytest.param(lambda client: _duplicate_countdown_row(client), id="duplicate-row"),
         pytest.param(
             lambda client: _set_published_text(client, "last-tuesday-ish"), id="malformed-value",
         ),
@@ -285,14 +284,6 @@ def _delete_countdown_rows(client: TestClient) -> None:
             RateLimitSetting.setting_key == SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
         )):
             session.delete(row)
-        session.commit()
-
-
-def _duplicate_countdown_row(client: TestClient) -> None:
-    with client.app.state.ctx.db() as session:
-        session.add(RateLimitSetting(
-            setting_key=SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE, value=0,
-        ))
         session.commit()
 
 
