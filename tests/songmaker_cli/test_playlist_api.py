@@ -358,9 +358,7 @@ def test_add_song_not_found(seeded_session: Session) -> None:
 
 def test_add_album_adds_all_picked(seeded_session: Session) -> None:
     playlist = _create_playlist(seeded_session, "Test")
-    result = add_album_to_playlist(
-        seeded_session, playlist.id, "a1", is_readable=lambda _take: True,
-    )
+    result = add_album_to_playlist(seeded_session, playlist.id, "a1", is_readable=lambda _: True)
     seeded_session.commit()
     assert len(result.entries) == 2
     gen_ids = {e.generation_id for e in result.entries}
@@ -372,9 +370,7 @@ def test_add_album_not_found(seeded_session: Session) -> None:
     playlist = _create_playlist(seeded_session, "Test")
     seeded_session.commit()
     with pytest.raises(ValueError, match="Album not found"):
-        add_album_to_playlist(
-            seeded_session, playlist.id, "nonexistent", is_readable=lambda _take: True,
-        )
+        add_album_to_playlist(seeded_session, playlist.id, "missing", is_readable=lambda _: True)
 
 
 def test_remove_from_playlist(seeded_session: Session) -> None:
