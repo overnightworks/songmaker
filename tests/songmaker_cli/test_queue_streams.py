@@ -10,7 +10,15 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from support.library_rows import a_song, a_take, a_version, an_album
+from support.library_rows import (
+    a_song,
+    a_take,
+    a_version,
+    an_album,
+    loose_album,
+    loose_song,
+    loose_take,
+)
 from support.queue_stream_audio import stub_audio_build
 from support.route_budget import queries_without_session_auth
 from support.web_app import (
@@ -22,7 +30,7 @@ from support.web_app import (
 )
 
 from songmaker_cli import audio_files, queue_streams
-from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User
+from songmaker_cli.db.models import Generation, Playlist, PlaylistEntry, Song, User
 from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
     QueueStreamSource,
@@ -1288,13 +1296,7 @@ def _reverse_in_place(items: list) -> None:
 
 
 def _source_with_id(generation_id: str) -> QueueStreamSource:
-    generation = Generation(
-        id=generation_id,
-        song_id="s1",
-        generation_number=1,
-        mp3_path=f"{generation_id}.mp3",
-        seed=1,
-    )
+    generation = loose_take(generation_id, "s1", owner="owner", mp3_path=f"{generation_id}.mp3")
     return QueueStreamSource(
         key=generation_id,
         index=0,
@@ -1428,26 +1430,23 @@ def test_library_pool_queue_default_scan_limit_is_explicitly_partial(
     assert queue_streams.LIBRARY_QUEUE_STREAM_SCAN_LIMIT == 1_000
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_shuffle_data)
     seed_session(client, "usera")
-    album = Album(id="scan-album", title="Scan", artist="A", created_by="user-a")
+    album = loose_album("scan-album", title="Scan", artist="A", created_by="user-a")
     songs: list[Song] = []
     for index in range(1, 1_002):
-        song = Song(
-            id=f"scan-song-{index:04d}",
+        song = loose_song(
+            f"scan-song-{index:04d}",
+            album.id,
             title=f"Song {index}",
-            album=album,
-            album_id=album.id,
             track_number=index,
+            album=album,
         )
         song.generations.append(
-            Generation(
-                id=f"scan-gen-{index:04d}",
-                song_id=song.id,
-                generation_number=1,
-                mp3_path=f"user-a/scan-{index:04d}.mp3",
+            loose_take(
+                f"scan-gen-{index:04d}",
+                song.id,
+                owner="user-a",
                 model_mode="turbo",
-                is_archived=False,
                 is_picked=True,
-                is_kept=False,
             )
         )
         songs.append(song)
@@ -1609,13 +1608,11 @@ def test_library_pool_queue_unknown_pool_is_422(
 
 
 def test_generation_matches_pool_rules() -> None:
-    picked = Generation(id="p", song_id="s", mp3_path="p.mp3", is_picked=True, is_kept=False)
-    kept = Generation(id="k", song_id="s", mp3_path="k.mp3", is_picked=False, is_kept=True)
-    both = Generation(id="b", song_id="s", mp3_path="b.mp3", is_picked=True, is_kept=True)
-    plain = Generation(id="n", song_id="s", mp3_path="n.mp3", is_picked=False, is_kept=False)
-    archived = Generation(
-        id="a", song_id="s", mp3_path="a.mp3", is_picked=True, is_kept=True, is_archived=True
-    )
+    picked = loose_take("p", "s", owner="o", mp3_path="p.mp3", is_picked=True, is_kept=False)
+    kept = loose_take("k", "s", owner="o", mp3_path="k.mp3", is_picked=False, is_kept=True)
+    both = loose_take("b", "s", owner="o", mp3_path="b.mp3", is_picked=True, is_kept=True)
+    plain = loose_take("n", "s", owner="o", mp3_path="n.mp3", is_picked=False, is_kept=False)
+    archived = loose_take("a", "s", owner="o", is_picked=True, is_kept=True, is_archived=True)
 
     assert generation_matches_pool(picked, "mix") is True
     assert generation_matches_pool(kept, "mix") is True
@@ -1630,31 +1627,31 @@ def test_generation_matches_pool_rules() -> None:
 
 def test_collect_library_pool_dedupes_pick_and_keep_and_pins_out_of_pool_start() -> None:
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    older = Generation(
-        id="g-old",
-        song_id="s1",
-        mp3_path="old.mp3",
+    older = loose_take(
+        "g-old",
+        "s1",
+        owner="o",
         is_picked=False,
         is_kept=False,
         created_at=t0,
     )
-    both = Generation(
-        id="g-both",
-        song_id="s1",
-        mp3_path="both.mp3",
+    both = loose_take(
+        "g-both",
+        "s1",
+        owner="o",
         is_picked=True,
         is_kept=True,
         created_at=t0 + timedelta(days=2),
     )
-    keep = Generation(
-        id="g-keep",
-        song_id="s1",
-        mp3_path="keep.mp3",
+    keep = loose_take(
+        "g-keep",
+        "s1",
+        owner="o",
         is_picked=False,
         is_kept=True,
         created_at=t0 + timedelta(days=1),
     )
-    song = Song(id="s1", title="One", album_id="a1", track_number=1)
+    song = loose_song("s1", "a1", title="One")
     song.generations = [older, both, keep]
 
     mixed = collect_library_pool_generations([song], "mix", older)
