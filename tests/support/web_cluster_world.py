@@ -36,9 +36,10 @@ SCRIPTED_REPLY = "The reply the gateway stand-in scripted."
 
 def start_owner(cluster: WebProcesses, redis_client: Redis, name: str) -> tuple[WebProcess, str]:
     """Start a process and return it with the owner id its lease names."""
-    before = leased_owner_ids(redis_client)
+    before = leased_owner_ids(redis_client) | cluster.claimed_owner_ids
     process = cluster.start(name)
     [owner_id] = leased_owner_ids(redis_client) - before
+    cluster.claimed_owner_ids.add(owner_id)
     return process, owner_id
 
 

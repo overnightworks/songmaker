@@ -165,6 +165,9 @@ class WebProcesses:
         self._redis = Redis.from_url(redis_url, decode_responses=True)
         self._shared_environment = self._settings_environment(database_url, redis_url)
         self._processes: list[ChildProcess] = []
+        self.claimed_owner_ids: set[str] = set()
+        """The owner ids of the processes started so far, so a lease that lapsed and started
+        again is not mistaken for the lease of a process still to start."""
 
     def _settings_environment(self, database_url: str, redis_url: str) -> dict[str, str]:
         client_secret = self.root / "oidc-client-secret"
@@ -267,7 +270,7 @@ class WebProcesses:
         return self._start_worker(name, SCORING_WORKER_SETTINGS)
 
     def _start_worker(self, name: str, settings_path: str) -> WorkerProcess:
-        known_owner_ids = leased_owner_ids(self._redis)
+        known_owner_ids = leased_owner_ids(self._redis) | self.claimed_owner_ids
         process, log, log_path = self._launch(
             name, ["-m", "songmaker_cli.arq_worker", settings_path], environment={},
         )
@@ -278,6 +281,7 @@ class WebProcesses:
             lambda: bool(leased_owner_ids(self._redis) - known_owner_ids),
         )
         [worker.owner_id] = leased_owner_ids(self._redis) - known_owner_ids
+        self.claimed_owner_ids.add(worker.owner_id)
         return worker
 
     def stop_all(self) -> None:
