@@ -5,7 +5,7 @@
 
 <!-- Whitespace between the ring and the line would enter the text a caller reads. -->
 <!-- prettier-ignore -->
-<div class="busy" role="status" aria-labelledby={lineId}><span class="ring" aria-hidden="true"></span><p id={lineId}>{text}</p></div>
+<div class="busy" role="status" aria-labelledby={lineId}><span class="ring ring-turn" aria-hidden="true"></span><p id={lineId}>{text}</p></div>
 
 <style>
 	.busy {
@@ -27,18 +27,12 @@
 		border: 2px solid var(--busy);
 		border-top-color: transparent;
 		border-radius: 50%;
-		animation: rotate 1.1s linear infinite;
+		--ring-turn: 1.1s;
 	}
 
 	.busy p {
 		margin: 0;
 		max-width: 28ch;
 		font-size: 15px;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.ring {
-			animation: none;
-		}
 	}
 </style>

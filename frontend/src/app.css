@@ -225,6 +225,17 @@ button {
 	}
 }
 
+/* Every turning busy ring carries this class and sets its own --ring-turn duration. */
+.ring-turn {
+	animation: rotate var(--ring-turn) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ring-turn {
+		animation: none;
+	}
+}
+
 .kv {
 	display: flex;
 	align-items: center;

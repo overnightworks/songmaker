@@ -252,7 +252,7 @@
 		title={isError && errorMsg ? errorMsg : ''}
 	>
 		<span class="play-btn-face" style={playFaceStyle}>
-			{#if buttonFace === 'spinner'}<span class="spinner"></span>{:else}<Icon
+			{#if buttonFace === 'spinner'}<span class="spinner ring-turn"></span>{:else}<Icon
 					name={buttonFace}
 					size={buttonFace === 'refresh-cw' ? 24 : 26}
 				/>{/if}
@@ -471,7 +471,7 @@
 		background-image:
 			linear-gradient(transparent, transparent),
 			conic-gradient(var(--on-accent), transparent, var(--on-accent));
-		animation: rotate 0.8s linear infinite;
+		--ring-turn: 0.8s;
 	}
 	.nav-btn {
 		width: 44px;
