@@ -118,7 +118,7 @@ import Layout from '../../routes/+layout.svelte';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
-import collectionMenuSource from './CollectionMenu.svelte?raw';
+import menuPopoverSource from './MenuPopover.svelte?raw';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import songRowSource from './SongRow.svelte?raw';
@@ -135,7 +135,7 @@ const COMPONENT_STYLE_SOURCES = {
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
 	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
-	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
+	MenuPopover: { source: menuPopoverSource, filename: 'MenuPopover.svelte' },
 	CollectionHeaderFrame: {
 		source: collectionHeaderFrameSource,
 		filename: 'CollectionHeaderFrame.svelte'
@@ -197,7 +197,7 @@ const INVENTORY = [
 	{
 		name: 'collection-menu',
 		selector: '.menu-trigger[data-hitbox="frequent"]',
-		component: 'CollectionMenu'
+		component: 'MenuPopover'
 	},
 	{
 		name: 'rail-search',
