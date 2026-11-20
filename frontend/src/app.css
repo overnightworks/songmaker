@@ -252,6 +252,25 @@ button {
 	font-size: var(--label-font-size);
 }
 
+/* The outlined pill button a page's header carries for its one primary action. */
+.pill-action {
+	padding: 0.45rem 1rem;
+	border: 1px solid var(--border);
+	border-radius: var(--btn-radius-pill);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-family: var(--font-display);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	font-size: 0.8rem;
+}
+
+.pill-action:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
 @media (prefers-reduced-motion: no-preference) {
 	button:active:not(:disabled):not(.play-btn):not([data-hitbox='frequent']) {
 		transform: scale(0.97);

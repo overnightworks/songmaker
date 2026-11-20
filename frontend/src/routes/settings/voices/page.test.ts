@@ -146,10 +146,10 @@ describe('voices page', () => {
 		setPointer('coarse');
 		loras.set([VOICE]);
 		const target = await renderVoicesPage();
-		target.querySelector<HTMLButtonElement>('.create-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.pill-action')?.click();
 		await tick();
 
-		const controls = target.querySelectorAll('.toggle-deleted, .create-btn, .danger, .primary');
+		const controls = target.querySelectorAll('.toggle-deleted, .pill-action, .danger, .primary');
 		expect(controls).toHaveLength(4);
 		for (const control of controls) {
 			expect(minHeightPx(control, control.className)).toBe(HITBOX_FREQUENT_PX);
@@ -299,7 +299,7 @@ describe('voices page', () => {
 		mounted = mount(VoicesPage, { target });
 		await tick();
 
-		target.querySelector<HTMLButtonElement>('.create-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.pill-action')?.click();
 		await tick();
 		const input = target.querySelector<HTMLInputElement>('.create-panel input');
 		if (!input) throw new Error('Expected voice name input');
@@ -381,7 +381,7 @@ describe('voices page', () => {
 		mounted = mount(VoicesPage, { target });
 		await tick();
 
-		target.querySelector<HTMLButtonElement>('.create-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.pill-action')?.click();
 		await tick();
 		const input = target.querySelector<HTMLInputElement>('.create-panel input');
 		if (!input) throw new Error('Expected voice name input');
