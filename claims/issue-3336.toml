@@ -1,0 +1,8 @@
+claim_id = "202694485a1b4621936a665625d6fb52"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "7bb0c1ec6d96e669c1431994cae43553b1b89c93"
+branch = "claude/issue-3336-settings-controls-reach-the-touch-target"
+scope = ["frontend/src"]
+opened_commit = "74718830aa02c3df6c4e0ac205ed8d687a7e07f3"
+whole_reason = "two settings pages, the transport bar frame and the hitbox inventory"
