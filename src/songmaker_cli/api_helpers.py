@@ -64,9 +64,10 @@ from songmaker_cli.db.queries.jobs import (
     create_job,
     recover_stale_jobs_by_age_and_type,
 )
-from songmaker_cli.db.queries.playlists import get_playlist
+from songmaker_cli.db.queries.loras import lora_slug_taken
+from songmaker_cli.db.queries.playlists import get_playlist, playlist_slug_taken
 from songmaker_cli.db.queries.rate_limits import resolve_rate_limit
-from songmaker_cli.db.queries.songs import get_song
+from songmaker_cli.db.queries.songs import get_song, song_slug_taken
 from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
@@ -400,15 +401,9 @@ def unique_lora_slug_under_capacity_lock(
     """
     base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
 
-    def is_taken(candidate: str) -> bool:
-        return (
-            session.query(UserLora)
-            .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
-            .first()
-            is not None
-        )
-
-    return _first_free_slug(base_slug, is_taken)
+    return _first_free_slug(
+        base_slug, lambda candidate: lora_slug_taken(session, user_id, candidate),
+    )
 
 
 def unique_song_slug(
@@ -426,14 +421,7 @@ def unique_song_slug(
     already owns a row, so a rename or a move does not collide with itself.
     """
     def is_taken(candidate: str) -> bool:
-        query = (
-            session.query(Song)
-            .execution_options(include_deleted=True)
-            .filter(Song.album_id == album_id, Song.slug == candidate)
-        )
-        if exclude_song_id is not None:
-            query = query.filter(Song.id != exclude_song_id)
-        return query.first() is not None
+        return song_slug_taken(session, album_id, candidate, exclude_song_id)
 
     base_slug = slugify(title, max_length=_SONG_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
@@ -453,10 +441,7 @@ def unique_playlist_slug(
     the playlist already owns a row, so a rename does not collide with itself.
     """
     def is_taken(candidate: str) -> bool:
-        query = session.query(Playlist).filter(Playlist.slug == candidate)
-        if exclude_playlist_id is not None:
-            query = query.filter(Playlist.id != exclude_playlist_id)
-        return query.first() is not None
+        return playlist_slug_taken(session, candidate, exclude_playlist_id)
 
     base_slug = slugify(title, max_length=_PLAYLIST_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
