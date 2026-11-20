@@ -4,6 +4,7 @@
 	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
+	import ShareRowContent from '../ShareRowContent.svelte';
 
 	interface Props {
 		gen: GenerationItem;
@@ -93,14 +94,17 @@
 		<button
 			class="menu-item"
 			aria-pressed={gen.is_shared}
+			aria-busy={shareToggle.busy}
 			title={shareToggle.sharedTooltip}
 			onclick={shareToggle.toggle}
 		>
-			<Icon name={shareToggle.iconName} size={14} />
-			{pageText('takeMenu.share')}
-			<span class="menu-item-hint" aria-hidden="true">
-				{pageText(gen.is_shared ? 'takeMenu.shareOn' : 'takeMenu.shareOff')}
-			</span>
+			<ShareRowContent
+				label={pageText('takeMenu.share')}
+				hint={pageText(gen.is_shared ? 'takeMenu.shareOn' : 'takeMenu.shareOff')}
+				iconName={shareToggle.iconName}
+				isShared={gen.is_shared}
+				busy={shareToggle.busy}
+			/>
 		</button>
 	{/if}
 	<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>

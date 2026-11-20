@@ -4,6 +4,7 @@
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
+	import ShareRowContent from './ShareRowContent.svelte';
 	import ShareDialog from './ShareDialog.svelte';
 
 	interface Props {
@@ -97,10 +98,6 @@
 	function closeLeavingFocusToForm(action: () => void): void {
 		runAndClose(action, false);
 	}
-
-	function runLeavingMenuOpen(action: () => void): void {
-		action();
-	}
 </script>
 
 {#snippet actionRow(
@@ -120,15 +117,21 @@
 {/snippet}
 
 {#snippet shareRow()}
-	{@render actionRow(
-		pageText(kindKeys[kind].share),
-		shareToggle.toggle,
-		shareToggle.iconName,
-		pageText(isShared ? 'collectionMenu.shareOn' : 'collectionMenu.shareOff'),
-		runLeavingMenuOpen,
-		isShared,
-		shareToggle.sharedTooltip
-	)}
+	<button
+		class="menu-item"
+		aria-pressed={isShared}
+		aria-busy={shareToggle.busy}
+		title={shareToggle.sharedTooltip}
+		onclick={shareToggle.toggle}
+	>
+		<ShareRowContent
+			label={pageText(kindKeys[kind].share)}
+			hint={pageText(isShared ? 'collectionMenu.shareOn' : 'collectionMenu.shareOff')}
+			iconName={shareToggle.iconName}
+			{isShared}
+			busy={shareToggle.busy}
+		/>
+	</button>
 {/snippet}
 
 <div class="collection-menu">
