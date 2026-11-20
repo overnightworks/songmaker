@@ -31,7 +31,6 @@ WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
 DOWNLOAD_KEY_PREFIX = "songmaker:acestep:download"
 LM_FAILURE_KEY_PREFIX = "songmaker:acestep:lm-failure"
-GPU_HOLD_OLD_KEY_PREFIX = "songmaker:acestep:hold"
 GPU_HOLD_FAMILY = "gpu"
 GPU_HOLD_LASTS = timedelta(seconds=15)
 DOWNLOAD_LOCK_FAMILY = "download"
@@ -41,13 +40,11 @@ DOWNLOAD_LOCK_LASTS = timedelta(seconds=15)
 DOWNLOAD_LOCK_EXTEND_EVERY = timedelta(seconds=5)
 DOWNLOAD_LOCK_POLL_SECONDS = 1.0
 
-# KEYS: the queue depth, then the GPU holds' epoch, expiry and generation keys, then the old hold
-# key; ARGV: the lock span in ms and the worker id. A hold, or a restart that may have lost one,
-# refuses the admission.
+# KEYS: the queue depth, then the GPU holds' epoch, expiry and generation keys; ARGV: the lock span
+# in ms and the worker id. A hold, or a restart that may have lost one, refuses the admission.
 ADMIT_GENERATION_SCRIPT = """
 local keys = {epoch = KEYS[2], expiry = KEYS[3], generation = KEYS[4]}
 if tandem.lock_state(keys, ARGV[2], ARGV[1]) then return 0 end
-if redis.call('EXISTS', KEYS[5]) == 1 then return 0 end
 redis.call('INCR', KEYS[1])
 return 1
 """
@@ -59,15 +56,6 @@ def worker_state_key(worker_id: str) -> str:
 
 def queue_depth_key(worker_id: str) -> str:
     return f"{QUEUE_KEY_PREFIX}:{worker_id}"
-
-
-def gpu_hold_old_key(worker_id: str) -> str:
-    """The key the previous release holds for a worker's GPU hold; the worker writes it beside the
-    lock for one release, so a reader of either release sees a hold of the other.
-
-    ``acestep_worker.heartbeat`` builds the same key.
-    """
-    return f"{GPU_HOLD_OLD_KEY_PREFIX}:{worker_id}"
 
 
 def gpu_hold_locks(pool: ArqRedis) -> Locks:
@@ -83,7 +71,7 @@ def gpu_hold_locks(pool: ArqRedis) -> Locks:
 async def gpu_hold_is_free(pool: ArqRedis, worker_id: str) -> bool:
     """Whether no hold is live and none can have been lost to a Redis restart."""
     state = await gpu_hold_locks(pool).state(worker_id)
-    return state.liveness is Liveness.GONE and not await pool.exists(gpu_hold_old_key(worker_id))
+    return state.liveness is Liveness.GONE
 
 
 def download_key(mode: str) -> str:
@@ -156,7 +144,6 @@ async def admit_generation(pool: ArqRedis, worker_id: str) -> bool:
             locks.keys.epoch,
             locks.keys.expiry,
             locks.keys.generation,
-            gpu_hold_old_key(worker_id),
         ],
         [int(locks.lasts.total_seconds() * 1000), worker_id],
     )
