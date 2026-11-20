@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import NoResultFound
 from support.signed_in_people import sign_in_people
 
 from songmaker_cli.db.models import GenerationPreset, User
+from songmaker_cli.db.queries.auth import require_user
 
 DEFAULT_CONFIG_URL = "/api/settings/default-config"
 PRESETS_URL = "/api/settings/presets"
@@ -95,3 +97,9 @@ def test_another_persons_preset_is_refused_as_default(people):
     }
     with factory() as session:
         assert session.get(User, "u-ana").default_generation_config is None
+
+
+def test_a_missing_account_fails_loud_where_a_default_is_set(people):
+    _, factory = people
+    with factory() as session, pytest.raises(NoResultFound):
+        require_user(session, "u-nobody")

@@ -40,6 +40,11 @@ def get_user(session: Session, user_id: str) -> User | None:
     return session.query(User).filter_by(id=user_id).first()
 
 
+def require_user(session: Session, user_id: str) -> User:
+    """The account ``user_id``; raises ``NoResultFound`` when it does not exist."""
+    return session.execute(select(User).where(User.id == user_id)).scalar_one()
+
+
 def get_user_theme(session: Session, user_id: str) -> ThemeChoice:
     return ThemeChoice(session.execute(select(User.theme).where(User.id == user_id)).scalar_one())
 
