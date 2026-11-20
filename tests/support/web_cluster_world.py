@@ -16,7 +16,6 @@ from support.app_processes import (
     StandIns,
     WebProcess,
     WebProcesses,
-    leased_owner_ids,
     web_processes,
 )
 from support.cowriter_gateway import MEMBER_GROUPS, HeldGateway
@@ -36,11 +35,7 @@ SCRIPTED_REPLY = "The reply the gateway stand-in scripted."
 
 def start_owner(cluster: WebProcesses, redis_client: Redis, name: str) -> tuple[WebProcess, str]:
     """Start a process and return it with the owner id its lease names."""
-    before = leased_owner_ids(redis_client) | cluster.claimed_owner_ids
-    process = cluster.start(name)
-    [owner_id] = leased_owner_ids(redis_client) - before
-    cluster.claimed_owner_ids.add(owner_id)
-    return process, owner_id
+    return cluster.start_claiming_owner(lambda _has_new_lease: cluster.start(name))
 
 
 @dataclass(frozen=True)
