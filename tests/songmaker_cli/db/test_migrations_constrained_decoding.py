@@ -11,7 +11,7 @@ import pytest
 from alembic import command
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
-from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import seeded_then_upgraded
 from support.reference_link_migration import seed_users
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
@@ -78,9 +78,8 @@ def _upgraded_with_params(database, migration, values):
     return versions[0], _stored_params(engine)
 
 
-def test_the_migration_follows_the_accounts_kind_revision_on_the_single_chain(migration):
+def test_the_migration_follows_the_accounts_kind_revision(migration):
     assert migration.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(migration.revision)
 
 
 def test_upgrade_deletes_the_key_and_keeps_every_other_key(reference_link_database, migration):

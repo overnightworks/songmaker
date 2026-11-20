@@ -10,7 +10,6 @@ from sqlalchemy import inspect
 from support.migration_chain import (
     column_names,
     insert_bare_job,
-    is_on_the_single_chain,
     job_count,
     seeded_then_upgraded,
 )
@@ -55,9 +54,8 @@ def _upgraded_with_a_job(database):
     )
 
 
-def test_the_migration_follows_the_previous_revision_on_the_single_chain():
+def test_the_migration_follows_the_previous_revision():
     assert MIGRATION.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(

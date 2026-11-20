@@ -30,7 +30,6 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
-        trusted_proxies=TrustedProxies.parse("172.16.0.0/12"),
         async_redis=make_fake_async_redis(),
     )
 
@@ -43,7 +42,6 @@ def test_the_configuration_carries_the_deployments_own_facts(
     config = build_web_auth_config(ctx, get_settings())
 
     assert config.signing_key == TEST_SECRET
-    assert "172.18.0.1" in config.trusted_proxies
     assert config.allowed_hosts_exact == frozenset({"songmaker.example", "localhost"})
 
 

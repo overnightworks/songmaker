@@ -106,8 +106,9 @@ def test_a_failing_session_store_leaves_the_browser_to_decide_and_is_logged(
         unreachable_engine.dispose()
 
     assert (response.status_code, _lang_of(response.text)) == (200, "de")
-    assert [record.levelno for record in caplog.records] == [logging.ERROR]
-    assert caplog.records[0].exc_info is not None
+    own_records = [record for record in caplog.records if record.name == page_language.__name__]
+    assert [record.levelno for record in own_records] == [logging.ERROR]
+    assert own_records[0].exc_info is not None
 
 
 MARKUP = '"><script>alert(1)</script>'

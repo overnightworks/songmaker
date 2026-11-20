@@ -53,7 +53,7 @@
 		border-radius: 50%;
 		border: 2px solid color-mix(in srgb, white 30%, transparent);
 		border-top-color: white;
-		animation: mark-turn 2.4s linear infinite;
+		animation: rotate 2.4s linear infinite;
 	}
 
 	.mark-dot {
@@ -61,12 +61,6 @@
 		height: 6px;
 		border-radius: 50%;
 		background: var(--accent);
-	}
-
-	@keyframes mark-turn {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

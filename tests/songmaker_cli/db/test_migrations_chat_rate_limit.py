@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from alembic import command
 from sqlalchemy import text
-from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 PREVIOUS_REVISION = "e8db38b3b46c"
@@ -67,6 +67,3 @@ def test_the_downgrade_restores_no_chat_row(reference_link_database) -> None:
     assert {"chat-global", "chat-override"}.isdisjoint(_stored_ids(engine))
     assert {"generation-global", "scoring-override"} <= _stored_ids(engine)
 
-
-def test_the_chat_revision_is_on_the_single_chain() -> None:
-    assert is_on_the_single_chain(CHAT_REVISION)

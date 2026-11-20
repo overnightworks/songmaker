@@ -19,6 +19,7 @@ from songmaker_cli.app_context import AppContext
 QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
 QUEUE_STREAM_BUILD_LOCK_LASTS: Final = timedelta(seconds=15)
 RENEWALS_PER_LOCK_SPAN: Final = 3
+QUEUE_STREAM_BUILD_LOCK_FAMILY: Final = "queue-stream-build"
 LOST_LOCK_WARNING: Final = (
     "Queue stream build lock lost while building; another process may build the same stream"
 )
@@ -40,7 +41,7 @@ def build_lock(
     Redis restart holds builds only that long.
     """
     locks = Locks(
-        ctx.async_redis, key_prefix=_consts.REDIS_KEY_PREFIX, family="queue-stream-build",
+        ctx.async_redis, key_prefix=_consts.REDIS_KEY_PREFIX, family=QUEUE_STREAM_BUILD_LOCK_FAMILY,
         lasts=lasts,
     )
     while (generation := from_thread.run(locks.acquire, key)) is None:

@@ -30,7 +30,6 @@ from webauth.middleware import (
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
-from songmaker_cli.middleware.preflight_client_address import PreflightClientAddressMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.settings import get_settings
 
@@ -275,7 +274,8 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
 ) -> None:
     """defect:#1590, defect:#1521 -- pin the security-critical middleware order.
 
-    Outermost first, because Starlette runs the last-added layer first. CORS is
+    Outermost first, because Starlette runs the last-added layer first. The client address
+    writer sits immediately inside the request line, so it is outside CORS. CORS is
     registered for every configuration (`CORS_ORIGIN` only picks its policy), so
     the default one is built here. An intended reorder updates this list and the
     comment block in `server.py` together.
@@ -284,12 +284,11 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
 
     assert _middleware_classes(client) == [
         RequestLineMiddleware,
-        PreflightClientAddressMiddleware,
+        ClientAddressMiddleware,
         ResourceStreamDeadlineMiddleware,
         SelectiveGZipMiddleware,
         CORSMiddleware,
         SecurityHeadersMiddleware,
-        ClientAddressMiddleware,
         PathRefusalMiddleware,
         BodySizeLimitMiddleware,
         IpRateLimitMiddleware,

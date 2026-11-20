@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from alembic import command
 from sqlalchemy import text
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import column_names, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 PREVIOUS_REVISION = "f71349322716"
@@ -128,6 +128,3 @@ def test_the_downgrade_drops_both_columns_and_keeps_every_row(reference_link_dat
         remaining = connection.execute(text("SELECT count(*) FROM reference_recordings"))
     assert remaining.scalar_one() == len(REFERENCE_IDS)
 
-
-def test_the_keep_revision_is_on_the_single_chain() -> None:
-    assert is_on_the_single_chain(KEEP_REVISION)

@@ -923,9 +923,9 @@ def _apply_generation_task_overrides(
 
 
 def _temporary_generation_audio_paths(ctx: GenerationContext) -> list[str]:
-    shared_tmp_prefix = str(ctx.audio_dir / WORKER_SHARED_TMP_DIRNAME)
+    shared_tmp_dir = (ctx.audio_dir / WORKER_SHARED_TMP_DIRNAME).resolve()
     candidates = [ctx.ace_config.src_audio_path, ctx.raw_src_audio]
-    return [path for path in candidates if path and path.startswith(shared_tmp_prefix)]
+    return [p for p in candidates if p and Path(p).resolve().is_relative_to(shared_tmp_dir)]
 
 
 def _remove_temporary_generation_audio(paths: list[str]) -> None:

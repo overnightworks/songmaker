@@ -38,7 +38,6 @@ _WAKE_KEEPALIVE_OPTIONS = {
     socket.TCP_KEEPCNT: 3,
 }
 GLOBAL_SLOT_POOL = "global"
-_SLOT_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 
 class RedisConnectionSettings(BaseSettings):
@@ -173,7 +172,7 @@ async def take_stream_slot(
 ) -> str | None:
     """Hold one slot in the person's pool and in the global pool, or in neither.
 
-    Returns the token for ``release_slot_in_background``, or None when a pool is at its cap.
+    Returns the token for ``SlotReleases.release_in_background``, or None when a pool is at its cap.
     """
     return await slots.take({GLOBAL_SLOT_POOL: global_cap, f"person:{user_id}": per_person_cap})
 
@@ -188,18 +187,22 @@ async def _release_slot(slots: Slots, token: str, *, subject: str) -> None:
         log.warning("%s hold had already ended at its release", subject)
 
 
-def release_slot_in_background(slots: Slots, token: str, *, subject: str) -> None:
-    task = asyncio.create_task(_release_slot(slots, token, subject=subject))
-    _SLOT_RELEASE_TASKS.add(task)
-    task.add_done_callback(_SLOT_RELEASE_TASKS.discard)
+class SlotReleases:
+    """The background slot releases of one application, awaited before its event loop closes."""
 
+    def __init__(self) -> None:
+        self._tasks: set[asyncio.Task[None]] = set()
 
-async def drain_slot_releases() -> None:
-    """Wait for pending background slot releases before closing their event loop."""
-    while _SLOT_RELEASE_TASKS:
-        pending = tuple(_SLOT_RELEASE_TASKS)
-        await asyncio.gather(*pending)
-        _SLOT_RELEASE_TASKS.difference_update(pending)
+    def release_in_background(self, slots: Slots, token: str, *, subject: str) -> None:
+        task = asyncio.create_task(_release_slot(slots, token, subject=subject))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def drain(self) -> None:
+        while self._tasks:
+            pending = tuple(self._tasks)
+            await asyncio.gather(*pending)
+            self._tasks.difference_update(pending)
 
 
 class RedisHttpMetrics:

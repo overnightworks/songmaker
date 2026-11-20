@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -11,11 +10,9 @@ import pytest
 from fastapi.testclient import TestClient
 from support.fake_oidc_issuer import a_fake_issuer
 from support.mcp_world import worker_ready
-from support.web_app import make_test_app, seed_user, web_client
-from webauth.config import install_web_auth_config, installed_web_auth_config
+from support.web_app import make_test_app, seed_user, trust_proxies, web_client
 from webauth.middleware import IpRateLimitMiddleware
 from webauth.policies import RateLimitBudget, RateLimitPolicy
-from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.request_policies import (
@@ -30,16 +27,6 @@ from songmaker_cli.settings import get_settings
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
-
-
-def _trust_proxy_network(client: TestClient) -> None:
-    install_web_auth_config(
-        client.app,
-        dataclasses.replace(
-            installed_web_auth_config(client.app),
-            trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
-        ),
-    )
 
 
 def _seed_rate_limit_data(session) -> None:
@@ -333,7 +320,7 @@ def test_ip_budget_is_per_forwarded_client_not_per_proxy(
 ) -> None:
     """Behind a proxy every visitor arrives from one gateway address. The
     budget must follow the visitor, or the first one locks out all the rest."""
-    _trust_proxy_network(ip_limited_client)
+    trust_proxies(ip_limited_client.app, _PROXY_NETWORK)
 
     for _ in range(2):
         _check_from(ip_limited_client, "203.0.113.1")
@@ -345,7 +332,7 @@ def test_ip_budget_is_per_forwarded_client_not_per_proxy(
 def test_a_malformed_chain_shares_the_peer_budget(ip_limited_client: TestClient) -> None:
     """Rotating nonsense through X-Forwarded-For must not mint fresh budgets:
     every malformed chain keys on the peer the request really came from."""
-    _trust_proxy_network(ip_limited_client)
+    trust_proxies(ip_limited_client.app, _PROXY_NETWORK)
 
     _check_from(ip_limited_client, "garbage")
     _check_from(ip_limited_client, "   ")
@@ -357,7 +344,7 @@ def test_ipv4_mapped_and_plain_forms_share_one_budget(
     ip_limited_client: TestClient,
 ) -> None:
     """Same client, one budget — a notation switch must not double it."""
-    _trust_proxy_network(ip_limited_client)
+    trust_proxies(ip_limited_client.app, _PROXY_NETWORK)
 
     _check_from(ip_limited_client, "203.0.113.1")
     _check_from(ip_limited_client, "::ffff:203.0.113.1")
@@ -473,7 +460,7 @@ def test_the_back_channel_and_a_preflight_spend_nothing_of_the_sign_in_budget(
 def test_a_second_forwarded_client_keeps_its_own_sign_in_budget(
     sign_in_client: TestClient,
 ) -> None:
-    _trust_proxy_network(sign_in_client)
+    trust_proxies(sign_in_client.app, _PROXY_NETWORK)
     proxy = web_client(sign_in_client.app, client=(_TRUSTED_PEER, 55000))
     _spend_sign_in_budget(proxy, **{"x-forwarded-for": _FORWARDED_CLIENT})
 

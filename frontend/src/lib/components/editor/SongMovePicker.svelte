@@ -262,7 +262,7 @@
 		border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
 		border-top-color: var(--accent);
 		border-radius: 50%;
-		animation: pk-spin 0.9s linear infinite;
+		animation: rotate 0.9s linear infinite;
 	}
 
 	.pk-run {
@@ -273,12 +273,6 @@
 		height: 2px;
 		background: var(--accent);
 		animation: pk-run 1.2s ease-in-out infinite;
-	}
-
-	@keyframes pk-spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	@keyframes pk-run {

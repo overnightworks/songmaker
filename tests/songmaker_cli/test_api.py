@@ -13,6 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.job_owner import an_owner, stored_payload
+from support.library_rows import a_song, a_take, a_version, an_album
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
@@ -175,16 +176,11 @@ def _seed_db(session, owner_id: str | None = None) -> None:
     session.add(song)
     ver = Version(id="v1", song_id="s1", version_number=1, lyrics="boom", prompt="hard rock")
     session.add(ver)
-    gen1 = Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="u-test/g1.mp3", wav_path="u-test/g1.wav", seed=42,
+    a_take(
+        session, "g1", "s1", owner="u-test", version_id="v1", seed=42, wav_path="u-test/g1.wav",
         generation_params={"bpm": 140},
     )
-    gen2 = Generation(
-        id="g2", song_id="s1", version_id="v1", generation_number=2,
-        mp3_path="u-test/g2.mp3", seed=77,
-    )
-    session.add_all([gen1, gen2])
+    a_take(session, "g2", "s1", owner="u-test", version_id="v1", generation_number=2, seed=77)
     session.query(AvailableModel).filter(
         AvailableModel.id.in_(["turbo", "sft"]),
     ).update({"is_active": True}, synchronize_session=False)
@@ -221,10 +217,10 @@ def test_get_song(client: TestClient) -> None:
 
 def test_get_song_includes_source_take_version_for_provenance(client: TestClient) -> None:
     with client.app.state.ctx.db() as session:
-        session.add(Generation(
-            id="g3", song_id="s1", version_id="v1", generation_number=3,
-            mp3_path="u-test/g3.mp3", src_generation_id="g1",
-        ))
+        a_take(
+            session, "g3", "s1", owner="u-test", version_id="v1", generation_number=3, seed=None,
+            src_generation_id="g1",
+        )
         session.commit()
 
     response = client.get("/api/songs/s1")
@@ -423,9 +419,7 @@ def test_rename_song_other_user_blocked(tmp_path: Path, pg_factory) -> None:
             id="u-other", username="other_user", role="user",
         ))
         session.flush()
-        session.add(Album(
-            id="other", title="Other Album", artist="Them", created_by="u-other",
-        ))
+        an_album(session, "other", title="Other Album", artist="Them", created_by="u-other")
         session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
         session.commit()
 
@@ -486,9 +480,7 @@ def _seed_listen_playlists(client: TestClient) -> None:
             id="u-other", username="other_user", role="user",
         ))
         session.add(Song(id="s2", title="Lightning", album_id="rock", track_number=2))
-        session.add(Generation(
-            id="g-s2", song_id="s2", generation_number=1, mp3_path="u-test/g-s2.mp3",
-        ))
+        a_take(session, "g-s2", "s2", owner="u-test", seed=None)
         session.flush()
         owner_id = session.get(Album, "rock").created_by
         for playlist_id, created_by, generation_id in [
@@ -616,16 +608,9 @@ def test_listen_song_hides_a_foreign_song(tmp_path: Path, pg_factory, body: dict
             id="u-other", username="other_user", role="user",
         ))
         session.flush()
-        session.add(Album(
-            id="other", title="Other Album", artist="Them", created_by="u-other",
-        ))
-        session.add(Song(
-            id="s-other", title="Their Song", album_id="other", track_number=1,
-        ))
-        session.add(Generation(
-            id="g-other", song_id="s-other", generation_number=1,
-            mp3_path="u-other/g-other.mp3",
-        ))
+        an_album(session, "other", title="Other Album", artist="Them", created_by="u-other")
+        a_song(session, "s-other", "other", title="Their Song")
+        a_take(session, "g-other", "s-other", owner="u-other", seed=None)
         session.commit()
 
     resp = client.post("/api/songs/s-other/listen", json=body)
@@ -645,9 +630,7 @@ def test_rename_album_other_user_blocked(tmp_path: Path, pg_factory) -> None:
             id="u-other", username="other_user", role="user",
         ))
         session.flush()
-        session.add(Album(
-            id="other", title="Other Album", artist="Them", created_by="u-other",
-        ))
+        an_album(session, "other", title="Other Album", artist="Them", created_by="u-other")
         session.commit()
 
     app = make_router_app(
@@ -767,21 +750,14 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path, pg_facto
             id="u-other", username="other_user", role="user",
         ))
         session.flush()
-        session.add(Album(
-            id="other", title="Other Album", artist="Them", created_by="u-other",
-        ))
-        session.add(Song(
-            id="s-other", title="Their Song", album_id="other", track_number=1,
-        ))
-        session.add(Version(
-            id="v-other", song_id="s-other", version_number=1,
-            lyrics="secret", prompt="x",
-        ))
-        session.add(Generation(
-            id="g-other", song_id="s-other", version_id="v-other",
-            generation_number=1, mp3_path="u-other/g.mp3", seed=1,
+        an_album(session, "other", title="Other Album", artist="Them", created_by="u-other")
+        a_song(session, "s-other", "other", title="Their Song")
+        a_version(session, "v-other", "s-other", lyrics="secret", prompt="x")
+        a_take(
+            session, "g-other", "s-other", owner="u-other", version_id="v-other",
+            mp3_path="u-other/g.mp3",
             whisper_cues=[{"start": 0.0, "end": 1.0, "text": "secret"}],
-        ))
+        )
         session.commit()
 
     app = make_router_app(
@@ -1155,8 +1131,7 @@ def test_generate_refused_without_lyrics_or_prompt(client: TestClient, lyrics: s
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         session.add(Song(id="s_empty", title="Empty", album_id="rock", slug="empty"))
-        session.add(Version(id="v1e", song_id="s_empty", version_number=1, lyrics=lyrics,
-                            prompt=prompt))
+        a_version(session, "v1e", "s_empty", lyrics=lyrics, prompt=prompt)
         session.commit()
     resp = client.post("/api/songs/s_empty/generate", json={"count": 1, "model": "sft"})
     assert resp.status_code == 400
@@ -1640,9 +1615,7 @@ def test_song_generation_job_requires_ownership(client: TestClient, endpoint: st
             id="u-other", username="other_user", role="user",
         ))
         session.flush()
-        session.add(Album(
-            id="other", title="Other Album", artist="Them", created_by="u-other",
-        ))
+        an_album(session, "other", title="Other Album", artist="Them", created_by="u-other")
         session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
         session.flush()
         session.add(Job(
@@ -2480,10 +2453,7 @@ def test_user_cannot_see_other_song(tmp_path: Path, pg_factory) -> None:
         session.flush()
         session.add(Album(id="secret", title="Secret", artist="X", created_by="u-other"))
         session.add(Song(id="s-secret", title="Hidden", album_id="secret", track_number=1))
-        session.add(Version(
-            id="v-secret", song_id="s-secret", version_number=1,
-            lyrics="x", prompt="x",
-        ))
+        a_version(session, "v-secret", "s-secret", lyrics="x", prompt="x")
         session.commit()
     resp = c.get("/api/songs/s-secret")
     assert resp.status_code == 404
@@ -3194,7 +3164,6 @@ def test_stream_job_slot_is_taken_and_released_around_the_stream(
     """
     import asyncio
 
-    from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
@@ -3230,7 +3199,7 @@ def test_stream_job_slot_is_taken_and_released_around_the_stream(
 
         await app(_job_stream_scope(job_id, cookie=cookie), _receive, _send)
 
-        await redis_client.drain_slot_releases()
+        await ctx.slot_releases.drain()
 
         return response_status["status"]
 
@@ -3911,31 +3880,18 @@ def _client_beside_a_foreign_take(
         ))
         session.flush()
 
-        album_mine = Album(id="mine", title="My Album", artist="Me", created_by="u-test")
-        album_other = Album(
-            id="other", title="Other Album", artist="Them", created_by=other_user_id,
+        an_album(session, "mine", title="My Album", artist="Me", created_by="u-test")
+        an_album(
+            session, "other", title="Other Album", artist="Them", created_by=other_user_id,
         )
-        session.add_all([album_mine, album_other])
-
-        song_mine = Song(id="s-mine", title="My Song", album_id="mine", track_number=1)
-        song_other = Song(id="s-other", title="Other Song", album_id="other", track_number=1)
-        session.add_all([song_mine, song_other])
-
-        ver_mine = Version(id="v-mine", song_id="s-mine", version_number=1, lyrics="a", prompt="b")
-        ver_other = Version(
-            id="v-other", song_id="s-other", version_number=1, lyrics="c", prompt="d",
+        a_song(session, "s-mine", "mine", title="My Song")
+        a_song(session, "s-other", "other", title="Other Song")
+        a_version(session, "v-mine", "s-mine", lyrics="a", prompt="b")
+        a_version(session, "v-other", "s-other", lyrics="c", prompt="d")
+        a_take(session, "g-mine", "s-mine", owner="u-test", version_id="v-mine", seed=None)
+        a_take(
+            session, "g-other", "s-other", owner=other_user_id, version_id="v-other", seed=None,
         )
-        session.add_all([ver_mine, ver_other])
-
-        gen_mine = Generation(
-            id="g-mine", song_id="s-mine", version_id="v-mine",
-            generation_number=1, mp3_path="u-test/g-mine.mp3",
-        )
-        gen_other = Generation(
-            id="g-other", song_id="s-other", version_id="v-other",
-            generation_number=1, mp3_path=f"{other_user_id}/g-other.mp3",
-        )
-        session.add_all([gen_mine, gen_other])
         session.commit()
 
     foreign_take_file = tmp_path / "audio" / other_user_id / "g-other.mp3"
@@ -4161,7 +4117,6 @@ def test_s8_stream_error_only_changes(client, before, after):
     """S8-C: The real SSE route emits error-only and type-only changes."""
     import asyncio
 
-    from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx = client.app.state.ctx
@@ -4203,7 +4158,7 @@ def test_s8_stream_error_only_changes(client, before, after):
         try:
             await client.app(_job_stream_scope(job_id, cookie=cookie), receive, send)
         finally:
-            await redis_client.drain_slot_releases()
+            await ctx.slot_releases.drain()
         assert status == 200
         first, second = frames[:2]
         assert _stream_fields(first) == _reported_frame(before)
@@ -4226,7 +4181,6 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
         WorkerStream,
     )
 
-    from songmaker_cli import redis_client
     from songmaker_cli.acestep_state import read_queue_depth
     from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
@@ -4305,7 +4259,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     async with asyncio.timeout(PEER_CLEANUP_DEADLINE_SECONDS):
                         await server.stop()
                 finally:
-                    await redis_client.drain_slot_releases()
+                    await ctx.slot_releases.drain()
 
     asyncio.run(drive())
 
@@ -4314,7 +4268,6 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
     """S9-B, S9-D: A real saved take survives and does not hide its own OOM partial."""
     from support.worker_http_peer import WorkerScenario, WorkerStream
 
-    from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
 
@@ -4340,7 +4293,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
                     redis=peer.redis, target_model="sft", owner=an_owner("o1"),
                 )
         finally:
-            await redis_client.drain_slot_releases()
+            await ctx.slot_releases.drain()
 
     asyncio.run(drive())
     response = client.get("/api/songs/s1/last-failed-generation")

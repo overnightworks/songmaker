@@ -8,7 +8,6 @@ import dataclasses
 import hashlib
 import json
 import logging
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -28,11 +27,11 @@ from support.web_app import (
     make_test_app,
     seed_session,
     seed_user,
+    trust_proxies,
     web_client,
 )
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import sign_session_id
-from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
@@ -560,22 +559,6 @@ def test_body_size_limit_rejects_large_content_length(server_app: TestClient) ->
     assert resp.status_code == 413
 
 
-@contextmanager
-def _trusting_the_proxy_network(server_app: TestClient):
-    """Serve the block as if the deployment sat behind its Docker gateway."""
-    installed = installed_web_auth_config(server_app.app)
-    install_web_auth_config(
-        server_app.app,
-        dataclasses.replace(
-            installed, trusted_proxies=TrustedProxies.parse(_PROXY_NETWORK),
-        ),
-    )
-    try:
-        yield
-    finally:
-        install_web_auth_config(server_app.app, installed)
-
-
 def _get_through_peer(
     server_app: TestClient, peer_ip: str, headers: dict[str, str] | list[tuple[str, str]],
 ) -> httpx.Response:
@@ -608,7 +591,8 @@ def test_request_line_names_the_forwarded_client(
 ) -> None:
     """The log is what an operator reads after an incident -- it must name the
     visitor, not the one gateway address every visitor arrives through."""
-    with configured("songmaker-web"), _trusting_the_proxy_network(server_app):
+    trust_proxies(server_app.app, _PROXY_NETWORK)
+    with configured("songmaker-web"):
         _get_through_peer(
             server_app, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
         )
@@ -620,7 +604,8 @@ def test_request_line_names_the_forwarded_client(
 def test_request_line_names_the_peer_when_the_chain_is_malformed(
     server_app: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with configured("songmaker-web"), _trusting_the_proxy_network(server_app):
+    trust_proxies(server_app.app, _PROXY_NETWORK)
+    with configured("songmaker-web"):
         _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
 
     (request_line,) = request_lines(capsys.readouterr().out)
@@ -679,7 +664,6 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
 
 
 def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg_factory) -> None:
-    from songmaker_cli.redis_client import release_slot_in_background
     from songmaker_cli.server import _lifespan
 
     mock_app = MagicMock(**{"state.mcp_front": None})
@@ -692,6 +676,7 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
     )
 
     slots = MagicMock(release=AsyncMock(return_value=True))
+    slots_owner = mock_app.state.ctx.slot_releases
 
     async def _run():
         cleanup_started = asyncio.Event()
@@ -702,7 +687,7 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
             try:
                 await asyncio.Future()
             except asyncio.CancelledError:
-                release_slot_in_background(slots, "slot-token", subject="Test")
+                slots_owner.release_in_background(slots, "slot-token", subject="Test")
                 cleanup_cancelled.set()
                 raise
 
