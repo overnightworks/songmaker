@@ -21,8 +21,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_cli.audio_files import read_audio_duration
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
 from songmaker_cli.db.advisory_locks import lock_until_transaction_ends
-from songmaker_cli.db.models import ReferenceRecording, User
-from songmaker_cli.db.queries.auth import list_user_ids
+from songmaker_cli.db.models import ReferenceRecording
+from songmaker_cli.db.queries.auth import get_user, list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
     CountdownPublication,
     CountdownRowUnusable,
@@ -141,7 +141,7 @@ def _lock_reference_owner(session: Session, user_id: str) -> None:
     digest = hashlib.sha256((_REFERENCE_LOCK_NAMESPACE + user_id).encode()).digest()
     lock_id = int.from_bytes(digest[:8], "big", signed=True)
     lock_until_transaction_ends(session, lock_id)
-    if session.get(User, user_id) is None:
+    if get_user(session, user_id) is None:
         raise ReferenceAudioStorageError("missing owner")
 
 

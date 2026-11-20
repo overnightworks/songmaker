@@ -87,7 +87,7 @@ from songmaker_cli.db.queries.songs import (
     stored_song_title,
     update_song,
 )
-from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
+from songmaker_cli.db.queries.versions import VersionInUseError, delete_version, get_version_by_id
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.refusals import Refusal
@@ -585,9 +585,7 @@ def api_delete_version(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
-    from songmaker_cli.db.models import Version as VersionModel
-
-    ver = session.query(VersionModel).filter_by(id=version_id).first()
+    ver = get_version_by_id(session, version_id)
     if not ver:
         raise version_not_found()
     try:

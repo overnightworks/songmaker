@@ -69,6 +69,10 @@ def get_preset(session: Session, preset_id: str, user_id: str) -> GenerationPres
     )
 
 
+def get_preset_by_id(session: Session, preset_id: str) -> GenerationPreset | None:
+    return session.get(GenerationPreset, preset_id)
+
+
 def name_exists(session: Session, user_id: str, model_mode: str, name: str) -> bool:
     return (
         session.query(GenerationPreset)
