@@ -1,7 +1,0 @@
-claim_id = "499019cd09cc4908ab93d09a8d6be28f"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "9c61b63e1311ad918972e3d4d42e2e8335b28a27"
-branch = "claude/issue-3321-the-song-menu-s-component-test-keeps-onl"
-scope = ["frontend/src/lib/components/editor/SongMenu.test.ts", "tests/songmaker_cli/test_scoring_queue_processes.py"]
-opened_commit = "28f1f97652082c0469c8351b48d5a1cac0fed614"
