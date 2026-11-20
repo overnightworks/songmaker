@@ -1,8 +1,0 @@
-claim_id = "1905f76ab4894ce1951e9039cd2a7962"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "03a362d62858c418029b463137550452743f2a0e"
-branch = "claude/issue-3342-a-preset-row-s-edit-and-delete-live-in-i"
-scope = ["frontend/e2e", "frontend/src/app.css", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components", "frontend/src/lib/words/de.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/settings/generation", "frontend/src/routes/settings/voices/+page.svelte", "frontend/src/routes/settings/voices/page.test.ts", "scripts/style-literals.txt", "src/songmaker_cli/words.py"]
-opened_commit = "3ea627d47db389dcef25243c43e37f8e6b800a6f"
-whole_reason = "the generation settings page and its row menu, the Voices page whose button form becomes shared, the two capitalised menu words in the catalogs with their generated files, and the style-literal ratchet"
