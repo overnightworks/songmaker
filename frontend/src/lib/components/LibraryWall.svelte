@@ -386,7 +386,7 @@
 		flex-wrap: wrap;
 		justify-content: space-between;
 		gap: 8px;
-		padding: 16px 20px 12px;
+		padding: 16px var(--library-gutter) 12px;
 		border-bottom: 1px solid var(--border);
 	}
 
@@ -470,7 +470,7 @@
 		min-height: 0;
 		overflow-x: hidden;
 		overflow-y: auto;
-		padding: 8px 20px 20px;
+		padding: 8px var(--library-gutter) 20px;
 	}
 
 	.tile-grid {
@@ -538,11 +538,7 @@
 
 	@media (max-width: 768px) {
 		.wall-titlebar {
-			padding: 10px 12px 6px;
-		}
-
-		.wall-body {
-			padding-inline: 12px;
+			padding-block: 10px 6px;
 		}
 
 		.tile-grid {

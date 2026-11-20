@@ -155,7 +155,7 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 		const menu = await openNewMenu(root);
 
 		expect(newButton(root).getAttribute('aria-expanded')).toBe('true');
-		expect(menu.querySelector('.new-menu-heading')?.textContent).toBe(newInLibrary());
+		expect(menu.querySelector('.menu-heading')?.textContent).toBe(newInLibrary());
 		const items = [...menu.querySelectorAll('button')];
 		expect(items.map((item) => item.textContent?.trim())).toEqual([
 			words['newPlace.album'],
@@ -169,7 +169,7 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 
 		const menu = await openNewMenu(root);
 
-		const marked = menu.querySelector('.new-menu-heading b');
+		const marked = menu.querySelector('.menu-heading b');
 		expect(marked?.textContent).toBe(words['places.library']);
 	});
 

@@ -5137,12 +5137,12 @@ msgid "unset default"
 msgstr "nicht mehr Standard"
 
 msgctxt "generationPage.edit"
-msgid "edit"
-msgstr "bearbeiten"
+msgid "Edit"
+msgstr "Bearbeiten"
 
 msgctxt "generationPage.delete"
-msgid "delete"
-msgstr "löschen"
+msgid "Delete"
+msgstr "Löschen"
 
 msgctxt "generationPage.noPresets"
 msgid "No presets saved yet."

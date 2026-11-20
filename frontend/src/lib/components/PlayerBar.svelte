@@ -230,7 +230,9 @@
 </script>
 
 {#snippet trackInfo(titleGlowStyle: string, inlineFailure: string | null)}
-	{#if roomForCover}
+	<!-- Without a take the phone's cover is an empty tile, and its width is what
+		cuts the idle title (Bibliothek) beside play's centre line. -->
+	{#if roomForCover && (shownTake || !mobileTransport)}
 		<span class="track-cover" aria-hidden="true">
 			{#if coverUrl}
 				<img src={coverUrl} alt="" />

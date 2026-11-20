@@ -269,15 +269,14 @@ test('1374_rule_5 B5: an unplayable first song is neither listed nor staged', as
 	await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(1)));
 });
 
-test('1374_rule_2 B6: no playable song shows only the title and no-audio notice', async ({
-	visitor
-}) => {
+test('1374_rule_2 B6: no playable song shows the unplayable player page', async ({ visitor }) => {
 	await openMockAlbum(visitor, [
 		{ title: MOCK_UNPLAYABLE_TITLE, lyrics: 'Hidden words', playable: false }
 	]);
 	await expect(visitor.page.getByRole('status')).toHaveText(words['share.noAudio']);
+	await expect(visitor.page.getByRole('button', { name: words['transport.play'] })).toBeDisabled();
 	await expect(
-		visitor.page.locator('.now-playing, .np-page-lyrics, .np-page-songs, .player-bar')
+		visitor.page.locator('.now-playing-line, .np-page-lyrics, .np-page-songs, .player-bar')
 	).toHaveCount(0);
 	await expect(visitor.page.getByText(MOCK_UNPLAYABLE_TITLE)).toHaveCount(0);
 });

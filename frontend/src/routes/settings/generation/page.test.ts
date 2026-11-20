@@ -6,6 +6,14 @@ import { currentUser } from '#lib/stores/auth.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
 import { words } from '#lib/words/en.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '#lib/test-utils/hitbox.ts';
 
 import GenerationSettingsPage from './+page.svelte';
 
@@ -105,10 +113,12 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	currentUser.set(null);
 	vi.unstubAllGlobals();
+	clearHitboxStyles();
+	clearPointer();
 });
 
 async function saveNewPreset(target: HTMLElement, name: string): Promise<void> {
-	target.querySelector<HTMLButtonElement>('.add-btn')?.click();
+	target.querySelector<HTMLButtonElement>('.pill-action')?.click();
 	await vi.waitFor(() =>
 		expect(target.querySelector<HTMLSelectElement>('.model-select')?.value).toBe(MODEL)
 	);
@@ -120,7 +130,38 @@ async function saveNewPreset(target: HTMLElement, name: string): Promise<void> {
 	target.querySelector<HTMLButtonElement>('.save-btn')?.click();
 }
 
+const menuItem = (label: string): HTMLButtonElement => {
+	const found = [...document.querySelectorAll<HTMLButtonElement>('.menu-panel .menu-item')].find(
+		(button) => button.textContent?.trim() === label
+	);
+	if (!found) throw new Error(`no ${label} menu item`);
+	return found;
+};
+
 describe('generation settings', () => {
+	it('gives every chip, button and menu trigger the touch target on a coarse pointer', async () => {
+		injectHitboxStyles();
+		setPointer('coarse');
+		const { target } = await openPageAs(makeAuthUser(), new Set(), {
+			...RESPONSES,
+			[PRESETS_PATH]: [
+				{
+					...savedPreset(JSON.stringify({ name: 'Warm', model_mode: MODEL, params: {} })),
+					id: 'a'
+				}
+			]
+		});
+		await vi.waitFor(() => expect(target.querySelectorAll('.preset-action')).toHaveLength(1));
+
+		const controls = target.querySelectorAll(
+			'.default-chip, .pill-action, .preset-action, .menu-trigger'
+		);
+		expect(controls.length).toBeGreaterThan(3);
+		for (const control of controls) {
+			expect(minHeightPx(control, control.className)).toBe(HITBOX_FREQUENT_PX);
+		}
+	});
+
 	it.each([
 		['a non-admin', makeAuthUser()],
 		['an administrator', makeAuthUser({ role: 'admin' })]
@@ -223,7 +264,7 @@ describe('generation settings', () => {
 		async function openWithOnePreset(): Promise<{
 			target: HTMLElement;
 			deleted: string[];
-			rowDelete: HTMLButtonElement;
+			rowMenu: HTMLButtonElement;
 		}> {
 			const preset: PresetItem = {
 				...savedPreset(
@@ -235,15 +276,16 @@ describe('generation settings', () => {
 				...RESPONSES,
 				[PRESETS_PATH]: [preset]
 			});
-			const rowDelete = await vi.waitFor(() => {
-				const button = target.querySelector<HTMLButtonElement>('.preset-action.delete');
-				if (!button) throw new Error('no delete button yet');
+			const rowMenu = await vi.waitFor(() => {
+				const button = target.querySelector<HTMLButtonElement>('.menu-trigger');
+				if (!button) throw new Error('no row menu yet');
 				return button;
 			});
-			rowDelete.focus();
-			rowDelete.click();
+			rowMenu.click();
 			await tick();
-			return { target, deleted, rowDelete };
+			menuItem(words['generationPage.delete']).click();
+			await tick();
+			return { target, deleted, rowMenu };
 		}
 
 		const dialogButton = (label: string): HTMLButtonElement => {
@@ -273,9 +315,9 @@ describe('generation settings', () => {
 						new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
 					)
 			]
-		])('keeps the preset and returns focus to its delete button on %s', async (_how, close) => {
+		])('keeps the preset and returns focus to its row menu on %s', async (_how, close) => {
 			stopListeningForEscape = listenForGlobalEscape();
-			const { target, deleted, rowDelete } = await openWithOnePreset();
+			const { target, deleted, rowMenu } = await openWithOnePreset();
 
 			close();
 			await tick();
@@ -283,7 +325,7 @@ describe('generation settings', () => {
 			expect(document.querySelector('[role="dialog"]')).toBeNull();
 			expect(deleted).toEqual([]);
 			expect(target.querySelector('.preset-name')?.textContent).toBe('Warm');
-			expect(document.activeElement).toBe(rowDelete);
+			expect(document.activeElement).toBe(rowMenu);
 		});
 
 		it('deletes the preset and drops its row only on Delete', async () => {
@@ -294,5 +336,29 @@ describe('generation settings', () => {
 			await vi.waitFor(() => expect(deleted).toEqual([DELETE_PATH]));
 			await vi.waitFor(() => expect(target.querySelector('.preset-name')).toBeNull());
 		});
+	});
+
+	it('opens the editor for the preset from its row menu', async () => {
+		const { target } = await openPageAs(makeAuthUser(), new Set(), {
+			...RESPONSES,
+			[PRESETS_PATH]: [
+				{
+					...savedPreset(JSON.stringify({ name: 'Warm', model_mode: MODEL, params: {} })),
+					id: 'a'
+				}
+			]
+		});
+		const rowMenu = await vi.waitFor(() => {
+			const button = target.querySelector<HTMLButtonElement>('.menu-trigger');
+			if (!button) throw new Error('no row menu yet');
+			return button;
+		});
+		rowMenu.click();
+		await tick();
+
+		menuItem(words['generationPage.edit']).click();
+		await tick();
+
+		expect(target.querySelector<HTMLInputElement>('.preset-name-input')?.value).toBe('Warm');
 	});
 });

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFil
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 from webauth.config import installed_web_auth_config
 from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
@@ -16,6 +17,7 @@ from songmaker_cli.agent.backend import TurnCaller, cover_admission
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
     Pagination,
+    album_not_found,
     check_album_access,
     cover_file_response,
     owner_filter,
@@ -382,14 +384,21 @@ def api_share_album(
 ) -> ShareResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    album = enable_album_sharing(session, album_id)
+    try:
+        album = enable_album_sharing(session, album_id)
+    except ValueError as exc:
+        raise album_not_found() from exc
     missing = songs_without_playable_take(session, album_id)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.ALBUM, album_id)
     share_url = public_share_url(ShareKind.ALBUM, album.share_slug)
     session.commit()
+    try:
+        share_slug = album.share_slug
+    except ObjectDeletedError as exc:
+        raise album_not_found() from exc
     return ShareResponse(
         share_url=share_url,
-        share_slug=album.share_slug,
+        share_slug=share_slug,
         songs_without_playable_take=[
             UnplayableSongSummary(id=song.id, title=song.title) for song in missing
         ],
@@ -414,7 +423,10 @@ def api_unshare_album(
 ) -> StatusResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    disable_album_sharing(session, album_id)
+    try:
+        disable_album_sharing(session, album_id)
+    except ValueError as exc:
+        raise album_not_found() from exc
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.ALBUM, album_id)
     session.commit()
     return StatusResponse()

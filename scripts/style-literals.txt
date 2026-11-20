@@ -22,7 +22,7 @@ lib/components/MenuPopover.svelte 2
 lib/components/ModelRegistryPanel.svelte 10
 lib/components/ModelsServiceRow.svelte 6
 lib/components/NewPlaceCard.svelte 3
-lib/components/NewPlaceMenu.svelte 2
+lib/components/NewPlaceMenu.svelte 1
 lib/components/NowPlayingCuration.svelte 2
 lib/components/NowPlayingFrame.svelte 23
 lib/components/NowPlayingLyrics.svelte 5
@@ -57,7 +57,7 @@ lib/components/editor/TakeTaskCard.svelte 7
 lib/components/editor/TakesList.svelte 7
 lib/components/editor/VersionsSheet.svelte 14
 lib/components/editor/WriteColumn.svelte 1
-lib/components/share/SharedCollection.svelte 7
+lib/components/share/SharedCollection.svelte 3
 lib/components/share/SharedFooter.svelte 2
 lib/components/shell/PhoneTabs.svelte 1
 lib/components/shell/Rail.svelte 5
@@ -73,4 +73,4 @@ routes/settings/+page.svelte 2
 routes/settings/about/+page.svelte 3
 routes/settings/generation/+page.svelte 14
 routes/settings/users/+page.svelte 21
-routes/settings/voices/+page.svelte 19
+routes/settings/voices/+page.svelte 18

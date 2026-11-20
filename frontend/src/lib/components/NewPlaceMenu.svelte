@@ -49,16 +49,16 @@
 		{#snippet trigger()}<span class="new-face"
 				><Icon name="plus" size={16} />{pageText('newPlace.face')}</span
 			>{/snippet}
-		<p class="new-menu-heading">
+		<p class="menu-heading">
 			<Marked
 				parts={pageParts('newPlace.heading', { library: pageText('places.library') })}
 				marked={{ strong }}
 			/>
 		</p>
-		<button type="button" class="new-menu-item" onclick={() => startNew('album')}
+		<button type="button" class="menu-item" onclick={() => startNew('album')}
 			><Icon name="album" size={16} />{pageText('newPlace.album')}</button
 		>
-		<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
+		<button type="button" class="menu-item" onclick={() => startNew('playlist')}
 			><Icon name="playlist" size={16} />{pageText('newPlace.playlist')}</button
 		>
 	</MenuPopover>
@@ -104,46 +104,13 @@
 		text-transform: uppercase;
 	}
 
-	.new-menu-heading {
-		padding: 0.2rem 0.6rem 0.5rem;
-		border-bottom: 1px solid var(--border);
-		color: var(--text-subtle);
-		font-size: 13px;
-	}
-
-	.new-menu-heading b {
+	.menu-heading b {
 		color: var(--text);
 		font-weight: 600;
 	}
 
-	.new-menu-item {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		min-height: 34px;
-		padding: 0 0.6rem;
-		border: 0;
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text);
-		font-family: var(--font-body);
-		font-size: 0.87rem;
-		text-align: left;
-	}
-
-	.new-menu-item :global(svg) {
+	.menu-item :global(svg) {
 		flex: none;
 		color: var(--text-muted);
-	}
-
-	.new-menu-item:hover {
-		background: var(--surface-hover);
-	}
-
-	@media (max-width: 768px) {
-		.new-menu-item {
-			min-height: 44px;
-		}
 	}
 </style>

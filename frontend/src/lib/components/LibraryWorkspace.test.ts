@@ -101,6 +101,7 @@ describe('the library workspace', () => {
 		const alert = target.querySelector('[role="alert"]');
 		expect(alert?.textContent).toContain('Stream refused');
 		expect(alert?.querySelector('svg')).not.toBeNull();
+		expect(alert?.parentElement).not.toBe(target);
 
 		target
 			.querySelector<HTMLButtonElement>(`button[aria-label="${words['libraryWorkspace.retry']}"]`)

@@ -94,6 +94,26 @@ describe('TakeMenu', () => {
 		expect(menuRow(target, words['takeMenu.share']).title).toBe('Shared: /share/gen/take');
 	});
 
+	it('shows a shared take by a check and an unshared one by none, and a pending request by a turning ring', async () => {
+		const unshared = await render();
+		const unsharedRow = menuRow(unshared.target, words['takeMenu.share']);
+		expect(unsharedRow.getAttribute('aria-pressed')).toBe('false');
+		expect(unsharedRow.querySelector('.shared-check')).toBeNull();
+		expect(unsharedRow.querySelector('.ring-turn')).toBeNull();
+
+		const shared = await render({ gen: gen({ is_shared: true, share_slug: 'take' }) });
+		const sharedRow = menuRow(shared.target, words['takeMenu.share']);
+		expect(sharedRow.getAttribute('aria-pressed')).toBe('true');
+		expect(sharedRow.querySelector('.shared-check')).not.toBeNull();
+		expect(sharedRow.querySelector('.ring-turn')).toBeNull();
+
+		const pending = await render({ onshare: vi.fn(() => new Promise<never>(() => undefined)) });
+		const pendingRow = menuRow(pending.target, words['takeMenu.share']);
+		pendingRow.click();
+		await tick();
+		expect(pendingRow.querySelector('.ring-turn')).not.toBeNull();
+	});
+
 	it.each([
 		{ seed: null, rows: [] as string[] },
 		{ seed: 4127730, rows: [words['takeMenu.useSeed']] }

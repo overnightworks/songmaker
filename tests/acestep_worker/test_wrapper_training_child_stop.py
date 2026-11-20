@@ -14,7 +14,7 @@ import pytest
 from support.wrapper_deps import reserved_gpu_hold, settled_fake_redis
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
-from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks, gpu_hold_old_key
+from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.models import GenerationTaskResult, TrainLoraRequest, TrainLoraTaskResult
 from acestep_worker.subprocess_runner import SubprocessHandle, make_acestep_runner
@@ -69,7 +69,6 @@ class _GpuHold:
 
     async def lapse(self) -> None:
         await self.redis.zrem(gpu_hold_locks(self.redis).keys.expiry, self.worker_id)
-        await self.redis.delete(gpu_hold_old_key(self.worker_id))
 
 
 @dataclass

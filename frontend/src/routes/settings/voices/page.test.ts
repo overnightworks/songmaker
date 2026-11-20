@@ -7,6 +7,14 @@ import {
 } from '#lib/stores/connectivity.ts';
 import type { UserLoraItem } from '#lib/api/types.ts';
 import { words } from '#lib/words/en.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '#lib/test-utils/hitbox.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -77,6 +85,8 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	clearComponentStyles();
+	clearHitboxStyles();
+	clearPointer();
 	resetConnectivityForTests();
 });
 
@@ -131,6 +141,21 @@ describe('voices page reads', () => {
 });
 
 describe('voices page', () => {
+	it('gives the show-deleted toggle and the voice buttons the touch target on a coarse pointer', async () => {
+		injectHitboxStyles();
+		setPointer('coarse');
+		loras.set([VOICE]);
+		const target = await renderVoicesPage();
+		target.querySelector<HTMLButtonElement>('.pill-action')?.click();
+		await tick();
+
+		const controls = target.querySelectorAll('.toggle-deleted, .pill-action, .danger, .primary');
+		expect(controls).toHaveLength(4);
+		for (const control of controls) {
+			expect(minHeightPx(control, control.className)).toBe(HITBOX_FREQUENT_PX);
+		}
+	});
+
 	it('shows the model mode on every ready voice', async () => {
 		loras.set([
 			{
@@ -274,7 +299,7 @@ describe('voices page', () => {
 		mounted = mount(VoicesPage, { target });
 		await tick();
 
-		target.querySelector<HTMLButtonElement>('.create-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.pill-action')?.click();
 		await tick();
 		const input = target.querySelector<HTMLInputElement>('.create-panel input');
 		if (!input) throw new Error('Expected voice name input');
@@ -356,7 +381,7 @@ describe('voices page', () => {
 		mounted = mount(VoicesPage, { target });
 		await tick();
 
-		target.querySelector<HTMLButtonElement>('.create-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.pill-action')?.click();
 		await tick();
 		const input = target.querySelector<HTMLInputElement>('.create-panel input');
 		if (!input) throw new Error('Expected voice name input');

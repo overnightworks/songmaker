@@ -252,6 +252,11 @@
 		color: var(--text-subtle);
 	}
 
+	.menu-panel :global(.menu-item[aria-pressed='true']),
+	.menu-panel :global(.menu-item[aria-pressed='true'] .menu-item-hint) {
+		color: var(--accent);
+	}
+
 	.menu-panel :global(.menu-item:hover:not(:disabled)) {
 		background: var(--surface-hover);
 	}

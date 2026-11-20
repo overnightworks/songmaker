@@ -11,7 +11,10 @@
 	let { face, size }: Props = $props();
 </script>
 
-{#if face === 'spinner'}<span class="spinner" style:width="{size}px" style:height="{size}px"
+{#if face === 'spinner'}<span
+		class="spinner ring-turn"
+		style:width="{size}px"
+		style:height="{size}px"
 	></span>{:else}<Icon name={face} {size} />{/if}
 
 <style>
@@ -20,6 +23,6 @@
 		border: 2px solid currentColor;
 		border-right-color: transparent;
 		border-radius: 50%;
-		animation: rotate 0.8s linear infinite;
+		--ring-turn: 0.8s;
 	}
 </style>

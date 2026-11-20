@@ -58,7 +58,7 @@
 	aria-live="polite"
 	aria-busy={kind === 'loading'}
 >
-	<div class="status-mark {kind}" aria-hidden="true">
+	<div class="status-mark {kind}" class:ring-turn={kind === 'loading'} aria-hidden="true">
 		<Icon name={icon} size={34} />
 	</div>
 	<h1 bind:this={headingElement} tabindex="-1">{heading}</h1>
@@ -103,7 +103,7 @@
 	.status-mark.loading {
 		border-radius: 50%;
 		color: var(--accent);
-		animation: rotate 1.8s linear infinite;
+		--ring-turn: 1.8s;
 	}
 
 	.status-mark.missing {
@@ -146,11 +146,5 @@
 		color: var(--text-muted);
 		text-decoration: underline;
 		text-underline-offset: 0.2rem;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.status-mark.loading {
-			animation: none;
-		}
 	}
 </style>

@@ -4966,11 +4966,11 @@ msgid "unset default"
 msgstr ""
 
 msgctxt "generationPage.edit"
-msgid "edit"
+msgid "Edit"
 msgstr ""
 
 msgctxt "generationPage.delete"
-msgid "delete"
+msgid "Delete"
 msgstr ""
 
 msgctxt "generationPage.noPresets"

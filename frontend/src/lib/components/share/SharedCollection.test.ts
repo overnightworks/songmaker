@@ -458,14 +458,28 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 	});
 
 	it.each([{ tracks: [] }, { tracks: [sharedTrack('silent', 'Unpicked', { audioUrl: null })] }])(
-		'1374_rule_2 B6 shows only the title and notice when no song is playable (%j)',
+		'REQ-SHARE-28 shows the unplayable player page named like the collection when no song is playable (%j)',
 		async ({ tracks }) => {
+			stubLayout(true);
 			const target = await renderCollection({ tracks });
 			expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
+			expect(getByRoleButton(target, words['transport.play']).disabled).toBe(true);
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(words['share.noAudio']);
 			expect(target.textContent).toContain(words['aiNotice.generated']);
-			expect(target.querySelector('.now-playing, .np-lyrics, .np-queue')).toBeNull();
+			expect(target.querySelector('.now-playing-line, .np-page-lyrics, .np-page-songs')).toBeNull();
+			expect(target.textContent).not.toContain('Unpicked');
 			expect(audioPlayer.current).toBeNull();
+		}
+	);
+
+	it.runIf(kind === 'album')(
+		'REQ-SHARE-28 an album without a playable song shows the artist line a playable album shows, not its own title twice',
+		async () => {
+			stubLayout(true);
+			const target = await renderCollection({ tracks: [] });
+			const shownText = target.textContent ?? '';
+			expect(shownText).toContain(words['share.albumSubtitle']({ artist: 'Felix' }));
+			expect(shownText.split('Open Windows')).toHaveLength(2);
 		}
 	);
 
