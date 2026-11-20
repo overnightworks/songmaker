@@ -140,11 +140,11 @@
 	<header class="page-head">
 		<h1>{pageText('voicesPage.heading')}</h1>
 		<div class="head-actions">
-			<label class="toggle-deleted">
+			<label class="toggle-deleted" data-hitbox="text">
 				<input type="checkbox" bind:checked={showDeleted} />
 				{pageText('voicesPage.showDeleted')}
 			</label>
-			<button class="create-btn" onclick={() => (showCreate = !showCreate)}>
+			<button class="create-btn" data-hitbox="text" onclick={() => (showCreate = !showCreate)}>
 				{showCreate ? pageText('voicesPage.cancel') : pageText('voicesPage.newVoice')}
 			</button>
 		</div>
@@ -161,7 +161,7 @@
 					if (e.key === 'Escape') showCreate = false;
 				}}
 			/>
-			<button class="primary" disabled={creating || !newName.trim()} onclick={handleCreate}>
+			<button class="primary" data-hitbox="text" disabled={creating || !newName.trim()} onclick={handleCreate}>
 				{creating ? pageText('voicesPage.creating') : pageText('voicesPage.create')}
 			</button>
 		</div>
@@ -202,6 +202,7 @@
 						{#if lora.deleted_at === null}
 							<button
 								class="danger"
+								data-hitbox="text"
 								disabled={isLoraActive(lora.status)}
 								onclick={() => askDelete(lora)}
 							>
