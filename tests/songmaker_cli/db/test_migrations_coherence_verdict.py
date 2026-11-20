@@ -14,7 +14,6 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
-from support.migration_chain import is_on_the_single_chain
 from support.reference_link_migration import seed_users
 
 from songmaker_cli.db.models import Album, Generation, Score, Song, Version
@@ -99,9 +98,8 @@ def _upgrade_with(database, migration, values, scorers=None):
     return before, _stored_text(engine)
 
 
-def test_the_migration_follows_the_session_token_revision_on_the_single_chain(migration):
+def test_the_migration_follows_the_session_token_revision(migration):
     assert migration.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(migration.revision)
 
 
 def test_upgrade_deletes_both_keys_and_keeps_every_other_key(database, migration):

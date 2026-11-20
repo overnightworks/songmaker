@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import column_names, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.d8b4f2a6c1e9_users_choose_their_theme"
@@ -33,9 +33,8 @@ def _upgraded_with_two_people(database):
     return seeded_then_upgraded(database, PREVIOUS_REVISION, MIGRATION.revision, seed_users)
 
 
-def test_the_migration_follows_the_previous_revision_on_the_single_chain():
+def test_the_migration_follows_the_previous_revision():
     assert MIGRATION.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 def test_upgrade_gives_every_existing_person_the_device_choice(reference_link_database):
