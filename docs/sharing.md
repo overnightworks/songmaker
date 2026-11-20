@@ -34,6 +34,8 @@ For anyone building or reviewing public shares and administration: the ruled pro
 
 ### REQ-SHARE-27: A person's own agent cannot enable a public share.
 
+### REQ-SHARE-28: A public share without a playable take, song, album or playlist alike, shows its cover, title, AI mark, a dimmed Play and the no-audio sentence on the player page, with no song list or now-playing line.
+
 ### REQ-ADMIN-01: A user has exactly one role: administrator or user.
 
 ### REQ-ADMIN-05: A user cannot create another user.

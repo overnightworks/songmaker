@@ -4,6 +4,7 @@
 	import {
 		playableTracks,
 		trackPlaybackInfo,
+		unplayableCollectionInfo,
 		type SharedCollectionView
 	} from '#lib/share/sharedCollection.ts';
 	import { SharePlayback, type ShareStreamFetcher } from '#lib/share/sharePlayback.svelte.ts';
@@ -14,7 +15,6 @@
 	import TransportBarFrame from '#lib/components/TransportBarFrame.svelte';
 	import NowPlayingFrame from '#lib/components/NowPlayingFrame.svelte';
 	import NowPlayingQueue from '#lib/components/NowPlayingQueue.svelte';
-	import AiNotice from '#lib/components/AiNotice.svelte';
 	import type { SharedCollectionKind } from '#lib/api/shared.ts';
 	import ShareStatus from '#lib/components/ShareStatus.svelte';
 	import SharedFooter from './SharedFooter.svelte';
@@ -44,6 +44,15 @@
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
 	const isCollection = $derived(view?.kind === 'album' || view?.kind === 'playlist');
+	// A collection without a playable take reads as one unplayable song named
+	// like the collection: no queue, no now-playing line, no side controls.
+	const nothingToPlay = $derived(tracks.length === 0);
+	const hasQueue = $derived(isCollection && !nothingToPlay);
+	const albumSubtitle = $derived(
+		view?.artist
+			? pageText('share.albumSubtitle', { artist: view.artist })
+			: pageText('share.albumSubtitleNoArtist')
+	);
 	const subtitleByEntryId = $derived(
 		view?.kind === 'playlist'
 			? new Map(tracks.map((track) => [track.key, track.albumTitle ?? '']))
@@ -58,15 +67,13 @@
 		playback.currentTrack ?? tracks[0] ?? (isCollection ? null : view?.tracks[0]) ?? null
 	);
 	const collectionHead = $derived(
-		isCollection && view && stagedTrack
+		hasQueue && view && stagedTrack
 			? {
 					title: view.title,
 					subtitle:
 						view.kind === 'playlist'
 							? pageText('share.playlistSubtitle', tracks.length)
-							: view.artist
-								? pageText('share.albumSubtitle', { artist: view.artist })
-								: pageText('share.albumSubtitleNoArtist'),
+							: albumSubtitle,
 					nowPlaying: pageText('share.nowPlaying', {
 						title: stagedTrack.title,
 						position: String(Math.max(0, playback.queue.currentIndex) + 1),
@@ -75,7 +82,11 @@
 				}
 			: undefined
 	);
-	const stagedInfo = $derived(view && stagedTrack ? trackPlaybackInfo(view, stagedTrack) : null);
+	const stagedInfo = $derived.by(() => {
+		if (!view) return null;
+		if (stagedTrack) return trackPlaybackInfo(view, stagedTrack);
+		return isCollection ? unplayableCollectionInfo(view, albumSubtitle) : null;
+	});
 
 	$effect(() => {
 		void view?.cover;
@@ -100,7 +111,7 @@
 	});
 
 	$effect(() => {
-		if (!isCollection || !pageElement || !transportElement) {
+		if (!hasQueue || !pageElement || !transportElement) {
 			playerOutOfView = false;
 			return;
 		}
@@ -166,8 +177,8 @@
 
 <div
 	class="shared-page player-page"
-	class:collection-page={isCollection}
-	class:bar-room={isCollection && stackedPlayer && playback.currentTrack !== null}
+	class:collection-page={hasQueue}
+	class:bar-room={hasQueue && stackedPlayer && playback.currentTrack !== null}
 	bind:this={pageElement}
 >
 	<div class="bg-effects" aria-hidden="true">
@@ -190,38 +201,34 @@
 			surface="page"
 			artwork={view?.kind === 'playlist' ? playlistCover : undefined}
 			{collectionHead}
-			songs={isCollection ? collectionSongs : undefined}
+			songs={hasQueue ? collectionSongs : undefined}
 			canPrev={playback.canPrev}
 			canNext={playback.currentTrack ? playback.canNext : tracks.length > 1}
-			onprev={isCollection ? () => playback.prev() : undefined}
-			onnext={isCollection
+			onprev={hasQueue ? () => playback.prev() : undefined}
+			onnext={hasQueue
 				? () => (playback.currentTrack ? playback.next() : playback.jump(1))
 				: undefined}
 			shuffle={playback.shuffle}
 			shuffleLabel={pageText(playback.shuffle ? 'share.disableShuffle' : 'share.shuffle')}
-			onToggleShuffle={isCollection ? () => playback.setShuffle(!playback.shuffle) : undefined}
+			onToggleShuffle={hasQueue ? () => playback.setShuffle(!playback.shuffle) : undefined}
 			info={stagedInfo}
 			onCoverError={() => (coverFailed = true)}
 			{coverUrl}
 			onTogglePlay={() => playback.play()}
 			onSeek={(seconds) => playback.seek(seconds)}
 			ended={playback.ended}
-			unplayableNotice={tracks.length === 0 ? pageText('share.noAudio') : null}
+			unplayableNotice={nothingToPlay ? pageText('share.noAudio') : null}
 			showTakeLabel={false}
 			lyricsEmptyLabel={pageText('share.noLyrics')}
 			lyricsCues={stagedTrack?.cues ?? null}
 			lyricsText={stagedTrack?.lyrics ?? null}
 		/>
-	{:else if view}
-		<h1 class="header-title">{view.title}</h1>
-		<p class="no-audio-mark"><AiNotice look="badge" /></p>
-		<p class="no-audio" role="status">{pageText('share.noAudio')}</p>
 	{/if}
 
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack && isCollection && playerOutOfView}
+{#if playback.currentTrack && hasQueue && playerOutOfView}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -311,26 +318,6 @@
 		}
 	}
 
-	.header-title {
-		font-family: var(--font-display, 'Oswald', sans-serif);
-		font-size: 1.55rem;
-		color: var(--text);
-		text-transform: uppercase;
-		letter-spacing: 1.5px;
-		margin: 0;
-	}
-
-	.no-audio-mark {
-		margin: 0.5rem 0 0;
-	}
-
-	.no-audio {
-		margin-top: 1.5rem;
-		text-align: center;
-		color: var(--text-subtle, #888);
-		font-size: 0.9rem;
-	}
-
 	.track-cover {
 		display: grid;
 		place-items: center;
@@ -395,9 +382,6 @@
 		.shared-page,
 		.shared-page.player-page {
 			padding: 1.2rem 0.8rem;
-		}
-		.header-title {
-			font-size: 1.2rem;
 		}
 	}
 
