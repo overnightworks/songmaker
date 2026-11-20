@@ -200,28 +200,12 @@
 {/if}
 
 <style>
-	.kv {
-		display: flex;
-		align-items: center;
-		gap: var(--row-gap);
-		min-height: var(--hitbox-frequent);
-		padding: 0 var(--row-padding);
-		border-bottom: 1px solid var(--border);
-	}
-
 	.kv.open {
 		background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 	}
 
 	.kv.open .trigger {
 		color: var(--accent);
-	}
-
-	.k {
-		flex: 1;
-		min-width: 0;
-		color: var(--text-muted);
-		font-size: var(--label-font-size);
 	}
 
 	.v {

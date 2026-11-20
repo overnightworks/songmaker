@@ -424,22 +424,6 @@
 		flex-shrink: 0;
 	}
 
-	.kv {
-		display: flex;
-		align-items: center;
-		gap: var(--row-gap);
-		min-height: var(--hitbox-frequent);
-		padding: 0 var(--row-padding);
-		border-bottom: 1px solid var(--border);
-	}
-
-	.k {
-		flex: 1;
-		min-width: 0;
-		color: var(--text-muted);
-		font-size: var(--label-font-size);
-	}
-
 	.v {
 		display: inline-flex;
 		align-items: center;
