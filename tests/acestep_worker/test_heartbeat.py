@@ -16,7 +16,6 @@ from acestep_worker.heartbeat import (
     HeartbeatLoop,
     gpu_hold_blocks_generation,
     gpu_hold_locks,
-    gpu_hold_old_key,
     queue_depth_key,
     reserve_gpu_hold,
     worker_state_key,
@@ -131,7 +130,6 @@ def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None
             assert await gpu_hold_locks(other).release(worker_id, previous)
             acquired = await gpu_hold_locks(other).acquire(worker_id)
             assert acquired is not None
-            await other.set(gpu_hold_old_key(worker_id), acquired, ex=15)
             replacement.append(acquired)
 
         loop = HeartbeatLoop(
@@ -140,40 +138,16 @@ def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None
             state_provider=_no_state,
         )
         await loop.clear_orphaned_queue()
-        return (
-            replacement,
-            await gpu_hold_locks(other).state(worker_id),
-            await other.get(gpu_hold_old_key(worker_id)),
-        )
+        return replacement, await gpu_hold_locks(other).state(worker_id)
 
-    replacement, hold, old_key = _run(go())
+    replacement, hold = _run(go())
 
     assert hold.liveness is Liveness.ALIVE
     assert hold.generation == replacement[0]
-    assert old_key == replacement[0].encode()
 
 
 async def _no_state() -> dict[str, object]:
     return {}
-
-
-def test_a_hold_of_the_previous_release_keeps_a_generation_off_the_worker() -> None:
-    async def go():
-        redis = settled_fake_redis()
-        await redis.set(gpu_hold_old_key("acestep-worker-0"), "token", ex=15)
-        return await gpu_hold_blocks_generation(redis, "acestep-worker-0")
-
-    assert _run(go())
-
-
-def test_clear_orphaned_queue_ends_the_hold_of_a_previous_release() -> None:
-    async def go():
-        loop, redis = _make_loop()
-        await redis.set(gpu_hold_old_key("acestep-worker-0"), "token", ex=15)
-        await loop.clear_orphaned_queue()
-        return await gpu_hold_blocks_generation(redis, "acestep-worker-0")
-
-    assert not _run(go())
 
 
 def test_start_stop_cycles() -> None:
