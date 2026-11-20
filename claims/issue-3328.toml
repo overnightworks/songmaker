@@ -1,8 +1,0 @@
-claim_id = "4f3dd38d8b7a41078e7ae14dfd79c7a3"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "05919cc6973c26f75ef1c5bd7de983c3cd46be87"
-branch = "claude/issue-3328-no-test-leaves-a-pending-asyncio-task-fo"
-scope = ["src/songmaker_cli", "tests"]
-opened_commit = "59ce2448160425dd28470e5f21f12263a02dfc73"
-whole_reason = "the leaking task's owner is not known before the search; it is a test client, a lifespan or the slot release owner, with its tests"
