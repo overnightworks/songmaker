@@ -37,11 +37,7 @@ from songmaker_cli.db.queries.jobs import create_job, lock_active_job
 from songmaker_cli.db.queries.reference_recordings import lock_and_mark_reference_used
 from songmaker_cli.db.queries.resource_events import create_generation_created_event
 from songmaker_cli.db.queries.sentinels import unset_if_none
-from songmaker_cli.db.queries.settings import (
-    effective_default_config,
-    get_default_preset,
-    get_preset_by_id,
-)
+from songmaker_cli.db.queries.settings import effective_default_config, get_default_preset
 from songmaker_cli.db.queries.songs import get_song
 from songmaker_cli.db.queries.versions import get_version
 from songmaker_cli.generate import (
@@ -294,6 +290,7 @@ def _load_preset_params(
     db_factory: sessionmaker[Session],
 ) -> BaseGenerationParams | None:
     from songmaker_cli.config import get_builtin_defaults, resolve_model_mode
+    from songmaker_cli.db.queries.settings import get_preset_by_id
 
     with db_factory() as session:
         user = get_user(session, user_id)

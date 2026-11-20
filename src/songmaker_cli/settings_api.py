@@ -389,7 +389,7 @@ def api_set_default_config(
             if req.config not in shared_ids:
                 raise Refusal(400, "settingsRefusal.invalidDefaultConfig")
     db_user = get_user(session, user.id)
-    assert db_user is not None  # noqa: S101 - the authenticated person has an account row
+    assert db_user is not None
     db_user.default_generation_config = req.config
     record_audit(
         session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
