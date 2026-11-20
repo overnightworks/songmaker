@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Iterable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, NamedTuple
 
@@ -33,7 +33,7 @@ from songmaker_cli.timestamps import aware_timestamp, utcnow
 
 log = logging.getLogger(__name__)
 
-_PROCESS_STARTED_AT = datetime.now(timezone.utc)
+_PROCESS_STARTED_AT = utcnow()
 OWNER_LEASE_FAMILY = "owner"
 
 

@@ -18,7 +18,7 @@ import tempfile
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from math import ceil
 from pathlib import Path
 from typing import Final, Literal
@@ -58,6 +58,7 @@ from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.object_store import ObjectMissingError, StoredObject
 from songmaker_cli.queue_stream_build_lock import build_lock as _build_lock
 from songmaker_cli.refusals import Refusal
+from songmaker_cli.timestamps import utcnow
 
 log = logging.getLogger(__name__)
 
@@ -232,13 +233,12 @@ def _build_queue_stream_snapshot(
         audio_paths.append(prepared.audio_path)
         offset = end
     _render_and_store_snapshot_audio(ctx, snapshot_id, audio_paths)
-
     manifest = QueueStreamManifest(
         snapshot_id=snapshot_id,
         scope=scope,
         scope_id=scope_id,
         content_hash=content_hash,
-        expires_at=datetime.now(timezone.utc) + QUEUE_STREAM_TTL,
+        expires_at=utcnow() + QUEUE_STREAM_TTL,
         total_duration=round(offset, 3),
         windowed=windowed_by_count,
         tracks=tracks,
@@ -372,7 +372,7 @@ def _find_reusable_snapshot(
 ) -> QueueStreamManifestResponse | None:
     snapshot_id = ctx.redis.get(_content_hash_key(content_hash))
     manifest = None if snapshot_id is None else _stored_manifest(ctx, snapshot_id)
-    if manifest is None or manifest.expires_at < datetime.now(timezone.utc):
+    if manifest is None or manifest.expires_at < utcnow():
         return None
     return manifest.response(stream_url)
 
@@ -383,14 +383,14 @@ def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStream
     manifest = _stored_manifest(ctx, snapshot_id)
     if manifest is None:
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)  # unread: share
-    if manifest.expires_at < datetime.now(timezone.utc):
+    if manifest.expires_at < utcnow():
         delete_snapshot_files(ctx, snapshot_id)
         raise HTTPException(404, "Queue stream expired")  # unread: share
     return manifest
 
 
 def cleanup_expired_queue_streams(ctx: AppContext) -> None:
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     stored = list(ctx.object_store.list(QUEUE_STREAM_KEY_PREFIX))
     live_snapshot_ids = _remove_expired_queue_stream_snapshots(ctx, stored, now)
     _remove_expired_queue_stream_orphans(ctx, stored, live_snapshot_ids, now)

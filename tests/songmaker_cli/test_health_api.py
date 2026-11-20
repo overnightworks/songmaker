@@ -229,11 +229,10 @@ def test_health_preserves_response_bytes(
         registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
 
     with (
-        patch("songmaker_cli.health_api.datetime", wraps=datetime) as clock,
+        patch("songmaker_cli.health_api.utcnow", return_value=now),
         patch.object(arq_mod, "is_music_worker_healthy", AsyncMock(return_value=True)),
         patch.object(arq_mod, "is_scoring_worker_healthy", AsyncMock(return_value=True)),
     ):
-        clock.now.return_value = now
         response = health_client.get("/health/details", headers=monitoring_headers)
 
     expected = (

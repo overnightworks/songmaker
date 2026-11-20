@@ -2229,12 +2229,7 @@ def test_get_running_generation_exposes_take_counters_and_eta(
 
     now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
 
-    class FixedDatetime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return now
-
-    monkeypatch.setattr(job_models, "datetime", FixedDatetime)
+    monkeypatch.setattr(job_models, "utcnow", lambda: now)
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")
@@ -2284,12 +2279,7 @@ def test_generation_estimate_leaves_the_model_load_out(
 
     clock = [datetime(2030, 1, 1, tzinfo=timezone.utc)]
 
-    class SteppedDatetime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return clock[0]
-
-    monkeypatch.setattr(job_models, "datetime", SteppedDatetime)
+    monkeypatch.setattr(job_models, "utcnow", lambda: clock[0])
     monkeypatch.setattr(job_queries, "utcnow", lambda: clock[0])
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:

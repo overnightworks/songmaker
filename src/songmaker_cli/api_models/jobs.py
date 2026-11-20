@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from math import ceil
 from typing import Final, Literal
 
@@ -12,6 +12,7 @@ from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, GenerationPhase, JobStatus, JobType
 from songmaker_cli.messages import Message, stored_sentence
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
@@ -116,7 +117,7 @@ class JobResponse(BaseModel):
         *,
         now: datetime | None = None,
     ) -> JobResponse:
-        now = now or datetime.now(timezone.utc)
+        now = now or utcnow()
         return cls(
             id=job.id,
             type=job.type,

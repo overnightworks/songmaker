@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Final
 
 from arq.connections import ArqRedis
@@ -32,6 +32,7 @@ from songmaker_cli.job_timing import (
     OWNER_GONE_CHECK_INTERVAL_SECONDS,
 )
 from songmaker_cli.job_types import JobType
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import JobOwnerStamp, WorkerLiveness, owner_lease_liveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
@@ -69,7 +70,7 @@ def cleanup_expired_resource_events(ctx: AppContext) -> int:
     """Delete delivered event history beyond retention, preserving cursors."""
     from songmaker_cli.db.queries.resource_events import delete_resource_events_before
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RESOURCE_EVENT_RETENTION_DAYS)
+    cutoff = utcnow() - timedelta(days=RESOURCE_EVENT_RETENTION_DAYS)
     with ctx.db() as session:
         deleted = delete_resource_events_before(session, cutoff)
         session.commit()

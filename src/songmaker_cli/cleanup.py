@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from songmaker_cli.api_helpers import cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
@@ -34,6 +34,7 @@ from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list
 from songmaker_cli.db.soft_delete import soft_delete_cutoff
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import utcnow
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ def run_cleanup_expired(
     references the deleted songs alone linked are stamped unused; a failed stamp
     changes neither the counts nor the file removals.
     """
-    cutoff = soft_delete_cutoff(now or datetime.now(timezone.utc))
+    cutoff = soft_delete_cutoff(now or utcnow())
     with db_factory() as session:
         purge = _purge_expired(session, cutoff)
         session.commit()
@@ -192,7 +193,7 @@ def run_generation_retention(
     performing any writes. `now` fixes the clock both cutoffs measure from.
     """
     settings = get_settings()
-    now = now or datetime.now(timezone.utc)
+    now = now or utcnow()
     archive_cutoff = now - timedelta(days=settings.generation_retention_days)
     delete_cutoff = now - timedelta(days=settings.final_deletion_days)
     report = GenerationRetentionReport()
