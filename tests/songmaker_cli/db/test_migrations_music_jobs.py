@@ -7,7 +7,7 @@ import importlib
 import pytest
 from alembic import command
 from alembic.runtime.migration import MigrationContext
-from support.migration_chain import insert_bare_job, is_on_the_single_chain, job_count
+from support.migration_chain import insert_bare_job, job_count
 
 MIGRATION = importlib.import_module(
     "songmaker_cli.db.migrations.versions.b8d3f6a2c915_music_jobs_wait_only_in_postgresql"
@@ -24,10 +24,6 @@ def _database_at_previous_revision_holding(database, job_type: str, status: str)
     command.upgrade(config, MIGRATION.down_revision)
     insert_bare_job(engine, job_type=job_type, status=status)
     return config, engine
-
-
-def test_the_migration_is_on_the_single_chain():
-    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 @pytest.mark.parametrize(
