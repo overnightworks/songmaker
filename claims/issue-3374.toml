@@ -1,8 +1,0 @@
-claim_id = "50f663a1a21644c99ec3d3c1878aead0"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "40548d48db332af48309f9c4c34991044ea3834f"
-branch = "claude/issue-3374-cover-score-and-lora-sweep-reads-move-in"
-scope = ["src/songmaker_cli/cover_runner.py", "src/songmaker_cli/db/queries/cover_suggestions.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/lifecycle.py"]
-opened_commit = "740286e886a5c5828ba38505126a9f297fdc94fb"
-whole_reason = "the remaining by-id reads move behind their db/queries owners"
