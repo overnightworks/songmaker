@@ -1,0 +1,8 @@
+claim_id = "cb5b61450c41451dbf63bd0b74513b3d"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "c52571137cb45dd6b1b7606a9a60ab1713981dc3"
+branch = "claude/issue-3334-the-transport-spinners-stop-under-reduce"
+scope = ["frontend/src"]
+opened_commit = "8a3c68f6126ac90fd31896ca29cf00a62f53fdaf"
+whole_reason = "one reduced-motion rule for seven rings in seven components and app.css"
