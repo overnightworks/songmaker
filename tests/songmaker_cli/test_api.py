@@ -1131,8 +1131,7 @@ def test_generate_refused_without_lyrics_or_prompt(client: TestClient, lyrics: s
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         session.add(Song(id="s_empty", title="Empty", album_id="rock", slug="empty"))
-        session.add(Version(id="v1e", song_id="s_empty", version_number=1, lyrics=lyrics,
-                            prompt=prompt))
+        a_version(session, "v1e", "s_empty", lyrics=lyrics, prompt=prompt)
         session.commit()
     resp = client.post("/api/songs/s_empty/generate", json={"count": 1, "model": "sft"})
     assert resp.status_code == 400
