@@ -1,8 +1,0 @@
-claim_id = "eca52ed00eb3438dac6882dde252be9a"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "65355b44f3155d5cb4e7f3bb5d33b0fc83e87166"
-branch = "claude/issue-3376-add-album-to-playlist-requires-is-readab"
-scope = ["src/songmaker_cli/db/queries/playlists.py", "tests/songmaker_cli/test_playlist_api.py"]
-opened_commit = "3f140c3f06ba59e82a4157049dcc0482fec312dd"
-whole_reason = "one owner's reads move together with their callers"
