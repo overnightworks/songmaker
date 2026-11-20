@@ -381,6 +381,7 @@ def api_set_default_config(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> DefaultConfigResponse:
+    from songmaker_cli.db.models import User
     if req.config is not None and req.config not in VALID_BUILTIN_CONFIGS:
         preset = get_preset(session, req.config, user.id)
         if not preset:
@@ -388,8 +389,7 @@ def api_set_default_config(
             shared_ids = {p.id for p in _shared(session)}
             if req.config not in shared_ids:
                 raise Refusal(400, "settingsRefusal.invalidDefaultConfig")
-    db_user = get_user(session, user.id)
-    assert db_user is not None
+    db_user = session.query(User).filter_by(id=user.id).one()
     db_user.default_generation_config = req.config
     record_audit(
         session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
