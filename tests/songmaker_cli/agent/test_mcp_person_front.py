@@ -179,7 +179,7 @@ def test_an_admins_agent_cannot_write_into_or_generate_for_another_persons_conte
     world.world.seed_take(TokenWorld.BOB, "bobs")
     groups = ADMIN_GROUPS
 
-    with worker_ready() as pool:
+    with worker_ready():
         into = world.call("create_song", {"title": "x", "album_id": "album-bobs"}, groups=groups)
         generated = world.call(
             "generate_song", {"song_id": "song-bobs", "model": "sft"}, groups=groups,
@@ -189,7 +189,6 @@ def test_an_admins_agent_cannot_write_into_or_generate_for_another_persons_conte
     assert "Album not found" in into.text
     assert "Song not found" in generated.text
     assert world.rows_of(Job, "id") == []
-    pool.enqueue_job.assert_not_called()
 
 
 _PROGRESS_TOOLS = {
@@ -574,14 +573,13 @@ def test_the_browser_lists_its_own_takes_and_reads_its_lora_with_the_cookie(
 def test_generate_queues_a_job_for_the_person_as_the_api_queues_it(mcp: McpWorld) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
 
-    with worker_ready() as pool:
+    with worker_ready():
         reply = mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     assert (reply.is_error, reply.json()["type"]) == (False, "generate")
     assert mcp.rows_of(Job, "user_id", "song_id", "type") == [
         (TokenWorld.ALICE, "song-alices", "generate"),
     ]
-    pool.enqueue_job.assert_called_once()
 
 
 def test_generate_for_another_persons_song_or_a_song_without_lyrics_queues_nothing(
@@ -590,7 +588,7 @@ def test_generate_for_another_persons_song_or_a_song_without_lyrics_queues_nothi
     mcp.world.seed_take(TokenWorld.BOB, "bobs")
     bare = mcp.seed_song_without_lyrics(TokenWorld.ALICE)
 
-    with worker_ready() as pool:
+    with worker_ready():
         others = mcp.call("generate_song", {"song_id": "song-bobs", "model": "sft"})
         empty = mcp.call("generate_song", {"song_id": bare, "model": "sft"})
 
@@ -598,7 +596,6 @@ def test_generate_for_another_persons_song_or_a_song_without_lyrics_queues_nothi
     assert "lyrics" in empty.text
     assert (others.is_error, empty.is_error) == (True, True)
     assert mcp.rows_of(Job, "id") == []
-    pool.enqueue_job.assert_not_called()
 
 
 def test_generate_past_the_persons_limit_gets_the_apis_refusal_and_no_job(

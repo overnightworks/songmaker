@@ -12,7 +12,7 @@ from songmaker_cli.job_payloads import GeneratePayload
 
 @dataclass(frozen=True)
 class GenerationJobRequest:
-    """Keep audio_dir/data_dir out of queue_args() because the worker supplies its local paths."""
+    """The arguments of a generate job; audio_dir and data_dir are the worker's local paths."""
 
     job_id: str
     song_id: str
@@ -34,19 +34,4 @@ class GenerationJobRequest:
             song_id=self.song_id, version_id=self.version_id, count=self.count,
             user_id=self.user_id, seed=self.seed, target_model=self.target_model,
             task_params=self.repaint_params or self.cover_params,
-        )
-
-    def queue_args(
-        self,
-    ) -> tuple[str, str, str, int, str, int | None, str, dict | None, dict | None]:
-        return (
-            self.job_id,
-            self.song_id,
-            self.version_id,
-            self.count,
-            self.user_id,
-            self.seed,
-            self.target_model,
-            self.repaint_params.model_dump() if self.repaint_params is not None else None,
-            self.cover_params.model_dump() if self.cover_params is not None else None,
         )

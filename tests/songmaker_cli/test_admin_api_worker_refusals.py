@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -163,18 +163,6 @@ def test_a_worker_nobody_registered_is_named_on_each_worker_route(
     assert response.status_code == 404
     assert response.json()["detail"] == "Worker 'ghost' not found"
     assert _message(response) == {"key": "workerRefusal.notFound", "values": {"workerId": "ghost"}}
-
-
-def test_a_load_without_a_job_queue_names_the_queue_refusal(admin_client: TestClient) -> None:
-    pool = AsyncMock()
-    pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=pool):
-        response = admin_client.post(
-            f"/api/admin/workers/{WORKER_ID}/load_model", json={"mode": "sft"},
-        )
-
-    assert response.status_code == 503
-    assert _message(response) == {"key": "jobRefusal.queueUnavailable", "values": {}}
 
 
 @pytest.mark.parametrize(

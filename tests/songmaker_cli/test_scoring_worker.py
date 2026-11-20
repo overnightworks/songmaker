@@ -13,6 +13,7 @@ from support.job_owner import an_owner
 from tandem.testing import FakeWakeBus
 
 from songmaker_cli.job_queue import ClaimedJob
+from songmaker_cli.job_types import JobType
 from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import get_settings
 
@@ -227,7 +228,7 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_worker_shuts_down(
         update={"database_url": postgresql_url, "redis_url": redis_url},
     )
     worker = ScoringWorker(settings)
-    worker.claim_next_job = MagicMock(side_effect=[ClaimedJob("j1", None), None])
+    worker.claim_next_job = MagicMock(side_effect=[ClaimedJob("j1", JobType.SCORE, None), None])
     job_started, job_may_finish, job_finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
     async def run_claimed(_claimed: ClaimedJob) -> None:

@@ -21,7 +21,6 @@ from songmaker_cli.acestep_state import (
 )
 from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries.jobs import get_job
-from songmaker_cli.job_types import JobFunction
 from songmaker_cli.jobs import download_model_on_worker, run_generation_job
 from songmaker_cli.messages import message
 
@@ -31,18 +30,12 @@ def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
     seeded_db, generation_worker_peer, completed, locked_ffmpeg,
 ):
     """A hold or an unsettled Redis restart met at /generate requeues the takes still missing."""
-    queued = []
-
-    async def enqueue_job(function, *args, **kwargs):
-        queued.append((function, args, kwargs))
-
     async def exercise():
         held = WorkerReply(409, GPU_HELD_DETAIL)
         scenario = WorkerScenario(
             loaded_modes=("sft",), submit_answers=(None,) * completed + (held,),
         )
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
-            peer.redis.enqueue_job = enqueue_job
             await run_generation_job(
                 "j1", "s1", "v1", 2, "u1", db_factory=seeded_db,
                 audio_dir=peer.audio_dir, data_dir=peer.data_dir, redis=peer.redis,
@@ -51,12 +44,10 @@ def test_a_take_the_worker_refuses_as_held_requeues_the_job_and_fails_nothing(
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
 
     run_async(exercise())
-    assert [(function, args[3]) for function, args, _ in queued] == [
-        (JobFunction.GENERATE, 2 - completed),
-    ]
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "queued"
+        assert job.payload.count == 2 - completed
         assert job.queue_reason_message == message("jobWait.voiceTraining")
         assert job.error_message is None
         assert session.query(Generation).count() == completed

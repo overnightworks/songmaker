@@ -149,17 +149,32 @@ def count_total_queued_jobs(session: Session) -> int:
     )
 
 
-def count_queued_jobs(session: Session, job_type: JobType) -> int:
-    """Count the waiting jobs of one type, running jobs excluded."""
+def count_queued_jobs(session: Session, *job_types: JobType) -> int:
+    """Count the waiting jobs of the types, running jobs excluded."""
     return (
         session.query(Job)
-        .filter(Job.status == JobStatus.QUEUED, Job.type == job_type)
+        .filter(Job.status == JobStatus.QUEUED, Job.type.in_(job_types))
         .count()
     )
 
 
-def count_queued_generation_jobs(session: Session) -> int:
-    return count_queued_jobs(session, JobType.GENERATE)
+def count_generation_jobs_awaiting_the_gpu(session: Session) -> int:
+    """Count the generations that have not started a take: waiting, or claimed and not yet taking.
+
+    A claim moves a generation to running before it is admitted to a worker, so LoRA training,
+    which yields to generations, counts the claimed ones too.
+    """
+    return (
+        session.query(Job)
+        .filter(
+            Job.type == JobType.GENERATE,
+            or_(
+                Job.status == JobStatus.QUEUED,
+                and_(Job.status == JobStatus.RUNNING, Job.take_index.is_(None)),
+            ),
+        )
+        .count()
+    )
 
 
 def count_queued_lora_training_jobs(session: Session) -> int:
@@ -167,8 +182,9 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     return count_queued_jobs(session, JobType.LORA_TRAINING)
 
 
-# A row of these types has no arq message behind it: only a claim can run it.
-_TYPES_WITHOUT_QUEUE_MESSAGE: Final = frozenset({JobType.COVER})
+# A row of these types still has an arq message that runs it from its own arguments; a row of
+# any other type is run only by a claim.
+_TYPES_WITH_QUEUE_MESSAGE: Final = frozenset({JobType.SCORE})
 
 
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
@@ -176,27 +192,29 @@ def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
     return claim_next_queued_job(session, owner, JobType.COVER)
 
 
-def claim_next_queued_job(session: Session, owner: JobOwner, job_type: JobType) -> Job | None:
-    """Atomically move the job of ``job_type`` that is due first to running, owned by ``owner``.
+def claim_next_queued_job(session: Session, owner: JobOwner, *job_types: JobType) -> Job | None:
+    """Atomically move the job of ``job_types`` that is due first to running, owned by ``owner``.
 
     Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
     ``run_after`` and is never due. A queued job without one (written before rows carried
-    their arguments) is due for a type that has no queue message to run it; a score job
-    without one is left to its arq message, which runs it from its own arguments. SKIP
-    LOCKED makes competing workers take different rows instead of waiting on each other's.
+    their arguments) is due for a type that has no queue message to run it, and its claimer
+    fails it as having no payload; a score job without one is left to its arq message, which
+    runs it from its own arguments. SKIP LOCKED makes competing workers take different rows
+    instead of waiting on each other's.
     """
     due = Job.run_after <= datetime.now(timezone.utc)
-    if job_type in _TYPES_WITHOUT_QUEUE_MESSAGE:
-        due = or_(Job.run_after.is_(None), due)
+    without_message = [t for t in job_types if t not in _TYPES_WITH_QUEUE_MESSAGE]
+    if without_message:
+        due = or_(due, and_(Job.run_after.is_(None), Job.type.in_(without_message)))
     candidate_id = (
         session.query(Job.id)
-        .filter(Job.type == job_type, Job.status == JobStatus.QUEUED, due)
+        .filter(Job.type.in_(job_types), Job.status == JobStatus.QUEUED, due)
         .order_by(Job.run_after.asc(), Job.id.asc())
         .limit(1)
         .with_for_update(skip_locked=True)
         .scalar_subquery()
     )
-    claimed_id = _claim_queued_row(session, owner, Job.id == candidate_id, Job.type == job_type)
+    claimed_id = _claim_queued_row(session, owner, Job.id == candidate_id)
     return None if claimed_id is None else session.get(Job, claimed_id)
 
 
