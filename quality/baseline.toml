@@ -52,18 +52,18 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1180
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1839
 "tests/songmaker_cli/test_admin_api.py" = 999
-"tests/songmaker_cli/test_api.py" = 4542
-"tests/songmaker_cli/test_db.py" = 2429
+"tests/songmaker_cli/test_api.py" = 4499
+"tests/songmaker_cli/test_db.py" = 2404
 "tests/songmaker_cli/test_db_postgresql.py" = 831
 "tests/songmaker_cli/test_jobs.py" = 3052
 "tests/songmaker_cli/test_library_api.py" = 1621
 "tests/songmaker_cli/test_lora_api.py" = 1170
-"tests/songmaker_cli/test_playlist_api.py" = 1100
+"tests/songmaker_cli/test_playlist_api.py" = 1068
 "tests/songmaker_cli/test_queue_streams.py" = 1929
 "tests/songmaker_cli/test_resource_event_api.py" = 1110
 "tests/songmaker_cli/test_scheduler.py" = 1279
 "tests/songmaker_cli/test_server.py" = 1802
-"tests/songmaker_cli/test_sharing_api.py" = 2482
+"tests/songmaker_cli/test_sharing_api.py" = 2393
 
 [function_lines."src/acestep_worker/__main__.py"]
 "build_deps" = 67

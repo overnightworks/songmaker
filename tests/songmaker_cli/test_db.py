@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 from support.job_owner import an_owner, create_job_of_unstamped_owner
+from support.library_rows import a_take, a_version
 from support.web_app import seed_user
 from tandem import Liveness
 
@@ -123,24 +124,14 @@ def seeded_session(db_session: Session) -> Session:
     ver = Version(id="v1", song_id="s1", version_number=1, lyrics="verse one", prompt="rock")
     db_session.add(ver)
 
-    gen1 = Generation(
-        id="g1",
-        song_id="s1",
-        version_id="v1",
-        generation_number=1,
-        mp3_path="test/01_song_one_v1.mp3",
-        seed=42,
-        generation_params={"bpm": 120, "key_scale": "Am"},
+    a_take(
+        db_session, "g1", "s1", owner="test", version_id="v1", seed=42,
+        mp3_path="test/01_song_one_v1.mp3", generation_params={"bpm": 120, "key_scale": "Am"},
     )
-    gen2 = Generation(
-        id="g2",
-        song_id="s1",
-        version_id="v1",
-        generation_number=2,
+    a_take(
+        db_session, "g2", "s1", owner="test", version_id="v1", generation_number=2, seed=99,
         mp3_path="test/01_song_one_v2.mp3",
-        seed=99,
     )
-    db_session.add_all([gen1, gen2])
 
     score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 55.0})
     db_session.add(score)
@@ -374,15 +365,7 @@ def test_generation_missing_version_lyrics_is_null(
 def test_generation_empty_version_lyrics_is_null(
     seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
-    empty = Version(
-        id="v-empty",
-        song_id="s1",
-        version_number=99,
-        lyrics="",
-        prompt="empty",
-    )
-    seeded_session.add(empty)
-    seeded_session.flush()
+    empty = a_version(seeded_session, "v-empty", "s1", version_number=99, prompt="empty")
     gen = create_generation(
         seeded_session,
         song_id="s1",
@@ -1216,15 +1199,7 @@ def test_save_scores_upsert_persists(pg_factory) -> None:
         session.add(Album(id="t2", title="T2", artist="A"))
         session.add(Song(id="s2", title="S2", album_id="t2", track_number=1))
         session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="x", prompt="y"))
-        session.add(
-            Generation(
-                id="gx",
-                song_id="s2",
-                version_id="v2",
-                generation_number=1,
-                mp3_path="t2/test.mp3",
-            )
-        )
+        a_take(session, "gx", "s2", owner="t2", version_id="v2", seed=None, mp3_path="t2/test.mp3")
         session.add(Score(id="scx", generation_id="gx", scorer="batch", value={"old": 1.0}))
         session.commit()
 
