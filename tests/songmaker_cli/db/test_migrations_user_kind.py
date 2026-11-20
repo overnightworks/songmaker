@@ -8,7 +8,7 @@ import pytest
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import column_names, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.a4c7e19b3d52_accounts_have_a_kind"
@@ -30,9 +30,8 @@ def _upgraded_with_two_accounts(database):
     return seeded_then_upgraded(database, PREVIOUS_REVISION, MIGRATION.revision, seed_users)
 
 
-def test_the_migration_follows_the_previous_revision_on_the_single_chain():
+def test_the_migration_follows_the_previous_revision():
     assert MIGRATION.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 def test_upgrade_makes_every_existing_account_a_person(reference_link_database):

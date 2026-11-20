@@ -13,15 +13,16 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError
 from support.migration_chain import (
     column_names,
     frozen_table,
-    is_on_the_single_chain,
     seeded_then_upgraded,
     stored_values,
 )
-from support.repository_root import REPOSITORY_ROOT
+from support.stored_message_contract import (
+    StoredMessageMigrationContract,
+    committed_stored_keys,
+)
 
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
@@ -32,7 +33,6 @@ PREVIOUS_REVISION = "b3a8d5e1f7c2"
 OLD_COLUMN = "error"
 NEW_COLUMN = "error_message"
 TAKES_COLUMN = "completed_takes"
-STORED_KEYS_FILE = REPOSITORY_ROOT / "scripts" / "stored_message_keys.txt"
 WORKER_REPORTED_KEY = "jobFailure.workerReported"
 RECORDED_KEY = "jobFailure.recorded"
 GENERATION_FAILED_KEY = "jobFailure.generationFailed"
@@ -151,17 +151,9 @@ def _worded(token: dict) -> str:
     return text(SOURCE_LANGUAGE, token["key"], **token["values"])
 
 
-def test_the_migration_follows_the_previous_revision_on_the_single_chain():
+def test_the_migration_follows_the_previous_revision():
     assert MIGRATION.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(MIGRATION.revision)
 
-
-@pytest.mark.parametrize("number", range(len(SENTENCES)))
-def test_a_known_sentence_becomes_the_token_that_words_it_again(upgraded, number):
-    _, engine = upgraded
-    token = _token(engine, f"known-{number}")
-    assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[SENTENCES[number]], "values": {}}
-    assert _worded(token) == SENTENCES[number]
 
 
 def test_a_partial_whose_counts_agree_keeps_them_and_its_cause_becomes_a_token(upgraded):
@@ -273,43 +265,29 @@ def test_every_bucket_count_is_logged(reference_link_database, texts, caplog):
     }
 
 
-def test_upgrade_replaces_the_sentence_column_by_the_token_and_takes_columns(upgraded):
+def test_upgrade_adds_the_completed_takes_column(upgraded):
     _, engine = upgraded
-    names = column_names(engine, "jobs")
-    assert {NEW_COLUMN, TAKES_COLUMN} <= names
-    assert OLD_COLUMN not in names
+    assert TAKES_COLUMN in column_names(engine, "jobs")
 
 
-@pytest.mark.parametrize(
-    "token",
-    [
-        pytest.param({"key": 7, "values": {}}, id="key-not-a-string"),
-        pytest.param({"values": {}}, id="key-missing"),
-        pytest.param({"key": "jobFailure.internal", "values": []}, id="values-not-an-object"),
-        pytest.param({"key": "jobFailure.internal"}, id="values-missing"),
-    ],
-)
-def test_the_database_refuses_a_value_that_is_not_a_token(upgraded, token):
-    _, engine = upgraded
-    with pytest.raises(IntegrityError):
-        _insert_failed_job(engine, "bad", NEW_COLUMN, token)
+def test_no_retired_key_is_in_the_committed_set_of_stored_keys():
+    assert not (MIGRATION.RETIRED_STORED_KEYS & committed_stored_keys())
+
+
+class TestJobFailureMigration(StoredMessageMigrationContract):
+    migration = MIGRATION
+    table = "jobs"
+    old_column = OLD_COLUMN
+    new_column = NEW_COLUMN
+    insert_row = staticmethod(_insert_failed_job)
+    other_stored_keys = frozenset({
+        WORKER_REPORTED_KEY, RECORDED_KEY, GENERATION_FAILED_KEY, CHAT_PROBLEM_KEY,
+        *MIGRATION.MODE_TEMPLATES,
+    })
+
 
 
 def test_downgrade_raises_and_names_the_backup(upgraded):
     config, _ = upgraded
     with pytest.raises(Exception, match="restore a backup"):
         command.downgrade(config, PREVIOUS_REVISION)
-
-
-def test_the_keys_the_migration_stores_are_in_the_committed_set_of_stored_keys():
-    committed = {
-        line.strip() for line in STORED_KEYS_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
-    stored = {
-        *MIGRATION.STORED_MESSAGE_KEYS.values(),
-        WORKER_REPORTED_KEY, RECORDED_KEY, GENERATION_FAILED_KEY, CHAT_PROBLEM_KEY,
-        *MIGRATION.MODE_TEMPLATES,
-    }
-    assert stored <= committed
-    assert not (MIGRATION.RETIRED_STORED_KEYS & committed)

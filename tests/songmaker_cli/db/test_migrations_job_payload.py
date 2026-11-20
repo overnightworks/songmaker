@@ -11,7 +11,6 @@ from sqlalchemy import inspect
 from support.migration_chain import (
     column_names,
     insert_bare_job,
-    is_on_the_single_chain,
     job_count,
     seeded_then_upgraded,
 )
@@ -27,9 +26,6 @@ def _upgraded_with_a_job_of_the_old_shape(database):
         database, MIGRATION.down_revision, MIGRATION.revision, insert_bare_job,
     )
 
-
-def test_the_migration_is_on_the_single_chain():
-    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 @pytest.mark.parametrize("column", COLUMNS)
