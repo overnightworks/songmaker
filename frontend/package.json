@@ -39,7 +39,7 @@
 		"eslint-config-prettier": "^10.1.5",
 		"eslint-plugin-svelte": "^3.24.1",
 		"globals": "^17.14.0",
-		"jsdom": "30.0.1",
+		"jsdom": "31.0.1",
 		"monocart-coverage-reports": "3.2.1",
 		"prettier": "^3.10.1",
 		"prettier-plugin-svelte": "^4.1.1",
