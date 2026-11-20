@@ -107,14 +107,13 @@
 {/if}
 
 <style>
-	/* The wall's content edges (LibraryWall's titlebar and body padding). */
 	.load-failure-gutter {
-		padding: 16px 20px 0;
+		padding: 16px var(--library-gutter) 0;
 	}
 
 	@media (max-width: 768px) {
 		.load-failure-gutter {
-			padding: 10px 12px 0;
+			padding-top: 10px;
 		}
 	}
 
