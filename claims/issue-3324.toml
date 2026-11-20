@@ -1,0 +1,8 @@
+claim_id = "93ff3ccaada84d3c9031dd77b2150d72"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "ff8cd87537419f1a49b41b92ccb962cee58e918e"
+branch = "claude/issue-3324-five-production-copies-call-their-one-ow"
+scope = ["frontend/src", "src/songmaker_cli"]
+opened_commit = "a1e650952c2b4530837b37d29746c2469332f24b"
+whole_reason = "five small copies in four backend modules and ten frontend files share one reason and one review"
