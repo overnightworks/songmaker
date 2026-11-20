@@ -97,50 +97,9 @@
 {/if}
 
 <style>
-	.menu-heading {
-		margin: 0;
-		padding: 0.3rem 0.6rem 0.5rem;
-		font-family: var(--font-display);
-		font-size: 0.7rem;
-		letter-spacing: 0.5px;
-		text-transform: uppercase;
-		color: var(--text-subtle);
-		border-bottom: 1px solid var(--border);
-		margin-bottom: 0.25rem;
-		overflow-wrap: anywhere;
-	}
-
-	.menu-item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-height: var(--hitbox-frequent);
-		padding: 0.5rem 0.6rem;
-		border-radius: var(--btn-radius-sm);
-		font-size: 0.87rem;
-		color: var(--text);
-		background: none;
-		border: none;
-		text-align: left;
-		cursor: pointer;
-	}
-
 	.menu-item.opens-list::after {
 		content: '›';
 		margin-left: auto;
 		color: var(--text-subtle);
-	}
-
-	.menu-item:hover:not(:disabled) {
-		background: var(--surface-hover);
-	}
-
-	.menu-item:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.menu-item.destructive {
-		color: var(--fail);
 	}
 </style>

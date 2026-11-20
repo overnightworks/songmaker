@@ -218,4 +218,50 @@
 		border-radius: var(--card-radius);
 		z-index: 301;
 	}
+
+	.menu-panel :global(.menu-heading) {
+		margin: 0 0 0.25rem;
+		padding: 0.3rem 0.6rem 0.5rem;
+		font-family: var(--font-display);
+		font-size: 0.7rem;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+		color: var(--text-subtle);
+		border-bottom: 1px solid var(--border);
+		overflow-wrap: anywhere;
+	}
+
+	.menu-panel :global(.menu-item) {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: var(--hitbox-frequent);
+		padding: 0.5rem 0.6rem;
+		border-radius: var(--btn-radius-sm);
+		font-size: 0.87rem;
+		color: var(--text);
+		background: none;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.menu-panel :global(.menu-item-hint) {
+		margin-left: auto;
+		font-size: 0.75rem;
+		color: var(--text-subtle);
+	}
+
+	.menu-panel :global(.menu-item:hover:not(:disabled)) {
+		background: var(--surface-hover);
+	}
+
+	.menu-panel :global(.menu-item:disabled) {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	.menu-panel :global(.menu-item.destructive) {
+		color: var(--fail);
+	}
 </style>
