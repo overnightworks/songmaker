@@ -1,8 +1,0 @@
-claim_id = "849213345f864a279def43ce793955e6"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "857b619c929116f617b596fb4a8fcac53330af8a"
-branch = "claude/issue-3363-gpu-hold-drops-previous-release-key"
-scope = ["docs/acestep.md", "src/acestep_worker/heartbeat.py", "src/songmaker_cli/acestep_state.py", "tests/acestep_worker", "tests/songmaker_cli/test_acestep_state.py"]
-opened_commit = "b0fd677b5a2892a37034709e335b430ddd8b0293"
-whole_reason = "the old key is written by the worker, read by the web's admission script and named in docs, with its test cells beside each"
