@@ -8,16 +8,14 @@ import json
 import pytest
 import sqlalchemy as sa
 from alembic import command
-from sqlalchemy.exc import IntegrityError
 from support.migration_chain import (
     column_names,
     frozen_table,
-    is_on_the_single_chain,
     seeded_then_upgraded,
     stored_values,
 )
 from support.reference_link_migration import seed_users
-from support.repository_root import REPOSITORY_ROOT
+from support.stored_message_contract import StoredMessageMigrationContract
 
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
@@ -27,7 +25,6 @@ MIGRATION = importlib.import_module(
 PREVIOUS_REVISION = "a9d3f1b7c5e2"
 OLD_COLUMN = "error"
 NEW_COLUMN = "error_message"
-STORED_KEYS_FILE = REPOSITORY_ROOT / "scripts" / "stored_message_keys.txt"
 RECORDED_KEY = "voiceFailure.recorded"
 HISTORIC_CANCEL_SENTENCE = "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
 UNSUPPORTED_SENTENCE = (
@@ -79,18 +76,9 @@ def upgraded(reference_link_database):
     return reference_link_database[0], engine
 
 
-def test_the_migration_follows_the_previous_revision_on_the_single_chain():
+def test_the_migration_follows_the_previous_revision():
     assert MIGRATION.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(MIGRATION.revision)
 
-
-@pytest.mark.parametrize("number", range(len(SENTENCES)))
-def test_a_known_sentence_becomes_its_key_without_gap_values(upgraded, number):
-    _, engine = upgraded
-    sentence = SENTENCES[number]
-    token = stored_values(engine, "user_loras", NEW_COLUMN)[f"known-{number}"]
-    assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
-    assert text(SOURCE_LANGUAGE, token["key"]) == sentence
 
 
 def test_the_historic_cancel_sentence_is_kept_as_the_recorded_token(upgraded):
@@ -126,26 +114,6 @@ def test_a_voice_without_a_reason_stays_sql_null(upgraded):
     assert null_ids == {"none"}
 
 
-def test_upgrade_replaces_the_sentence_column_by_the_token_column(upgraded):
-    _, engine = upgraded
-    names = column_names(engine, "user_loras")
-    assert NEW_COLUMN in names
-    assert OLD_COLUMN not in names
-
-
-@pytest.mark.parametrize(
-    "token",
-    [
-        pytest.param({"key": 7, "values": {}}, id="key-not-a-string"),
-        pytest.param({"values": {}}, id="key-missing"),
-        pytest.param({"key": "voiceFailure.crashed", "values": []}, id="values-not-an-object"),
-        pytest.param({"key": "voiceFailure.crashed"}, id="values-missing"),
-    ],
-)
-def test_the_database_refuses_a_value_that_is_not_a_token(upgraded, token):
-    _, engine = upgraded
-    with pytest.raises(IntegrityError):
-        _insert_lora(engine, "bad", NEW_COLUMN, token)
 
 
 def test_downgrade_restores_every_sentence_and_keeps_the_voices_without_a_reason(upgraded):
@@ -171,14 +139,10 @@ def test_the_migration_upgrades_again_after_a_downgrade(upgraded):
     }
 
 
-def test_the_keys_the_migration_stores_are_in_the_committed_set_of_stored_keys():
-    committed = {
-        line.strip() for line in STORED_KEYS_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
-    stored = {
-        *MIGRATION.STORED_MESSAGE_KEYS.values(),
-        RECORDED_KEY,
-        *(token["key"] for token in MODE_TOKENS.values()),
-    }
-    assert stored <= committed
+class TestVoiceFailureMigration(StoredMessageMigrationContract):
+    migration = MIGRATION
+    table = "user_loras"
+    old_column = OLD_COLUMN
+    new_column = NEW_COLUMN
+    insert_row = staticmethod(_insert_lora)
+    other_stored_keys = frozenset({RECORDED_KEY, *(token["key"] for token in MODE_TOKENS.values())})

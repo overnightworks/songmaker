@@ -9,17 +9,13 @@ import logging
 import pytest
 import sqlalchemy as sa
 from alembic import command
-from sqlalchemy.exc import IntegrityError
 from support.migration_chain import (
     column_names,
     frozen_table,
-    is_on_the_single_chain,
     seeded_then_upgraded,
     stored_values,
 )
-from support.repository_root import REPOSITORY_ROOT
-
-from songmaker_cli.words import SOURCE_LANGUAGE, text
+from support.stored_message_contract import StoredMessageMigrationContract
 
 MIGRATION = importlib.import_module(
     "songmaker_cli.db.migrations.versions.a9d3f1b7c5e2_a_queue_wait_is_stored_as_a_message"
@@ -27,7 +23,6 @@ MIGRATION = importlib.import_module(
 PREVIOUS_REVISION = "d2f6b8a4c7e1"
 OLD_COLUMN = "queue_reason"
 NEW_COLUMN = "queue_reason_message"
-STORED_KEYS_FILE = REPOSITORY_ROOT / "scripts" / "stored_message_keys.txt"
 UNKNOWN_SENTENCE = "Waiting for the next GPU slot."
 SENTENCES = list(MIGRATION.STORED_MESSAGE_KEYS)
 JOB_COLUMNS = ("id", "type", "status", "progress", "heartbeat_at", "started_at")
@@ -60,18 +55,9 @@ def upgraded(reference_link_database, caplog):
     return reference_link_database[0], engine
 
 
-def test_the_migration_follows_the_previous_revision_on_the_single_chain():
+def test_the_migration_follows_the_previous_revision():
     assert MIGRATION.down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(MIGRATION.revision)
 
-
-def test_every_known_sentence_becomes_the_token_that_words_it_again(upgraded):
-    _, engine = upgraded
-    stored = stored_values(engine, "jobs", NEW_COLUMN)
-    for number, sentence in enumerate(SENTENCES):
-        token = stored[f"known-{number}"]
-        assert token == {"key": MIGRATION.STORED_MESSAGE_KEYS[sentence], "values": {}}
-        assert text(SOURCE_LANGUAGE, token["key"]) == sentence
 
 
 def test_an_unknown_sentence_becomes_sql_null_and_its_count_is_logged(upgraded, caplog):
@@ -86,26 +72,6 @@ def test_an_unknown_sentence_becomes_sql_null_and_its_count_is_logged(upgraded, 
     assert any("1 unrecognized" in line for line in logged)
 
 
-def test_upgrade_replaces_the_sentence_column_by_the_token_column(upgraded):
-    _, engine = upgraded
-    names = column_names(engine, "jobs")
-    assert NEW_COLUMN in names
-    assert OLD_COLUMN not in names
-
-
-@pytest.mark.parametrize(
-    "token",
-    [
-        pytest.param({"key": 7, "values": {}}, id="key-not-a-string"),
-        pytest.param({"values": {}}, id="key-missing"),
-        pytest.param({"key": "jobWait.voiceTraining", "values": []}, id="values-not-an-object"),
-        pytest.param({"key": "jobWait.voiceTraining"}, id="values-missing"),
-    ],
-)
-def test_the_database_refuses_a_value_that_is_not_a_token(upgraded, token):
-    _, engine = upgraded
-    with pytest.raises(IntegrityError):
-        _insert_job(engine, "bad", NEW_COLUMN, token)
 
 
 def test_downgrade_restores_the_sentences_and_keeps_the_jobs_without_a_wait(upgraded):
@@ -128,9 +94,9 @@ def test_the_migration_upgrades_again_after_a_downgrade(upgraded):
     }
 
 
-def test_the_keys_the_migration_stores_are_in_the_committed_set_of_stored_keys():
-    committed = {
-        line.strip() for line in STORED_KEYS_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
-    assert set(MIGRATION.STORED_MESSAGE_KEYS.values()) <= committed
+class TestQueueWaitMigration(StoredMessageMigrationContract):
+    migration = MIGRATION
+    table = "jobs"
+    old_column = OLD_COLUMN
+    new_column = NEW_COLUMN
+    insert_row = staticmethod(_insert_job)

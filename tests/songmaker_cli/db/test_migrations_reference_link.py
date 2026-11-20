@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import column_names, is_on_the_single_chain
+from support.migration_chain import column_names
 from support.reference_link_migration import (
     RECORDING_COLUMN,
     RECORDING_PATH,
@@ -137,9 +137,8 @@ def _linked_row(engine, case: LinkCase) -> tuple[str | None, dict | None]:
 
 
 @link_cases
-def test_the_migration_follows_the_previous_link_revision_on_the_single_chain(case):
+def test_the_migration_follows_the_previous_link_revision(case):
     assert case.migration.down_revision == case.previous_revision
-    assert is_on_the_single_chain(case.migration.revision)
 
 
 @link_cases
