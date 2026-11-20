@@ -1,7 +1,0 @@
-claim_id = "1fc9f39c67f74e4da0b2e3f911d29796"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "857b619c929116f617b596fb4a8fcac53330af8a"
-branch = "claude/issue-3362-scoring-pinned-load-tests-run-in-ci"
-scope = ["tests/songmaker_cli/scoring/test_pipeline_model_paths.py", "tests/songmaker_cli/test_scoring_scorers_extended.py", "tests/support/fake_library.py"]
-opened_commit = "293149da363f3aa5614b4ea29b52dfb455a0aa2e"
