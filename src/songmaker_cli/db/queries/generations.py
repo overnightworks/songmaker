@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 
@@ -23,6 +23,7 @@ from songmaker_cli.db.queries.sharing import (
     playable_take_filter,
 )
 from songmaker_cli.job_types import JobStatus
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.whisper_cues import WhisperCue
 
 log = logging.getLogger(__name__)
@@ -392,7 +393,7 @@ def archive_generation(session: Session, generation_id: str) -> Generation | Non
     if gen is None:
         return None
     gen.is_archived = True
-    gen.archived_at = datetime.now(timezone.utc)
+    gen.archived_at = utcnow()
     session.flush()
     return gen
 

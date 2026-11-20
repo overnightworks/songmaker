@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Collection, Mapping
 from dataclasses import KW_ONLY, dataclass, fields
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Final
 
 from sqlalchemy import and_, func, not_, or_, update
@@ -97,7 +97,7 @@ def has_active_job_for_version(session: Session, version_id: str) -> bool:
 def count_user_jobs_in_window(
     session: Session, user_id: str, job_type: str, window_seconds: int = 3600,
 ) -> int:
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    cutoff = utcnow() - timedelta(seconds=window_seconds)
     return (
         session.query(Job)
         .filter(
@@ -202,7 +202,7 @@ def claim_next_queued_job(session: Session, owner: JobOwner, *job_types: JobType
     runs it from its own arguments. SKIP LOCKED makes competing workers take different rows
     instead of waiting on each other's.
     """
-    due = Job.run_after <= datetime.now(timezone.utc)
+    due = Job.run_after <= utcnow()
     without_message = [t for t in job_types if t not in _TYPES_WITH_QUEUE_MESSAGE]
     if without_message:
         due = or_(due, and_(Job.run_after.is_(None), Job.type.in_(without_message)))
@@ -237,7 +237,7 @@ def _claim_queued_row(session: Session, owner: JobOwner, *conditions) -> str | N
         update(Job)
         .where(*conditions, Job.status == JobStatus.QUEUED)
         .values(
-            status=JobStatus.RUNNING, heartbeat_at=datetime.now(timezone.utc), run_after=None,
+            status=JobStatus.RUNNING, heartbeat_at=utcnow(), run_after=None,
             **owner_columns(owner),
         )
         .returning(Job.id),
@@ -287,7 +287,7 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
     )
     if job is None or job.status in JOB_TERMINAL_STATUSES:
         return False
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     status = update.status
     _move_generation_start(job, status, update.phase, now)
     if _enters_running(job, status):
@@ -358,7 +358,7 @@ def update_job_heartbeat(session: Session, job_id: str) -> None:
     )
     if job is None or job.status in JOB_TERMINAL_STATUSES:
         return
-    job.heartbeat_at = datetime.now(timezone.utc)
+    job.heartbeat_at = utcnow()
     session.flush()
 
 
@@ -562,7 +562,7 @@ def recover_jobs_of_dead_owners(
     """Fail the active jobs of every owner stamp read as GONE and return counts keyed by type."""
     if not owner_liveness:
         return {}
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     jobs = (
         session.query(Job)
         .filter(
@@ -610,7 +610,7 @@ def recover_stale_jobs_by_age_and_type(
     enforcing an active-job limit, without defining a second freshness bound.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = utcnow()
     else:
         now = aware_timestamp(now)
 

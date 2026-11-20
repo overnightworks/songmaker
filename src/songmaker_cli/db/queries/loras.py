@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -16,6 +16,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
 from songmaker_cli.messages import Message
+from songmaker_cli.timestamps import utcnow
 
 
 def lora_slug_taken(session: Session, user_id: str, slug: str) -> bool:
@@ -130,7 +131,7 @@ def soft_delete_user_lora(session: Session, lora_id: str) -> datetime:
     lora = session.query(UserLora).filter_by(id=lora_id).first()
     if not lora:
         raise ValueError(f"UserLora not found: {lora_id}")
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     lora.deleted_at = now
     session.flush()
     return now
