@@ -19,6 +19,7 @@ from songmaker_cli.db.models import Album, Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import (
     disable_sharing,
     enable_sharing,
+    lock_and_reload,
     playable_take_filter,
 )
 from songmaker_cli.job_types import JobStatus
@@ -264,7 +265,7 @@ def set_generation_transcript(
 def save_rating(
     session: Session, generation_id: str, rating_value: float, notes: str = "",
 ) -> Rating:
-    _lock_generation(session, generation_id)
+    lock_and_reload(session, Generation, generation_id)
     existing = session.query(Rating).filter_by(generation_id=generation_id).first()
     if existing:
         existing.rating = rating_value
@@ -285,27 +286,9 @@ def _require_generation(session: Session, generation_id: str) -> Generation:
     return gen
 
 
-def _lock_generation(session: Session, generation_id: str) -> Generation:
-    """Lock the take and reload it, so a concurrent archive or restore is seen.
-
-    The lock is limited to the take (`of=Generation`) because the eager join to its
-    reference recording is an outer join, which PostgreSQL cannot lock.
-    """
-    gen = (
-        session.query(Generation)
-        .filter_by(id=generation_id)
-        .with_for_update(of=Generation)
-        .populate_existing()
-        .first()
-    )
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
-    return gen
-
-
 def lock_unarchived_generation(session: Session, generation_id: str) -> Generation:
     """The one refusal of an archived take: lock it, or raise `ArchivedTakeError`."""
-    gen = _lock_generation(session, generation_id)
+    gen = lock_and_reload(session, Generation, generation_id)
     if gen.is_archived:
         raise ArchivedTakeError(generation_id)
     return gen
@@ -367,7 +350,7 @@ def lock_takes(
 
 
 def unpick_generation(session: Session, generation_id: str) -> None:
-    gen = _lock_generation(session, generation_id)
+    gen = lock_and_reload(session, Generation, generation_id)
     gen.is_picked = False
     session.flush()
 
@@ -379,7 +362,7 @@ def keep_generation(session: Session, generation_id: str) -> None:
 
 
 def unkeep_generation(session: Session, generation_id: str) -> None:
-    gen = _lock_generation(session, generation_id)
+    gen = lock_and_reload(session, Generation, generation_id)
     gen.is_kept = False
     session.flush()
 
@@ -415,7 +398,7 @@ def archive_generation(session: Session, generation_id: str) -> Generation | Non
 
 
 def unarchive_generation(session: Session, generation_id: str) -> Generation:
-    gen = _lock_generation(session, generation_id)
+    gen = lock_and_reload(session, Generation, generation_id)
     gen.is_archived = False
     gen.archived_at = None
     session.flush()

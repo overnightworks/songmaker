@@ -471,12 +471,7 @@
 		background-image:
 			linear-gradient(transparent, transparent),
 			conic-gradient(var(--on-accent), transparent, var(--on-accent));
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
+		animation: rotate 0.8s linear infinite;
 	}
 	.nav-btn {
 		width: 44px;

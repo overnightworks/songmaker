@@ -14,7 +14,8 @@ from songmaker_cli.constants import (
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
     VALID_BUILTIN_CONFIGS,
 )
-from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting, User
+from songmaker_cli.db.models import AvailableModel, GenerationPreset, User
+from songmaker_cli.db.queries.rate_limits import get_rate_limit_setting, upsert_rate_limit_setting
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -203,14 +204,7 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
 
 
 def get_cowriter_tail_token_budget(session: Session) -> int:
-    row = (
-        session.query(RateLimitSetting)
-        .filter(
-            RateLimitSetting.setting_key == SETTING_COWRITER_TAIL_TOKEN_BUDGET,
-            RateLimitSetting.user_id.is_(None),
-        )
-        .first()
-    )
+    row = get_rate_limit_setting(session, SETTING_COWRITER_TAIL_TOKEN_BUDGET)
     if row is None:
         return COWRITER_DEFAULT_TAIL_TOKEN_BUDGET
     return row.value
@@ -230,22 +224,7 @@ def set_cowriter_tail_token_budget(session: Session, budget: int) -> None:
         raise TailTokenBudgetOutOfRangeError(
             COWRITER_MIN_TAIL_TOKEN_BUDGET, COWRITER_MAX_TAIL_TOKEN_BUDGET,
         )
-    row = (
-        session.query(RateLimitSetting)
-        .filter(
-            RateLimitSetting.setting_key == SETTING_COWRITER_TAIL_TOKEN_BUDGET,
-            RateLimitSetting.user_id.is_(None),
-        )
-        .first()
-    )
-    if row:
-        row.value = budget
-    else:
-        row = RateLimitSetting(
-            setting_key=SETTING_COWRITER_TAIL_TOKEN_BUDGET, value=budget,
-        )
-        session.add(row)
-    session.flush()
+    upsert_rate_limit_setting(session, SETTING_COWRITER_TAIL_TOKEN_BUDGET, budget)
 
 
 def _clear_default(session: Session, user_id: str, model_mode: str) -> None:

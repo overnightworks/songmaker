@@ -27,19 +27,13 @@
 		border: 2px solid var(--busy);
 		border-top-color: transparent;
 		border-radius: 50%;
-		animation: turn 1.1s linear infinite;
+		animation: rotate 1.1s linear infinite;
 	}
 
 	.busy p {
 		margin: 0;
 		max-width: 28ch;
 		font-size: 15px;
-	}
-
-	@keyframes turn {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

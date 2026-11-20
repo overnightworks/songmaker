@@ -530,13 +530,7 @@
 		border: 3px solid var(--border);
 		border-top-color: var(--accent);
 		border-radius: 50%;
-		animation: stage-turn 2.4s linear infinite;
-	}
-
-	@keyframes stage-turn {
-		to {
-			transform: rotate(360deg);
-		}
+		animation: rotate 2.4s linear infinite;
 	}
 
 	.cover-failure {

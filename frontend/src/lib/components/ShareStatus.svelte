@@ -103,7 +103,7 @@
 	.status-mark.loading {
 		border-radius: 50%;
 		color: var(--accent);
-		animation: spin 1.8s linear infinite;
+		animation: rotate 1.8s linear infinite;
 	}
 
 	.status-mark.missing {
@@ -146,12 +146,6 @@
 		color: var(--text-muted);
 		text-decoration: underline;
 		text-underline-offset: 0.2rem;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
