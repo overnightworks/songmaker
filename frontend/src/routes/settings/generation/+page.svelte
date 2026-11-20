@@ -219,7 +219,8 @@
 	<section>
 		<div class="section-header">
 			<h2>{pageText('generationPage.myPresets')}</h2>
-			<button class="add-btn" data-hitbox="text" onclick={openNewPreset}>{pageText('generationPage.newPreset')}</button
+			<button class="add-btn" data-hitbox="text" onclick={openNewPreset}
+				>{pageText('generationPage.newPreset')}</button
 			>
 		</div>
 
@@ -279,10 +280,16 @@
 								preset.is_default ? 'generationPage.unsetDefault' : 'generationPage.setDefault'
 							)}
 						</button>
-						<button class="preset-action" data-hitbox="text" onclick={() => openEditPreset(preset.id)}
-							>{pageText('generationPage.edit')}</button
+						<button
+							class="preset-action"
+							data-hitbox="text"
+							onclick={() => openEditPreset(preset.id)}>{pageText('generationPage.edit')}</button
 						>
-						<button class="preset-action delete" data-hitbox="text" onclick={() => (presetPendingDelete = preset)}>
+						<button
+							class="preset-action delete"
+							data-hitbox="text"
+							onclick={() => (presetPendingDelete = preset)}
+						>
 							{pageText('generationPage.delete')}
 						</button>
 					</div>

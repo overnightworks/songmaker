@@ -161,7 +161,12 @@
 					if (e.key === 'Escape') showCreate = false;
 				}}
 			/>
-			<button class="primary" data-hitbox="text" disabled={creating || !newName.trim()} onclick={handleCreate}>
+			<button
+				class="primary"
+				data-hitbox="text"
+				disabled={creating || !newName.trim()}
+				onclick={handleCreate}
+			>
 				{creating ? pageText('voicesPage.creating') : pageText('voicesPage.create')}
 			</button>
 		</div>

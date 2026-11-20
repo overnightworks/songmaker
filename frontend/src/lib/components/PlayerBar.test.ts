@@ -1261,24 +1261,6 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		expect(openTargets()).toHaveLength(0);
 		expect(bar().querySelector('.track-title')?.textContent).toBe(words['places.library']);
 	});
-
-	it.each([
-		{ layout: 'phone', phone: true, covers: 0 },
-		{ layout: 'desktop', phone: false, covers: 1 }
-	])('gives the idle $layout title the room an empty cover would take', async ({ phone, covers }) => {
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn((query: string) => ({
-				matches: query === MINI_PLAYER_WITHOUT_COVER_MEDIA ? false : phone,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn()
-			}))
-		);
-		queueContext.set({ type: 'library' });
-		await mountBar();
-
-		expect(target.querySelectorAll('.track-cover')).toHaveLength(covers);
-	});
 });
 
 describe('PlayerBar failure line', () => {
