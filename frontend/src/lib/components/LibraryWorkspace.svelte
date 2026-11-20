@@ -69,11 +69,13 @@
 </script>
 
 {#if bootstrapFailed}
-	<LoadFailure
-		message={sync.error || pageText('resourceSync.error')}
-		retryLabel={pageText('libraryWorkspace.retry')}
-		onretry={() => void retryLoad()}
-	/>
+	<div class="load-failure-gutter">
+		<LoadFailure
+			message={sync.error || pageText('resourceSync.error')}
+			retryLabel={pageText('libraryWorkspace.retry')}
+			onretry={() => void retryLoad()}
+		/>
+	</div>
 {:else if !workspaceReady}
 	<BusyState text={pageText('libraryWorkspace.loading')} />
 {:else}
@@ -105,6 +107,17 @@
 {/if}
 
 <style>
+	/* The wall's content edges (LibraryWall's titlebar and body padding). */
+	.load-failure-gutter {
+		padding: 16px 20px 0;
+	}
+
+	@media (max-width: 768px) {
+		.load-failure-gutter {
+			padding: 10px 12px 0;
+		}
+	}
+
 	.library-root {
 		display: flex;
 		flex-direction: column;
