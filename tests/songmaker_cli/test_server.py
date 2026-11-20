@@ -664,7 +664,6 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
 
 
 def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg_factory) -> None:
-    from songmaker_cli.redis_client import release_slot_in_background
     from songmaker_cli.server import _lifespan
 
     mock_app = MagicMock(**{"state.mcp_front": None})
@@ -677,6 +676,7 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
     )
 
     slots = MagicMock(release=AsyncMock(return_value=True))
+    slots_owner = mock_app.state.ctx.slot_releases
 
     async def _run():
         cleanup_started = asyncio.Event()
@@ -687,7 +687,7 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
             try:
                 await asyncio.Future()
             except asyncio.CancelledError:
-                release_slot_in_background(slots, "slot-token", subject="Test")
+                slots_owner.release_in_background(slots, "slot-token", subject="Test")
                 cleanup_cancelled.set()
                 raise
 

@@ -17,6 +17,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 from songmaker_cli.job_queue import app_wake_channel
+from songmaker_cli.redis_client import SlotReleases
 from songmaker_cli.worker_liveness import JobOwner, owner_leases
 
 if TYPE_CHECKING:
@@ -48,6 +49,8 @@ class AppContext:
     """This process as the owner of its jobs, set once its lease is held."""
     wake_channel: WakeChannel = field(init=False)
     """The app's wake channel: a job's cancel, and a queue's due row."""
+    slot_releases: SlotReleases = field(default_factory=SlotReleases)
+    """The stream slot releases still running; the lifespan drains them before its loop closes."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)
