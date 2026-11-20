@@ -105,11 +105,9 @@
 	action: () => void,
 	icon?: string,
 	hint?: string,
-	close: (action: () => void) => void = runAndClose,
-	pressed?: boolean,
-	tooltip?: string
+	close: (action: () => void) => void = runAndClose
 )}
-	<button class="menu-item" aria-pressed={pressed} title={tooltip} onclick={() => close(action)}>
+	<button class="menu-item" onclick={() => close(action)}>
 		{#if icon}<Icon name={icon} size={14} />{/if}
 		{label}
 		{#if hint}<span class="menu-item-hint" aria-hidden="true">{hint}</span>{/if}
