@@ -1,8 +1,0 @@
-claim_id = "25c5ce6247f7452886628dbda018bc30"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "65355b44f3155d5cb4e7f3bb5d33b0fc83e87166"
-branch = "claude/issue-3377-sharestatus-links-to-sign-in-through-sig"
-scope = ["frontend/src/lib/components/ShareStatus.svelte"]
-opened_commit = "56f30556604933a5d2c9c35b0b7caef1fec15952"
-whole_reason = "one owner's reads move together with their callers"
