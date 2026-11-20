@@ -1,8 +1,0 @@
-claim_id = "84eb1a5608334748a899897cd268fdc7"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "5ce8efa8868347489c5295b36f6eb85a62754dad"
-branch = "claude/issue-3366-gone-resource-answers-404"
-scope = ["src/songmaker_cli/album_api.py", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/audio_paths.py", "src/songmaker_cli/lora_api.py", "src/songmaker_cli/playlist_api.py", "src/songmaker_cli/queue_streams.py", "tests"]
-opened_commit = "352d02fabc1bf73ef95fe776ec852a5ade7400b5"
-whole_reason = "three routes' error answers and their regression tests, which live in several test modules"
