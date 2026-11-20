@@ -59,7 +59,7 @@
 "tests/songmaker_cli/test_library_api.py" = 1621
 "tests/songmaker_cli/test_lora_api.py" = 1170
 "tests/songmaker_cli/test_playlist_api.py" = 1100
-"tests/songmaker_cli/test_queue_streams.py" = 2196
+"tests/songmaker_cli/test_queue_streams.py" = 1932
 "tests/songmaker_cli/test_resource_event_api.py" = 1110
 "tests/songmaker_cli/test_scheduler.py" = 1279
 "tests/songmaker_cli/test_server.py" = 1802
@@ -156,10 +156,6 @@
 
 [function_lines."tests/songmaker_cli/test_health_api.py"]
 "prometheus_output_before_refactor" = 114
-
-[function_lines."tests/songmaker_cli/test_queue_streams.py"]
-"_seed_library_data" = 113
-"_seed_library_pool_data" = 106
 
 [function_lines."tests/songmaker_cli/test_reference_audio_quota.py"]
 "test_postgresql_failed_reference_write_releases_admission" = 75
