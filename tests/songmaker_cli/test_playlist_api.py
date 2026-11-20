@@ -13,6 +13,7 @@ from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 from support.cover_refusals import COVER_TOO_LARGE, COVER_UNSUPPORTED_TYPE
+from support.library_rows import a_song, a_take, a_version, an_album
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -97,18 +98,9 @@ def _seed_test_data(session: Session) -> None:
     session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="hi", prompt="rock"))
     session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="hi", prompt="pop"))
     session.flush()
-    session.add(Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="u-test/g1.mp3", seed=42, is_picked=True,
-    ))
-    session.add(Generation(
-        id="g2", song_id="s1", version_id="v1", generation_number=2,
-        mp3_path="u-test/g2.mp3", seed=99,
-    ))
-    session.add(Generation(
-        id="g3", song_id="s2", version_id="v2", generation_number=1,
-        mp3_path="u-test/g3.mp3", seed=77, is_picked=True,
-    ))
+    a_take(session, "g1", "s1", owner="u-test", version_id="v1", seed=42, is_picked=True)
+    a_take(session, "g2", "s1", owner="u-test", version_id="v1", generation_number=2, seed=99)
+    a_take(session, "g3", "s2", owner="u-test", version_id="v2", seed=77, is_picked=True)
 
 
 @pytest.fixture
@@ -158,24 +150,15 @@ def _add_album_generation(
     generation_id: str,
     cover_key: str | None,
 ) -> None:
-    session.add(Album(
-        id=album_id,
-        title=album_id,
-        artist="Artist",
-        created_by=_DEFAULT_USER_ID,
-        cover_key=cover_key,
-    ))
-    session.add(Song(id=song_id, title=song_id, album_id=album_id, slug=song_id))
-    session.add(Version(
-        id=f"version-{song_id}", song_id=song_id, version_number=1, lyrics="lyrics",
-    ))
-    session.add(Generation(
-        id=generation_id,
-        song_id=song_id,
-        version_id=f"version-{song_id}",
-        generation_number=1,
-        mp3_path=f"{_DEFAULT_USER_ID}/{generation_id}.mp3",
-    ))
+    an_album(
+        session, album_id, title=album_id, created_by=_DEFAULT_USER_ID, cover_key=cover_key,
+    )
+    a_song(session, song_id, album_id, track_number=0)
+    a_version(session, f"version-{song_id}", song_id, lyrics="lyrics")
+    a_take(
+        session, generation_id, song_id, owner=_DEFAULT_USER_ID, version_id=f"version-{song_id}",
+        seed=None,
+    )
 
 
 def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_plus_one(
@@ -813,13 +796,8 @@ def test_api_add_album_to_playlist_hides_missing_and_foreign_albums(client: Test
     with factory() as session:
         session.add(User(id="foreign-user", username="foreign", role="user"))
         session.flush()
-        session.add(
-            Album(
-                id="foreign-album",
-                title="Foreign",
-                artist="Other",
-                created_by="foreign-user",
-            ),
+        an_album(
+            session, "foreign-album", title="Foreign", artist="Other", created_by="foreign-user",
         )
         session.commit()
 
@@ -923,15 +901,10 @@ def test_api_add_nonexistent_generation(client: TestClient) -> None:
 def _seed_sharing_data(session) -> None:
     admin = User(username="admin", role="admin")
     session.add(admin)
-    session.add(Album(id="a1", title="Album", artist="Artist"))
-    session.add(
-        Song(id="s1", title="Song One", album_id="a1", track_number=1, slug="song-one"),
-    )
-    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="hi"))
-    session.add(Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
-    ))
+    an_album(session, "a1")
+    a_song(session, "s1", "a1", title="Song One", slug="song-one")
+    a_version(session, "v1", "s1", lyrics="hi")
+    a_take(session, "g1", "s1", owner="admin_user", version_id="v1", seed=42, is_picked=True)
     playlist = Playlist(id="pl1", title="Shared Mix", slug="shared-mix", created_by=admin.id)
     session.add(playlist)
     session.add(PlaylistEntry(
@@ -999,14 +972,9 @@ def test_shared_playlist_stops_presenting_a_deleted_songs_take(
 
 def _seed_two_song_sharing_data(session) -> None:
     _seed_sharing_data(session)
-    session.add(
-        Song(id="s2", title="Song Two", album_id="a1", track_number=2, slug="song-two"),
-    )
-    session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="ho"))
-    session.add(Generation(
-        id="g2", song_id="s2", version_id="v2", generation_number=1,
-        mp3_path="admin_user/g2.mp3", seed=43, is_picked=True,
-    ))
+    a_song(session, "s2", "a1", title="Song Two", track_number=2, slug="song-two")
+    a_version(session, "v2", "s2", lyrics="ho")
+    a_take(session, "g2", "s2", owner="admin_user", version_id="v2", seed=43, is_picked=True)
     session.add(PlaylistEntry(
         id="pe2", playlist_id="pl1", generation_id="g2", position=1,
     ))
