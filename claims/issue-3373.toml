@@ -3,6 +3,6 @@ agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
 role = "builder"
 base = "65355b44f3155d5cb4e7f3bb5d33b0fc83e87166"
 branch = "claude/issue-3373-user-preset-and-version-by-id-reads-move"
-scope = ["src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/db/queries/versions.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/settings_api.py", "src/songmaker_cli/song_api.py"]
+scope = ["src/songmaker_cli/db/queries/auth.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/db/queries/versions.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/settings_api.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_settings_api_default_config.py"]
 opened_commit = "f19bf722da12656a31ef6290a51dbc1988970ad3"
 whole_reason = "one owner's reads move together with their callers"
