@@ -57,7 +57,7 @@ lib/components/editor/TakeTaskCard.svelte 7
 lib/components/editor/TakesList.svelte 7
 lib/components/editor/VersionsSheet.svelte 14
 lib/components/editor/WriteColumn.svelte 1
-lib/components/share/SharedCollection.svelte 7
+lib/components/share/SharedCollection.svelte 3
 lib/components/share/SharedFooter.svelte 2
 lib/components/shell/PhoneTabs.svelte 1
 lib/components/shell/Rail.svelte 5

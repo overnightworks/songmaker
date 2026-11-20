@@ -199,3 +199,20 @@ export function trackPlaybackInfo(
 		lyrics: track.lyrics
 	};
 }
+
+// The stand-in for a collection with nothing to play: one take named like the
+// collection, so the player page shows its cover and title and the unplayable
+// state.
+export function unplayableCollectionInfo(collection: SharedCollectionView): PlaybackInfo {
+	return trackPlaybackInfo(collection, {
+		key: collection.kind,
+		title: collection.title,
+		subtitle: null,
+		albumTitle: null,
+		audioUrl: null,
+		durationSec: null,
+		lyrics: null,
+		cues: null,
+		cover: collection.cover
+	});
+}

@@ -462,9 +462,10 @@ test('1374_rule_14 P10: unplayable entries are neither staged nor listed', async
 	await page.reload();
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(PLAYLIST_TITLE);
 	await expect(page.getByRole('status')).toHaveText(words['share.noAudio']);
-	await expect(page.locator('.now-playing, .queue-row, .np-page-lyrics, .player-bar')).toHaveCount(
-		0
-	);
+	await expect(page.getByRole('button', { name: words['transport.play'] })).toBeDisabled();
+	await expect(
+		page.locator('.now-playing-line, .queue-row, .np-page-lyrics, .player-bar')
+	).toHaveCount(0);
 });
 
 test('1374_rule_10 P11: missing words and failed covers recover on the next song', async ({
