@@ -1,0 +1,8 @@
+claim_id = "7cf38e45ea5047698b6e8285cc1af224"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "77cf809e9a18b4d8fea2d606ec4297cd0a5e7e56"
+branch = "claude/issue-3351-the-frontend-s-seven-pending-npm-updates"
+scope = [".github/dependabot.yml", "frontend/e2e/helpers.ts", "frontend/package.json", "frontend/pnpm-lock.yaml"]
+opened_commit = "53d97e689bec6c8e2fd271859f82b6e014fea75a"
+whole_reason = "the frontend's dependency pins and lockfile, Dependabot's ignore list and the E2E guard that reports the failure"
