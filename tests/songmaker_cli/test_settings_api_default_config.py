@@ -99,7 +99,7 @@ def test_another_persons_preset_is_refused_as_default(people):
         assert session.get(User, "u-ana").default_generation_config is None
 
 
-def test_a_missing_account_fails_loud_where_a_default_is_set(people):
+def test_require_user_raises_when_the_account_does_not_exist(people):
     _, factory = people
     with factory() as session, pytest.raises(NoResultFound):
         require_user(session, "u-nobody")
