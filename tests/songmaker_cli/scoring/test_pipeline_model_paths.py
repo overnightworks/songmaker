@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from support.fake_library import install_fake_library
 from support.job_owner import an_owner
 
 from songmaker_cli.db.models import Generation
@@ -36,12 +36,11 @@ class ModelScorer:
     def config(self, path: Path | None) -> PipelineConfig:
         return PipelineConfig(device="cpu", **{self.config_field: path})
 
-    def stub_library(self) -> AbstractContextManager[MagicMock]:
-        pytest.importorskip(self.library_module)
-        stub = MagicMock()
+    def stub_library(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        stub = install_fake_library(monkeypatch, self.library_module, self.library_class)
         stub.return_value.forward.return_value = [{"CE": 7.5, "CU": 6.0, "PC": 8.0, "PQ": 7.0}]
         stub.return_value.transcribe.return_value = (iter(()), MagicMock(language="en"))
-        return patch(f"{self.library_module}.{self.library_class}", stub)
+        return stub
 
 
 def _make_directory(parent: Path) -> Path:
@@ -89,50 +88,52 @@ def _empty_model_caches() -> Iterator[None]:
 
 @MODEL_SCORERS
 def test_scorer_loads_the_model_from_the_configured_path(
-    scorer: ModelScorer, tmp_path: Path,
+    scorer: ModelScorer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = scorer.make_path(tmp_path)
 
-    with scorer.stub_library() as library:
-        scorer.score(tmp_path / "take.mp3", config=scorer.config(path))
+    library = scorer.stub_library(monkeypatch)
+    scorer.score(tmp_path / "take.mp3", config=scorer.config(path))
 
     call = library.call_args
     assert str(path) in [str(argument) for argument in (*call.args, *call.kwargs.values())]
 
 
-def test_whisper_never_resolves_a_model_through_the_hub(tmp_path: Path) -> None:
+def test_whisper_never_resolves_a_model_through_the_hub(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     path = WHISPER.make_path(tmp_path)
 
-    with WHISPER.stub_library() as library:
-        WHISPER.score(tmp_path / "take.mp3", config=WHISPER.config(path))
+    library = WHISPER.stub_library(monkeypatch)
+    WHISPER.score(tmp_path / "take.mp3", config=WHISPER.config(path))
 
     assert library.call_args.kwargs["local_files_only"] is True
 
 
 @MODEL_SCORERS
 def test_scorer_without_a_configured_path_fails_naming_the_setting(
-    scorer: ModelScorer, tmp_path: Path,
+    scorer: ModelScorer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     take = tmp_path / "take.mp3"
     config = scorer.config(None)
 
-    with scorer.stub_library() as library:
-        with pytest.raises(ValueError, match=scorer.setting):
-            scorer.score(take, config=config)
+    library = scorer.stub_library(monkeypatch)
+    with pytest.raises(ValueError, match=scorer.setting):
+        scorer.score(take, config=config)
 
     library.assert_not_called()
 
 
 @MODEL_SCORERS
 def test_scorer_with_a_missing_path_fails_instead_of_asking_the_hub(
-    scorer: ModelScorer, tmp_path: Path,
+    scorer: ModelScorer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     take = tmp_path / "take.mp3"
     config = scorer.config(tmp_path / "absent")
 
-    with scorer.stub_library() as library:
-        with pytest.raises(FileNotFoundError, match=scorer.setting):
-            scorer.score(take, config=config)
+    library = scorer.stub_library(monkeypatch)
+    with pytest.raises(FileNotFoundError, match=scorer.setting):
+        scorer.score(take, config=config)
 
     library.assert_not_called()
 
@@ -196,7 +197,7 @@ def test_scoring_job_without_a_configured_path_leaves_the_scorers_to_fail_naming
 
 
 def test_whisper_directory_without_a_tokenizer_fails_instead_of_asking_the_hub(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     incomplete = tmp_path / "incomplete"
     incomplete.mkdir()
@@ -204,8 +205,8 @@ def test_whisper_directory_without_a_tokenizer_fails_instead_of_asking_the_hub(
     take = tmp_path / "take.mp3"
     config = WHISPER.config(incomplete)
 
-    with WHISPER.stub_library() as library:
-        with pytest.raises(FileNotFoundError, match=WHISPER.setting):
-            WHISPER.score(take, config=config)
+    library = WHISPER.stub_library(monkeypatch)
+    with pytest.raises(FileNotFoundError, match=WHISPER.setting):
+        WHISPER.score(take, config=config)
 
     library.assert_not_called()
