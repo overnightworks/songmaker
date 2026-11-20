@@ -11,6 +11,7 @@ import pytest
 
 librosa = pytest.importorskip("librosa")
 
+from support.fake_library import install_fake_library
 from support.wav_files import read_wav, write_wav
 from songmaker_cli.whisper_cues import WhisperCue, WhisperWordCue
 from songmaker_cli.parser import SongMeta
@@ -96,8 +97,8 @@ def test_force_cpu_env_restores_existing(monkeypatch) -> None:
     assert os.environ["CUDA_VISIBLE_DEVICES"] == "0,1"
 
 
-def test_get_predictor_caches(tmp_path: Path) -> None:
-    pytest.importorskip("audiobox_aesthetics")
+def test_get_predictor_caches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -113,8 +114,8 @@ def test_get_predictor_caches(tmp_path: Path) -> None:
     ab.clear_cache()
 
 
-def test_get_predictor_cpu_uses_force_env(tmp_path: Path) -> None:
-    pytest.importorskip("audiobox_aesthetics")
+def test_get_predictor_cpu_uses_force_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -128,8 +129,8 @@ def test_get_predictor_cpu_uses_force_env(tmp_path: Path) -> None:
     ab.clear_cache()
 
 
-def test_get_predictor_cuda_no_force_env(tmp_path: Path) -> None:
-    pytest.importorskip("audiobox_aesthetics")
+def test_get_predictor_cuda_no_force_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -143,8 +144,8 @@ def test_get_predictor_cuda_no_force_env(tmp_path: Path) -> None:
     ab.clear_cache()
 
 
-def test_get_predictor_default_cache(tmp_path: Path) -> None:
-    pytest.importorskip("audiobox_aesthetics")
+def test_get_predictor_default_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -278,8 +279,8 @@ def _whisper_model_dir(parent: Path) -> Path:
     return model_dir
 
 
-def test_get_whisper_model_caches(tmp_path: Path) -> None:
-    pytest.importorskip("faster_whisper")
+def test_get_whisper_model_caches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_library(monkeypatch, "faster_whisper", "WhisperModel")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
@@ -295,8 +296,8 @@ def test_get_whisper_model_caches(tmp_path: Path) -> None:
     ta.clear_cache()
 
 
-def test_get_whisper_model_default_cache(tmp_path: Path) -> None:
-    pytest.importorskip("faster_whisper")
+def test_get_whisper_model_default_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install_fake_library(monkeypatch, "faster_whisper", "WhisperModel")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
