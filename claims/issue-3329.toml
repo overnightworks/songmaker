@@ -1,0 +1,8 @@
+claim_id = "29b9cf92f6454e7f9fb402a2a2371a22"
+agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
+role = "builder"
+base = "38d0d762043ed3784532ad19531cb7a0c913a66b"
+branch = "claude/issue-3329-four-large-test-modules-build-their-libr"
+scope = ["tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_db.py", "tests/songmaker_cli/test_playlist_api.py", "tests/songmaker_cli/test_sharing_api.py", "tests/support/library_rows.py"]
+opened_commit = "66d6c9a54874209a2ee060e303133bf242541036"
+whole_reason = "four test modules take the same builder, whose signature is tidied once"
