@@ -1,8 +1,0 @@
-claim_id = "318e510f60d9472cb0e2475abc086149"
-agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
-role = "builder"
-base = "08b3bf0f6e66e2536d05c80c7c9a769ba0eefc5d"
-branch = "claude/issue-3345-a-menu-s-share-row-shows-its-state-by-sh"
-scope = ["frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/ShareRowContent.svelte", "frontend/src/lib/components/editor/TakeMenu.svelte", "frontend/src/lib/components/editor/TakeMenu.test.ts", "frontend/src/lib/share"]
-opened_commit = "bc282fe6da647ef61d9a0f26efdf784af4299e01"
-whole_reason = "the two menus with a share row, their tests, the one share row piece both mount, the shared menu owner and the share helper"
