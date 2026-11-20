@@ -3,5 +3,5 @@ agent = "Claude f9e149be-ec49-4424-a6a0-691872c221ce"
 role = "builder"
 base = "b0c8ce80984d8e5fcbd1458d889b3bafd8653cf5"
 branch = "claude/issue-3348-the-owner-recovery-test-with-redis-unrea"
-scope = ["tests/songmaker_cli/test_server_owner_recovery.py", "tests/support/web_cluster_world.py"]
+scope = ["tests/songmaker_cli/test_server_owner_recovery.py", "tests/support/app_processes.py", "tests/support/web_cluster_world.py"]
 opened_commit = "91a987f363be3ff15dd9195d17b104f576e7f139"
