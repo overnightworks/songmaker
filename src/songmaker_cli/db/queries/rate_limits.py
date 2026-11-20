@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import RateLimitSetting
+from songmaker_cli.timestamps import utcnow
 
 
 def get_rate_limit_setting(
@@ -38,17 +40,22 @@ def upsert_rate_limit_setting(
     session: Session, setting_key: str, value: int,
     user_id: str | None = None,
 ) -> RateLimitSetting:
-    existing = get_rate_limit_setting(session, setting_key, user_id)
-    if existing:
-        existing.value = value
-        session.flush()
-        return existing
-    setting = RateLimitSetting(
-        setting_key=setting_key, value=value, user_id=user_id,
+    """Write the limit in one statement, so two first Saves of one key both succeed and the
+    later value stays, then reload the stored row."""
+    session.execute(
+        insert(RateLimitSetting)
+        .values(setting_key=setting_key, value=value, user_id=user_id)
+        .on_conflict_do_update(
+            index_elements=[RateLimitSetting.user_id, RateLimitSetting.setting_key],
+            set_={"value": value, "updated_at": utcnow()},
+        ),
     )
-    session.add(setting)
-    session.flush()
-    return setting
+    return (
+        session.query(RateLimitSetting)
+        .filter_by(setting_key=setting_key, user_id=user_id)
+        .populate_existing()
+        .one()
+    )
 
 
 def get_all_global_rate_limits(session: Session) -> list[RateLimitSetting]:

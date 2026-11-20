@@ -511,7 +511,7 @@ def api_update_rate_limits(
     invalid = set(req.settings.keys()) - _get_env_defaults().keys()
     if invalid:
         raise Refusal(400, "settingsRefusal.unknownKeys", keys=str(sorted(invalid)))
-    for key, value in req.settings.items():
+    for key, value in sorted(req.settings.items()):
         if value < 0:
             raise Refusal(400, "settingsRefusal.negativeValue", key=key)
         upsert_rate_limit_setting(session, key, value)
