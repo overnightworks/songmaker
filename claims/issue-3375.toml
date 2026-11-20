@@ -1,8 +1,0 @@
-claim_id = "b8307988cc694ede98223ab12e8eadb9"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "535966450e6ec8383f6fa276e9f038a5403914f2"
-branch = "claude/issue-3375-slug-taken-reads-move-from-api-helpers-i"
-scope = ["src/songmaker_cli/api_helpers.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/db/queries/songs.py"]
-opened_commit = "6741280ff947327f1c334dd53ad9bd8d51a4c9df"
-whole_reason = "one owner's reads move together with their callers"
