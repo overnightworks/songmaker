@@ -73,4 +73,4 @@ routes/settings/+page.svelte 2
 routes/settings/about/+page.svelte 3
 routes/settings/generation/+page.svelte 14
 routes/settings/users/+page.svelte 21
-routes/settings/voices/+page.svelte 19
+routes/settings/voices/+page.svelte 18
