@@ -7,7 +7,7 @@ import hashlib
 import hmac
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from html.parser import HTMLParser
 from http import HTTPStatus
 from pathlib import Path
@@ -37,6 +37,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.job_queue import JobQueue
 from songmaker_cli.request_policies import HEALTH_DETAILS_PATH
+from songmaker_cli.timestamps import utcnow
 
 PROM_HTTP_REQUESTS_TOTAL: Final[str] = "songmaker_http_requests_total"
 PROM_HTTP_REQUEST_DURATION_MS: Final[str] = "songmaker_http_request_duration_milliseconds_total"
@@ -372,9 +373,9 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
 async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignals:
     ctx: AppContext = request.app.state.ctx
     startup_time: datetime = getattr(
-        request.app.state, "startup_time", datetime.now(timezone.utc),
+        request.app.state, "startup_time", utcnow(),
     )
-    uptime = int((datetime.now(timezone.utc) - startup_time).total_seconds())
+    uptime = int((utcnow() - startup_time).total_seconds())
 
     db_ok = _check_db(ctx)
 

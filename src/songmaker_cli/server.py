@@ -12,7 +12,6 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 
@@ -76,6 +75,7 @@ from songmaker_cli.request_policies import (
     build_security_headers_policy,
 )
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, Settings, get_settings
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import keep_owner_lease
 
 WEB_SERVICE_NAME = "songmaker-web"
@@ -159,7 +159,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await init_arq_pool()
     log.info("arq pool connected")
 
-    app.state.startup_time = datetime.now(timezone.utc)
+    app.state.startup_time = utcnow()
     try:
         async with keep_owner_lease(
             ctx.owner_leases, ctx.owner_id,

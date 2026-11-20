@@ -9,7 +9,7 @@ import shutil
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -49,6 +49,7 @@ from songmaker_cli.scheduler import (
     worker_request_headers,
 )
 from songmaker_cli.settings import LoraTrainingJobConfig
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import JobOwner
 
 from ._runtime import _defer_job, _sanitize_error, _touch_heartbeat, _update_job
@@ -816,7 +817,7 @@ def cleanup_failed_lora(
         lora_id,
         status=LoraStatus.FAILED,
         error_message=error_message,
-        completed_at=datetime.now(timezone.utc),
+        completed_at=utcnow(),
     )
     record_audit(
         session,
@@ -1016,7 +1017,7 @@ def _persist_crashed_lora_reconciliation(
         lora_id,
         status=LoraStatus.READY,
         storage_path=storage_rel,
-        completed_at=datetime.now(timezone.utc),
+        completed_at=utcnow(),
         model_mode=completed_model_mode,
         clear_error=True,
     )
@@ -1195,7 +1196,7 @@ def _lora_queue_wait_seconds(
         if job is None:
             return None
         queued_at = job.started_at
-    return (datetime.now(timezone.utc) - queued_at).total_seconds()
+    return (utcnow() - queued_at).total_seconds()
 
 
 async def _submit_lora_training_job(
@@ -1364,7 +1365,7 @@ def _mark_lora_training_complete(
             lora_id,
             status=LoraStatus.READY,
             storage_path=storage_rel,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=utcnow(),
             model_mode=completed_model_mode,
             clear_error=True,
         )
