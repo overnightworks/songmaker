@@ -31,6 +31,7 @@ from songmaker_cli.db.models import (
     UserSession,
 )
 from songmaker_cli.db.queries.resource_events import create_generation_created_event
+from songmaker_cli.redis_client import SlotReleases
 
 
 @pytest.fixture
@@ -426,9 +427,12 @@ def test_t23_a_bearer_alone_does_not_register_a_worker_and_the_internal_token_st
 
 
 async def _read_stream_until(
-    app: ASGIApp, path: str, headers: dict[str, str], *, until: str,
+    app: ASGIApp, releases: SlotReleases, path: str, headers: dict[str, str], *, until: str,
 ) -> tuple[int, str]:
-    """GET a stream through the app's ASGI interface; the client leaves once `until` has arrived."""
+    """GET a stream through the app's ASGI interface; the client leaves once `until` has arrived.
+
+    The stream a leaving client abandons ends when the loop finalizes its async generators; its
+    slot release then runs before the loop closes, as the application's lifespan would await it."""
     status = 0
     body = ""
     # The request arrives once; a second read of the receive channel never returns.
@@ -454,11 +458,13 @@ async def _read_stream_until(
     }
     with suppress(ClientDisconnect):
         await asyncio.wait_for(app(scope, receive.get, send), timeout=10)
+    await asyncio.get_running_loop().shutdown_asyncgens()
+    await releases.drain()
     return status, body
 
 
 def test_t24_the_event_streams_admit_a_token_and_keep_their_per_person_filter(
-    token_world: TokenWorld,
+    token_world: TokenWorld, no_task_left_pending: None,
 ) -> None:
     with token_world.factory() as session:
         seed_user(session, "bob", user_id=TokenWorld.BOB)
@@ -472,9 +478,22 @@ def test_t24_the_event_streams_admit_a_token_and_keep_their_per_person_filter(
             )
             session.commit()
     headers = token_world.bearer(TokenWorld.ALICE)
+    released_slots: list[str] = []
+
+    class _HeldSlots:
+        async def take(self, _limits: dict[str, int]) -> str:
+            return "slot-token"
+
+        async def release(self, token: str) -> bool:
+            await asyncio.sleep(0.05)  # a store round trip: a release the loop drops never lands
+            released_slots.append(token)
+            return True
+
+    app = token_world.client.app
+    app.state._resource_stream_slots = _HeldSlots()
 
     status, frames = asyncio.run(_read_stream_until(
-        token_world.client.app, "/api/resource-events/stream",
+        app, app.state.ctx.slot_releases, "/api/resource-events/stream",
         {**headers, "Last-Event-ID": "0"}, until="take-alices",
     ))
     foreign_job = token_world.client.get("/api/jobs/bobs-job/stream", headers=headers)
@@ -483,3 +502,4 @@ def test_t24_the_event_streams_admit_a_token_and_keep_their_per_person_filter(
         200, True, False,
     )
     assert foreign_job.status_code == 404
+    assert released_slots == ["slot-token"]
