@@ -1,0 +1,8 @@
+claim_id = "b23e444eb54f4b7ab269f82466ac7944"
+agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
+role = "builder"
+base = "b954095c464327335f85c46c914253014fc51328"
+branch = "claude/issue-3371-nine-db-modules-read-the-clock-through-u"
+scope = ["src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/auth.py", "src/songmaker_cli/db/queries/conversations.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/db/soft_delete.py", "tests/songmaker_cli/test_api.py"]
+opened_commit = "7f1b8c4d9e27f6d434627644e18000f49e371ae7"
+whole_reason = "one clock owner replaces inline datetime.now across the db query modules"
