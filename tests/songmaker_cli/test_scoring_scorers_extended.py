@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -97,66 +98,36 @@ def test_force_cpu_env_restores_existing(monkeypatch) -> None:
     assert os.environ["CUDA_VISIBLE_DEVICES"] == "0,1"
 
 
-def test_get_predictor_caches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
+@pytest.fixture
+def aes_predictor_class(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     from songmaker_cli.scoring import audiobox_aesthetics as ab
+
+    predictor_class = install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
+    ab.clear_cache()
+    yield predictor_class
+    ab.clear_cache()
+
+
+def test_get_predictor_caches(tmp_path: Path, aes_predictor_class: MagicMock) -> None:
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
-    ab.clear_cache()
-    mock_cls = MagicMock(return_value=MagicMock())
-
-    with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        p1 = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
-        p2 = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
+    p1 = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
+    p2 = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
 
     assert p1 is p2
-    assert mock_cls.call_count == 1
-    ab.clear_cache()
+    assert aes_predictor_class.call_count == 1
 
 
-def test_get_predictor_cpu_uses_force_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
-    from songmaker_cli.scoring import audiobox_aesthetics as ab
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_get_predictor_builds_one_predictor_per_device(
+    tmp_path: Path, aes_predictor_class: MagicMock, device: str,
+) -> None:
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
-    ab.clear_cache()
-    mock_cls = MagicMock(return_value=MagicMock())
+    result = _get_predictor(tmp_path / "checkpoint.pt", device=device)
 
-    with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
-
-    mock_cls.assert_called_once()
-    ab.clear_cache()
-
-
-def test_get_predictor_cuda_no_force_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
-    from songmaker_cli.scoring import audiobox_aesthetics as ab
-    from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
-
-    ab.clear_cache()
-    mock_cls = MagicMock(return_value=MagicMock())
-
-    with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        _get_predictor(tmp_path / "checkpoint.pt", device="cuda")
-
-    mock_cls.assert_called_once()
-    ab.clear_cache()
-
-
-def test_get_predictor_default_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_library(monkeypatch, "audiobox_aesthetics.infer", "AesPredictor")
-    from songmaker_cli.scoring import audiobox_aesthetics as ab
-    from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
-
-    ab.clear_cache()
-    mock_cls = MagicMock(return_value=MagicMock())
-
-    with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        result = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
-
-    assert result is not None
-    ab.clear_cache()
+    aes_predictor_class.assert_called_once()
+    assert result is aes_predictor_class.return_value
 
 
 def test_score_audiobox(tmp_path: Path) -> None:
@@ -279,36 +250,32 @@ def _whisper_model_dir(parent: Path) -> Path:
     return model_dir
 
 
-def test_get_whisper_model_caches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_library(monkeypatch, "faster_whisper", "WhisperModel")
+@pytest.fixture
+def whisper_model_class(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     from songmaker_cli.scoring import text_accuracy as ta
+
+    model_class = install_fake_library(monkeypatch, "faster_whisper", "WhisperModel")
+    ta.clear_cache()
+    yield model_class
+    ta.clear_cache()
+
+
+def test_get_whisper_model_caches(tmp_path: Path, whisper_model_class: MagicMock) -> None:
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
-    ta.clear_cache()
-    mock_model = MagicMock()
-
-    with patch("faster_whisper.WhisperModel", return_value=mock_model) as mock_cls:
-        m1 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
-        m2 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
+    m1 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
+    m2 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
 
     assert m1 is m2
-    assert mock_cls.call_count == 1
-    ta.clear_cache()
+    assert whisper_model_class.call_count == 1
 
 
-def test_get_whisper_model_default_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    install_fake_library(monkeypatch, "faster_whisper", "WhisperModel")
-    from songmaker_cli.scoring import text_accuracy as ta
+def test_get_whisper_model_default_cache(tmp_path: Path, whisper_model_class: MagicMock) -> None:
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
-    ta.clear_cache()
-    mock_model = MagicMock()
+    result = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
 
-    with patch("faster_whisper.WhisperModel", return_value=mock_model):
-        result = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
-
-    assert result is mock_model
-    ta.clear_cache()
+    assert result is whisper_model_class.return_value
 
 
 def _whisper_word(text: str, start: float, end: float) -> MagicMock:
