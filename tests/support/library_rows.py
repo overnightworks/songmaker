@@ -8,7 +8,6 @@ parameters of its ``loose_*`` twin.
 from __future__ import annotations
 
 from collections.abc import Callable
-from functools import wraps
 from typing import Concatenate
 
 from sqlalchemy.orm import Session
@@ -21,7 +20,6 @@ def _added[**Parameters, Row](
 ) -> Callable[Concatenate[Session, Parameters], Row]:
     """The twin of a ``loose_*`` builder that adds and flushes its row; the caller commits."""
 
-    @wraps(build)
     def add(session: Session, *args: Parameters.args, **kwargs: Parameters.kwargs) -> Row:
         row = build(*args, **kwargs)
         session.add(row)
