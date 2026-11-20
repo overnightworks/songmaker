@@ -16,7 +16,7 @@ from songmaker_cli.constants import (
     SETTING_SCORING_RATE_LIMIT,
 )
 
-PREVIOUS_REVISION = "a3c9e1f7b254"
+PREVIOUS_REVISION = "b8d3f6a2c915"
 UNIQUE_REVISION = "b64e2a7c9d10"
 
 

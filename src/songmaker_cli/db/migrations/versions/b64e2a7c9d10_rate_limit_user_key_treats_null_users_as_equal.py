@@ -1,7 +1,7 @@
 """one global rate limit row per key
 
 Revision ID: b64e2a7c9d10
-Revises: a3c9e1f7b254
+Revises: b8d3f6a2c915
 Create Date: 2026-11-20 09:00:00.000000
 
 PostgreSQL treats NULL user ids as distinct, so uq_rate_limit_user_key never constrained the
@@ -15,7 +15,7 @@ from typing import Sequence
 from alembic import op
 
 revision: str = 'b64e2a7c9d10'
-down_revision: str | Sequence[str] | None = 'a3c9e1f7b254'
+down_revision: str | Sequence[str] | None = 'b8d3f6a2c915'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
