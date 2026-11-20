@@ -9,7 +9,6 @@ lib/components/Breadcrumb.svelte 1
 lib/components/CoWriterPanel.svelte 14
 lib/components/CollectionHeader.svelte 3
 lib/components/CollectionHeaderFrame.svelte 3
-lib/components/CollectionMenu.svelte 3
 lib/components/ConfirmDeleteDialog.svelte 5
 lib/components/ConfirmDialog.svelte 4
 lib/components/EditableTitle.svelte 4
@@ -19,6 +18,7 @@ lib/components/LibraryWorkspace.svelte 1
 lib/components/LoraDetail.svelte 21
 lib/components/MemoryEditor.svelte 9
 lib/components/MentionDropdown.svelte 3
+lib/components/MenuPopover.svelte 2
 lib/components/ModelRegistryPanel.svelte 10
 lib/components/ModelsServiceRow.svelte 6
 lib/components/NewPlaceCard.svelte 3
@@ -52,8 +52,6 @@ lib/components/WorkerVramLine.svelte 3
 lib/components/editor/EditorHeader.svelte 5
 lib/components/editor/GenerationStatusSlot.svelte 1
 lib/components/editor/SeedChip.svelte 1
-lib/components/editor/SongMenu.svelte 2
-lib/components/editor/TakeMenu.svelte 2
 lib/components/editor/TakeRow.svelte 12
 lib/components/editor/TakeTaskCard.svelte 7
 lib/components/editor/TakesList.svelte 7
