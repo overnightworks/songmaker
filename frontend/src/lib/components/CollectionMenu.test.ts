@@ -68,6 +68,35 @@ function shareWarningDialog(target: HTMLElement): Element | null {
 	return target.querySelector(`[role="dialog"][aria-label="${words['shareDialog.title']}"]`);
 }
 
+describe('CollectionMenu share row state', () => {
+	it.each(['album', 'playlist'] as const)(
+		'shows a shared %s by a check and a pending request by a turning ring',
+		async (kind) => {
+			const shareLabel =
+				words[kind === 'album' ? 'collectionMenu.albumShare' : 'collectionMenu.playlistShare'];
+			const unshared = await render({ kind });
+			await openCollectionMenu(unshared.target);
+			const unsharedRow = menuRow(unshared.target, shareLabel);
+			expect(unsharedRow.getAttribute('aria-pressed')).toBe('false');
+			expect(unsharedRow.querySelector('.shared-check')).toBeNull();
+
+			const shared = await render({ kind, isShared: true, shareSlug: 'abc' });
+			await openCollectionMenu(shared.target);
+			const sharedRow = menuRow(shared.target, shareLabel);
+			expect(sharedRow.getAttribute('aria-pressed')).toBe('true');
+			expect(sharedRow.querySelector('.shared-check')).not.toBeNull();
+
+			const pending = await render({ kind, onshare: () => new Promise(() => undefined) });
+			await openCollectionMenu(pending.target);
+			const pendingRow = menuRow(pending.target, shareLabel);
+			expect(pendingRow.querySelector('.ring-turn')).toBeNull();
+			pendingRow.click();
+			await tick();
+			expect(pendingRow.querySelector('.ring-turn')).not.toBeNull();
+		}
+	);
+});
+
 describe('CollectionMenu share warning', () => {
 	it('opens a warning dialog listing songs without a playable take after sharing an album, closing the menu behind it', async () => {
 		const { target } = await render({
