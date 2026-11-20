@@ -233,7 +233,6 @@ def _build_queue_stream_snapshot(
         audio_paths.append(prepared.audio_path)
         offset = end
     _render_and_store_snapshot_audio(ctx, snapshot_id, audio_paths)
-
     manifest = QueueStreamManifest(
         snapshot_id=snapshot_id,
         scope=scope,

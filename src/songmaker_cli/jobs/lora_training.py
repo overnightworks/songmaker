@@ -1195,8 +1195,7 @@ def _lora_queue_wait_seconds(
         job = get_job(session, job_id)
         if job is None:
             return None
-        queued_at = job.started_at
-    return (utcnow() - queued_at).total_seconds()
+        return (utcnow() - job.started_at).total_seconds()
 
 
 async def _submit_lora_training_job(
