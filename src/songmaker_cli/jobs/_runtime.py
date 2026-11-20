@@ -110,8 +110,8 @@ def _defer_job(
 ) -> bool:
     """Put the job back in the queue for one poll of the GPU hold, saying why it waits.
 
-    A job that comes back with fewer arguments than it left with passes them as ``payload``, so
-    the row and the queue message name the same work.
+    A job that comes back with fewer arguments than it left with passes them as ``payload``; the
+    row is the only copy of the work, since a requeue sends no queue message.
     """
     return _update_job(
         factory, job_id, JobStatus.QUEUED, queue_reason_message=reason,

@@ -246,12 +246,10 @@ def build_mcp_world(
 
 
 @contextmanager
-def worker_ready() -> Iterator[AsyncMock]:
-    """The generation, scoring and training workers answer healthy; yields the queue pool."""
-    pool = AsyncMock()
+def worker_ready() -> Iterator[None]:
+    """The generation and scoring workers answer healthy."""
     with (
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool),
-        patch("songmaker_cli.lora_api.get_arq_pool", return_value=pool),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
         patch("songmaker_cli.generation_api.is_music_worker_healthy",
               AsyncMock(return_value=True)),
         patch("songmaker_cli.generation_api.is_scoring_worker_healthy",
@@ -259,7 +257,7 @@ def worker_ready() -> Iterator[AsyncMock]:
         patch("songmaker_cli.generation_api._has_online_acestep_worker",
               AsyncMock(return_value=True)),
     ):
-        yield pool
+        yield
 
 
 @pytest.fixture

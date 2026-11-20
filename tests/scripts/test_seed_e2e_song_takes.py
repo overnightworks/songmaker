@@ -202,6 +202,24 @@ def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_
     assert get_queue_position(session, job) == 2
 
 
+def test_a_seeded_queued_job_stays_queued_when_a_worker_claims(seeded_job, capsys):
+    import argparse
+
+    from support.job_owner import an_owner
+
+    from songmaker_cli.db.queries.jobs import claim_next_queued_job, get_job
+    from songmaker_cli.job_types import JobStatus, JobType
+
+    session, _, running = seeded_job
+    seed_e2e_job_states.cmd_set_queued(
+        session, argparse.Namespace(song_id=running.song_id, owner_username=_OWNER_ID),
+    )
+    seeded_id = capsys.readouterr().out.strip()
+
+    assert claim_next_queued_job(session, an_owner("worker"), JobType.GENERATE) is None
+    assert get_job(session, seeded_id).status == JobStatus.QUEUED
+
+
 def test_failed_command_stores_the_given_worker_sentence_as_the_cause_on_the_job(seeded_job):
     import argparse
 

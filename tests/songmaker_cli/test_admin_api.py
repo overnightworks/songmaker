@@ -524,16 +524,17 @@ def test_registry_unknown_availability_when_no_worker_online(client: TestClient)
     assert availabilities == {"unknown_no_worker"}
 
 
-def test_load_model_on_worker_enqueues_job(client: TestClient) -> None:
+def test_load_model_on_worker_queues_job_and_wakes_the_music_queue(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.db.queries.jobs import get_job
+    from songmaker_cli.job_queue import JobQueue
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
 
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
-
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    publish = AsyncMock()
+    with patch.object(client.app.state.ctx.wake_channel, "publish", publish):
         resp = client.post(
             "/api/admin/workers/w1/load_model", json={"mode": "sft"},
         )
@@ -542,11 +543,10 @@ def test_load_model_on_worker_enqueues_job(client: TestClient) -> None:
     data = resp.json()
     assert data["type"] == "load_model_on_worker"
     assert data["status"] == "queued"
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    mock_pool.enqueue_job.assert_called_once_with(
-        "load_model_on_worker", data["id"], "w1", "sft",
-        _queue_name=ARQ_MUSIC_QUEUE_NAME,
-    )
+    with client.app.state.ctx.db() as session:
+        payload = get_job(session, data["id"]).payload
+    assert (payload.worker_id, payload.mode) == ("w1", "sft")
+    publish.assert_awaited_once_with(JobQueue.MUSIC)
 
 
 def test_load_model_on_worker_unknown_worker(client: TestClient) -> None:
@@ -564,22 +564,6 @@ def test_load_model_on_worker_unknown_mode(client: TestClient) -> None:
         "/api/admin/workers/w1/load_model", json={"mode": "bogus"},
     )
     assert resp.status_code == 400
-
-
-def test_load_model_on_worker_queue_unavailable(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    _login_as_admin(client)
-    _seed_worker(client, "w1")
-
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
-
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
-        resp = client.post(
-            "/api/admin/workers/w1/load_model", json={"mode": "sft"},
-        )
-    assert resp.status_code == 503
 
 
 def test_evict_model_proxies_to_worker(client: TestClient, internal_token: str) -> None:
@@ -881,53 +865,36 @@ def test_download_endpoint_already_in_progress(client: TestClient) -> None:
     pool._store[download_key("xl-base")] = "previous-job-id"
     _override_pool(client, pool)
 
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    publish = AsyncMock()
+    with patch.object(client.app.state.ctx.wake_channel, "publish", publish):
         resp = client.post("/api/admin/registry/xl-base/download")
 
     assert resp.status_code == 409
     assert "already being downloaded" in resp.json()["detail"]
-    mock_pool.enqueue_job.assert_not_called()
+    publish.assert_not_awaited()
 
 
-def test_download_endpoint_enqueues_job(client: TestClient) -> None:
+def test_download_endpoint_queues_job_and_wakes_the_music_queue(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.db.queries.jobs import get_job
+    from songmaker_cli.job_queue import JobQueue
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
     _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
 
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    publish = AsyncMock()
+    with patch.object(client.app.state.ctx.wake_channel, "publish", publish):
         resp = client.post("/api/admin/registry/xl-base/download")
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["type"] == "download_model_on_worker"
     assert data["status"] == "queued"
-
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    mock_pool.enqueue_job.assert_called_once_with(
-        "download_model_on_worker", data["id"], "xl-base",
-        _queue_name=ARQ_MUSIC_QUEUE_NAME,
-    )
-
-
-def test_download_endpoint_queue_unavailable(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    _login_as_admin(client)
-    _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
-
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
-        resp = client.post("/api/admin/registry/xl-base/download")
-
-    assert resp.status_code == 503
+    with client.app.state.ctx.db() as session:
+        assert get_job(session, data["id"]).payload.mode == "xl-base"
+    publish.assert_awaited_once_with(JobQueue.MUSIC)
 
 
 def test_download_endpoint_requires_admin(client: TestClient) -> None:

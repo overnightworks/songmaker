@@ -1143,7 +1143,6 @@ def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers, 
         client,
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
     ):
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -1176,6 +1175,8 @@ def test_health_with_worker_running(
         admin = User(username="admin7", role="admin")
         session.add(admin)
         create_job(session, JobType.SCORE)
+        create_job(session, JobType.GENERATE)
+        create_job(session, JobType.LORA_TRAINING)
         session.commit()
 
     redis = make_fake_redis()
@@ -1187,7 +1188,6 @@ def test_health_with_worker_running(
         client,
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=2)),
     ):
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -1227,7 +1227,6 @@ def test_health_degraded_no_worker(
         client,
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
     ):
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -1267,7 +1266,6 @@ def test_health_queue_depth_cap_reached(
         client,
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=3)),
         patch("songmaker_cli.settings.get_settings") as mock_settings,
     ):
         mock_settings.return_value.configure_mock(

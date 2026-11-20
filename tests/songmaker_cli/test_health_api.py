@@ -151,7 +151,6 @@ def _get_health(
     with (
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
     ):
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -221,6 +220,8 @@ def test_health_preserves_response_bytes(
     with health_client.app.state.ctx.db() as session:
         for _ in range(2):
             create_job(session, JobType.SCORE)
+        for _ in range(3):
+            create_job(session, JobType.GENERATE)
         session.commit()
     registry = health_client.app.state.background_loop_registry
     registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
@@ -231,7 +232,6 @@ def test_health_preserves_response_bytes(
         patch("songmaker_cli.health_api.datetime", wraps=datetime) as clock,
         patch.object(arq_mod, "is_music_worker_healthy", AsyncMock(return_value=True)),
         patch.object(arq_mod, "is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch.object(arq_mod, "get_music_queue_depth", AsyncMock(return_value=3)),
     ):
         clock.now.return_value = now
         response = health_client.get("/health/details", headers=monitoring_headers)

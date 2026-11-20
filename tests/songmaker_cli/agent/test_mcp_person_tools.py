@@ -164,12 +164,11 @@ def test_a_write_tool_that_touches_another_persons_resource_is_refused_and_write
 ) -> None:
     before = household.snapshot()
 
-    with worker_ready() as pool:
+    with worker_ready():
         reply = household.call(tool.name, tool.arguments_for(subject, other))
 
     assert reply.is_error
     assert household.snapshot() == before
-    pool.enqueue_job.assert_not_called()
 
 
 # (tool, arguments, model, columns, row that exists afterwards)
@@ -554,12 +553,11 @@ def test_a_cookie_write_without_csrf_is_refused_on_each_tool_route_and_writes_no
     seed_session(household.world.client, "alice")
     before = household.snapshot()
 
-    with worker_ready() as pool:
+    with worker_ready():
         reply = _browser(household, tool, ALICE, FORGED)
 
     assert reply.status_code == 403
     assert household.snapshot() == before
-    pool.enqueue_job.assert_not_called()
 
 
 # -- containers the person already shared ---------------------------------------------------

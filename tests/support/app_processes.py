@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import json
 import os
 import secrets
 import signal
@@ -41,8 +42,10 @@ from tandem.testing import settle_epoch
 
 from acestep_worker.settings import WorkerSettings
 from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.db.models import Job
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.settings import Settings
+from songmaker_cli.worker_base import JOB_ENDED_EVENT
 from songmaker_cli.worker_liveness import owner_leases
 
 T = TypeVar("T")
@@ -317,6 +320,23 @@ def poll_until(
             return False
         pause.wait(poll_seconds)
     return True
+
+
+def times_run(workers: list[WorkerProcess], job_id: str) -> int:
+    """How many of the workers' ``arq_job.ended`` lines name the job: one per run."""
+    ended = (
+        json.loads(line)
+        for worker in workers
+        for line in worker.log_text().splitlines()
+        if line.startswith("{")
+    )
+    return sum(1 for entry in ended if entry.get("event") == JOB_ENDED_EVENT
+               and entry.get("job_id") == job_id)
+
+
+def owners_of(factory, job_ids: list[str]) -> set[str | None]:
+    with factory() as session:
+        return {session.get(Job, job_id).owner_id for job_id in job_ids}
 
 
 def _on_the_same_server(redis: Redis) -> AsyncRedis:

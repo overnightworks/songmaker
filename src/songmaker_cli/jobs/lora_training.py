@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
@@ -33,11 +32,11 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import UserLora
 from songmaker_cli.db.queries.auth import record_audit
-from songmaker_cli.db.queries.jobs import count_queued_generation_jobs, get_job
+from songmaker_cli.db.queries.jobs import count_generation_jobs_awaiting_the_gpu, get_job
 from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
 from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS, STALE_JOB_THRESHOLDS
-from songmaker_cli.job_types import JobFunction, JobStatus, JobType
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import Message, message
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
@@ -642,7 +641,7 @@ async def _reserve_lora_worker(
 
     with db_factory() as session:
         picked = await pick_worker(session, redis, target_mode)
-        if count_queued_generation_jobs(session) > 0:
+        if count_generation_jobs_awaiting_the_gpu(session) > 0:
             raise AllWorkersHeld("A generation is waiting before LoRA training")
     async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
         response = await client.post(
@@ -1044,13 +1043,12 @@ async def run_lora_training_job(
     target_mode: str = MODEL_DEFAULT_MODE,
     training_config: LoraTrainingJobConfig,
 ) -> None:
-    """ARQ job: materialize dataset, dispatch training to a worker, persist.
+    """Materialize the dataset, dispatch training to a worker, persist.
 
     Status transitions:
         QUEUED -> PREPROCESSING -> TRAINING -> EXPORTING -> READY / FAILED
 
-    Registered under :class:`JobFunction.LORA_TRAINING` in the music
-    worker's settings.
+    The music worker runs it for a claimed ``lora_training`` row.
     """
     try:
         await _run_lora_training(
@@ -1101,15 +1099,7 @@ async def _run_lora_training(
             db_factory=db_factory,
         )
     except AllWorkersHeld:
-        await _defer_lora_training_for_generation(
-            audio_dir,
-            db_factory,
-            job_id,
-            lora_id,
-            redis,
-            target_mode,
-            user_id,
-        )
+        _defer_lora_training_for_generation(audio_dir, db_factory, job_id, lora_id, user_id)
         return
     submitted = await _submit_lora_training_job(
         audio_dir,
@@ -1166,13 +1156,11 @@ def _load_lora_training_samples(
         return list(lora.samples or [])
 
 
-async def _defer_lora_training_for_generation(
+def _defer_lora_training_for_generation(
     audio_dir: Path,
     db_factory: sessionmaker[Session],
     job_id: str,
     lora_id: str,
-    redis: Redis,
-    target_mode: str,
     user_id: str,
 ) -> None:
     waited_seconds = _lora_queue_wait_seconds(db_factory, job_id)
@@ -1196,15 +1184,6 @@ async def _defer_lora_training_for_generation(
         )
         return
     _defer_job(db_factory, job_id, message("jobWait.queuedGenerations"))
-    await redis.enqueue_job(
-        JobFunction.LORA_TRAINING,
-        job_id,
-        lora_id,
-        user_id,
-        target_mode,
-        _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
-    )
 
 
 def _lora_queue_wait_seconds(

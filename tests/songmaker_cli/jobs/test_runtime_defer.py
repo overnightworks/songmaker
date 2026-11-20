@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 from support.job_owner import an_owner
 
-from songmaker_cli.db.queries.jobs import claim_queued_job, create_job, get_job
+from songmaker_cli.db.queries.jobs import (
+    claim_next_queued_job,
+    claim_queued_job,
+    create_job,
+    get_job,
+)
 from songmaker_cli.job_payloads import GeneratePayload
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus, JobType
@@ -21,6 +24,13 @@ from songmaker_cli.timestamps import utcnow
 
 REASON = message("jobWait.voiceTraining")
 WORKER = an_owner("worker")
+
+
+def _request_for(job_id: str, payload: GeneratePayload, tmp_path: Path) -> GenerationJobRequest:
+    return GenerationJobRequest(
+        job_id=job_id, audio_dir=tmp_path, data_dir=tmp_path, repaint_params=None,
+        cover_params=None, **payload.model_dump(exclude={"job_type", "task_params"}),
+    )
 
 
 def test_a_deferred_job_is_queued_without_an_owner_and_names_why_it_waits(pg_factory) -> None:
@@ -85,16 +95,33 @@ def test_a_generation_requeued_after_some_takes_stores_the_takes_it_has_left(
         job_id = create_job(session, JobType.GENERATE, payload=payload).id
         claim_queued_job(session, job_id, WORKER)
         session.commit()
-    request = GenerationJobRequest(
-        job_id=job_id, audio_dir=tmp_path, data_dir=tmp_path, repaint_params=None,
-        cover_params=None, **payload.model_dump(exclude={"job_type", "task_params"}),
-    )
-    redis = MagicMock(enqueue_job=AsyncMock())
+    request = _request_for(job_id, payload, tmp_path)
 
-    asyncio.run(_requeue_generation(request.with_takes_left(2), redis, pg_factory))
+    _requeue_generation(request.with_takes_left(2), pg_factory)
 
     with pg_factory() as session:
         stored = get_job(session, job_id).payload
     assert stored == payload.model_copy(update={"count": 2})
-    queued_count = redis.enqueue_job.await_args.args[1 + 3]
-    assert queued_count == stored.count
+
+
+def test_a_generation_the_gpu_hold_requeued_is_not_claimed_before_its_wait_ends(
+    pg_factory, tmp_path: Path,
+) -> None:
+    payload = GeneratePayload(
+        song_id="song", version_id="version", count=1, user_id="user",
+        seed=None, target_model="sft", task_params=None,
+    )
+    with pg_factory() as session:
+        job_id = create_job(session, JobType.GENERATE, payload=payload).id
+        claim_queued_job(session, job_id, WORKER)
+        session.commit()
+    request = _request_for(job_id, payload, tmp_path)
+
+    _requeue_generation(request, pg_factory)
+
+    with pg_factory() as session:
+        too_early = claim_next_queued_job(session, WORKER, JobType.GENERATE)
+        get_job(session, job_id).run_after = utcnow() - timedelta(seconds=1)
+        session.flush()
+        once_due = claim_next_queued_job(session, WORKER, JobType.GENERATE)
+        assert (too_early, once_due.id) == (None, job_id)

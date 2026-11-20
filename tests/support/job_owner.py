@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tandem import Hold
 
-from songmaker_cli.db.queries.jobs import create_job
+from songmaker_cli.db.queries.jobs import create_job, get_job
 from songmaker_cli.worker_liveness import JobOwner
 
 
@@ -25,3 +25,9 @@ def create_job_of_owner(session, job_type: str, owner: JobOwner | str, **fields)
     if isinstance(owner, str):
         return create_job_of_unstamped_owner(session, job_type, owner, **fields)
     return create_job(session, job_type, owner=owner, **fields)
+
+
+def stored_payload(factory, job_id: str):
+    """The arguments the job's row holds: what a worker runs the job with."""
+    with factory() as session:
+        return get_job(session, job_id).payload

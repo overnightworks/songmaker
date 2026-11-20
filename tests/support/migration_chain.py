@@ -46,7 +46,9 @@ def job_count(engine: Engine) -> int:
         return connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
 
 
-def insert_bare_job(engine: Engine, *, job_type: str = "generate") -> None:
+def insert_bare_job(
+    engine: Engine, *, job_type: str = "generate", status: str = "queued",
+) -> None:
     """Insert the job ``job`` with only the columns every revision's ``jobs`` table has.
 
     Older revisions' ``jobs`` tables lack the timestamp columns, so they join only where
@@ -58,6 +60,6 @@ def insert_bare_job(engine: Engine, *, job_type: str = "generate") -> None:
     jobs = sa.table("jobs", *(sa.column(name) for name in names))
     with engine.begin() as connection:
         connection.execute(sa.insert(jobs).values(
-            id="job", type=job_type, status="queued", progress=0.0,
+            id="job", type=job_type, status=status, progress=0.0,
             **{name: sa.func.current_timestamp() for name in timestamps},
         ))

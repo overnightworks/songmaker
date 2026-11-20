@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -17,10 +16,10 @@ from support.lora_api_world import (
     sample_routes,
 )
 from support.web_app import make_authenticated_user, make_router_app, web_client
+from tandem import StoreError
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
     USER_LORA_MAX_SAMPLES,
     USER_LORA_SAMPLE_MAX_BYTES,
     LoraStatus,
@@ -33,15 +32,8 @@ from songmaker_cli.db.models import (
     UserLoraSample,
 )
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
+from songmaker_cli.job_queue import JobQueue
 from songmaker_cli.job_types import JobStatus
-
-
-@contextmanager
-def _mock_arq():
-    mock_pool = AsyncMock()
-    with patch("songmaker_cli.lora_api.get_arq_pool", return_value=mock_pool):
-        yield mock_pool
-
 
 # ── Create ────────────────────────────────────────────────────────────
 
@@ -1095,29 +1087,27 @@ def test_train_rejects_when_soft_deleted(
     assert resp.status_code == 404
 
 
-def test_train_happy_path_enqueues_and_audits(
+def test_train_happy_path_queues_wakes_and_audits(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
     lora_id = _seed_trainable_lora(ctx)
 
-    with _mock_arq() as mock_pool:
+    publish = AsyncMock()
+    with patch.object(ctx.wake_channel, "publish", publish):
         resp = client.post(f"/api/loras/{lora_id}/train")
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == LoraStatus.QUEUED
     assert data["training_job_id"]
-    mock_pool.enqueue_job.assert_awaited_once()
-    call_args = mock_pool.enqueue_job.await_args[0]
-    assert call_args[0] == "lora_training"
-    assert call_args[2] == lora_id
-    assert mock_pool.enqueue_job.await_args.kwargs["_queue_name"] == ARQ_MUSIC_QUEUE_NAME
+    publish.assert_awaited_once_with(JobQueue.MUSIC)
 
     with ctx.db() as session:
         job = session.query(Job).filter_by(id=data["training_job_id"]).first()
         assert job is not None
         assert job.type == "lora_training"
+        assert job.payload.lora_id == lora_id
 
         from songmaker_cli.db.models import AuditLog
         audits = session.query(AuditLog).filter_by(
@@ -1126,43 +1116,21 @@ def test_train_happy_path_enqueues_and_audits(
         assert len(audits) == 1
 
 
-def test_train_enqueue_failure_marks_job_and_lora_failed(
+def test_a_voice_is_queued_for_training_though_its_wake_cannot_be_sent(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
+    """The committed row is the queue entry: a Redis that is down only costs the wake."""
     client, ctx = client_and_ctx
     lora_id = _seed_trainable_lora(ctx)
 
-    mock_pool = AsyncMock(enqueue_job=AsyncMock(side_effect=ConnectionError("redis down")))
-    with patch("songmaker_cli.lora_api.get_arq_pool", return_value=mock_pool):
+    refused = AsyncMock(side_effect=StoreError("redis down", outage=True))
+    with patch.object(ctx.wake_channel, "publish", refused):
         resp = client.post(f"/api/loras/{lora_id}/train")
 
-    assert resp.status_code == 503
+    assert (resp.status_code, resp.json()["status"]) == (200, LoraStatus.QUEUED)
     with ctx.db() as session:
-        lora = session.query(UserLora).filter_by(id=lora_id).first()
-        assert lora.status == LoraStatus.FAILED
-        assert lora.error_message.key == "jobRefusal.queueUnavailable"
-        job = session.query(Job).filter_by(id=lora.training_job_id).first()
-        assert (job.status, job.error_message) == (JobStatus.FAILED, lora.error_message)
-
-
-def test_train_enqueue_failure_exception_swallowed(
-    client_and_ctx: tuple[TestClient, AppContext],
-) -> None:
-    client, ctx = client_and_ctx
-    lora_id = _seed_trainable_lora(ctx)
-
-    mock_pool = AsyncMock()
-    mock_pool.enqueue_job.side_effect = ConnectionError("redis down")
-    with (
-        patch("songmaker_cli.lora_api.get_arq_pool", return_value=mock_pool),
-        patch(
-            "songmaker_cli.lora_api.update_job_status",
-            side_effect=RuntimeError("nested"),
-        ),
-    ):
-        resp = client.post(f"/api/loras/{lora_id}/train")
-
-    assert resp.status_code == 503
+        job = session.query(Job).filter_by(id=resp.json()["training_job_id"]).one()
+        assert job.status == JobStatus.QUEUED
 
 
 def test_train_missing_lora_404(client_a: TestClient) -> None:
