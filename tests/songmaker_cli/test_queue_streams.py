@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from support.library_rows import a_song, a_take, a_version, an_album
 from support.queue_stream_audio import stub_audio_build
 from support.route_budget import queries_without_session_auth
 from support.web_app import (
@@ -21,7 +22,7 @@ from support.web_app import (
 )
 
 from songmaker_cli import audio_files, queue_streams
-from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User
 from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
     QueueStreamSource,
@@ -59,56 +60,17 @@ def _seed_queue_data(session) -> None:
     other = User(id="other-id", username="other")
     session.add_all([owner, other])
     session.flush()
-    session.add(Album(id="a1", title="Album", artist="Artist", created_by=owner.id))
-    session.add(Album(id="a2", title="Other", artist="Other", created_by=other.id))
-    session.flush()
-    session.add(
-        Song(id="s1", title="One", album_id="a1", track_number=1, slug="one"),
-    )
-    session.add(
-        Song(id="s2", title="Two", album_id="a1", track_number=2, slug="two"),
-    )
-    session.add(
-        Song(id="s3", title="Other", album_id="a2", track_number=1, slug="other"),
-    )
-    session.flush()
-    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="one"))
-    session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="two"))
-    session.add(Version(id="v3", song_id="s3", version_number=1, lyrics="other"))
-    session.flush()
-    session.add(
-        Generation(
-            id="g1",
-            song_id="s1",
-            version_id="v1",
-            generation_number=1,
-            mp3_path="owner-id/g1.mp3",
-            seed=1,
-            is_picked=True,
-        )
-    )
-    session.add(
-        Generation(
-            id="g2",
-            song_id="s2",
-            version_id="v2",
-            generation_number=1,
-            mp3_path="owner-id/g2.mp3",
-            seed=2,
-            is_picked=True,
-        )
-    )
-    session.add(
-        Generation(
-            id="g3",
-            song_id="s3",
-            version_id="v3",
-            generation_number=1,
-            mp3_path="other-id/g3.mp3",
-            seed=3,
-            is_picked=True,
-        )
-    )
+    an_album(session, "a1", title="Album", artist="Artist", created_by=owner.id)
+    an_album(session, "a2", title="Other", artist="Other", created_by=other.id)
+    a_song(session, "s1", "a1", title="One", slug="one")
+    a_song(session, "s2", "a1", title="Two", track_number=2, slug="two")
+    a_song(session, "s3", "a2", title="Other", slug="other")
+    a_version(session, "v1", "s1", lyrics="one")
+    a_version(session, "v2", "s2", lyrics="two")
+    a_version(session, "v3", "s3", lyrics="other")
+    a_take(session, "g1", "s1", owner="owner-id", version_id="v1", seed=1, is_picked=True)
+    a_take(session, "g2", "s2", owner="owner-id", version_id="v2", seed=2, is_picked=True)
+    a_take(session, "g3", "s3", owner="other-id", version_id="v3", seed=3, is_picked=True)
     playlist = Playlist(id="pl1", title="Mix", created_by=owner.id)
     session.add(playlist)
     session.add(PlaylistEntry(id="pe1", playlist_id="pl1", generation_id="g1", position=0))
@@ -205,47 +167,15 @@ def _seed_versioned_lyrics(session) -> None:
     owner = User(id="owner-id", username="owner")
     session.add(owner)
     session.flush()
-    session.add(Album(id="a1", title="Nachtstrom", artist="Artist", created_by=owner.id))
-    session.flush()
-    session.add(
-        Song(id="s1", title="Tide", album_id="a1", track_number=1, slug="tide"),
-    )
-    session.flush()
-    session.add(Version(id="v-old", song_id="s1", version_number=1, lyrics="old verse"))
-    session.add(Version(id="v-new", song_id="s1", version_number=2, lyrics="latest draft"))
-    session.add(Version(id="v-empty", song_id="s1", version_number=3, lyrics=""))
-    session.flush()
-    session.add(
-        Generation(
-            id="g-old",
-            song_id="s1",
-            version_id="v-old",
-            generation_number=1,
-            mp3_path="owner-id/g-old.mp3",
-            seed=1,
-            is_picked=True,
-        )
-    )
-    session.add(
-        Generation(
-            id="g-empty",
-            song_id="s1",
-            version_id="v-empty",
-            generation_number=2,
-            mp3_path="owner-id/g-empty.mp3",
-            seed=2,
-        )
-    )
-    session.add(
-        Generation(
-            id="g-none",
-            song_id="s1",
-            version_id=None,
-            generation_number=3,
-            mp3_path="owner-id/g-none.mp3",
-            seed=3,
-        )
-    )
+    an_album(session, "a1", title="Nachtstrom", artist="Artist", created_by=owner.id)
+    a_song(session, "s1", "a1", title="Tide", slug="tide")
+    a_version(session, "v-old", "s1", lyrics="old verse")
+    a_version(session, "v-new", "s1", version_number=2, lyrics="latest draft")
+    a_version(session, "v-empty", "s1", version_number=3, lyrics="")
+    a_take(session, "g-old", "s1", owner="owner-id", version_id="v-old", seed=1, is_picked=True)
+    a_take(session, "g-empty", "s1", owner="owner-id", version_id="v-empty",
+           generation_number=2, seed=2)
+    a_take(session, "g-none", "s1", owner="owner-id", generation_number=3, seed=3)
 
 
 def _shared_playlist_snapshot(client: TestClient, generation_ids: list[str]):
@@ -637,14 +567,8 @@ def test_shared_queue_stream_revalidates_tracks(
 
     if invalidates == "picked_take":
         with factory() as session:
-            session.add(Generation(
-                id="g1-replacement",
-                song_id="s1",
-                version_id="v1",
-                generation_number=2,
-                mp3_path="owner-id/g1-replacement.mp3",
-                seed=4,
-            ))
+            a_take(session, "g1-replacement", "s1", owner="owner-id", version_id="v1",
+                   generation_number=2, seed=4)
             session.commit()
         (tmp_path / "audio" / "owner-id" / "g1-replacement.mp3").write_bytes(b"source")
 
@@ -853,96 +777,28 @@ def _seed_library_data(session) -> None:
     session.add_all([user_a, user_b])
     session.flush()
 
-    session.add(Album(id="a1", title="First", artist="A", created_by="user-a"))
-    session.add(Album(id="a2", title="Second", artist="A", created_by="user-a"))
-    session.add(Album(id="a3", title="B Album", artist="B", created_by="user-b"))
-    session.flush()
-
-    session.add(
-        Song(id="s1", title="One", album_id="a1", track_number=1, slug="one"),
-    )
-    session.add(
-        Song(id="s2", title="Two", album_id="a1", track_number=2, slug="two"),
-    )
-    session.add(
-        Song(id="s3", title="Three", album_id="a2", track_number=1, slug="three"),
-    )
-    session.add(
-        Song(id="s4", title="Four", album_id="a2", track_number=2, slug="four"),
-    )
-    session.add(
-        Song(id="s5", title="Five", album_id="a3", track_number=1, slug="five"),
-    )
-    session.flush()
-
-    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics=""))
-    session.add(Version(id="v2", song_id="s2", version_number=1, lyrics=""))
-    session.add(Version(id="v3", song_id="s3", version_number=1, lyrics=""))
-    session.add(Version(id="v5", song_id="s5", version_number=1, lyrics=""))
-    session.flush()
+    an_album(session, "a1", title="First", artist="A", created_by="user-a")
+    an_album(session, "a2", title="Second", artist="A", created_by="user-a")
+    an_album(session, "a3", title="B Album", artist="B", created_by="user-b")
+    a_song(session, "s1", "a1", title="One", slug="one")
+    a_song(session, "s2", "a1", title="Two", track_number=2, slug="two")
+    a_song(session, "s3", "a2", title="Three", slug="three")
+    a_song(session, "s4", "a2", title="Four", track_number=2, slug="four")
+    a_song(session, "s5", "a3", title="Five", slug="five")
+    for version_id, song_id in (("v1", "s1"), ("v2", "s2"), ("v3", "s3"), ("v5", "s5")):
+        a_version(session, version_id, song_id)
 
     # s1: non-picked gen first (by created_at desc: g1b > g1), g1b is picked
-    session.add(
-        Generation(
-            id="g1",
-            song_id="s1",
-            version_id="v1",
-            generation_number=1,
-            mp3_path="user-a/g1.mp3",
-            seed=1,
-            is_picked=False,
-        )
-    )
-    session.add(
-        Generation(
-            id="g1b",
-            song_id="s1",
-            version_id="v1",
-            generation_number=2,
-            mp3_path="user-a/g1b.mp3",
-            seed=2,
-            is_picked=True,
-        )
-    )
+    a_take(session, "g1", "s1", owner="user-a", version_id="v1", seed=1)
+    a_take(session, "g1b", "s1", owner="user-a", version_id="v1", generation_number=2, seed=2,
+           is_picked=True)
     # s2: kept, not picked — mix includes it; picks does not
-    session.add(
-        Generation(
-            id="g2",
-            song_id="s2",
-            version_id="v2",
-            generation_number=1,
-            mp3_path="user-a/g2.mp3",
-            seed=3,
-            is_picked=False,
-            is_kept=True,
-        )
-    )
+    a_take(session, "g2", "s2", owner="user-a", version_id="v2", seed=3, is_kept=True)
     # s3: single archived gen → song has no eligible generation
-    session.add(
-        Generation(
-            id="g3",
-            song_id="s3",
-            version_id="v3",
-            generation_number=1,
-            mp3_path="user-a/g3.mp3",
-            seed=4,
-            is_picked=False,
-            is_archived=True,
-        )
-    )
+    a_take(session, "g3", "s3", owner="user-a", version_id="v3", seed=4, is_archived=True)
     # s4: no generations at all
     # s5 (user B)
-    session.add(
-        Generation(
-            id="g5",
-            song_id="s5",
-            version_id="v5",
-            generation_number=1,
-            mp3_path="user-b/g5.mp3",
-            seed=5,
-            is_picked=True,
-        )
-    )
+    a_take(session, "g5", "s5", owner="user-b", version_id="v5", seed=5, is_picked=True)
 
 
 def _write_library_audio_files(root: Path) -> None:
@@ -1164,16 +1020,12 @@ def _seed_large_library(session, *, song_count: int) -> None:
     user = User(id="user-a", username="usera")
     session.add(user)
     session.flush()
-    session.add(Album(id="a1", title="Big Album", artist="A", created_by=user.id))
-    session.flush()
+    an_album(session, "a1", title="Big Album", artist="A", created_by=user.id)
     for i in range(song_count):
         song_id = f"s{i}"
-        session.add(Song(id=song_id, title=song_id, album_id="a1", track_number=i, slug=song_id))
-        session.add(Version(id=f"v{i}", song_id=song_id, version_number=1, lyrics=""))
-        session.add(Generation(
-            id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
-            mp3_path=f"user-a/g{i}.mp3", seed=i,
-        ))
+        a_song(session, song_id, "a1", track_number=i)
+        a_version(session, f"v{i}", song_id)
+        a_take(session, f"g{i}", song_id, owner="user-a", version_id=f"v{i}", seed=i)
 
 
 def _write_large_library_audio_files(root: Path, *, song_count: int) -> None:
@@ -1479,31 +1331,13 @@ def test_shuffle_library_sources_leaves_a_single_track_unchanged() -> None:
 def _seed_library_shuffle_data(session) -> None:
     session.add(User(id="user-a", username="usera"))
     session.flush()
-    session.add(Album(id="a1", title="Album", artist="A", created_by="user-a"))
-    session.flush()
+    an_album(session, "a1", title="Album", artist="A", created_by="user-a")
     for index in range(1, 5):
-        session.add(
-            Song(
-                id=f"s{index}", title=f"Song {index}", album_id="a1",
-                track_number=index, slug=f"song-{index}",
-            ),
-        )
-    session.flush()
-    for index in range(1, 5):
-        session.add(Version(id=f"v{index}", song_id=f"s{index}", version_number=1, lyrics=""))
-    session.flush()
-    for index in range(1, 5):
-        session.add(
-            Generation(
-                id=f"g{index}",
-                song_id=f"s{index}",
-                version_id=f"v{index}",
-                generation_number=1,
-                mp3_path=f"user-a/g{index}.mp3",
-                seed=index,
-                is_picked=True,
-            )
-        )
+        a_song(session, f"s{index}", "a1", title=f"Song {index}", track_number=index,
+               slug=f"song-{index}")
+        a_version(session, f"v{index}", f"s{index}")
+        a_take(session, f"g{index}", f"s{index}", owner="user-a", version_id=f"v{index}",
+               seed=index, is_picked=True)
 
 
 def _write_shuffle_audio_files(root: Path) -> None:
@@ -1834,108 +1668,26 @@ def _seed_library_pool_data(session) -> None:
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     session.add(User(id="user-a", username="usera"))
     session.flush()
-    session.add(Album(id="a1", title="Alpha", artist="A", created_by="user-a"))
-    session.add(Album(id="a2", title="Beta", artist="A", created_by="user-a"))
-    session.flush()
-    session.add(
-        Song(id="s1", title="One", album_id="a1", track_number=1, slug="one"),
-    )
-    session.add(
-        Song(id="s2", title="Two", album_id="a1", track_number=2, slug="two"),
-    )
-    session.add(
-        Song(id="s3", title="Three", album_id="a2", track_number=1, slug="three"),
-    )
-    session.flush()
+    an_album(session, "a1", title="Alpha", artist="A", created_by="user-a")
+    an_album(session, "a2", title="Beta", artist="A", created_by="user-a")
+    a_song(session, "s1", "a1", title="One", slug="one")
+    a_song(session, "s2", "a1", title="Two", track_number=2, slug="two")
+    a_song(session, "s3", "a2", title="Three", slug="three")
     for index, song_id in enumerate(("s1", "s2", "s3"), start=1):
-        session.add(Version(id=f"v{index}", song_id=song_id, version_number=1, lyrics=""))
-    session.flush()
-    session.add_all(
-        [
-            Generation(
-                id="g-old",
-                song_id="s1",
-                version_id="v1",
-                generation_number=1,
-                mp3_path="user-a/g-old.mp3",
-                seed=1,
-                created_at=t0,
-            ),
-            Generation(
-                id="g-pick",
-                song_id="s1",
-                version_id="v1",
-                generation_number=2,
-                mp3_path="user-a/g-pick.mp3",
-                seed=2,
-                is_picked=True,
-                created_at=t0 + timedelta(days=1),
-            ),
-            Generation(
-                id="g-keep-a",
-                song_id="s1",
-                version_id="v1",
-                generation_number=3,
-                mp3_path="user-a/g-keep-a.mp3",
-                seed=3,
-                is_kept=True,
-                created_at=t0 + timedelta(days=2),
-            ),
-            Generation(
-                id="g-both",
-                song_id="s1",
-                version_id="v1",
-                generation_number=4,
-                mp3_path="user-a/g-both.mp3",
-                seed=4,
-                is_picked=True,
-                is_kept=True,
-                created_at=t0 + timedelta(days=3),
-            ),
-            Generation(
-                id="g-arch",
-                song_id="s1",
-                version_id="v1",
-                generation_number=5,
-                mp3_path="user-a/g-arch.mp3",
-                seed=5,
-                is_picked=True,
-                is_kept=True,
-                is_archived=True,
-                created_at=t0 + timedelta(days=4),
-            ),
-            Generation(
-                id="g-keep-b",
-                song_id="s2",
-                version_id="v2",
-                generation_number=1,
-                mp3_path="user-a/g-keep-b.mp3",
-                seed=6,
-                is_kept=True,
-                created_at=t0 + timedelta(days=1),
-            ),
-            Generation(
-                id="g-missing",
-                song_id="s2",
-                version_id="v2",
-                generation_number=2,
-                mp3_path="user-a/g-missing.mp3",
-                seed=7,
-                is_kept=True,
-                created_at=t0 + timedelta(days=2),
-            ),
-            Generation(
-                id="g-pick-b",
-                song_id="s3",
-                version_id="v3",
-                generation_number=1,
-                mp3_path="user-a/g-pick-b.mp3",
-                seed=8,
-                is_picked=True,
-                created_at=t0,
-            ),
-        ]
-    )
+        a_version(session, f"v{index}", song_id)
+
+    def take(take_id, song_id, version_id, number, seed, days, **flags):
+        a_take(session, take_id, song_id, owner="user-a", version_id=version_id,
+               generation_number=number, seed=seed, created_at=t0 + timedelta(days=days), **flags)
+
+    take("g-old", "s1", "v1", 1, 1, 0)
+    take("g-pick", "s1", "v1", 2, 2, 1, is_picked=True)
+    take("g-keep-a", "s1", "v1", 3, 3, 2, is_kept=True)
+    take("g-both", "s1", "v1", 4, 4, 3, is_picked=True, is_kept=True)
+    take("g-arch", "s1", "v1", 5, 5, 4, is_picked=True, is_kept=True, is_archived=True)
+    take("g-keep-b", "s2", "v2", 1, 6, 1, is_kept=True)
+    take("g-missing", "s2", "v2", 2, 7, 2, is_kept=True)
+    take("g-pick-b", "s3", "v3", 1, 8, 0, is_picked=True)
 
 
 def _write_pool_audio_files(root: Path) -> None:
@@ -2008,26 +1760,10 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path, monkeypatc
     """
     def seed_with_unplayable(session) -> None:
         _seed_library_pool_data(session)
-        session.add_all(
-            [
-                Generation(
-                    id="g-no-path",
-                    song_id="s2",
-                    version_id="v2",
-                    generation_number=3,
-                    mp3_path="",
-                    is_kept=True,
-                ),
-                Generation(
-                    id="g-directory",
-                    song_id="s3",
-                    version_id="v3",
-                    generation_number=2,
-                    mp3_path="user-a/directory.mp3",
-                    is_picked=True,
-                ),
-            ]
-        )
+        a_take(session, "g-no-path", "s2", owner="user-a", version_id="v2", generation_number=3,
+               seed=None, mp3_path="", is_kept=True)
+        a_take(session, "g-directory", "s3", owner="user-a", version_id="v3", generation_number=2,
+               seed=None, mp3_path="user-a/directory.mp3", is_picked=True)
 
     stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=seed_with_unplayable)
