@@ -22,5 +22,4 @@
 		border-radius: 50%;
 		animation: rotate 0.8s linear infinite;
 	}
-
 </style>
