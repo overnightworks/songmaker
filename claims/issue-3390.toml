@@ -1,7 +1,0 @@
-claim_id = "7f6d5fecbedd4638b1ece206ea8332f8"
-agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
-role = "builder"
-base = "b5eacfc755fe9cae7ca2509fde34bc8417d12266"
-branch = "claude/issue-3390-songmaker-pins-tandem-v0-13-1"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "0440cb02e773cff64150cc3dce2713708d93ae7b"
