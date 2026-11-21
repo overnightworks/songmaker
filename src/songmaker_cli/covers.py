@@ -13,7 +13,7 @@ from typing import Final
 from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 
-from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
+from songmaker_audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,

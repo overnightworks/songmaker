@@ -13,7 +13,7 @@ from support.job_owner import an_owner
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario
 
-from acestep_engine.constants import GPU_HELD_DETAIL
+from songmaker_acestep_engine.constants import GPU_HELD_DETAIL
 from songmaker_cli.acestep_state import (
     download_locks,
     read_queue_depth,

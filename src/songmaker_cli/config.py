@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError

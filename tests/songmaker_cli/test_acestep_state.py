@@ -12,7 +12,7 @@ from support.owner_lease_epoch import settled_epoch
 from support.refused_download import attempt_download_that_must_not_run
 from support.wrapper_deps import settled_fake_redis
 
-from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
+from songmaker_acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
     DOWNLOAD_KEY_PREFIX,
     DOWNLOAD_LOCK_LASTS,
@@ -69,13 +69,13 @@ def another_process(server):
 
 
 def test_key_prefixes_match_worker_heartbeat(redis) -> None:
-    from acestep_worker.heartbeat import (
+    from songmaker_acestep_worker.heartbeat import (
         QUEUE_KEY_PREFIX as WORKER_QUEUE_PREFIX,
     )
-    from acestep_worker.heartbeat import (
+    from songmaker_acestep_worker.heartbeat import (
         WORKER_KEY_PREFIX as WORKER_WORKER_PREFIX,
     )
-    from acestep_worker.heartbeat import gpu_hold_locks as worker_gpu_hold_locks
+    from songmaker_acestep_worker.heartbeat import gpu_hold_locks as worker_gpu_hold_locks
 
     assert WORKER_KEY_PREFIX == WORKER_WORKER_PREFIX
     assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
@@ -84,8 +84,8 @@ def test_key_prefixes_match_worker_heartbeat(redis) -> None:
 
 
 def test_lm_failure_key_matches_the_workers_key() -> None:
-    from acestep_worker.lm_failure import LM_FAILURE_KEY_PREFIX as WORKER_PREFIX
-    from acestep_worker.lm_failure import lm_failure_key as worker_lm_failure_key
+    from songmaker_acestep_worker.lm_failure import LM_FAILURE_KEY_PREFIX as WORKER_PREFIX
+    from songmaker_acestep_worker.lm_failure import lm_failure_key as worker_lm_failure_key
 
     assert LM_FAILURE_KEY_PREFIX == WORKER_PREFIX
     assert lm_failure_key("acestep-worker-0") == worker_lm_failure_key("acestep-worker-0")
@@ -95,13 +95,13 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
     from pathlib import Path
     from unittest.mock import MagicMock
 
-    from acestep_worker.model_cache import ModelCache
-    from acestep_worker.wrapper import WorkerDeps, build_state_payload
+    from songmaker_acestep_worker.model_cache import ModelCache
+    from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload
     from songmaker_cli.admin_api import _state_from_dict
     from songmaker_cli.api_models.workers import LoadedModelDetail  # noqa: F401
 
     async def fake_loader(_: str):
-        from acestep_worker.model_cache import LoadedModel
+        from songmaker_acestep_worker.model_cache import LoadedModel
 
         return LoadedModel(mode="sft", handle=None, port=8101)
 

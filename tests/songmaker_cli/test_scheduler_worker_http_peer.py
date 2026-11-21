@@ -8,7 +8,7 @@ import httpx
 import pytest
 from support.worker_http_peer import WorkerScenario
 
-from acestep_worker.model_cache import LoadedModel
+from songmaker_acestep_worker.model_cache import LoadedModel
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 

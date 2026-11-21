@@ -40,7 +40,7 @@ from support.object_store import configured_bucket
 from tandem import Leases
 from tandem.testing import settle_epoch
 
-from acestep_worker.settings import WorkerSettings
+from songmaker_acestep_worker.settings import WorkerSettings
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.db.models import Job
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER

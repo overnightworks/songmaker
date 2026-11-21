@@ -161,7 +161,7 @@ def test_check_lora_ready_404_when_missing(db_factory) -> None:
 
 
 def test_apply_user_lora_path_injects_absolute_path(db_factory, tmp_path) -> None:
-    from acestep_engine.models import AceStepConfig
+    from songmaker_acestep_engine.models import AceStepConfig
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -181,7 +181,7 @@ def test_apply_user_lora_path_injects_absolute_path(db_factory, tmp_path) -> Non
 def test_apply_user_lora_path_rejects_unavailable_voice(
     db_factory, tmp_path, lora_state: str,
 ) -> None:
-    from acestep_engine.models import AceStepConfig
+    from songmaker_acestep_engine.models import AceStepConfig
 
     if lora_state == "missing":
         lora_id = "missing"
@@ -210,7 +210,7 @@ def test_apply_user_lora_path_rejects_unavailable_voice(
 
 
 def test_apply_user_lora_path_rejects_another_users_voice(db_factory, tmp_path) -> None:
-    from acestep_engine.models import AceStepConfig
+    from songmaker_acestep_engine.models import AceStepConfig
 
     lora_id = _make_ready_lora(db_factory, USER_B)
     params = BaseGenerationParams(user_lora_id=lora_id)
@@ -229,7 +229,7 @@ def test_unavailable_voice_setup_error_is_exposed_to_the_job() -> None:
 
 
 def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
-    from acestep_engine.models import AceStepConfig
+    from songmaker_acestep_engine.models import AceStepConfig
 
     params = BaseGenerationParams()
     config = AceStepConfig(prompt="p", lyrics="L")

@@ -15,9 +15,9 @@ from support.owner_lease_epoch import settled_epoch
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
 
-from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
-from acestep_engine.models import AceStepConfig
-from acestep_engine.progress import AceStepPhase
+from songmaker_acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+from songmaker_acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
     gpu_hold_locks,
     queue_depth_key,
@@ -459,7 +459,7 @@ def test_s8_worker_error_kind(consume, payload, expected):
     """S8-A/E: Only the generation wire kind selects GPU memory failure."""
     from typing import get_args
 
-    from acestep_worker.models import TaskErrorKind
+    from songmaker_acestep_worker.models import TaskErrorKind
 
     assert WORKER_ERROR_GPU_OUT_OF_MEMORY in get_args(TaskErrorKind)
     body = "event: error\ndata: " + json.dumps(payload) + "\n\n"
@@ -721,7 +721,7 @@ def _make_ace_config():
 
 
 def test_dto_keys_match_worker_model_fields() -> None:
-    from acestep_worker.models import GenerationTaskResult
+    from songmaker_acestep_worker.models import GenerationTaskResult
 
     assert GenerationTaskResult.model_fields.keys() == GenerationTaskResultDTO.model_fields.keys()
 

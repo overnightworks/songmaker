@@ -48,7 +48,7 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 from support.xmp_packet import read_digital_source_type
 from tandem import StoreError
 
-from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
+from songmaker_audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli import cover_runner
 from songmaker_cli.api_models import AgentProblem
 from songmaker_cli.db.models import (

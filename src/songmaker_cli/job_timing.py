@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from acestep_engine.settings import get_engine_settings
+from songmaker_acestep_engine.settings import get_engine_settings
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 
 WORKER_RESTART_GRACE_SECONDS: Final[int] = 300
