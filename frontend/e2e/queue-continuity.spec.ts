@@ -292,15 +292,7 @@ test('shuffle while a library take plays keeps the position reached during the p
 	const transport = page.getByRole('contentinfo');
 	await transport.getByRole('button', { name: words['transport.play'], exact: true }).click();
 	await expect.poll(() => timeline.position).toBeGreaterThan(0);
-	await transport
-		.getByRole('button', {
-			name:
-				shell === 'mobile'
-					? new RegExp(`${words['player.openNowPlaying']({ title: '' })}$`)
-					: words['transport.nowPlaying'],
-			exact: true
-		})
-		.click();
+	await openNowPlayingFromBar(page, shell, readSeededLibrary().pickedSongTitle);
 	// The library's pool of one pick queues a single take, so Now Playing opens
 	// on This take; Escape then puts the sheet away on the phone.
 	await page.getByRole('tab', { name: words['nowPlaying.queueTab'], exact: true }).click();

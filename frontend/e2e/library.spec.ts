@@ -742,7 +742,7 @@ test('1354_37b_64: an album with nothing to play dims its circle and leaves the 
 	});
 
 	await page.goto(`/album/${library.albumId}`);
-	await albumCircle.click();
+	await playOpenAlbum(page);
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
 	// The second seeded album holds songs without a take (see seed.ts).
