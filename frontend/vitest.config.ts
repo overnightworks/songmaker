@@ -50,7 +50,7 @@ export default defineConfig({
 			thresholds: {
 				statements: 94,
 				lines: 95,
-				branches: 87,
+				branches: 90,
 				'src/lib/**/*.ts': {
 					statements: 90,
 					lines: 93
