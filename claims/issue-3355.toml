@@ -1,0 +1,8 @@
+claim_id = "18b94a7d8a8243fdbf66dbd20bdce8c0"
+agent = "Claude 54b282ca-7891-403a-a10d-7bfdd4fe2b66"
+role = "builder"
+base = "95e932f4604c3c091a9a705da70ea92cee42fdfd"
+branch = "claude/issue-3355-the-e2e-step-play-the-album-open-now-pla"
+scope = ["frontend/e2e"]
+opened_commit = "f94894a1ec41c324b62c26a466b85e9778fb26e7"
+whole_reason = "two test-only e2e helper follow-ups of #2976 bundled into one lane; the specs that repeat the opening steps sit across the e2e directory"
