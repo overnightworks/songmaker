@@ -699,6 +699,26 @@ describe('NowPlayingLyrics sung marks', () => {
 		expect(sungLines()[0].previousElementSibling).toBe(target.querySelectorAll('.lyrics-line')[1]);
 	});
 
+	it('closes the Sung line with a second click while a fine pointer still rests on the word', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: true }))
+		);
+		await render(markedTake());
+		const [, city] = marks();
+		const mouse = { pointerType: 'mouse' };
+
+		city.dispatchEvent(Object.assign(new Event('pointerenter'), mouse));
+		city.click();
+		await tick();
+		expect(sungLines()).toHaveLength(1);
+
+		city.click();
+		await tick();
+		expect(sungLines()).toHaveLength(0);
+		expect(city.getAttribute('aria-expanded')).toBe('false');
+	});
+
 	it('moves the open state to another word of the same line', async () => {
 		await render({ ...markedTake(), cues: [sungCue(0, 0.5, 'the lantern hums softly tonight')] });
 		const [first, second] = Array.from(

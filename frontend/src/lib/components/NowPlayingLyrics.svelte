@@ -75,7 +75,14 @@
 	}
 
 	function toggleMark(line: number, word: number): void {
-		tappedMark = tappedMark?.line === line && tappedMark.word === word ? null : { line, word };
+		if (tappedMark?.line === line && tappedMark.word === word) {
+			// The pointer still rests on the mark and fires no new enter, so the
+			// hover must not keep the closed line showing.
+			tappedMark = null;
+			hoveredMark = null;
+		} else {
+			tappedMark = { line, word };
+		}
 	}
 
 	function hoverMark(mark: MarkRef | null): void {
