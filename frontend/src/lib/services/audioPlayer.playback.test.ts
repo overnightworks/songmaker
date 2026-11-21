@@ -9,10 +9,6 @@ import {
 	type FakeAudio
 } from './audioPlayer-test-fixtures';
 
-vi.mock('./continuousDeck', async () =>
-	(await import('./audioPlayer-test-fixtures')).continuousDeckModule()
-);
-
 let fakeAudio: FakeAudio;
 
 beforeEach(() => {
@@ -121,7 +117,7 @@ describe('one take on the element', () => {
 
 			expect(audioPlayer.getElement()).toBe(fakeAudio);
 			expect(audioPlayer.current).toBe(preloaded);
-			expect(fakeAudio.playMock).toHaveBeenCalledOnce();
+			expect(fakeAudio.paused).toBe(false);
 		});
 
 		it('shows no length when its element cannot tell it', () => {

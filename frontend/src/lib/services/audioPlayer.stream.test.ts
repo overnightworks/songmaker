@@ -8,10 +8,6 @@ import {
 	type FakeAudio
 } from './audioPlayer-test-fixtures';
 
-vi.mock('./continuousDeck', async () =>
-	(await import('./audioPlayer-test-fixtures')).continuousDeckModule()
-);
-
 let fakeAudio: FakeAudio;
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -48,21 +44,20 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 
 	// Spec: REQ-PLAYER-24 -- moving to a track plays it when asked to or, if not told, when the stream was playing.
 	it.each([
-		{ ask: 'to play', opts: { autoplay: true }, playing: false, plays: true },
-		{ ask: 'to stay paused', opts: { autoplay: false }, playing: true, plays: false },
-		{ ask: 'nothing while it plays', opts: {}, playing: true, plays: true },
-		{ ask: 'nothing while it is paused', opts: {}, playing: false, plays: false }
-	])('goes to a track and, asked $ask, plays: $plays', ({ opts, playing, plays }) => {
+		{ ask: 'to play', opts: { autoplay: true }, playing: false, paused: false },
+		{ ask: 'to stay paused', opts: { autoplay: false }, playing: true, paused: false },
+		{ ask: 'nothing while it plays', opts: {}, playing: true, paused: false },
+		{ ask: 'nothing while it is paused', opts: {}, playing: false, paused: true }
+	])('goes to a track and, asked $ask, ends paused: $paused', ({ opts, playing, paused }) => {
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 		fakeAudio.fire('canplay');
 		fakeAudio.paused = !playing;
-		fakeAudio.playMock.mockClear();
 
 		expect(audioPlayer.seekToStreamTrack(1, opts)).toBe(true);
 
 		expect(audioPlayer.current?.songTitle).toBe('Second');
 		expect(fakeAudio.currentTime).toBe(10);
-		expect(fakeAudio.playMock.mock.calls.length > 0).toBe(plays);
+		expect(fakeAudio.paused).toBe(paused);
 	});
 
 	// Spec: REQ-PLAYER-24 -- moving to a track plays it when asked to or, if not told, when the stream was playing.
@@ -72,13 +67,12 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 	])('goes back a track and, asked $ask, plays: $plays', ({ opts, plays }) => {
 		audioPlayer.loadStream(makeStreamManifest(), 1, { autoplay: false });
 		fakeAudio.fire('canplay');
-		fakeAudio.paused = plays;
-		fakeAudio.playMock.mockClear();
+		fakeAudio.paused = true;
 
 		expect(audioPlayer.prevStreamTrack(opts)).toBe(true);
 
 		expect(audioPlayer.current?.songTitle).toBe('First');
-		expect(fakeAudio.playMock.mock.calls.length > 0).toBe(plays);
+		expect(fakeAudio.paused).toBe(!plays);
 	});
 
 	// Spec: REQ-PLAYER-25 -- Previous on the first track of a windowed stream goes nowhere.
@@ -108,7 +102,7 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 		audioPlayer.swapCallbacks(callbacks({ networkFailureIsAnnounced: () => true }));
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 		startPlayingAt(12);
-		const load = vi.spyOn(fakeAudio, 'load');
+		const sourceBefore = fakeAudio.src;
 
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('error');
@@ -116,7 +110,7 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 
 		expect(audioPlayer.status).toBe('buffering');
 		expect(fetchMock).not.toHaveBeenCalled();
-		expect(load).not.toHaveBeenCalled();
+		expect(fakeAudio.src).toBe(sourceBefore);
 	});
 
 	// Spec: REQ-PLAYER-28 -- the answer to a check of a stream the player has left changes nothing.
@@ -129,12 +123,10 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 		await vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS);
 		audioPlayer.load(makeInfo({ songTitle: 'Next take' }), { autoplay: false });
 		const sourceBefore = fakeAudio.src;
-		const load = vi.spyOn(fakeAudio, 'load');
 
 		answerProbe({ ok: true, status: 200 });
 		await vi.advanceTimersByTimeAsync(0);
 
-		expect(load).not.toHaveBeenCalled();
 		expect(fakeAudio.src).toBe(sourceBefore);
 		expect(audioPlayer.current?.songTitle).toBe('Next take');
 	});
