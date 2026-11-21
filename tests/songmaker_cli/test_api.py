@@ -40,6 +40,7 @@ from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.messages import Message, message
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from songmaker_cli.request_policies import API_CACHE_CONTROL
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 _DEFAULT_USER_ID = "u-test"
@@ -2657,7 +2658,7 @@ def test_stream_job_initial_state(client: TestClient) -> None:
     with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
-        assert resp.headers["cache-control"] == "no-cache"
+        assert resp.headers["cache-control"] == API_CACHE_CONTROL
         assert resp.headers["x-accel-buffering"] == "no"
         for line in resp.iter_lines():
             if line.startswith("data: "):

@@ -465,7 +465,7 @@ def test_a_second_forwarded_client_keeps_its_own_sign_in_budget(
     assert _start(proxy, **{"x-forwarded-for": _OTHER_FORWARDED_CLIENT}) != 429
 
 
-def test_the_installed_sign_in_budget_is_webauths_default(sign_in_client: TestClient) -> None:
+def test_the_sign_in_budget_policy_is_webauths_default(sign_in_client: TestClient) -> None:
     assert _sign_in_budget() == RateLimitPolicy().sign_in
 
 
