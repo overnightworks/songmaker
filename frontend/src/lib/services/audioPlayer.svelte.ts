@@ -536,7 +536,8 @@ class AudioPlayer {
 		this.lastObservedTime = startAt;
 		this.duration = takeDuration(entry);
 		this.setCurrent(entry.take);
-		if (opts.autoplay ?? true) this.play();
+		const autoplay = opts.autoplay ?? true;
+		if (autoplay) this.play();
 		else this.pause();
 		return true;
 	}
@@ -670,9 +671,9 @@ class AudioPlayer {
 		this.status = 'ready';
 		this.currentUrl = url;
 		this.applyPendingRecoverySeek(promoted);
-		if (opts.autoplay) this.play();
 		if (previous) clearDeck(previous);
 		this.setCurrent(info);
+		if (opts.autoplay) this.play();
 	}
 
 	private createStandby(): HTMLAudioElement {
@@ -711,7 +712,7 @@ class AudioPlayer {
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error' || this.pausedOnAFailedLoad) {
-			this.recoverOnPlay('media-error');
+			this.recoverOnPlay(this.audio, 'media-error');
 			return;
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
@@ -721,7 +722,7 @@ class AudioPlayer {
 			return;
 		}
 		if (this.clockStoodStill) {
-			this.recoverOnPlay('frozen-clock');
+			this.recoverOnPlay(this.audio, 'frozen-clock');
 			return;
 		}
 		// A take paused while it waited for its bytes still waits for them: its
@@ -823,6 +824,7 @@ class AudioPlayer {
 
 	prevStreamTrack(opts: { autoplay?: boolean } = {}): boolean {
 		if (!this.audio || !this.streamEngine.active) return false;
+		const autoplay = opts.autoplay ?? !this.audio.paused;
 		const streamState = this.streamEngine.prevTrack(this.audio);
 		this.syncStreamBoundaries();
 		if (!streamState) return false;
@@ -830,7 +832,7 @@ class AudioPlayer {
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
 		this.lastObservedTime = streamState.absoluteTime;
-		if (opts.autoplay ?? !this.audio.paused) this.play();
+		if (autoplay) this.play();
 		return true;
 	}
 
@@ -1176,15 +1178,13 @@ class AudioPlayer {
 	// resuming what the element holds; the deck fetches on from the bytes it
 	// received and keeps its one source (#1288). The listener asked for sound,
 	// so a deck whose download resumes plays on where the playhead stands.
-	private recoverOnPlay(reason: 'media-error' | 'frozen-clock'): void {
+	private recoverOnPlay(el: HTMLAudioElement, reason: 'media-error' | 'frozen-clock'): void {
 		this.recoveryStartedAt = null;
 		this.clearStallRecoveryTimer();
 		if (this.streamEngine.active) {
 			void this.recoverStream(reason);
 			return;
 		}
-		const el = this.audio;
-		if (!el) return;
 		if (!this.deckSession) this.reloadAt(this.reachedPosition(el));
 		else if (!this.recoverOnTheDeck(this.deckSession, el, reason))
 			el.play().catch((err) => this.handlePlayRejection(err));
@@ -1441,7 +1441,7 @@ class AudioPlayer {
 		const track = state.manifest.tracks[state.trackIndex];
 		const absoluteTime = Math.max(
 			0,
-			(track?.start_offset ?? 0) + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
+			track.start_offset + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
 		);
 		const probe = await this.probeStream(state.manifest.stream_url);
 		if (probe === null || this.streamRecoveryInterrupted(target)) return;
@@ -1452,7 +1452,7 @@ class AudioPlayer {
 			const fresh = await this.callbacks.onStreamRebuild?.(state);
 			if (this.streamRecoveryInterrupted(target)) return;
 			if (fresh && fresh.tracks.length > 0) {
-				const currentId = track?.generation_id;
+				const currentId = track.generation_id;
 				const matched = fresh.tracks.findIndex((item) => item.generation_id === currentId);
 				const index = Math.max(0, matched);
 				const freshTrack = fresh.tracks[index];
@@ -1526,11 +1526,11 @@ class AudioPlayer {
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
-		this.failForAnUnknownReason();
-
 		const target = this.current;
 		const url = this.currentUrl;
 		if (!target || !url) return;
+
+		this.failForAnUnknownReason();
 
 		const probe = await this.probeUrl(url);
 
