@@ -117,7 +117,7 @@
 	);
 
 	// Curation mode (issue #228) only ever plays an album's own queue. The
-	// real guarantee lives in the player store: setQueueContext (the one
+	// real guarantee lives in the queue store: setQueueContext (the one
 	// writer of queueContext) turns curationActive off on every queue build
 	// that isn't curateAlbum's own — a different album, a take clicked
 	// mid-curation, a playlist — so curationActive being true here already
