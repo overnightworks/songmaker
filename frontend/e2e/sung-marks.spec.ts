@@ -14,7 +14,7 @@ import { words } from '../src/lib/words/en';
 const SECONDS_PER_WORD = 0.5;
 const SUNG_AS = 'Mood';
 const LEFT_OUT = 'lyrics';
-const REPLACED = 'Move';
+const REPLACED = 'seeded';
 
 let guard: FlowGuard;
 
@@ -37,7 +37,7 @@ interface SongBody {
 	generations: TakeBody[];
 }
 
-// The lyrics sung word by word, "Move" as "Mood" and the last word not at all.
+// The lyrics sung word by word, "seeded" as "Mood" and the last word not at all.
 function sungDifferently(lyrics: string): unknown[] {
 	const sung = lyrics
 		.split(/\s+/)
