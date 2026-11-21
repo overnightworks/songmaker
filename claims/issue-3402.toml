@@ -3,6 +3,6 @@ agent = "Claude 21e892ab-fbe1-424c-95f4-8df2b859755f"
 role = "builder"
 base = "43b7f79c6625b4ecdd1a3e32bc0e0623e92ae632"
 branch = "claude/issue-3402-the-audio-player-service-s-uncovered-bra"
-scope = ["docs/architecture.md", "docs/library.md", "frontend/src/lib/services", "frontend/vitest.config.ts"]
+scope = ["docs/architecture.md", "docs/library.md", "frontend/src/lib/services", "frontend/vitest.config.ts", "scripts/test_helper_ratchet.txt"]
 opened_commit = "6057c7701c64249f3dcdd781148579bac881e0f6"
 whole_reason = "The service's uncovered arms, their new focused test files and the floor they raise move together; the services directory holds the source and the new test files beside it."
