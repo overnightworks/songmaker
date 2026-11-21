@@ -1,0 +1,8 @@
+claim_id = "4a9844a20abb459c9c39900d2e0055b6"
+agent = "Claude 54b282ca-7891-403a-a10d-7bfdd4fe2b66"
+role = "builder"
+base = "855ea6b99cf72a4cb1cb8d0c5e8e5267260db6d4"
+branch = "dependabot/docker/docker-images-55f7517545"
+scope = ["Dockerfile", "docker/acestep-worker.Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile"]
+opened_commit = "abca75f16135bd988719f7f9786ceadc32bc1535"
+whole_reason = "One base-image bump that Dependabot applies to all four Dockerfiles together."
