@@ -60,15 +60,18 @@ function refuse(take: PlaybackInfo, requestIndex: number): Promise<void> {
 
 describe('the continuous deck, REQ-PLAYER-20 to REQ-PLAYER-23', () => {
 	// Spec: REQ-PLAYER-20 -- a take loaded without saying whether to play starts playing.
-	it('plays a take the deck already holds when it is loaded without saying whether to play', () => {
+	it.each([
+		{ ask: 'nothing', opts: {}, pausedBefore: true, playsAfter: true },
+		{ ask: 'to stay paused', opts: { autoplay: false }, pausedBefore: false, playsAfter: false }
+	])('moves to a take the deck holds and, asked $ask, plays: $playsAfter', (scenario) => {
 		playFirstWithSecondAppended();
-		audioPlayer.pause();
-		expect(fakeAudio.paused).toBe(true);
+		if (scenario.pausedBefore) audioPlayer.pause();
+		fakeAudio.paused = scenario.pausedBefore;
 
-		audioPlayer.load(second);
+		audioPlayer.load(second, scenario.opts);
 
 		expect(audioPlayer.current).toBe(second);
-		expect(fakeAudio.paused).toBe(false);
+		expect(fakeAudio.paused).toBe(!scenario.playsAfter);
 	});
 
 	// Spec: REQ-PLAYER-21 -- where the deck holds no take at the playhead, the position follows the audio clock.

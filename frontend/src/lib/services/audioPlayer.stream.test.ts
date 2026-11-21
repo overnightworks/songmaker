@@ -66,15 +66,19 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 	});
 
 	// Spec: REQ-PLAYER-24 -- moving to a track plays it when asked to or, if not told, when the stream was playing.
-	it('goes back a track without playing when asked to stay paused', () => {
+	it.each([
+		{ ask: 'to play', opts: { autoplay: true }, plays: true },
+		{ ask: 'to stay paused', opts: { autoplay: false }, plays: false }
+	])('goes back a track and, asked $ask, plays: $plays', ({ opts, plays }) => {
 		audioPlayer.loadStream(makeStreamManifest(), 1, { autoplay: false });
-		fakeAudio.paused = false;
+		fakeAudio.fire('canplay');
+		fakeAudio.paused = plays;
 		fakeAudio.playMock.mockClear();
 
-		expect(audioPlayer.prevStreamTrack({ autoplay: false })).toBe(true);
+		expect(audioPlayer.prevStreamTrack(opts)).toBe(true);
 
 		expect(audioPlayer.current?.songTitle).toBe('First');
-		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+		expect(fakeAudio.playMock.mock.calls.length > 0).toBe(plays);
 	});
 
 	// Spec: REQ-PLAYER-25 -- Previous on the first track of a windowed stream goes nowhere.

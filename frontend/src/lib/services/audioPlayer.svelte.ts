@@ -536,7 +536,8 @@ class AudioPlayer {
 		this.lastObservedTime = startAt;
 		this.duration = takeDuration(entry);
 		this.setCurrent(entry.take);
-		if (opts.autoplay ?? true) this.play();
+		const autoplay = opts.autoplay ?? true;
+		if (autoplay) this.play();
 		else this.pause();
 		return true;
 	}
@@ -823,6 +824,7 @@ class AudioPlayer {
 
 	prevStreamTrack(opts: { autoplay?: boolean } = {}): boolean {
 		if (!this.audio || !this.streamEngine.active) return false;
+		const autoplay = opts.autoplay ?? !this.audio.paused;
 		const streamState = this.streamEngine.prevTrack(this.audio);
 		this.syncStreamBoundaries();
 		if (!streamState) return false;
@@ -830,7 +832,7 @@ class AudioPlayer {
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
 		this.lastObservedTime = streamState.absoluteTime;
-		if (opts.autoplay ?? !this.audio.paused) this.play();
+		if (autoplay) this.play();
 		return true;
 	}
 
