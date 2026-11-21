@@ -47,6 +47,7 @@ import {
 	LIBRARY_PATH,
 	LIBRARY_URL
 } from './helpers';
+import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { LOG_OUT_NAME } from './account-menu-words';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
@@ -396,12 +397,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
 	});
 	await expect(pickedSongRow.getByRole('button')).toHaveCount(2);
-	await surface
-		.getByRole('button', {
-			name: words['collectionHeader.playAlbum'],
-			exact: true
-		})
-		.click();
+	await playOpenAlbum(page);
 
 	const transport = page.getByRole('contentinfo');
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
@@ -435,12 +431,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	).toBeVisible();
 	await expect(playingMark).toBeVisible();
 	await expect(playingMark.locator('span').first()).toHaveCSS('animation-name', 'none');
-	await surface
-		.getByRole('button', {
-			name: words['collectionHeader.playAlbum'],
-			exact: true
-		})
-		.click();
+	await playOpenAlbum(page);
 	await expect(pauseButton(transport)).toBeVisible();
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
@@ -534,12 +525,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 
 	// On the phone shuffle lives in Now Playing, opened from the mini player's title.
 	if (shell === 'mobile') {
-		await transport
-			.getByRole('button', {
-				name: words['player.openNowPlaying']({ title: library.pickedSongTitle }),
-				exact: true
-			})
-			.click();
+		await openNowPlayingFromBar(page, shell, library.pickedSongTitle);
 	}
 	const shuffle = shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
 		name: nameStartingWith(words['share.shuffle'], words['share.disableShuffle'])

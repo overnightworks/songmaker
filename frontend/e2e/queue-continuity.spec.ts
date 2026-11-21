@@ -18,6 +18,7 @@ import {
 	type Shell,
 	LIBRARY_PATH
 } from './helpers';
+import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import {
 	BASE_URL,
 	archiveOwnedAlbum,
@@ -213,12 +214,7 @@ async function expectTransportMovesOn(page: Page, from: SeededTrack, to: SeededT
 
 async function playAlbum(page: Page, albumId: string) {
 	await page.goto(`/album/${albumId}`);
-	await workspace(page)
-		.getByRole('button', {
-			name: words['collectionHeader.playAlbum'],
-			exact: true
-		})
-		.click();
+	await playOpenAlbum(page);
 }
 
 function trackOf(library: SeededLibrary, take: SeededTake): SeededTrack {
@@ -239,13 +235,7 @@ async function seedPlaylistOf(library: SeededLibrary, takes: SeededTake[]): Prom
 // On the phone shuffle lives in Now Playing, opened from the mini player.
 async function toggleShuffle(page: Page, shell: Shell, playingSongTitle: string) {
 	const transport = page.getByRole('contentinfo');
-	if (shell === 'mobile')
-		await transport
-			.getByRole('button', {
-				name: words['player.openNowPlaying']({ title: playingSongTitle }),
-				exact: true
-			})
-			.click();
+	if (shell === 'mobile') await openNowPlayingFromBar(page, shell, playingSongTitle);
 	const controls =
 		shell === 'desktop' ? transport : page.getByRole('dialog', { name: playingSongTitle });
 	const shuffle = controls.getByRole('button', {
@@ -506,16 +496,7 @@ test('an album whose second take is refused names it once, when playback reaches
 	);
 
 	await playAlbum(page, library.albumId);
-	await page
-		.getByRole('contentinfo')
-		.getByRole('button', {
-			name:
-				shellOf(testInfo) === 'mobile'
-					? words['player.openNowPlaying']({ title: first.songTitle })
-					: words['transport.nowPlaying'],
-			exact: true
-		})
-		.click();
+	await openNowPlayingFromBar(page, shellOf(testInfo), first.songTitle);
 
 	await expect(upNext(third)).toBeVisible();
 	expect(toasts.count(skipped)).toBe(0);

@@ -99,7 +99,7 @@ interface Resource {
 	id: string;
 }
 interface Share {
-	share_slug: string;
+	share_url: string;
 }
 
 export interface RealPlaylist {
@@ -165,13 +165,13 @@ export async function createRealPlaylist(owner: Page): Promise<RealPlaylist> {
 			await post(`/api/playlists/${playlist.id}/entries/generation`, { generation_id: take.id });
 		}
 		const share = await post<Share>(`/api/playlists/${playlist.id}/share`, {});
-		const api = `/shared/playlist/${share.share_slug}`;
+		const api = new URL(share.share_url).pathname.replace('/share/', '/shared/');
 		const response = await owner.request.get(api, {
 			headers: { 'x-forwarded-for': '192.0.2.254' }
 		});
 		expect(response.ok()).toBeTruthy();
 		return {
-			url: `${BASE_URL}/share/playlist/${share.share_slug}`,
+			url: share.share_url,
 			api,
 			payload: (await response.json()) as SharedPlaylistPayload,
 			async setUpload(present) {

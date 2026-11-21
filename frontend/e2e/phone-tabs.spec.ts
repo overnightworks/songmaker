@@ -12,6 +12,7 @@ import {
 	openSettingsSection,
 	workspace
 } from './helpers';
+import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { openSearchSheet } from './phone-search';
 import { readSeededLibrary } from './seed';
 
@@ -105,20 +106,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await page.goto(`/album/${library.albumId}`);
 		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
 		await expectCurrent(page, words['places.library']);
-		await workspace(page)
-			.getByRole('button', {
-				name: words['collectionHeader.playAlbum'],
-				exact: true
-			})
-			.click();
+		await playOpenAlbum(page);
 		await expectCurrent(page, words['places.library']);
-		await page
-			.getByRole('contentinfo')
-			.getByRole('button', {
-				name: words['player.openNowPlaying']({ title: library.pickedSongTitle }),
-				exact: true
-			})
-			.click();
+		await openNowPlayingFromBar(page, 'mobile', library.pickedSongTitle);
 		await expect(tabs(page)).toHaveCount(0);
 		await page.getByRole('button', { name: words['nowPlaying.close'], exact: true }).click();
 		await expectCurrent(page, words['places.library']);
