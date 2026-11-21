@@ -56,14 +56,16 @@
 	let following = $state(true);
 
 	// The one mark whose line shows its Sung line: the one a tap opened, or,
-	// while a fine pointer rests on a mark, the one it rests on.
+	// while nothing is opened and a fine pointer rests on a mark, the one it
+	// rests on. A hover never replaces an opened line: closing it would pull
+	// a lower mark out from under the pointer.
 	interface MarkRef {
 		line: number;
 		word: number;
 	}
 	let tappedMark = $state<MarkRef | null>(null);
 	let hoveredMark = $state<MarkRef | null>(null);
-	const shownMark = $derived(hoveredMark ?? tappedMark);
+	const shownMark = $derived(tappedMark ?? hoveredMark);
 	// Words stay separate nodes, so the space between them is written out.
 	const WORD_SEPARATOR = ' ';
 	const HOVER_POINTER = '(hover: hover) and (pointer: fine)';

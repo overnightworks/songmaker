@@ -676,6 +676,29 @@ describe('NowPlayingLyrics sung marks', () => {
 		expect(sungLines()).toHaveLength(0);
 	});
 
+	it('keeps a pinned Sung line in place while a fine pointer rests on a word of a later line', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: true }))
+		);
+		await render(markedTake());
+		const [quietly, city] = marks();
+		const mouse = { pointerType: 'mouse' };
+		quietly.click();
+		await tick();
+
+		city.dispatchEvent(Object.assign(new Event('pointerenter'), mouse));
+		await tick();
+		expect(sungLines()).toHaveLength(1);
+		expect(sungLines()[0].previousElementSibling).toBe(target.querySelector('.lyrics-line'));
+
+		city.click();
+		city.dispatchEvent(Object.assign(new Event('pointerleave'), mouse));
+		await tick();
+		expect(sungLines()).toHaveLength(1);
+		expect(sungLines()[0].previousElementSibling).toBe(target.querySelectorAll('.lyrics-line')[1]);
+	});
+
 	it('moves the open state to another word of the same line', async () => {
 		await render({ ...markedTake(), cues: [sungCue(0, 0.5, 'the lantern hums softly tonight')] });
 		const [first, second] = Array.from(
