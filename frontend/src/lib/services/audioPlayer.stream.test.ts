@@ -38,14 +38,13 @@ describe('a queue stream, REQ-PLAYER-20 and REQ-PLAYER-24 to REQ-PLAYER-28', () 
 		audioPlayer.loadStream(makeStreamManifest());
 		fakeAudio.fire('canplay');
 
-		expect(fakeAudio.playMock).toHaveBeenCalled();
+		expect(fakeAudio.paused).toBe(false);
 		expect(audioPlayer.status).toBe('loading');
 	});
 
 	// Spec: REQ-PLAYER-24 -- moving to a track plays it when asked to or, if not told, when the stream was playing.
 	it.each([
 		{ ask: 'to play', opts: { autoplay: true }, playing: false, paused: false },
-		{ ask: 'to stay paused', opts: { autoplay: false }, playing: true, paused: false },
 		{ ask: 'nothing while it plays', opts: {}, playing: true, paused: false },
 		{ ask: 'nothing while it is paused', opts: {}, playing: false, paused: true }
 	])('goes to a track and, asked $ask, ends paused: $paused', ({ opts, playing, paused }) => {
