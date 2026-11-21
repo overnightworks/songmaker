@@ -32,6 +32,7 @@ const ENTRY_FILES = [
 
 const FORBIDDEN_MODULES = [
 	'lib/stores/player.ts',
+	'lib/stores/queue.ts',
 	'lib/stores/navigation.ts',
 	'lib/stores/editor.ts',
 	'lib/stores/takeActions.ts',

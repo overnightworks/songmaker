@@ -9,7 +9,7 @@ import {
 	readLastPlayed,
 	resetLibraryOrderForTests
 } from '#lib/stores/libraryOrder.ts';
-import { queueContext } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { makeAlbum, makePlaylist, makeSong, makeGeneration } from '#lib/test-utils/factories.ts';
 import { toasts } from '#lib/stores/toast.ts';

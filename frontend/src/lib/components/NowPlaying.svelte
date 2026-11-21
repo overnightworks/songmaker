@@ -13,31 +13,33 @@
 	import { albumList, songList } from '#lib/stores/libraryData.ts';
 	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import {
-		buildQueueViewModel,
 		canPlayNextSong,
 		canPlayPrevSong,
 		chooseLibraryTakePool,
 		closeNowPlaying,
-		curationActive,
 		dockNowPlaying,
 		ensureGenerationsLoaded,
 		expandNowPlaying,
 		jumpToQueueIndex,
 		libraryQueueSkipped,
-		libraryQueueSkippedComplete,
 		navigateToPlaying,
 		nowPlayingDockable,
 		nowPlayingPanel,
 		nowPlayingSurface,
-		playbackSource,
 		playNextSong,
 		playPrevSong,
-		queueContext,
 		shuffleEnabled,
 		shuffleLabel,
 		toggleShuffle,
 		windowEnded
 	} from '#lib/stores/player.ts';
+	import {
+		buildQueueViewModel,
+		curationActive,
+		libraryQueueSkippedComplete,
+		playbackSource,
+		queueContext
+	} from '#lib/stores/queue.ts';
 	import { libraryTakePool, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
 	import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 	import { addToast } from '#lib/stores/toast.ts';

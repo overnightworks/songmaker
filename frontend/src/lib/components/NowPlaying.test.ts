@@ -16,7 +16,6 @@ import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libra
 import {
 	closeNowPlaying,
 	expandNowPlaying,
-	curationActive,
 	ensureGenerationsLoaded,
 	libraryQueueSkipped,
 	nowPlayingDockable,
@@ -24,12 +23,12 @@ import {
 	nowPlayingPanel,
 	nowPlayingSurface,
 	openNowPlaying,
-	queueContext,
 	selectedSongId,
 	setShuffle,
 	shuffleEnabled,
 	shuffleLabel
 } from '#lib/stores/player.ts';
+import { curationActive, queueContext } from '#lib/stores/queue.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { setLibraryTakePool } from '#lib/stores/playbackSettings.ts';
 import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';

@@ -12,10 +12,10 @@ import {
 	closeNowPlaying,
 	nowPlayingOpen,
 	playStartNotice,
-	queueContext,
 	setShuffle,
 	shuffleEnabled
 } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import {
 	loadPlaylistDetail,
