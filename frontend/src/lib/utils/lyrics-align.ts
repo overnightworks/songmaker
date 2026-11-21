@@ -21,6 +21,12 @@
 // sings it word for word, since a character ratio cannot tell "yeah" from a
 // sung "year". Anything less leaves the line dark: a gap, not a guess.
 //
+// The same pairs say what was sung differently: a lyric word the alignment
+// leaves unpaired, or pairs with a heard word that reads differently, is
+// marked, and the line as sung is the heard words from its first to its last
+// paired word. Marks cover dark lines too: lighting answers "where are we",
+// marks answer "what was sung".
+//
 // A cue without word timestamps (a take scored before #142) contributes its
 // text's words, each carrying the whole cue span: nothing in such a take
 // says where inside a segment one line ends and the next begins, so the
@@ -62,23 +68,46 @@ interface LyricLineInterval {
 	end: number;
 }
 
+// A word of the line as sung, in Whisper's own spelling; `differs` when no
+// lyric word is paired with it word for word.
+export interface SungWord {
+	text: string;
+	differs: boolean;
+}
+
 export interface AlignedLyricLine {
 	text: string;
 	interval: LyricLineInterval | null;
+	// Indices into displayWords(text) of the words to underline.
+	marks: number[];
+	// The line as sung; null when no heard word is paired with the line.
+	sung: SungWord[] | null;
 }
 
+// One normalised token of a heard word; `source` numbers the heard word it
+// came from, `raw` is that word as Whisper wrote it.
 interface HeardWord {
+	start: number;
+	end: number;
+	text: string;
+	source: number;
+	raw: string;
+}
+
+interface SourceWord {
 	start: number;
 	end: number;
 	text: string;
 }
 
+// One normalised token of a lyric word; `wordIndex` is the display word.
 interface LyricWord {
 	lineIndex: number;
+	wordIndex: number;
 	text: string;
 }
 
-interface Anchor {
+interface Pair {
 	heardIndex: number;
 	similarity: number;
 }
@@ -88,6 +117,11 @@ function tokens(text: string): string[] {
 	return normalized.length === 0 ? [] : normalized.split(' ');
 }
 
+// The words of a line as the reader sees them; a mark names one by its index.
+export function displayWords(text: string): string[] {
+	return text.split(/\s+/).filter((word) => word.length > 0);
+}
+
 export function isSungLine(rawLine: string): boolean {
 	const trimmed = rawLine.trim();
 	return trimmed.length > 0 && !SECTION_MARKER.test(trimmed);
@@ -95,7 +129,11 @@ export function isSungLine(rawLine: string): boolean {
 
 function lyricWords(rawLines: string[]): LyricWord[] {
 	return rawLines.flatMap((line, lineIndex) =>
-		isSungLine(line) ? tokens(line).map((text) => ({ lineIndex, text })) : []
+		isSungLine(line)
+			? displayWords(line).flatMap((word, wordIndex) =>
+					tokens(word).map((text) => ({ lineIndex, wordIndex, text }))
+				)
+			: []
 	);
 }
 
@@ -119,17 +157,30 @@ function joinHyphenPieces(words: WhisperWordCue[]): WhisperWordCue[] {
 	return joined;
 }
 
-function heardWords(cues: WhisperCue[]): HeardWord[] {
+function sourceWords(cues: WhisperCue[]): SourceWord[] {
 	return cues
 		.map((cue, index) => ({ cue, index }))
 		.sort(
 			(left, right) =>
 				left.cue.start - right.cue.start || left.cue.end - right.cue.end || left.index - right.index
 		)
-		.flatMap(({ cue }) => (cue.words?.length ? joinHyphenPieces(cue.words) : [cue]))
-		.flatMap((word) =>
-			tokens(word.text).map((text) => ({ start: word.start, end: word.end, text }))
+		.flatMap(({ cue }) =>
+			cue.words?.length
+				? joinHyphenPieces(cue.words)
+				: displayWords(cue.text).map((text) => ({ start: cue.start, end: cue.end, text }))
 		);
+}
+
+function heardWords(cues: WhisperCue[]): HeardWord[] {
+	return sourceWords(cues).flatMap((word, source) =>
+		tokens(word.text).map((text) => ({
+			start: word.start,
+			end: word.end,
+			text,
+			source,
+			raw: word.text.trim()
+		}))
+	);
 }
 
 function wordSimilarity(heard: string, lyric: string): number {
@@ -245,14 +296,13 @@ function fillAlignmentTable(
 	return table;
 }
 
-// The anchor each lyric word takes in the heard stream, or null when the
-// best global alignment leaves it unsung or pairs it with a word too unlike
-// it to count.
-function alignWords(lyrics: string[], heard: string[]): (Anchor | null)[] {
+// The heard word each lyric word is paired with in the best global
+// alignment, or null when it leaves the lyric word unsung.
+function alignWords(lyrics: string[], heard: string[]): (Pair | null)[] {
 	const similarity = similarityLookup(lyrics, heard);
 	const table = fillAlignmentTable(lyrics.length, heard.length, similarity);
 
-	const anchors: (Anchor | null)[] = new Array(lyrics.length).fill(null);
+	const pairs: (Pair | null)[] = new Array(lyrics.length).fill(null);
 	let lyricIndex = lyrics.length;
 	let heardIndex = heard.length;
 	let ending = table.bestEnding(lyricIndex * table.width + heardIndex);
@@ -260,10 +310,10 @@ function alignWords(lyrics: string[], heard: string[]): (Anchor | null)[] {
 		const cell = lyricIndex * table.width + heardIndex;
 		const previous = table.previousOf(ending, cell);
 		if (ending === Ending.Pair) {
-			const pairSimilarity = similarity(lyricIndex - 1, heardIndex - 1);
-			if (pairSimilarity >= ANCHOR_MIN_SIMILARITY) {
-				anchors[lyricIndex - 1] = { heardIndex: heardIndex - 1, similarity: pairSimilarity };
-			}
+			pairs[lyricIndex - 1] = {
+				heardIndex: heardIndex - 1,
+				similarity: similarity(lyricIndex - 1, heardIndex - 1)
+			};
 			lyricIndex--;
 			heardIndex--;
 		} else if (ending === Ending.LyricGap) {
@@ -273,10 +323,15 @@ function alignWords(lyrics: string[], heard: string[]): (Anchor | null)[] {
 		}
 		ending = previous;
 	}
-	return anchors;
+	return pairs;
 }
 
-function isLineHeard(lineAnchors: (Anchor | null)[]): boolean {
+// A pair too unlike its words to count anchors nothing.
+function anchorOf(pair: Pair | null): Pair | null {
+	return pair && pair.similarity >= ANCHOR_MIN_SIMILARITY ? pair : null;
+}
+
+function isLineHeard(lineAnchors: (Pair | null)[]): boolean {
 	if (lineAnchors.length <= VERBATIM_MAX_TOKENS) {
 		return lineAnchors.every((anchor) => anchor?.similarity === 1);
 	}
@@ -284,10 +339,7 @@ function isLineHeard(lineAnchors: (Anchor | null)[]): boolean {
 	return anchored / lineAnchors.length >= LINE_MIN_ANCHORED_SHARE;
 }
 
-function lineInterval(
-	lineAnchors: (Anchor | null)[],
-	heard: HeardWord[]
-): LyricLineInterval | null {
+function lineInterval(lineAnchors: (Pair | null)[], heard: HeardWord[]): LyricLineInterval | null {
 	if (!isLineHeard(lineAnchors)) return null;
 	const sung = lineAnchors
 		.filter((anchor) => anchor !== null)
@@ -296,26 +348,71 @@ function lineInterval(
 	return { start: first.start, end: (sung.at(-1) ?? first).end };
 }
 
+interface LineToken {
+	wordIndex: number;
+	pair: Pair | null;
+}
+
+function isExactPair(pair: Pair | null): boolean {
+	return pair?.similarity === 1;
+}
+
+function lineMarks(lineTokens: LineToken[]): number[] {
+	const marked = lineTokens.filter(({ pair }) => !isExactPair(pair));
+	return [...new Set(marked.map(({ wordIndex }) => wordIndex))];
+}
+
+// The heard words from the line's first to its last paired one, each heard
+// word once, flagged when none of its tokens is an exact pair.
+function sungWords(lineTokens: LineToken[], heard: HeardWord[]): SungWord[] | null {
+	const paired = lineTokens.flatMap(({ pair }) => (pair ? [pair.heardIndex] : []));
+	if (paired.length === 0) return null;
+	const exact = new Set(
+		lineTokens.flatMap(({ pair }) => (pair && isExactPair(pair) ? [pair.heardIndex] : []))
+	);
+	const first = Math.min(...paired);
+	const last = Math.max(...paired);
+	const words = new Map<number, SungWord>();
+	for (let index = first; index <= last; index++) {
+		const { source, raw } = heard[index];
+		const word = words.get(source) ?? { text: raw, differs: false };
+		word.differs ||= !exact.has(index);
+		words.set(source, word);
+	}
+	return [...words.values()];
+}
+
 // Maps whisper_cues onto the display lines of `lyrics` (split with the same
 // /\r?\n/ regex the normalisation contract specifies). Every display line
 // is returned, in order, including blank and [section] lines — those are
-// simply never alignable and always carry a null interval.
+// simply never alignable and always carry a null interval and no marks.
 export function alignLyricsToCues(lyrics: string, cues: WhisperCue[]): AlignedLyricLine[] {
 	const rawLines = lyrics.split(/\r?\n/);
 	const words = lyricWords(rawLines);
 	const heard = heardWords(cues);
-	const anchors = alignWords(
+	const pairs = alignWords(
 		words.map((word) => word.text),
 		heard.map((word) => word.text)
 	);
 
-	const anchorsByLine = rawLines.map((): (Anchor | null)[] => []);
-	words.forEach((word, index) => anchorsByLine[word.lineIndex].push(anchors[index]));
+	const tokensByLine = rawLines.map((): LineToken[] => []);
+	words.forEach((word, index) =>
+		tokensByLine[word.lineIndex].push({ wordIndex: word.wordIndex, pair: pairs[index] })
+	);
 
-	return rawLines.map((text, index) => ({
-		text,
-		interval: anchorsByLine[index].length ? lineInterval(anchorsByLine[index], heard) : null
-	}));
+	return rawLines.map((text, index) => {
+		const lineTokens = tokensByLine[index];
+		if (lineTokens.length === 0) return { text, interval: null, marks: [], sung: null };
+		return {
+			text,
+			interval: lineInterval(
+				lineTokens.map(({ pair }) => anchorOf(pair)),
+				heard
+			),
+			marks: lineMarks(lineTokens),
+			sung: sungWords(lineTokens, heard)
+		};
+	});
 }
 
 // Every line active at `currentTime`, in display order, and none at all

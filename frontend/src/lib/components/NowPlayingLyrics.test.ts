@@ -191,6 +191,7 @@ interface LyricsProps {
 	// Where the take stands; a take the test does not place stands at its start.
 	position?: number | null;
 	songTitle?: string;
+	sungMarks?: boolean;
 }
 
 type MountedLyricsProps = Required<Omit<LyricsProps, 'songTitle'>> & {
@@ -203,7 +204,7 @@ type MountedLyricsProps = Required<Omit<LyricsProps, 'songTitle'>> & {
 async function mountLyrics(props: LyricsProps): Promise<MountedLyricsProps> {
 	target = document.createElement('div');
 	document.body.append(target);
-	live = reactiveProps({ emptyLabel: EMPTY_LABEL, position: 0, ...props });
+	live = reactiveProps({ emptyLabel: EMPTY_LABEL, position: 0, sungMarks: false, ...props });
 	mounted = mount(NowPlayingLyrics, { target, props: live });
 	await tick();
 	return live;
@@ -589,5 +590,116 @@ describe('NowPlayingLyrics', () => {
 			timedOffersFollow: true,
 			plainOffersFollow: false
 		});
+	});
+});
+
+// Line 1 is sung with "softly" for "quietly"; line 2 leaves out "city".
+function markedTake(): LyricsProps {
+	return {
+		lyrics: [LINE_1, LINE_2].join('\n'),
+		cues: [
+			sungCue(0, 0.5, 'the lantern hums softly tonight'),
+			sungCue(3, 0.5, 'we count the fading lights')
+		],
+		whisperText: null,
+		sungMarks: true
+	};
+}
+
+function marks(): HTMLButtonElement[] {
+	return Array.from(target.querySelectorAll<HTMLButtonElement>('.lyrics-line button'));
+}
+
+function sungLines(): NodeListOf<HTMLElement> {
+	return target.querySelectorAll<HTMLElement>('.sung-line');
+}
+
+// Spec: REQ-PLAYER-03 -- a word sung differently carries a dotted mark whose tap shows one Sung line under its lyric line.
+describe('NowPlayingLyrics sung marks', () => {
+	it('underlines only the words sung differently, each a button named by the word', async () => {
+		await render(markedTake());
+
+		expect(marks().map((mark) => mark.textContent)).toEqual(['quietly', 'city']);
+		expect(target.querySelector('.lyrics-line')?.textContent?.trim()).toBe(LINE_1);
+	});
+
+	it('opens the Sung line under the tapped word and closes it with a second tap', async () => {
+		await render(markedTake());
+		const [quietly] = marks();
+
+		quietly.click();
+		await tick();
+
+		expect(sungLines()).toHaveLength(1);
+		expect(sungLines()[0].previousElementSibling).toBe(target.querySelector('.lyrics-line'));
+		expect(sungLines()[0].textContent).toMatch(
+			new RegExp(`^\\s*${pageWords['nowPlaying.sungLine']}\\s+the lantern hums softly tonight\\s*$`)
+		);
+		expect(quietly.getAttribute('aria-expanded')).toBe('true');
+		expect(quietly.getAttribute('aria-controls')).toBe(sungLines()[0].id);
+
+		quietly.click();
+		await tick();
+
+		expect(sungLines()).toHaveLength(0);
+		expect(quietly.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('moves the one Sung line to the line of the next tapped word', async () => {
+		await render(markedTake());
+		const [quietly, city] = marks();
+
+		quietly.click();
+		city.click();
+		await tick();
+
+		expect(sungLines()).toHaveLength(1);
+		expect(sungLines()[0].previousElementSibling).toBe(target.querySelectorAll('.lyrics-line')[1]);
+		expect(sungLines()[0].textContent).toContain('we count the fading lights');
+	});
+
+	it('shows the Sung line while a fine pointer rests on a word', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: true }))
+		);
+		await render(markedTake());
+		const [quietly] = marks();
+		const mouse = { pointerType: 'mouse' };
+
+		quietly.dispatchEvent(Object.assign(new Event('pointerenter'), mouse));
+		await tick();
+		expect(sungLines()).toHaveLength(1);
+
+		quietly.dispatchEvent(Object.assign(new Event('pointerleave'), mouse));
+		await tick();
+		expect(sungLines()).toHaveLength(0);
+	});
+
+	it('reads a line nobody sang as the Sung label and the nothing glyph', async () => {
+		await render({
+			...markedTake(),
+			cues: [sungCue(0, 0.5, 'the lantern hums softly tonight')]
+		});
+		const unsung = Array.from(
+			target.querySelectorAll('.lyrics-line')[1].querySelectorAll('button')
+		);
+
+		expect(unsung.map((mark) => mark.textContent)).toEqual(LINE_2.split(' '));
+		unsung[0].click();
+		await tick();
+
+		expect(sungLines()[0].textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`${pageWords['nowPlaying.sungLine']} ${pageWords['nowPlaying.sungNothing']}`
+		);
+	});
+
+	it.each([
+		{ name: 'the surface does not ask for them', props: { sungMarks: false } },
+		{ name: 'the take has no cues', props: { cues: null } }
+	])('shows no marks when $name', async ({ props }) => {
+		await render({ ...markedTake(), ...props });
+
+		expect(marks()).toHaveLength(0);
 	});
 });

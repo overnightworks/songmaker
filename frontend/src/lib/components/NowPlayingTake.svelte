@@ -10,9 +10,7 @@
 	import { closeNowPlaying } from '#lib/stores/player.ts';
 	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
 	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '#lib/stores/takeActions.ts';
-	import { computeDiffByKey } from '#lib/utils/diff.ts';
-	import { normalizeLyricsToken } from '#lib/utils/lyrics-normalize.ts';
-	import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
+			import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
 	import { pageLanguage } from '#lib/utils/page-language.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import { formatTime } from '#lib/utils/format.ts';
@@ -74,95 +72,6 @@
 		}
 		return entries;
 	});
-
-	interface DeviationToken {
-		text: string;
-		kind: 'same' | 'changed' | 'missing' | 'added';
-		lyricsText?: string;
-	}
-
-	interface WordToken {
-		raw: string;
-		key: string;
-	}
-
-	const STRUCTURAL_LINE = /^\[[^\]]+\]$/;
-
-	// The whisper transcript is a plain sung transcription with its own line
-	// breaks (or none) — it shares neither the lyrics text's line wrapping nor
-	// its blank paragraph breaks and [Verse]/[Chorus] markers. Comparing whole
-	// lines against that would flag nearly every lyrics line as "removed"
-	// without ever finding the sung line it corresponds to. Splitting both
-	// texts into words instead — after dropping the lines-only artifacts —
-	// makes a substituted, skipped, or added word the unit of comparison,
-	// where a real sung deviation is actually visible. Each word carries a
-	// normalized `key` (issue #45's contract) alongside its `raw` display
-	// text, so punctuation and casing differences never register as
-	// deviations — only an actually different word does. A word that
-	// normalizes to nothing (pure punctuation) carries no sung content and is
-	// dropped before diffing.
-	function tokenizeWords(text: string): WordToken[] {
-		return text
-			.split('\n')
-			.map((line) => line.trim())
-			.filter((line) => line.length > 0 && !STRUCTURAL_LINE.test(line))
-			.join(' ')
-			.split(/\s+/)
-			.filter(Boolean)
-			.map((raw) => ({ raw, key: normalizeLyricsToken(raw) }))
-			.filter((token) => token.key.length > 0);
-	}
-
-	// computeDiffByKey only marks an index null on the side that has no
-	// matched token (an 'add' has no oldIndex, a 'remove' has no newIndex);
-	// every call site below reads the index on the side its own entry type
-	// guarantees is set, so a missing index here means the diff and the
-	// token arrays it was built from have gone out of sync — a bug worth
-	// failing loudly on, not silently working around.
-	function rawAt(tokens: WordToken[], index: number | null): string {
-		if (index === null) throw new Error('Expected a matched word-diff index');
-		return tokens[index].raw;
-	}
-
-	function buildDeviationTokens(
-		lyricsTokens: WordToken[],
-		whisperTokens: WordToken[]
-	): DeviationToken[] {
-		const diff = computeDiffByKey(
-			lyricsTokens.map((token) => token.key),
-			whisperTokens.map((token) => token.key)
-		);
-		const tokens: DeviationToken[] = [];
-		let i = 0;
-		while (i < diff.length) {
-			const entry = diff[i];
-			if (entry.type === 'same') {
-				tokens.push({ text: rawAt(whisperTokens, entry.newIndex), kind: 'same' });
-				i++;
-			} else if (entry.type === 'remove' && diff[i + 1]?.type === 'add') {
-				tokens.push({
-					text: rawAt(whisperTokens, diff[i + 1].newIndex),
-					kind: 'changed',
-					lyricsText: rawAt(lyricsTokens, entry.oldIndex)
-				});
-				i += 2;
-			} else if (entry.type === 'remove') {
-				tokens.push({ text: rawAt(lyricsTokens, entry.oldIndex), kind: 'missing' });
-				i++;
-			} else {
-				tokens.push({ text: rawAt(whisperTokens, entry.newIndex), kind: 'added' });
-				i++;
-			}
-		}
-		return tokens;
-	}
-
-	const hasTranscript = $derived(Boolean(lyrics && generation.whisper_text));
-	const deviationTokens = $derived.by((): DeviationToken[] => {
-		if (!lyrics || !generation.whisper_text) return [];
-		return buildDeviationTokens(tokenizeWords(lyrics), tokenizeWords(generation.whisper_text));
-	});
-	const hasDeviations = $derived(deviationTokens.some((token) => token.kind !== 'same'));
 
 	let ratingValue = $state(50);
 	let ratingNotes = $state('');
@@ -296,9 +205,8 @@
 		{/if}
 	</section>
 
-	<section class="take-section">
-		<h4 class="section-title">{pageText('nowPlayingTake.deviations')}</h4>
-		{#if !hasCues}
+	{#if !hasCues}
+		<section class="take-section">
 			<button
 				type="button"
 				class="rescore-hint"
@@ -308,30 +216,8 @@
 			>
 				{pageText(rescoring ? 'nowPlayingTake.rescoring' : 'nowPlayingTake.rescoreAction')}
 			</button>
-		{/if}
-		{#if !hasTranscript}
-			<p class="empty-note">{pageText('nowPlayingTake.deviationsUnavailable')}</p>
-		{:else if !hasDeviations}
-			<p class="empty-note">{pageText('nowPlayingTake.deviationsEmpty')}</p>
-		{:else}
-			<p class="deviation-text">
-				{#each deviationTokens as token, index (index)}<span
-						class="dev-token"
-						class:changed={token.kind === 'changed'}
-						class:missing={token.kind === 'missing'}
-						class:added={token.kind === 'added'}
-						title={token.lyricsText
-							? pageText('nowPlayingTake.lyricsRow', { lyrics: token.lyricsText })
-							: token.kind === 'added'
-								? pageText('nowPlayingTake.deviationAddedTitle')
-								: undefined}
-						aria-label={token.kind === 'added'
-							? pageText('nowPlayingTake.deviationAdded', { value: token.text })
-							: undefined}>{token.text}</span
-					>{/each}
-			</p>
-		{/if}
-	</section>
+		</section>
+	{/if}
 
 	{#if recipeGroups.length > 0}
 		<section class="take-section">
@@ -645,36 +531,6 @@
 		font-size: 1.05rem;
 		font-family: var(--font-display);
 		color: var(--text);
-	}
-	.deviation-text {
-		margin: 0;
-		padding: 0.6rem 0.7rem;
-		background: var(--surface);
-		border-radius: 4px;
-		font-family: 'Courier New', monospace;
-		font-size: 0.8rem;
-		line-height: 1.8;
-		color: var(--text-muted);
-		overflow-wrap: break-word;
-	}
-	.dev-token {
-		margin-right: 0.3em;
-	}
-	.dev-token.changed {
-		color: var(--accent);
-		text-decoration: underline dotted;
-		text-underline-offset: 2px;
-		cursor: help;
-	}
-	.dev-token.missing {
-		color: var(--text-subtle);
-		text-decoration: line-through;
-	}
-	.dev-token.added {
-		color: #f90;
-		text-decoration: underline dotted;
-		text-underline-offset: 2px;
-		cursor: help;
 	}
 	.rating-row {
 		display: flex;

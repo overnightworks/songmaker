@@ -2,7 +2,11 @@
 	import type { WhisperCue } from '#lib/api/types.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { alignInWorker } from '#lib/services/lyricsAlignment.svelte.ts';
-	import { activeLyricLineIndices, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
+	import {
+		activeLyricLineIndices,
+		displayWords,
+		type AlignedLyricLine
+	} from '#lib/utils/lyrics-align.ts';
 	import { preferredScrollBehavior } from '#lib/utils/motion.ts';
 
 	let {
@@ -11,7 +15,8 @@
 		whisperText,
 		emptyLabel,
 		position,
-		songTitle
+		songTitle,
+		sungMarks = false
 	}: {
 		lyrics: string | null;
 		cues: WhisperCue[] | null;
@@ -22,6 +27,9 @@
 		position: number | null;
 		// Names the song above its words where several songs share one page.
 		songTitle?: string;
+		// Underlines the words sung differently and opens what was sung under
+		// their line; the signed-in player sets it, the share pages do not.
+		sungMarks?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -47,11 +55,28 @@
 	// or another take starts.
 	let following = $state(true);
 
+	// The one line whose Sung line is shown: the one a tap opened, or, while a
+	// fine pointer rests on a mark, the one it rests on.
+	let tappedLine = $state<number | null>(null);
+	let hoveredLine = $state<number | null>(null);
+	const sungLineShown = $derived(hoveredLine ?? tappedLine);
+	const HOVER_POINTER = '(hover: hover) and (pointer: fine)';
+
+	function toggleSungLine(index: number): void {
+		tappedLine = tappedLine === index ? null : index;
+	}
+
+	function hoverSungLine(index: number | null): void {
+		if (index === null || window.matchMedia(HOVER_POINTER).matches) hoveredLine = index;
+	}
+
 	$effect(() => {
 		const takeLyrics = lyrics;
 		const takeCues = cues;
 		alignedLines = null;
 		following = true;
+		tappedLine = null;
+		hoveredLine = null;
 		if (takeLyrics == null || takeLyrics.length === 0) return;
 		if (takeCues == null || takeCues.length === 0) return;
 
@@ -203,8 +228,40 @@
 						class:active={activeIndices.includes(index)}
 						data-line-index={index}
 					>
-						{line.text}
+						{#if sungMarks && line.marks.length > 0}
+							{#each displayWords(line.text) as word, wordIndex (wordIndex)}
+								{#if line.marks.includes(wordIndex)}
+									<button
+										type="button"
+										class="sung-mark"
+										data-hitbox="text"
+										aria-expanded={sungLineShown === index}
+										aria-controls="sung-line-{index}"
+										onclick={() => toggleSungLine(index)}
+										onpointerenter={(event) =>
+											event.pointerType === 'mouse' && hoverSungLine(index)}
+										onpointerleave={() => hoverSungLine(null)}>{word}</button
+									>
+								{:else}
+									{word}
+								{/if}{' '}
+							{/each}
+						{:else}
+							{line.text}
+						{/if}
 					</p>
+					{#if sungMarks && sungLineShown === index}
+						<p class="sung-line" id="sung-line-{index}">
+							<span class="sung-label">{pageText('nowPlaying.sungLine')}</span>
+							{#if line.sung}
+								{#each line.sung as word, wordIndex (wordIndex)}
+									<span class:sung-differs={word.differs}>{word.text}</span>{' '}
+								{/each}
+							{:else}
+								{pageText('nowPlaying.sungNothing')}
+							{/if}
+						</p>
+					{/if}
 				{/each}
 			{:else}
 				<p class="lyrics-text">{lyrics}</p>
@@ -281,6 +338,31 @@
 	.lyrics-line.active {
 		color: var(--text);
 		font-weight: 600;
+	}
+	.sung-mark {
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		color: inherit;
+		text-decoration: underline dotted;
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
+	.sung-line {
+		margin: -0.3rem 0 0.5rem;
+		font-size: 0.82rem;
+		color: var(--text-subtle);
+	}
+	.sung-label {
+		font-family: var(--font-display);
+		font-size: 0.68rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.sung-differs {
+		font-weight: 600;
+		color: var(--text-muted);
 	}
 	/* Over the faded strip's right end, where left-aligned lines leave room.
 	   Placed without a transform: the app's press feedback scales buttons
