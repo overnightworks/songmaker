@@ -5,27 +5,16 @@ from __future__ import annotations
 import asyncio
 import gzip as gzip_stdlib
 import json
-from dataclasses import replace
 from pathlib import Path
 
-import anyio
 import httpx
 import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
-from logline import RequestLineMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from support.web_app import issued_cookies, make_test_app
-from webauth.config import install_web_auth_config, installed_web_auth_config
-from webauth.middleware import (
-    BodySizeLimitMiddleware,
-    ClientAddressMiddleware,
-    CsrfOriginMiddleware,
-    IpRateLimitMiddleware,
-    PathRefusalMiddleware,
-    SecurityHeadersMiddleware,
-)
+from webauth.config import installed_web_auth_config
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
@@ -174,9 +163,7 @@ async def _drive_middleware(app, headers: list[tuple[bytes, bytes]]) -> tuple[di
     Bypasses TestClient/httpx entirely: httpx's response reading re-buffers
     at its own internal boundary, hiding the individual ASGI messages a
     middleware actually emits. This is the only layer where "one send per
-    source chunk, no accumulation" and the exact header set are observable,
-    matching the pattern `test_body_size_streaming_too_large` in
-    `test_server.py` already uses for `BodySizeLimitMiddleware`.
+    source chunk, no accumulation" and the exact header set are observable.
     """
     start_message: dict = {}
     body_messages: list[bytes] = []
@@ -269,49 +256,24 @@ def _middleware_classes(client: TestClient) -> list:
     return [layer.cls for layer in client.app.user_middleware]
 
 
-def test_created_app_stacks_its_middleware_in_the_documented_security_order(
+def test_created_app_places_its_own_layers_in_the_two_slots_of_the_composition_call(
     tmp_path: Path, pg_factory,
 ) -> None:
-    """defect:#1590, defect:#1521 -- pin the security-critical middleware order.
+    """defect:#1590, defect:#1521 -- the host's layers keep their order around webauth's stack.
 
-    Outermost first, because Starlette runs the last-added layer first. The client address
-    writer sits immediately inside the request line, so it is outside CORS. CORS is
-    registered for every configuration (`CORS_ORIGIN` only picks its policy), so
-    the default one is built here. An intended reorder updates this list and the
-    comment block in `server.py` together.
+    Outermost first, because Starlette runs the last-added layer first: the gzip and CORS layers
+    sit outside the stack, so they see every refusal with its headers and CORS answers a
+    preflight itself; the host check and the metrics sit inside it, so they see only admitted
+    requests. CORS is registered for every configuration (`CORS_ORIGIN` only picks its policy).
+    The stack's own order is webauth's, driven by the refusal tests below.
     """
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
-    assert _middleware_classes(client) == [
-        RequestLineMiddleware,
-        ClientAddressMiddleware,
-        ResourceStreamDeadlineMiddleware,
-        SelectiveGZipMiddleware,
-        CORSMiddleware,
-        SecurityHeadersMiddleware,
-        PathRefusalMiddleware,
-        BodySizeLimitMiddleware,
-        IpRateLimitMiddleware,
-        CsrfOriginMiddleware,
-        TrustedHostMiddleware,
-        HttpMetricsMiddleware,
-    ]
-
-
-def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_and_csrf(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
-) -> None:
-    """The enabled stack is the disabled one plus webauth's bearer layer, nothing moved."""
-    from webauth.middleware.bearer_gate import BearerGateMiddleware
-
-    disabled = _middleware_classes(make_test_app(tmp_path, factory=pg_factory)[0])
-    monkeypatch.setenv("TOKEN_CLIENTS", "hal")
-    get_settings.cache_clear()
-    enabled = _middleware_classes(make_test_app(tmp_path, factory=pg_factory)[0])
-
-    csrf_position = disabled.index(CsrfOriginMiddleware)
-    assert enabled == [*disabled[:csrf_position], BearerGateMiddleware, *disabled[csrf_position:]]
-    assert disabled[csrf_position - 1] == IpRateLimitMiddleware
+    layers = _middleware_classes(client)
+    outside = [ResourceStreamDeadlineMiddleware, SelectiveGZipMiddleware, CORSMiddleware]
+    inside = [TrustedHostMiddleware, HttpMetricsMiddleware]
+    assert [layer for layer in layers if layer in {*outside, *inside}] == [*outside, *inside]
+    assert layers.index(TrustedHostMiddleware) - layers.index(CORSMiddleware) > 1
 
 
 _STREAM_ERROR = RuntimeError("stream failed")
@@ -423,6 +385,10 @@ def test_http_metrics_pass_non_http_scopes_through_without_a_record(
 
 @pytest.fixture
 def security_exchange(tmp_path: Path, pg_factory):
+    return _security_exchange(tmp_path, pg_factory)
+
+
+def _security_exchange(tmp_path: Path, pg_factory):
     """Drive the installed host stack without a TestClient worker thread."""
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     app = client.app
@@ -559,17 +525,14 @@ def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
     ("[::1]", "https://[::1", 403),
 ])
 def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
-    security_exchange, monkeypatch, allowed, origin, expected,
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch, allowed, origin, expected,
 ):
-    """defect:#1590 -- host configuration feeds the library's parsed origin checks."""
-    from songmaker_cli.app_context import allowed_hosts
-    app, exchange = security_exchange
-    monkeypatch.setenv("ALLOWED_HOSTS", allowed)
-    get_settings.cache_clear()
-    install_web_auth_config(app, replace(
-        installed_web_auth_config(app),
-        allowed_hosts_exact=frozenset(allowed_hosts(get_settings())),
-    ))
+    """defect:#1590 -- host configuration feeds the library's parsed origin checks.
+
+    `localhost` stays listed, because the host check refuses a request whose own Host is not.
+    """
+    monkeypatch.setenv("ALLOWED_HOSTS", f"{allowed},localhost")
+    _, exchange = _security_exchange(tmp_path, pg_factory)
     status, _, _ = asyncio.run(
         exchange("/api/security-proof", headers=[(b"origin", origin.encode())]),
     )
@@ -712,44 +675,3 @@ def test_cors_preflight_remains_outside_security_stack(security_exchange):
     assert status == 200
     assert headers[b"access-control-allow-origin"] == b"http://localhost"
     assert b"x-content-type-options" not in headers
-
-
-@pytest.mark.parametrize("failure", ["blocked-start", "body-after-start"])
-def test_body_limit_bounds_start_and_never_restarts_a_stream(failure):
-    """defect:#1590 -- stalled starts time out; an oversized late body aborts the stream."""
-    from songmaker_cli.request_policies import build_body_size_policy
-    policy = build_body_size_policy(get_settings())
-    assert policy.start_send_seconds == 10.0
-    policy = replace(policy, default_max_bytes=1, start_send_seconds=0.01)
-    messages = []
-
-    async def app(scope, receive, send):
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b"first", "more_body": True})
-        await receive()
-
-    async def receive():
-        return {"type": "http.request", "body": b"oversized", "more_body": False}
-
-    async def send(message):
-        messages.append(message)
-        if failure == "blocked-start":
-            await anyio.sleep_forever()
-
-    async def drive():
-        middleware = BodySizeLimitMiddleware(app, policy=policy)
-        scope = {"type": "http", "method": "POST", "path": "/api/proof", "headers": []}
-        with anyio.fail_after(1):
-            with pytest.raises(TimeoutError if failure == "blocked-start" else Exception) as raised:
-                await middleware(scope, receive, send)
-            if failure == "body-after-start":
-                assert not isinstance(raised.value, TimeoutError)
-
-    asyncio.run(drive())
-    assert [m["status"] for m in messages if m["type"] == "http.response.start"] == [200]
-    if failure == "body-after-start":
-        assert messages[-1] == {
-            "type": "http.response.body", "body": b"first", "more_body": True,
-        }
-    else:
-        assert len(messages) == 1

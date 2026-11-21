@@ -59,5 +59,5 @@ class World:
 def world(tmp_path: Path, pg_factory) -> World:
     client, factory = make_test_app(tmp_path, factory=pg_factory)
     issuer = a_fake_issuer()
-    client.app.state.oidc_sign_in = issuer.relying_party_for_app()
+    issuer.serve(client.app)
     return World(client, factory, issuer)

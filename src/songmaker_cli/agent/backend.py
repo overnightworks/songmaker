@@ -204,7 +204,7 @@ def _groups_of(caller: TurnCaller) -> GroupSource:
 def _read_groups(caller: TurnCaller) -> frozenset[str]:
     app = caller.app
     found = current_groups(
-        app.state.oidc_sign_in.relying_party,
+        app.state.web_auth.relying_party,
         caller.session_id,
         session_transaction=DatabaseSessionTransaction(app.state.ctx.db),
         config=installed_web_auth_config(app),

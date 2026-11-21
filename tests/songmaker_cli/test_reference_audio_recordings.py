@@ -8,11 +8,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 from support.wav_files import write_wav
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import ReferenceRecording, User
 from songmaker_cli.reference_audio import (
@@ -175,7 +174,7 @@ def test_a_commit_whose_confirmation_is_lost_leaves_row_and_file_in_agreement(ct
     ],
 )
 def test_the_stored_filename_is_the_basename_of_the_client_name(ctx, client_name, stored_name):
-    with TestClient(make_router_app(ctx, user=make_authenticated_user("owner"))) as client:
+    with web_client(make_router_app(ctx, user=make_authenticated_user("owner"))) as client:
         response = client.post("/api/references", files={"file": (client_name, b"a" * 100)})
     assert response.status_code == 200
     [row] = _rows(ctx)
@@ -184,7 +183,7 @@ def test_the_stored_filename_is_the_basename_of_the_client_name(ctx, client_name
 
 def test_a_filename_of_256_characters_is_refused_and_adds_nothing(ctx):
     """N3."""
-    with TestClient(make_router_app(ctx, user=make_authenticated_user("owner"))) as client:
+    with web_client(make_router_app(ctx, user=make_authenticated_user("owner"))) as client:
         response = client.post(
             "/api/references", files={"file": ("a" * 252 + ".wav", b"a" * 100)},
         )
@@ -195,7 +194,7 @@ def test_a_filename_of_256_characters_is_refused_and_adds_nothing(ctx):
 
 def test_a_successful_upload_logs_user_reference_and_bytes_only(ctx, caplog):
     """L1."""
-    with caplog.at_level(logging.INFO), TestClient(
+    with caplog.at_level(logging.INFO), web_client(
         make_router_app(ctx, user=make_authenticated_user("owner"))
     ) as client:
         response = client.post(

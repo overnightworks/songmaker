@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncGenerator
+import time
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -20,9 +21,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from logline import RequestLineMiddleware, configure, set_route
+from logline import configure, set_route
+from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from webauth.middleware import ClientAddressMiddleware, install_web_auth_middleware
+from webauth.ports import WallClock
+from webauth.web_auth import (
+    IssuerCalls,
+    WebAuth,
+    WebAuthSettings,
+    WebAuthStores,
+)
 
 from songmaker_cli.agent.mcp import (
     build_protected_resource,
@@ -37,6 +45,8 @@ from songmaker_cli.app_context import (
     parse_trusted_proxies,
 )
 from songmaker_cli.audio_paths import AudioPathRejectedError
+from songmaker_cli.auth_api import sign_in_pages
+from songmaker_cli.auth_stores import DatabaseSessionTransaction, DatabaseSignInTransaction
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -64,7 +74,11 @@ from songmaker_cli.lifecycle import (
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
-from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
+from songmaker_cli.oidc_client import (
+    build_admission_config,
+    build_bearer_gate,
+    build_oidc_client_config,
+)
 from songmaker_cli.page_language import PageShell
 from songmaker_cli.refusals import install_refusal_handler, not_found_response
 from songmaker_cli.request_policies import (
@@ -204,10 +218,6 @@ def _install_error_handlers(app: FastAPI) -> None:
         )
 
 
-def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> OidcSignIn:
-    return build_oidc_sign_in(settings) if given is None else given
-
-
 def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
     """Serve the favicon, service worker, manifest and icons; return their exact paths."""
     favicon_path = sveltekit_dir / "favicon.svg"
@@ -259,13 +269,58 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
     return exact_paths
 
 
-def _install_request_line(app: FastAPI, settings: Settings) -> None:
-    """Add the request line outside every other layer, so a request the security layers refuse
-    leaves its line too and the trace covers them. webauth's layers give it the person; the
-    client address writer sits immediately inside it and outside CORS, so a preflight CORS answers
-    itself, and every refusal, names the client the trusted proxies resolve."""
-    app.add_middleware(ClientAddressMiddleware, trusted_proxies=parse_trusted_proxies(settings))
-    app.add_middleware(RequestLineMiddleware)
+def build_web_auth(
+    ctx: AppContext,
+    settings: Settings,
+    script_hashes: Sequence[str],
+    issuer_calls: IssuerCalls | None,
+    wall_clock: WallClock,
+) -> WebAuth:
+    """The composition call: webauth's stack with songmaker's own layers in its two slots.
+
+    Outermost first, the whole stack is: the request line and the client-address writer
+    (`front`), `outside`, webauth's security headers, path refusal, body limit, rate limit, bearer
+    gate and CSRF origin check, then `inside`. A layer in `outside` sees every refusal of the
+    stack with its headers; one in `inside` sees only the requests the stack admitted.
+    WARNING: reordering the entries of the two slots changes security behavior.
+    """
+    client = build_oidc_client_config(settings)
+    return WebAuth.build(
+        WebAuthSettings(
+            config=build_web_auth_config(ctx, settings, wall_clock=wall_clock),
+            client=client,
+            sign_in_paths=SIGN_IN_PATHS,
+            keeps_id_token=True,
+            max_sessions=settings.max_concurrent_sessions_per_user,
+            security_headers=build_security_headers_policy(script_hashes),
+            csrf_origin=build_csrf_origin_policy(),
+            body_size=build_body_size_policy(settings),
+            rate_limit=build_rate_limit_policy(settings),
+        ),
+        stores=WebAuthStores(
+            sign_in=DatabaseSignInTransaction(ctx.db),
+            sessions=DatabaseSessionTransaction(ctx.db),
+        ),
+        groups=build_admission_config(client),
+        pages=sign_in_pages(),
+        front=parse_trusted_proxies(settings),
+        outside=(
+            # The deadline bounds the whole raw exchange of the one SSE path it governs; gzip
+            # compresses the finished response once and forwards `text/event-stream` untouched.
+            Middleware(ResourceStreamDeadlineMiddleware),
+            Middleware(
+                SelectiveGZipMiddleware,
+                minimum_size=GZIP_MINIMUM_SIZE_BYTES,
+                compresslevel=GZIP_COMPRESS_LEVEL,
+            ),
+            Middleware(CORSMiddleware, **_cors_middleware_kwargs(settings.cors_origin)),
+        ),
+        inside=(
+            Middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings))),
+            Middleware(HttpMetricsMiddleware),
+        ),
+        issuer_calls=issuer_calls,
+    )
 
 
 def _report_the_full_route(request: Request) -> None:
@@ -286,7 +341,8 @@ def create_app(
     data_dir: Path,
     project_root: Path,
     ctx: AppContext | None = None,
-    oidc_sign_in: OidcSignIn | None = None,
+    issuer_calls: IssuerCalls | None = None,
+    wall_clock: WallClock = time.time,
 ) -> FastAPI:
     app = FastAPI(
         title=APP_NAME,
@@ -299,81 +355,24 @@ def create_app(
         ctx = _create_default_context(audio_dir, data_dir)
 
     app.state.ctx = ctx
-    from webauth.config import install_web_auth_config
-
-    from songmaker_cli.auth_api import install_sign_in
     from songmaker_cli.redis_client import RedisHttpMetrics
 
-    web_auth = build_web_auth_config(ctx, get_settings())
-    install_web_auth_config(app, web_auth)
-    app.state.oidc_sign_in = _oidc_sign_in_or_default(oidc_sign_in, get_settings())
-    install_sign_in(app)
+    settings = get_settings()
+    script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
+    auth = build_web_auth(ctx, settings, script_hashes, issuer_calls, wall_clock)
+    app.state.web_auth = auth
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
     _include_routers(app)
 
     # Every route that appears in the schema is registered, so the marks are read from a
-    # complete schema; the gate needs them before the middleware is added.
-    settings = get_settings()
+    # complete schema; the gate needs them before it is installed.
     agent_tools = collect_route_tools(app)
-    mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
-
-    # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   0. RequestLineMiddleware, ClientAddressMiddleware -- see _install_request_line
-    #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
-    #   2. SelectiveGZipMiddleware    -- compress the finished response body
-    #   3. CORS middleware            -- add configured cross-origin policy
-    #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
-    #   5. PathRefusalMiddleware      -- refuse a route path with a control character
-    #   6. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   7. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   8. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified token skips CSRF
-    #   9. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #  10. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  11. HttpMetricsMiddleware      -- count the requests that passed the security checks
-    # WARNING: reordering these lines changes security behavior.
-    # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
-    # (the outermost security layer) and outside everything else, on purpose:
-    #   - It only inspects the outgoing Accept-Encoding/Content-Type/status
-    #     pair and never reads or rejects the request, so its placement
-    #     cannot affect the auth/CSRF/rate-limit checks below -- those
-    #     already ran and could already reject the request before this
-    #     middleware's compression step ever executes.
-    #   - Being outside CORS/BodySize/RateLimit/CSRF/HttpMetrics/SecurityHeaders
-    #     means it compresses the fully-assembled response (every other
-    #     middleware's headers set) exactly once, not an intermediate state.
-    #   - It stays inside ResourceStreamDeadlineMiddleware because that one
-    #     needs to observe/bound the complete raw ASGI exchange for the one
-    #     SSE path it governs. That observation is unaffected by GZip's
-    #     presence: `text/event-stream` is never on the compression
-    #     allowlist, so GZip forwards those messages one-for-one with no
-    #     buffering, exactly as if it were absent (see `middleware/gzip.py`
-    #     and `test_server_middleware.py`'s SSE test).
-    script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
-    app.add_middleware(HttpMetricsMiddleware)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
-    install_web_auth_middleware(
-        app, sign_in_paths=SIGN_IN_PATHS, csrf_origin=build_csrf_origin_policy(),
-        security_headers=build_security_headers_policy(script_hashes),
-        body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
-        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db, mcp_resource),
+    mcp_resource = build_protected_resource(settings, agent_tools.marks)
+    # `/mcp` is a route of the host: it registers before `auth.install`.
+    app.state.mcp_front = mount_mcp_front(
+        app, agent_tools, mcp_resource, auth.admission.bound_issuer,
     )
-
-    app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
-        CORSMiddleware,
-        **_cors_middleware_kwargs(settings.cors_origin),
-    )
-    app.add_middleware(
-        SelectiveGZipMiddleware,
-        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
-        compresslevel=GZIP_COMPRESS_LEVEL,
-    )
-    app.add_middleware(ResourceStreamDeadlineMiddleware)
-    _install_request_line(app, settings)
-
-    # Starlette builds the middleware stack at the first request, so the routes added here
-    # still sit behind the whole block above.
-    app.state.mcp_front = mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
     _install_error_handlers(app)
     sveltekit_dir = project_root / "frontend" / "build"
@@ -389,6 +388,10 @@ def create_app(
     _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
     page_shell = PageShell.read(sveltekit_dir / "index.html")
     app.state.page_shell = page_shell
+
+    # The security-critical middleware order is the composition call's (`build_web_auth`): the
+    # install after the last route places webauth's stack between the two slots.
+    auth.install(app, bearer=build_bearer_gate(settings, mcp_resource))
 
     @app.exception_handler(404)
     def spa_fallback(request: Request, exc: HTTPException) -> HTMLResponse | JSONResponse:
@@ -499,7 +502,7 @@ def run_server(
     # rewrite the peer address and the scheme before any application code sees
     # them, from *any* peer unless forwarded_allow_ips is kept in sync with
     # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (webauth's
-    # ClientAddressMiddleware applies it), so uvicorn must hand over the connection as it is.
+    # client-address writer applies it), so uvicorn must hand over the connection as it is.
     uvicorn.run(
         app,
         host=settings.host,

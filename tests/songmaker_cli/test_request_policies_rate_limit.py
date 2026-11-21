@@ -10,8 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from support.fake_oidc_issuer import a_fake_issuer
 from support.mcp_world import worker_ready
-from support.web_app import make_test_app, seed_user, trust_proxies, web_client
-from webauth.middleware import IpRateLimitMiddleware
+from support.web_app import make_test_app, seed_user, web_client
 from webauth.policies import RateLimitBudget, RateLimitPolicy
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
@@ -309,6 +308,12 @@ def test_exempt_paths_do_not_consume_api_budget(ip_limited_client: TestClient) -
 # ── Per-IP budget keys behind a proxy ───────────────────────────────
 
 
+@pytest.fixture
+def behind_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Name the proxies before the app is created: the app believes them from its start."""
+    monkeypatch.setenv("TRUSTED_PROXIES", _PROXY_NETWORK)
+
+
 def _check_from(client: TestClient, forwarded_for: str) -> int:
     peer_client = web_client(client.app, client=(_TRUSTED_PEER, 55000))
     resp = peer_client.get("/api/auth/check", headers={"x-forwarded-for": forwarded_for})
@@ -316,11 +321,10 @@ def _check_from(client: TestClient, forwarded_for: str) -> int:
 
 
 def test_ip_budget_is_per_forwarded_client_not_per_proxy(
-    ip_limited_client: TestClient,
+    behind_the_proxy, ip_limited_client: TestClient,
 ) -> None:
     """Behind a proxy every visitor arrives from one gateway address. The
     budget must follow the visitor, or the first one locks out all the rest."""
-    trust_proxies(ip_limited_client.app, _PROXY_NETWORK)
 
     for _ in range(2):
         _check_from(ip_limited_client, "203.0.113.1")
@@ -329,10 +333,11 @@ def test_ip_budget_is_per_forwarded_client_not_per_proxy(
     assert _check_from(ip_limited_client, "203.0.113.2") != 429
 
 
-def test_a_malformed_chain_shares_the_peer_budget(ip_limited_client: TestClient) -> None:
+def test_a_malformed_chain_shares_the_peer_budget(
+    behind_the_proxy, ip_limited_client: TestClient,
+) -> None:
     """Rotating nonsense through X-Forwarded-For must not mint fresh budgets:
     every malformed chain keys on the peer the request really came from."""
-    trust_proxies(ip_limited_client.app, _PROXY_NETWORK)
 
     _check_from(ip_limited_client, "garbage")
     _check_from(ip_limited_client, "   ")
@@ -341,10 +346,9 @@ def test_a_malformed_chain_shares_the_peer_budget(ip_limited_client: TestClient)
 
 
 def test_ipv4_mapped_and_plain_forms_share_one_budget(
-    ip_limited_client: TestClient,
+    behind_the_proxy, ip_limited_client: TestClient,
 ) -> None:
     """Same client, one budget — a notation switch must not double it."""
-    trust_proxies(ip_limited_client.app, _PROXY_NETWORK)
 
     _check_from(ip_limited_client, "203.0.113.1")
     _check_from(ip_limited_client, "::ffff:203.0.113.1")
@@ -368,17 +372,13 @@ _OTHER_FORWARDED_CLIENT = "203.0.113.2"
 def sign_in_client(tmp_path: Path, pg_factory, fresh_settings, monkeypatch) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "1")
     client, _ = make_test_app(
-        tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
+        tmp_path, factory=pg_factory, issuer=a_fake_issuer(),
     )
     return client
 
 
-def _sign_in_budget(client: TestClient) -> RateLimitBudget:
-    policy = next(
-        layer.kwargs["policy"] for layer in client.app.user_middleware
-        if layer.cls is IpRateLimitMiddleware
-    )
-    return policy.sign_in
+def _sign_in_budget() -> RateLimitBudget:
+    return build_rate_limit_policy(get_settings()).sign_in
 
 
 def _start(client: TestClient, **headers: str) -> int:
@@ -386,12 +386,12 @@ def _start(client: TestClient, **headers: str) -> int:
 
 
 def _spend_sign_in_budget(client: TestClient, **headers: str) -> None:
-    for _ in range(_sign_in_budget(client).max_requests):
+    for _ in range(_sign_in_budget().max_requests):
         assert _start(client, **headers) != 429
 
 
 def test_start_callback_and_logout_spend_one_sign_in_budget(sign_in_client: TestClient) -> None:
-    for index in range(_sign_in_budget(sign_in_client).max_requests):
+    for index in range(_sign_in_budget().max_requests):
         method, path = _SIGN_IN_REQUESTS[index % len(_SIGN_IN_REQUESTS)]
         assert sign_in_client.request(method, path, follow_redirects=False).status_code != 429
 
@@ -411,9 +411,7 @@ def test_a_spent_sign_in_budget_answers_429_with_its_retry_time_and_the_headers(
     response = sign_in_client.get(SIGN_IN_PATHS.start, follow_redirects=False)
 
     assert response.status_code == 429
-    assert 0 < int(response.headers["retry-after"]) <= _sign_in_budget(
-        sign_in_client,
-    ).window_seconds
+    assert 0 < int(response.headers["retry-after"]) <= _sign_in_budget().window_seconds
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert "content-security-policy" in response.headers
@@ -450,7 +448,7 @@ def test_the_back_channel_and_a_preflight_spend_nothing_of_the_sign_in_budget(
     sign_in_client: TestClient, method: str, path: str,
     headers: dict[str, str] | None,
 ) -> None:
-    for _ in range(_sign_in_budget(sign_in_client).max_requests):
+    for _ in range(_sign_in_budget().max_requests):
         sign_in_client.request(method, path, headers=headers)
 
     assert _start(sign_in_client) != 429
@@ -458,9 +456,8 @@ def test_the_back_channel_and_a_preflight_spend_nothing_of_the_sign_in_budget(
 
 
 def test_a_second_forwarded_client_keeps_its_own_sign_in_budget(
-    sign_in_client: TestClient,
+    behind_the_proxy, sign_in_client: TestClient,
 ) -> None:
-    trust_proxies(sign_in_client.app, _PROXY_NETWORK)
     proxy = web_client(sign_in_client.app, client=(_TRUSTED_PEER, 55000))
     _spend_sign_in_budget(proxy, **{"x-forwarded-for": _FORWARDED_CLIENT})
 
@@ -469,7 +466,7 @@ def test_a_second_forwarded_client_keeps_its_own_sign_in_budget(
 
 
 def test_the_installed_sign_in_budget_is_webauths_default(sign_in_client: TestClient) -> None:
-    assert _sign_in_budget(sign_in_client) == RateLimitPolicy().sign_in
+    assert _sign_in_budget() == RateLimitPolicy().sign_in
 
 
 def test_the_sign_in_setting_raises_the_limit_and_keeps_webauths_window(
@@ -478,13 +475,13 @@ def test_the_sign_in_setting_raises_the_limit_and_keeps_webauths_window(
     default = RateLimitPolicy().sign_in
     monkeypatch.setenv("SIGN_IN_RATE_LIMIT", str(default.max_requests + 1))
     client, _ = make_test_app(
-        tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
+        tmp_path, factory=pg_factory, issuer=a_fake_issuer(),
     )
 
     for _ in range(default.max_requests + 1):
         assert _start(client) != 429
     assert _start(client) == 429
-    raised = _sign_in_budget(client)
+    raised = _sign_in_budget()
     assert (raised.name, raised.window_seconds) == (default.name, default.window_seconds)
 
 

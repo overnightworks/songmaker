@@ -109,7 +109,7 @@ def make_token_world(tmp_path: Path, *, factory: sessionmaker) -> TokenWorld:
     get_settings.cache_clear()
     issuer = a_fake_issuer()
     app_client, factory = make_test_app(
-        tmp_path, factory=factory, oidc_sign_in=issuer.relying_party_for_app(),
+        tmp_path, factory=factory, issuer=issuer,
     )
     # A client that adds no Fetch Metadata: a request names exactly the headers a test gives it.
     client = TestClient(app_client.app, base_url=TEST_ORIGIN, cookies={},

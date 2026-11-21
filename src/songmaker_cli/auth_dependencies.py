@@ -1,47 +1,22 @@
-"""songmaker's binding of the library's auth dependencies to its own request.
+"""songmaker's names for the library's auth dependencies.
 
-Regular dependencies commit authentication in a short, separate transaction
-before the endpoint runs. Stream callers own their explicit transaction.
+`WebAuth.install` binds the session transaction, so `current_user` renews and reads the session in
+its own short transaction before the endpoint runs. A stream endpoint calls it directly, before it
+opens the session its stream reads from, because a yield dependency would hold a pooled
+connection for the whole stream.
 """
 
 from __future__ import annotations
 
 from fastapi import Depends, Request
-from sqlalchemy.orm import Session
-from webauth.dependencies import current_user_dependency
+from webauth.dependencies import admin_user, current_user
 from webauth.middleware import is_resource_admission
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.app_context import get_app_context, get_db_session
-from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.refusals import Refusal
 
-
-def _session_record_store(db: Session = Depends(get_db_session)) -> DatabaseSessionRecordStore:
-    return DatabaseSessionRecordStore(db)
-
-
-def _bind_nothing(_user: AuthenticatedUser) -> None:
-    """webauth requires the hook; songmaker has no log context of its own to bind."""
-
-
-_auth_dependencies = current_user_dependency(
-    session_store=_session_record_store,
-    on_authenticated=_bind_nothing,
-)
-
-
-def get_current_user(request: Request) -> AuthenticatedUser:
-    """Persist the session renewal without committing endpoint writes."""
-    with get_app_context(request).db.begin() as db:
-        return authenticate_request(request, db)
-
-
-def require_admin(
-    request: Request,
-    user: AuthenticatedUser = Depends(get_current_user),
-) -> AuthenticatedUser:
-    return _auth_dependencies.admin_user(request, user)
+get_current_user = current_user
+require_admin = admin_user
 
 
 def require_sharing_caller(
@@ -52,13 +27,3 @@ def require_sharing_caller(
     if is_resource_admission(request) and user.agent is None:
         raise Refusal(403, "shareRefusal.personsAgent")
     return user
-
-
-def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:
-    """The account behind ``request``, resolved outside FastAPI's dependency graph.
-
-    The stream endpoints call this instead of declaring `Depends`, because a
-    yield dependency stays open until the whole response finishes — which for
-    a stream means holding a pooled connection for its entire lifetime.
-    """
-    return _auth_dependencies.current_user(request, DatabaseSessionRecordStore(db))

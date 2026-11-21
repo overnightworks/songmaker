@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
     from tandem import Leases
+    from webauth.ports import WallClock
 
     from songmaker_cli.object_store import ObjectStore
     from songmaker_cli.settings import Settings
@@ -75,7 +77,9 @@ def allowed_hosts(settings: Settings) -> tuple[str, ...]:
     return hosts
 
 
-def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
+def build_web_auth_config(
+    ctx: AppContext, settings: Settings, *, wall_clock: WallClock = time.time,
+) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
     return WebAuthConfig(
         session_secret=SecretStr(ctx.signing_key.decode()),
@@ -86,6 +90,7 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
             absolute_max_age_seconds=settings.session_absolute_max_age_seconds,
         ),
         cookie_secure=settings.cookie_secure,
+        wall_clock=wall_clock,
     )
 
 

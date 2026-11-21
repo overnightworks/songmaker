@@ -22,22 +22,18 @@ from starlette.requests import HTTPConnection
 from webauth.middleware.bearer_gate import (
     MarkedRoute,
     ProtectedResource,
-    install_resource_metadata,
     resource_person,
 )
 from webauth.policies import AuthorizedParties
 
-from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import OIDC_MCP_GROUP
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from fastapi import FastAPI
-    from sqlalchemy.orm import Session, sessionmaker
     from starlette.types import Scope
 
-    from songmaker_cli.oidc_client import OidcSignIn
     from songmaker_cli.settings import Settings
 
 
@@ -70,7 +66,6 @@ def collect_route_tools(app: FastAPI) -> RouteTools:
 def build_protected_resource(
     settings: Settings,
     marks: frozenset[MarkedRoute],
-    database: sessionmaker[Session],
 ) -> ProtectedResource | None:
     """The resource at ``/mcp`` while the agent client and scope are configured, else none."""
     agent = settings.agent
@@ -87,7 +82,6 @@ def build_protected_resource(
         required_group=OIDC_MCP_GROUP,
         agent_group=agent.mcp_agent_group,
         authorized_parties=AuthorizedParties(frozenset({agent.mcp_client_id})),
-        transaction=DatabaseSignInTransaction(database),
         marked_routes=marks,
     )
 
@@ -96,23 +90,22 @@ def mount_mcp_front(
     app: FastAPI,
     tools: RouteTools,
     resource: ProtectedResource | None,
-    oidc_sign_in: OidcSignIn,
+    issuer: str,
 ) -> McpPersonFront | None:
-    """Serve ``/mcp`` and the resource's metadata document; the gate admits before routing.
+    """Serve ``/mcp``; the gate admits before routing, and ``auth.install`` serves the resource's
+    metadata document. Call it before ``auth.install``, so ``/mcp`` is a route of the host.
 
     Returns the front, which serves only inside ``running()``: the app's lifespan enters it.
     With no resource the endpoint is off and there is no front.
     """
     if resource is None:
         return None
-    issuer = oidc_sign_in.relying_party.issuer
 
     def resolve_person(scope: Scope) -> Principal:
         return Principal(iss=issuer, sub=resource_person(HTTPConnection(scope)).id)
 
     front = McpPersonFront(tools.tools, resolve_person=resolve_person)
     app.router.add_route(MCP_ENDPOINT_PATH, front, include_in_schema=False)
-    install_resource_metadata(app, resource, issuer=issuer)
     return front
 
 

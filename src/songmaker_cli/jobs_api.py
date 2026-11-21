@@ -27,7 +27,7 @@ from songmaker_cli.api_helpers import (
 )
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.auth_dependencies import authenticate_request, get_current_user
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
@@ -127,13 +127,13 @@ def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
     # exactly -- no request-scoped dependency at all. This is a plain
     # (non-async) `def`, so FastAPI thread-offloads the whole handler body
     # (unlike an `async def`, whose body runs directly on the loop); auth
-    # and the access check run as plain function calls against ONE
-    # short-lived `ctx.db()` session that closes before the slot is
+    # runs in its own short entry of the session transaction, and the access
+    # check against ONE short-lived `ctx.db()` session that closes before the slot is
     # acquired or the StreamingResponse is even constructed -- nothing left
     # tied to the response lifecycle holds a connection.
     ctx: AppContext = request.app.state.ctx
+    user = get_current_user(request)
     with ctx.db() as session:
-        user = authenticate_request(request, session)
         _check_job_access(session, job_id, user)
         session.commit()
     slots, slot_token = _take_job_stream_slot(request, user.id)

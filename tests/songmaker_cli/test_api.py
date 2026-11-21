@@ -3586,27 +3586,21 @@ def test_create_album_records_audit(client: TestClient) -> None:
 # ── Body size limit middleware ───────────────────────────────────────
 
 
-def test_body_size_limit_rejects_large_request(tmp_path: Path, pg_factory) -> None:
-    from webauth.middleware import BodySizeLimitMiddleware
-
-    from songmaker_cli.request_policies import build_body_size_policy
-    from songmaker_cli.settings import get_settings
-
-    factory = pg_factory
-
+def test_the_composition_call_refuses_a_request_body_over_the_limit(
+    tmp_path: Path, pg_factory,
+) -> None:
+    """The router app sits behind webauth's stack, whose body limit answers before the route."""
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="test"),
     )
-    app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(get_settings()))
 
-    tc = web_client(app)
-    large_body = b"x" * 2_000_000
-    resp = tc.post(
+    resp = web_client(app).post(
         "/api/albums",
-        content=large_body,
+        content=b"x" * 2_000_000,
         headers={"content-type": "application/json"},
     )
+
     assert resp.status_code == 413
 
 

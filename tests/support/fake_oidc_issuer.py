@@ -1,6 +1,6 @@
 """A Keycloak stand-in for sign-in tests: an RS256 key, its key set and a token endpoint.
 
-The sign-in routes run the real relying party; only its two outbound calls are
+The sign-in routes run the real relying party; only its outbound calls are
 replaced, so the ID token is verified exactly as in production.
 """
 
@@ -17,17 +17,12 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 from webauth.https_client import KeySetFetchError
 from webauth.oidc import (
-    OidcRelyingParty,
     TokenEndpointAnswer,
     TokenEndpointError,
     TokenRequest,
 )
+from webauth.web_auth import IssuerCalls
 
-from songmaker_cli.oidc_client import (
-    OidcSignIn,
-    build_admission_config,
-    build_oidc_client_config,
-)
 from songmaker_cli.settings import get_settings
 
 KEY_ID = "test-key"
@@ -165,16 +160,40 @@ class FakeIssuer:
             headers={"kid": KEY_ID, "typ": token_type},
         )
 
-    def relying_party_for_app(self) -> OidcSignIn:
-        client_config = build_oidc_client_config(get_settings())
-        relying_party = OidcRelyingParty(
-            client_config,
-            post_token_request=self.token_answer,
-            fetch_key_set=self.key_set,
-            wall_clock=self.clock,
+    def serve(self, app) -> None:
+        """Make this issuer the realm the app's relying party talks to, and its clock the app's."""
+        app.state.issuer_slot.issuer = self
+
+
+@dataclass
+class IssuerSlot:
+    """The realm one test app's relying party talks to, which a test fills with a FakeIssuer.
+
+    The app is built with the slot's calls; the relying party is bound at build time, so the slot
+    is what lets a test name its issuer afterwards. Until it does, the realm is unreachable.
+    """
+
+    issuer: FakeIssuer | None = None
+
+    def calls(self) -> IssuerCalls:
+        return IssuerCalls(
+            post_token_request=self._post_token_request,
+            fetch_key_set=self._fetch_key_set,
             monotonic_clock=self.clock,
         )
-        return OidcSignIn(relying_party, build_admission_config(client_config))
+
+    def clock(self) -> float:
+        return time.time() if self.issuer is None else self.issuer.clock()
+
+    def _post_token_request(self, request: TokenRequest) -> TokenEndpointAnswer:
+        if self.issuer is None:
+            raise TokenEndpointError("no issuer is served")
+        return self.issuer.token_answer(request)
+
+    def _fetch_key_set(self, url: str) -> bytes:
+        if self.issuer is None:
+            raise KeySetFetchError("no issuer is served")
+        return self.issuer.key_set(url)
 
 
 def a_fake_issuer() -> FakeIssuer:

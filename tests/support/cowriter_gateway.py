@@ -241,7 +241,7 @@ def attach_cowriter_gateway(
     app = client.app
     issuer = a_fake_issuer()
     issuer.person = Person(subject=user_id, groups=groups)
-    app.state.oidc_sign_in = issuer.relying_party_for_app()
+    issuer.serve(app)
 
     config = installed_web_auth_config(app)
     session_id = open_session(app, factory, user_id, refresh_token)

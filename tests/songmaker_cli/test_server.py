@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import dataclasses
 import hashlib
 import json
 import logging
@@ -27,10 +26,8 @@ from support.web_app import (
     make_test_app,
     seed_session,
     seed_user,
-    trust_proxies,
     web_client,
 )
-from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import sign_session_id
 
 from songmaker_cli.app_context import AppContext
@@ -566,12 +563,13 @@ def _get_through_peer(
     return peer_client.get("/", headers=headers)
 
 
-def _with_cookie_secure(server_app: TestClient, *, secure: bool):
-    installed = installed_web_auth_config(server_app.app)
-    install_web_auth_config(
-        server_app.app, dataclasses.replace(installed, cookie_secure=secure),
-    )
-    return installed
+@pytest.fixture
+def server_app_behind_proxy(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
+    monkeypatch.setenv("TRUSTED_PROXIES", _PROXY_NETWORK)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
+    return client
 
 
 def test_hsts_header_present_when_cookie_secure_is_true(server_app: TestClient) -> None:
@@ -580,21 +578,23 @@ def test_hsts_header_present_when_cookie_secure_is_true(server_app: TestClient) 
     assert "max-age=31536000" in resp.headers["Strict-Transport-Security"]
 
 
-def test_hsts_header_absent_when_cookie_secure_is_false(server_app: TestClient) -> None:
-    _with_cookie_secure(server_app, secure=False)
-    resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
+def test_hsts_header_absent_when_cookie_secure_is_false(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COOKIE_SECURE", "false")
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
+    resp = client.get("/", headers={"x-forwarded-proto": "https"})
     assert "Strict-Transport-Security" not in resp.headers
 
 
 def test_request_line_names_the_forwarded_client(
-    server_app: TestClient, capsys: pytest.CaptureFixture[str],
+    server_app_behind_proxy: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The log is what an operator reads after an incident -- it must name the
     visitor, not the one gateway address every visitor arrives through."""
-    trust_proxies(server_app.app, _PROXY_NETWORK)
     with configured("songmaker-web"):
         _get_through_peer(
-            server_app, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
+            server_app_behind_proxy, _TRUSTED_PEER, {"x-forwarded-for": "203.0.113.1, 172.18.0.9"},
         )
 
     (request_line,) = request_lines(capsys.readouterr().out)
@@ -602,11 +602,10 @@ def test_request_line_names_the_forwarded_client(
 
 
 def test_request_line_names_the_peer_when_the_chain_is_malformed(
-    server_app: TestClient, capsys: pytest.CaptureFixture[str],
+    server_app_behind_proxy: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    trust_proxies(server_app.app, _PROXY_NETWORK)
     with configured("songmaker-web"):
-        _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
+        _get_through_peer(server_app_behind_proxy, _TRUSTED_PEER, {"x-forwarded-for": "garbage"})
 
     (request_line,) = request_lines(capsys.readouterr().out)
     assert request_line["ip"] == _TRUSTED_PEER
@@ -800,7 +799,7 @@ def test_lifespan_fails_on_redis_unavailable(tmp_path: Path, pg_factory) -> None
     asyncio.run(_run())
 
 
-# ── BodySizeLimitMiddleware edge cases ─────────────────────────────
+# ── Body size limit edge cases ─────────────────────────────
 
 
 def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
@@ -810,56 +809,6 @@ def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
         headers={"content-type": "application/json", "content-length": "not-a-number"},
     )
     assert resp.status_code != 413
-
-
-def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "10")
-
-    from webauth.middleware import BodySizeLimitMiddleware
-
-    from songmaker_cli.request_policies import build_body_size_policy
-    from songmaker_cli.settings import get_settings
-
-    async def dummy_app(scope, receive, send):
-        await receive()
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [[b"content-type", b"text/plain"]],
-        })
-        await send({"type": "http.response.body", "body": b"ok"})
-
-    if True:
-        middleware = BodySizeLimitMiddleware(
-            dummy_app, policy=build_body_size_policy(get_settings()),
-        )
-
-        async def run():
-            response_started = False
-            status_code = None
-            body_parts = []
-
-            async def receive():
-                return {"type": "http.request", "body": b"x" * 100, "more_body": False}
-
-            async def send(msg):
-                nonlocal response_started, status_code
-                if msg["type"] == "http.response.start":
-                    status_code = msg["status"]
-                elif msg["type"] == "http.response.body":
-                    body_parts.append(msg.get("body", b""))
-
-            scope = {
-                "type": "http",
-                "method": "POST",
-                "path": "/api/test",
-                "headers": [],
-            }
-            await middleware(scope, receive, send)
-            return status_code
-
-        result = asyncio.run(run())
-        assert result == 413
 
 
 # ── CORS validation ────────────────────────────────────────────────
@@ -999,7 +948,7 @@ def test_a_missing_index_has_no_csp_hashes(tmp_path: Path) -> None:
     assert compute_script_hashes(tmp_path / "index.html") == []
 
 
-# ── IpRateLimitMiddleware ──────────────────────────────────────────
+# ── Per-IP rate limit ──────────────────────────────────────────
 
 
 def test_ip_rate_limit_429(tmp_path: Path, monkeypatch, pg_factory, fresh_settings) -> None:
