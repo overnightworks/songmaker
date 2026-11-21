@@ -6,10 +6,10 @@ import {
 	makeStreamManifest,
 	stubPlayerGlobals,
 	type FakeAudio
-} from './audioPlayerTestKit';
+} from './audioPlayer-test-fixtures';
 
 vi.mock('./continuousDeck', async () =>
-	(await import('./audioPlayerTestKit')).continuousDeckModule()
+	(await import('./audioPlayer-test-fixtures')).continuousDeckModule()
 );
 
 let fakeAudio: FakeAudio;
