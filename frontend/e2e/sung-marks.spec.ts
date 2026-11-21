@@ -12,7 +12,7 @@ import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
 
 const SECONDS_PER_WORD = 0.5;
-const SUNG_AS = 'Mood';
+const SUNG_AS = 'Seeder';
 const LEFT_OUT = 'lyrics';
 const REPLACED = 'seeded';
 
@@ -37,7 +37,7 @@ interface SongBody {
 	generations: TakeBody[];
 }
 
-// The lyrics sung word by word, "seeded" as "Mood" and the last word not at all.
+// The lyrics sung word by word, "seeded" as "Seeder" and the last word not at all.
 function sungDifferently(lyrics: string): unknown[] {
 	const sung = lyrics
 		.split(/\s+/)
