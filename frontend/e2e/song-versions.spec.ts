@@ -33,6 +33,7 @@ const firstTake = words['takeRow.takeLabel']({ number: '1' });
 import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
 import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';
+import { openNowPlayingFromBar } from './play-album';
 import {
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
@@ -705,13 +706,7 @@ test.describe('the versions of a song', () => {
 		await expect.poll(() => shownTakePosition(page, phoneTakeSeconds)).toBeCloseTo(heldAt, 1);
 		const shownAt = await shownTakePosition(page, phoneTakeSeconds);
 		if (mobile) {
-			await page
-				.getByRole('contentinfo')
-				.getByRole('button', {
-					name: words['player.openNowPlaying']({ title: song.title }),
-					exact: true
-				})
-				.click();
+			await openNowPlayingFromBar(page, 'mobile', song.title);
 			await page
 				.getByRole('dialog', { name: song.title })
 				.getByRole('button', { name: new RegExp(`${words['nowPlaying.queueTab']}$`) })

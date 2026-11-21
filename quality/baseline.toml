@@ -15,7 +15,7 @@
 "frontend/e2e/helpers.ts" = 819
 "frontend/e2e/library.spec.ts" = 1246
 "frontend/e2e/seed.ts" = 1173
-"frontend/e2e/song-versions.spec.ts" = 847
+"frontend/e2e/song-versions.spec.ts" = 842
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1310
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1800
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
