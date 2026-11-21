@@ -8,6 +8,7 @@ import pytest
 from support.web_app import make_test_app, web_client
 
 import songmaker_cli.constants as consts
+from songmaker_cli.shared_access import SHARED_RATE_LIMIT_REFUSAL
 
 _BUDGET = 2
 
@@ -26,7 +27,8 @@ def test_presented_audio_route_refuses_a_listener_past_the_budget(
     listener = web_client(client.app, cookies={})
     url = audio_route.format(slug="unshared", name="g1.mp3")
 
-    statuses = [listener.get(url).status_code for _ in range(_BUDGET + 1)]
+    responses = [listener.get(url) for _ in range(_BUDGET + 1)]
 
-    assert statuses[-1] == 429
-    assert 429 not in statuses[:_BUDGET]
+    assert 429 not in [response.status_code for response in responses[:_BUDGET]]
+    assert responses[-1].status_code == 429
+    assert responses[-1].json() == {"detail": SHARED_RATE_LIMIT_REFUSAL}
