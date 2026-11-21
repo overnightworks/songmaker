@@ -101,7 +101,10 @@ test('take ⋯ › Add to… › an existing playlist holds that take', async ({
 			words['takeMenu.label'],
 			words['takeMenu.addTo']
 		);
-		await page.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
+		await page
+			.getByRole('dialog', { name: words['takeMenu.label'], exact: true })
+			.getByRole('button', { name: nameStartingWith(playlist.title) })
+			.click();
 		await expect(page.getByRole('dialog', { name: words['takeMenu.label'] })).toBeHidden();
 
 		await page.goto(`/playlist/${playlist.slug}`);
