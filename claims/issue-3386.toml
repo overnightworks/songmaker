@@ -1,0 +1,8 @@
+claim_id = "611ae35012f84acca9ef9002cc041c29"
+agent = "Claude 3e34d517-ab5a-4146-951a-1cc798897546"
+role = "builder"
+base = "b5eacfc755fe9cae7ca2509fde34bc8417d12266"
+branch = "claude/issue-3386-the-three-engine-and-worker-packages-car"
+scope = [".github", "AGENTS.md", "README.md", "docker", "docs", "pyproject.toml", "quality", "scripts", "src", "tests"]
+opened_commit = "c4283f95967d9b16a747842bdf85804fcdfe42ff"
+whole_reason = "A package rename follows every import across the tree in one change, or the tree does not import."
