@@ -38,7 +38,7 @@ jobs:
 
       # The one job that writes the uv cache is this one on main: an entry written for a pull request is
       # readable only by that pull request's runs and counts against the shared quota, and jobs saving one key race.
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ env.BACKEND_PYTHON }}
           enable-cache: true
@@ -133,7 +133,7 @@ jobs:
         with:
           bucket: ${{ env.TEST_S3_BUCKET }}
 
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ env.BACKEND_PYTHON }}
           enable-cache: true
@@ -223,7 +223,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         if: ${{ !cancelled() }}
         with:
           python-version: ${{ env.BACKEND_PYTHON }}
@@ -410,7 +410,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ env.BACKEND_PYTHON }}
           enable-cache: true
@@ -575,7 +575,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: overnightworks/quality/.github/workflows/gate.yml@dc9f4e64edbe719e6aa25eda7bb65c1ba8489f68 # v0.21.1
+    uses: overnightworks/quality/.github/workflows/gate.yml@1d66f90569946cf182634a3372e1e183cec8353b # v0.22.0
     with:
       coverage-artifact: coverage
     secrets:

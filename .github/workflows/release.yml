@@ -21,7 +21,7 @@ jobs:
       checks: read
       contents: read
       pull-requests: read
-    uses: overnightworks/quality/.github/workflows/release-gate.yml@dc9f4e64edbe719e6aa25eda7bb65c1ba8489f68 # v0.21.1
+    uses: overnightworks/quality/.github/workflows/release-gate.yml@1d66f90569946cf182634a3372e1e183cec8353b # v0.22.0
     with:
       version: ${{ inputs.version }}
       form: YYYY.MM.DD.N
@@ -49,7 +49,7 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: overnightworks/quality/.github/workflows/image.yml@dc9f4e64edbe719e6aa25eda7bb65c1ba8489f68 # v0.21.1
+    uses: overnightworks/quality/.github/workflows/image.yml@1d66f90569946cf182634a3372e1e183cec8353b # v0.22.0
     with:
       image: ${{ matrix.image }}
       file: ${{ matrix.file }}
@@ -63,7 +63,7 @@ jobs:
     needs: [gate, image]
     permissions:
       contents: write
-    uses: overnightworks/quality/.github/workflows/release-tag.yml@dc9f4e64edbe719e6aa25eda7bb65c1ba8489f68 # v0.21.1
+    uses: overnightworks/quality/.github/workflows/release-tag.yml@1d66f90569946cf182634a3372e1e183cec8353b # v0.22.0
     with:
       version: ${{ inputs.version }}
       commit: ${{ needs.gate.outputs.commit }}
