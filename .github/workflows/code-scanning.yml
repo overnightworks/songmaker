@@ -21,6 +21,6 @@ jobs:
       security-events: write
       contents: read
       actions: read
-    uses: overnightworks/quality/.github/workflows/codeql.yml@915acb8df197c4765b6637b4f3ab67f2fba09c4a # v0.21.0
+    uses: overnightworks/quality/.github/workflows/codeql.yml@dc9f4e64edbe719e6aa25eda7bb65c1ba8489f68 # v0.21.1
     with:
       languages: '["actions", "javascript-typescript", "python"]'

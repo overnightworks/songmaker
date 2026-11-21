@@ -31,9 +31,9 @@ updates:
       # Playwright 1.65 (Chromium 158/159) reports the app's own chunk and /api requests that a main-frame navigation cuts off as net::ERR_ABORTED, which FlowGuard fails on; the release notes (https://github.com/microsoft/playwright/releases/tag/v1.65.0) name no such change, so the pin stays 1.64.1 until an upstream statement shows the aborts are intended or a release stops them.
       - dependency-name: "@playwright/test"
         versions: [">=1.65.0"]
-      # jsdom 30.1.x breaks getComputedStyle on var()/color-mix() shorthands; the pin stays 30.0.1.
+      # jsdom 30.1.x and 31 break getComputedStyle on var()/color-mix() shorthands; the pin stays 30.0.1.
       - dependency-name: "jsdom"
-        versions: [">=30.1.0, <30.2"]
+        versions: [">=30.1.0, <30.2", ">=31"]
       # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
@@ -75,9 +75,8 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
     ignore:
-      # Dependabot reads 17.11 as major.minor, so the 17.x security releases are
-      # its minor step: postgres moves within its major; a major move follows the platform.
+      # The platform owns the postgres and redis versions, and a digest-only bump carries
+      # no semver type, so every bump ahead of the platform is red under
+      # check_pinned_images_match.py --platform.
       - dependency-name: "postgres"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "redis"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
