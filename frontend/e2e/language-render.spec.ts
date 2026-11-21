@@ -7,6 +7,7 @@ import { expect, test, type Page } from './coverage-test';
 import { words, type Key } from '../src/lib/words/en';
 import { languages, loadWords, sourceLanguage, type Language } from '../src/lib/words/index';
 import { escapeForRegExp, shellOf, workspace } from './helpers';
+import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { readSeededLibrary, seedPlaylist, type SeededLibrary } from './seed';
 
 /** A desktop width narrower than the desktop project's own, so a longer translation meets less room. */
@@ -69,22 +70,18 @@ const surfaces: Surface[] = [
 		open: async (page, library, language) => {
 			const text = await loadWords(language);
 			await page.goto(`/album/${library.albumId}`);
-			await page
-				.getByRole('button', { name: text['collectionHeader.playAlbum'], exact: true })
-				.click();
+			await playOpenAlbum(page, text);
 			const bar = page.getByRole('contentinfo');
 			await expect(
 				bar.getByRole('button', { name: text['transport.pause'], exact: true })
 			).toBeVisible();
 			const isPhone = (page.viewportSize()?.width ?? 0) <= 768;
-			await bar
-				.getByRole('button', {
-					name: isPhone
-						? text['player.openNowPlaying']({ title: library.albumTracks[0].songTitle })
-						: text['transport.nowPlaying'],
-					exact: true
-				})
-				.click();
+			await openNowPlayingFromBar(
+				page,
+				isPhone ? 'mobile' : 'desktop',
+				library.albumTracks[0].songTitle,
+				text
+			);
 			// The phone keeps the right panel shut behind a trigger named for the queue tab.
 			await expect(
 				isPhone
