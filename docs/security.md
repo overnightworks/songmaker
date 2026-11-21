@@ -73,7 +73,7 @@ most 60 seconds so session expiry or revocation is enforced on reconnect.
 `172.16.0.0/12`, the bridge-network range the tunnel's container gateway sits
 in). `app_context.parse_trusted_proxies()` turns each entry into an
 `ip_network` at startup and hands the result to the composition call's `front=`, which hands it to webauth's
-webauth's client-address writer, and a peer is trusted when its address falls inside one of them — so
+client-address writer, and a peer is trusted when its address falls inside one of them — so
 `172.16.0.0/12` covers the gateway address `172.18.0.1`, and a bare
 `10.0.0.1` covers only itself. An entry that is not a valid address or
 network (including one with host bits set, like `10.0.0.1/24`) raises at

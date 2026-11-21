@@ -13,6 +13,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 
@@ -287,7 +288,7 @@ def build_web_auth(
     client = build_oidc_client_config(settings)
     return WebAuth.build(
         WebAuthSettings(
-            config=build_web_auth_config(ctx, settings, wall_clock=wall_clock),
+            config=replace(build_web_auth_config(ctx, settings), wall_clock=wall_clock),
             client=client,
             sign_in_paths=SIGN_IN_PATHS,
             keeps_id_token=True,
