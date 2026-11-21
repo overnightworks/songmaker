@@ -120,22 +120,17 @@ describe('TakesList menu', () => {
 	});
 
 	it('adds the take to a playlist from its own row, without also playing it', async () => {
-		// #141/3: the picker is absolutely positioned, so it must sit inside a
-		// positioned anchor in the row — otherwise it escapes the row entirely
-		// and the menu entry looks like it does nothing.
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
 		if (!row) throw new Error('Expected a take row');
 		openTakeMenu(row);
 		await tick();
-		clickMenuItem(row, words['takeMenu.addToPlaylist']);
+		clickMenuItem(row, words['takeMenu.addTo']);
 		await tick();
 
-		const picker = row.querySelector('.picker');
-		expect(picker, 'the playlist picker renders inside the take row').not.toBeNull();
-		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
+		expect(row.querySelector('.ap-head'), 'the picker takes the menu over').not.toBeNull();
 
-		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
+		row.querySelector<HTMLButtonElement>('.ap-row')?.click();
 		await tick();
 		await Promise.resolve();
 

@@ -14,6 +14,8 @@
 		pressed?: boolean;
 		/** Draws the trigger as a small face inside its full-size touch target, for a trigger that shares a row with other controls. */
 		hitboxFace?: boolean;
+		/** Runs whenever the menu has closed, so a host can return to its first rows. */
+		onclose?: () => void;
 		trigger: Snippet;
 		children: Snippet;
 	}
@@ -24,6 +26,7 @@
 		closeLabel,
 		pressed = false,
 		hitboxFace = false,
+		onclose,
 		trigger,
 		children
 	}: Props = $props();
@@ -44,7 +47,10 @@
 
 	$effect(() => {
 		const isOpen = $shown;
-		if (wasOpen && !isOpen && focusTriggerOnClose) focusTrigger();
+		if (wasOpen && !isOpen) {
+			onclose?.();
+			if (focusTriggerOnClose) focusTrigger();
+		}
 		focusTriggerOnClose = true;
 		wasOpen = isOpen;
 	});
@@ -264,6 +270,13 @@
 	.menu-panel :global(.menu-item:disabled) {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	/* The row opens a list in this same popover. */
+	.menu-panel :global(.menu-item.opens-list::after) {
+		content: '›';
+		margin-left: auto;
+		color: var(--text-subtle);
 	}
 
 	.menu-panel :global(.menu-item.destructive) {

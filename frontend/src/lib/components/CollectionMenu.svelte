@@ -2,6 +2,7 @@
 	import type { ShareResult, UnplayableSongSummary } from '#lib/api/types.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
+	import AddToPicker from './AddToPicker.svelte';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import ShareRowContent from './ShareRowContent.svelte';
@@ -27,7 +28,8 @@
 		hasCover?: boolean;
 		/** Playlist-only: removes the cover once one is set. */
 		onremovecover?: () => void;
-		onaddtoplaylist?: () => void;
+		/** Album-only: adds the album's songs to the playlist chosen in the menu. */
+		onaddto?: (playlistId: string) => void;
 		oncurate?: () => void;
 	}
 
@@ -59,7 +61,7 @@
 		oncoveredit,
 		hasCover = false,
 		onremovecover,
-		onaddtoplaylist,
+		onaddto,
 		oncurate
 	}: Props = $props();
 
@@ -73,6 +75,12 @@
 
 	let popover: MenuPopover | undefined = $state();
 	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
+	let adding = $state(false);
+
+	function addToAndClose(playlistId: string): void {
+		popover?.close();
+		onaddto?.(playlistId);
+	}
 
 	async function shareAndWarnIfIncomplete(): Promise<ShareResult> {
 		const result = await onshare();
@@ -138,8 +146,12 @@
 		layer="collection-menu"
 		label={pageText('collectionMenu.label')}
 		closeLabel={pageText('collectionMenu.close')}
+		onclose={() => (adding = false)}
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
+		{#if adding}
+			<AddToPicker onselect={addToAndClose} onback={() => (adding = false)} />
+		{:else}
 		<p class="menu-heading">{pageText(kindKeys[kind].heading, { title })}</p>
 		{#if kind === 'album'}
 			{#if oneditdetails}
@@ -162,8 +174,11 @@
 			{#if oncurate}
 				{@render actionRow(pageText('collectionMenu.curate'), oncurate, 'spark')}
 			{/if}
-			{#if onaddtoplaylist}
-				{@render actionRow(pageText('collectionMenu.addToPlaylist'), onaddtoplaylist, 'list-plus')}
+			{#if onaddto}
+				<button class="menu-item opens-list" onclick={() => (adding = true)}>
+					<Icon name="list-plus" size={14} />
+					{pageText('collectionMenu.addTo')}
+				</button>
 			{/if}
 			{@render shareRow()}
 			{#if onarchive}
@@ -185,6 +200,7 @@
 			<Icon name="trash" size={14} />
 			{pageText(kindKeys[kind].delete)}
 		</button>
+		{/if}
 	</MenuPopover>
 	<ShareDialog songs={missingTakeSongs} onclose={closeShareWarning} />
 </div>

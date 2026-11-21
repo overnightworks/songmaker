@@ -263,7 +263,7 @@ function albumMenuProps() {
 		onremovecover: vi.fn(),
 		hasCover: true,
 		oncurate: vi.fn(),
-		onaddtoplaylist: vi.fn(),
+		onaddto: vi.fn(),
 		onarchive: vi.fn()
 	};
 }
@@ -278,7 +278,7 @@ describe('CollectionMenu album rows', () => {
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']

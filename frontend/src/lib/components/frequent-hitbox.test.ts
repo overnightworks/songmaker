@@ -110,14 +110,14 @@ import { backToCollection, openLibraryWall } from '#lib/stores/navigation.ts';
 import { words } from '#lib/words/en.ts';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
-import PlaylistPicker from './PlaylistPicker.svelte';
+import CollectionMenu from './CollectionMenu.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import Breadcrumb from './Breadcrumb.svelte';
 import RailSearch from './shell/RailSearch.svelte';
 import Layout from '../../routes/+layout.svelte';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
-import playlistPickerSource from './PlaylistPicker.svelte?raw';
+import addToPickerSource from './AddToPicker.svelte?raw';
 import menuPopoverSource from './MenuPopover.svelte?raw';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
@@ -134,7 +134,7 @@ import railSearchSource from './shell/RailSearch.svelte?raw';
 const COMPONENT_STYLE_SOURCES = {
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
 	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
-	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
+	AddToPicker: { source: addToPickerSource, filename: 'AddToPicker.svelte' },
 	MenuPopover: { source: menuPopoverSource, filename: 'MenuPopover.svelte' },
 	CollectionHeaderFrame: {
 		source: collectionHeaderFrameSource,
@@ -180,9 +180,9 @@ const INVENTORY = [
 		component: 'SongRow'
 	},
 	{
-		name: 'playlist-picker-add',
-		selector: '.picker-add[data-hitbox="frequent"]',
-		component: 'PlaylistPicker'
+		name: 'add-to-picker-add',
+		selector: '.ap-add[data-hitbox="frequent"]',
+		component: 'AddToPicker'
 	},
 	{
 		name: 'phone-tab',
@@ -410,7 +410,7 @@ const layoutChildren = createRawSnippet(() => ({
 
 interface RenderedInventory {
 	root: HTMLElement;
-	playlistPickerOnClose: ReturnType<typeof vi.fn>;
+	addToPickerHost: HTMLElement;
 }
 
 async function renderInventory(): Promise<RenderedInventory> {
@@ -432,8 +432,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 		playerTarget
 	);
 
-	const playlistPickerOnClose = vi.fn();
-
 	// The song editor's header carries the breadcrumb.
 	mounted.push(
 		mount(Breadcrumb, {
@@ -442,10 +440,20 @@ async function renderInventory(): Promise<RenderedInventory> {
 		})
 	);
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
+	// The picker lives in an open album menu, as the album page hosts it.
 	mounted.push(
-		mount(PlaylistPicker, {
+		mount(CollectionMenu, {
 			target: pickerTarget,
-			props: { onselect: vi.fn(), onclose: playlistPickerOnClose }
+			props: {
+				kind: 'album',
+				title: 'Local Album',
+				isShared: false,
+				shareSlug: null,
+				onshare: vi.fn(),
+				onunshare: vi.fn(),
+				ondelete: vi.fn(),
+				onaddto: vi.fn()
+			}
 		})
 	);
 	mounted.push(mount(RailSearch, { target: railSearchTarget }));
@@ -454,7 +462,13 @@ async function renderInventory(): Promise<RenderedInventory> {
 	await tick();
 	await Promise.resolve();
 	await tick();
-	return { root, playlistPickerOnClose };
+	pickerTarget.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+	await tick();
+	Array.from(pickerTarget.querySelectorAll<HTMLButtonElement>('.menu-item'))
+		.find((row) => row.textContent?.includes(words['collectionMenu.addTo']))
+		?.click();
+	await tick();
+	return { root, addToPickerHost: pickerTarget };
 }
 
 describe('frequent action hitboxes', () => {
@@ -679,8 +693,8 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		);
 	}
 
-	it('1354_37b_71_escape: closes the sheet opened last, then the PlaylistPicker, and never runs the global one-level-up navigation', async () => {
-		const { playlistPickerOnClose } = await renderInventory();
+	it('1354_37b_71_escape: closes the sheet opened last, then the Add to… popover, and never runs the global one-level-up navigation', async () => {
+		const { addToPickerHost } = await renderInventory();
 		const sheet = historyLayerState('a-sheet', false);
 		onTestFinished(sheet.subscribe(() => undefined));
 		sheet.set(true);
@@ -688,12 +702,12 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		pressEscape();
 		await tick();
 		expect(get(sheet)).toBe(false);
-		expect(playlistPickerOnClose).not.toHaveBeenCalled();
+		expect(addToPickerHost.querySelector('.ap-head')).not.toBeNull();
 
 		pressEscape();
 		await tick();
 
-		expect(playlistPickerOnClose).toHaveBeenCalledTimes(1);
+		expect(addToPickerHost.querySelector('.ap-head')).toBeNull();
 		expect(openLibraryWall).not.toHaveBeenCalled();
 		expect(backToCollection).not.toHaveBeenCalled();
 	});

@@ -43,7 +43,7 @@
 		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
-		onaddtoplaylist: () => void;
+		onaddto: (playlistId: string) => void;
 		ondeletesong: () => void;
 		saveDisabled: boolean;
 		onsave: () => void;
@@ -78,7 +78,7 @@
 		shareSlug,
 		onshare,
 		onunshare,
-		onaddtoplaylist,
+		onaddto,
 		ondeletesong,
 		saveDisabled,
 		onsave
@@ -141,7 +141,7 @@
 					{saveDisabled}
 					{onsave}
 					onrename={() => titleEditor?.startEdit()}
-					{onaddtoplaylist}
+					{onaddto}
 					ondelete={ondeletesong}
 				/>
 			</div>

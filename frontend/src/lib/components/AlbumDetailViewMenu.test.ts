@@ -155,7 +155,7 @@ describe('AlbumDetailView menu', () => {
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']

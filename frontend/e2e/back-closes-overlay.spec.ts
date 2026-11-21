@@ -242,25 +242,27 @@ function unsavedDraftRow(): OverlayRow {
 	};
 }
 
-function playlistPicker(page: Page): Locator {
-	return page.getByRole('dialog', { name: words['playlistPicker.label'] });
+function addToPicker(page: Page): Locator {
+	return page
+		.getByRole('dialog', { name: words['songMenu.label'] })
+		.getByText(words['addToPicker.heading'], { exact: true });
 }
 
-const PLAYLIST_PICKER_ROW: OverlayRow = {
-	name: 'Back closes the playlist picker from the song menu and adds nothing',
+const ADD_TO_PICKER_ROW: OverlayRow = {
+	name: 'Back closes the Add to… picker from the song menu and adds nothing',
 	shell: 'mobile',
 	open: async (page, playlist) => {
 		await openSong(page, 'mobile', playlist);
 		await appBar(page).getByRole('button', { name: words['songMenu.label'] }).click();
 		await page
 			.getByRole('dialog', { name: words['songMenu.label'] })
-			.getByRole('button', { name: words['songMenu.addToPlaylist'] })
+			.getByRole('button', { name: nameStartingWith(words['songMenu.addTo']) })
 			.click();
-		await expect(playlistPicker(page)).toBeVisible();
+		await expect(addToPicker(page)).toBeVisible();
 	},
 	leave: goBack,
 	expectLeft: async (page, _pages, playlist) => {
-		await expect(playlistPicker(page)).toBeHidden();
+		await expect(addToPicker(page)).toBeHidden();
 		await expectSongStands(page, 'mobile', firstSong(playlist));
 	},
 	afterwards: async (page, pages, playlist) => {
@@ -422,7 +424,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		afterwards: backReaches('playlist')
 	},
 	unsavedDraftRow(),
-	PLAYLIST_PICKER_ROW,
+	ADD_TO_PICKER_ROW,
 	{
 		name: 'Back over Now Playing closes the This take sheet first, and the next Back closes Now Playing',
 		shell: 'mobile',

@@ -283,11 +283,11 @@ describe('SongDetailView adding a take to a playlist', () => {
 		if (!row) throw new Error('Expected a take row');
 		row.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
-		menuRow(row, words['takeMenu.addToPlaylist']).click();
+		menuRow(row, words['takeMenu.addTo']).click();
 		await tick();
-		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
-		// The picker closes once the add has fully settled, toast included.
-		await vi.waitFor(() => expect(row.querySelector('.picker')).toBeNull());
+		row.querySelector<HTMLButtonElement>('.ap-row')?.click();
+		await vi.waitFor(() => expect(addGenerationToPlaylist).toHaveBeenCalled());
+		await vi.waitFor(() => expect(vi.mocked(addToast)).toHaveBeenCalled());
 
 		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
 		expect(vi.mocked(addToast).mock.calls).toEqual([
