@@ -158,8 +158,8 @@ export function takeInfo(id: string, mp3Path: string): PlaybackInfo {
 }
 
 export function recoveryUrlOf(url: string): RegExp {
-	const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	return new RegExp(`^${escaped}\\?recover=\\S+$`);
+	const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+	return new RegExp(String.raw`^${escaped}\?recover=\S+$`);
 }
 
 export function makeStreamManifest(): QueueStreamManifest {
@@ -226,7 +226,7 @@ export class FakeAudio {
 	preload = '';
 	readyState = 0;
 	bufferedUntil = 0;
-	private listeners = new Map<string, Set<EventListener>>();
+	private readonly listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {
 		if (this.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
 			return Promise.reject(new DOMException('no supported source', 'NotSupportedError'));
@@ -243,7 +243,9 @@ export class FakeAudio {
 	removeEventListener(name: string, listener: EventListener): void {
 		this.listeners.get(name)?.delete(listener);
 	}
-	removeAttribute(_name: string): void {}
+	removeAttribute(_name: string): void {
+		// the element keeps no attributes
+	}
 	get buffered(): Pick<TimeRanges, 'length' | 'end'> {
 		const end = this.bufferedUntil;
 		return { length: end > 0 ? 1 : 0, end: () => end };
