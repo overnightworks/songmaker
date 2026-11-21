@@ -3,5 +3,5 @@ agent = "Claude 54b282ca-7891-403a-a10d-7bfdd4fe2b66"
 role = "builder"
 base = "95e932f4604c3c091a9a705da70ea92cee42fdfd"
 branch = "claude/issue-3393-the-shared-album-song-and-playlist-audio"
-scope = ["tests/songmaker_cli/test_sharing_api.py", "tests/songmaker_cli/test_sharing_api_rate_limit.py"]
+scope = ["src/songmaker_cli/shared_access.py", "tests/songmaker_cli/test_sharing_api.py", "tests/songmaker_cli/test_sharing_api_rate_limit.py"]
 opened_commit = "a81355ff864000d6202d5abd7916c9945cb0a8c4"
