@@ -35,3 +35,23 @@ For anyone building or reviewing library playback pools, shuffle and the player:
 ### REQ-PLAYER-02: On every player surface, while audio is loading, a first Play request queues playback and a second Play request cancels it.
 
 ### REQ-PLAYER-03: In the signed-in player's Now Playing the written lyrics stay intact; a word sung differently or not at all carries a dotted underline, and a tap or hover on it shows one "Sung" line with what was sung under that lyric line; there is no switch, no strike-through and no second printout.
+
+### REQ-PLAYER-20: A take or a queue stream that is loaded without saying whether to play starts playing.
+
+### REQ-PLAYER-21: Where the continuous stream holds no take at the playhead, the position shown follows the audio clock, and a load of another take starts a fresh stream.
+
+### REQ-PLAYER-22: A failure reported by a continuous stream the player has since left changes nothing the listener hears or sees.
+
+### REQ-PLAYER-23: A take the continuous stream refused is skipped, and the take the queue plays after it is appended in its place only while the refused take was the last one handed to the stream.
+
+### REQ-PLAYER-24: Moving to a track of a queue stream plays it when asked to or, when not told, when the stream was playing; it stays paused otherwise.
+
+### REQ-PLAYER-25: Previous on the first track of a windowed queue stream goes nowhere.
+
+### REQ-PLAYER-26: A queue stream that was buffering shows as playing again once its position moves.
+
+### REQ-PLAYER-27: While the network is announced gone, a queue stream that fails waits for it and asks the server nothing.
+
+### REQ-PLAYER-28: The answer to a check of a queue stream the player has since left changes nothing.
+
+### REQ-PLAYER-29: A stalled take is fetched again only while it still waits for its data, and the address it is fetched at keeps the query it carried.

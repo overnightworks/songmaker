@@ -21,7 +21,6 @@ backend _settings 2
 backend _stream_events 5
 frontend acceptRequests 3
 frontend baseProps 2
-frontend callbacks 2
 frontend coldTabAt 5
 frontend cue 2
 frontend defaultProps 7
