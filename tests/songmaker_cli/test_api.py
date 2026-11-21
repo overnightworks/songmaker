@@ -2654,15 +2654,13 @@ def test_stream_job_initial_state(client: TestClient) -> None:
         job_id = job.id
 
     _authenticate_job_stream_client(client)
-    events = []
     with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
         assert resp.headers["cache-control"] == API_CACHE_CONTROL
         assert resp.headers["x-accel-buffering"] == "no"
-        for line in resp.iter_lines():
-            if line.startswith("data: "):
-                events.append(json.loads(line[len("data: "):]))
+        data_lines = [line for line in resp.iter_lines() if line.startswith("data: ")]
+    events = [json.loads(line[len("data: "):]) for line in data_lines]
 
     assert len(events) == 1
     assert events[0]["id"] == job_id
