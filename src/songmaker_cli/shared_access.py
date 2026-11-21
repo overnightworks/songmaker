@@ -20,6 +20,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import Generation
 
 NOT_FOUND_DETAIL: Final = "Not found"
+SHARED_RATE_LIMIT_REFUSAL: Final = "Too many requests"
 # A public audio address names the take, never its stored path: that path
 # starts with the creator's account id.
 SHARED_AUDIO_SUFFIX: Final = ".mp3"
@@ -69,7 +70,7 @@ def check_rate_limit(
         )
     except RateLimitRejected as rejected:
         raise HTTPException(  # unread: share
-            429, "Too many requests",
+            429, SHARED_RATE_LIMIT_REFUSAL,
             headers={"Retry-After": str(rejected.retry_after_seconds)},
         ) from rejected
 
