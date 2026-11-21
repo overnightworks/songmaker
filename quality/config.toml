@@ -12,6 +12,18 @@ mandatory_jobs = [
 render_pass = "Render pass"
 
 [[gate.loosened]]
+what = 'import contract "Independent packages do not import the application" changes source_modules'
+item = "#3386"
+date = 2026-11-21
+reason = "the three independent packages carry the songmaker_ prefix (quality's naming rule, ruled by the operator 21.11.2026); the contract lists the same three packages under their new names and forbids the same import"
+
+[[gate.loosened]]
+what = "import-linter changes root_packages"
+item = "#3386"
+date = 2026-11-21
+reason = "the same rename: the three independent packages and songmaker_cli are the same four root packages under their new names"
+
+[[gate.loosened]]
 what = 'mandatory job "Alert rules (promtool)" removed'
 item = "#2284"
 date = 2026-11-12

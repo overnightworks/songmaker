@@ -10,7 +10,7 @@ from typing import Any, Final
 
 from sqlalchemy.orm import Session
 
-from acestep_engine.errors import AudioDownloadError
+from songmaker_acestep_engine.errors import AudioDownloadError
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     get_job,

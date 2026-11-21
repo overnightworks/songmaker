@@ -764,7 +764,7 @@ def test_a_module_that_needs_the_vendored_engine_is_collected_without_it():
             "-q",
             "-p",
             "no:cacheprovider",
-            "tests/acestep_engine/test_client_contract.py",
+            "tests/songmaker_acestep_engine/test_client_contract.py",
         ],
         cwd=ROOT,
         env={k: v for k, v in os.environ.items() if k not in ("TEST_SHARD", "TEST_SHARDS")},

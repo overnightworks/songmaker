@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from acestep_worker.subprocess_runner import SubprocessHandle, start_acestep_subprocess
+from songmaker_acestep_worker.subprocess_runner import SubprocessHandle, start_acestep_subprocess
 
 
 @pytest.fixture

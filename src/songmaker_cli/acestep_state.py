@@ -1,11 +1,11 @@
 """Redis read/write helpers for ACE-Step worker ephemeral state.
 
 Workers publish their loaded models, queue depth, and VRAM usage to Redis
-with a 15s TTL via ``acestep_worker.heartbeat``. The web container reads
+with a 15s TTL via ``songmaker_acestep_worker.heartbeat``. The web container reads
 that state through these helpers when assembling the admin Worker Pool view.
 
-The key prefixes here MUST stay in sync with ``acestep_worker.heartbeat`` and
-``acestep_worker.lm_failure``;
+The key prefixes here MUST stay in sync with ``songmaker_acestep_worker.heartbeat`` and
+``songmaker_acestep_worker.lm_failure``;
 see ``tests/songmaker_cli/test_acestep_state.py`` for the cross-package assertion.
 """
 
@@ -61,7 +61,7 @@ def queue_depth_key(worker_id: str) -> str:
 def gpu_hold_locks(pool: ArqRedis) -> Locks:
     """The GPU holds of the workers, one lock per worker id; the worker takes and renews them.
 
-    ``acestep_worker.heartbeat`` builds the same family.
+    ``songmaker_acestep_worker.heartbeat`` builds the same family.
     """
     return Locks(
         pool, key_prefix=REDIS_KEY_PREFIX, family=GPU_HOLD_FAMILY, lasts=GPU_HOLD_LASTS,

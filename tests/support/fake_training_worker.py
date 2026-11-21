@@ -15,12 +15,16 @@ from pathlib import Path
 import uvicorn
 from redis.asyncio import Redis
 
-from acestep_worker.heartbeat import HeartbeatLoop
-from acestep_worker.model_cache import LoadedModel, ModelCache
-from acestep_worker.models import GenerationTaskResult, TrainLoraRequest, TrainLoraTaskResult
-from acestep_worker.registry_client import RegistryClient, WorkerRegistration
-from acestep_worker.task_store import TaskStore
-from acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app
+from songmaker_acestep_worker.heartbeat import HeartbeatLoop
+from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache
+from songmaker_acestep_worker.models import (
+    GenerationTaskResult,
+    TrainLoraRequest,
+    TrainLoraTaskResult,
+)
+from songmaker_acestep_worker.registry_client import RegistryClient, WorkerRegistration
+from songmaker_acestep_worker.task_store import TaskStore
+from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app
 
 DEFAULT_BIND_HOST = "0.0.0.0"  # noqa: S104 - the fake runs in its own container and the web container must reach it
 DEFAULT_CONTROL_PLANE_URL = "http://songmaker-web:8080"

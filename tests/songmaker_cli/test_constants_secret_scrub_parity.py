@@ -1,6 +1,6 @@
 """Pins that every owner of a secret-scrub list names the same environment keys.
 
-``acestep_worker`` must never import ``songmaker_cli`` (the independent-packages
+``songmaker_acestep_worker`` must never import ``songmaker_cli`` (the independent-packages
 contract in ``.importlinter``), so the list exists twice: as a constant in each of
 the two packages. These tests are the only thing standing between them silently
 drifting apart. Each list is pinned against the same expected set, so agreement
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from acestep_worker.constants import SECRET_ENV_KEYS as WORKER_SECRET_ENV_KEYS
+from songmaker_acestep_worker.constants import SECRET_ENV_KEYS as WORKER_SECRET_ENV_KEYS
 from songmaker_cli.constants import SECRET_ENV_KEYS as CLI_SECRET_ENV_KEYS
 
 EXPECTED_SECRET_ENV_KEYS = frozenset({
@@ -30,7 +30,7 @@ EXPECTED_SECRET_ENV_KEYS = frozenset({
 
 SECRET_ENV_KEY_OWNERS = {
     "songmaker_cli": lambda: CLI_SECRET_ENV_KEYS,
-    "acestep_worker": lambda: WORKER_SECRET_ENV_KEYS,
+    "songmaker_acestep_worker": lambda: WORKER_SECRET_ENV_KEYS,
 }
 
 

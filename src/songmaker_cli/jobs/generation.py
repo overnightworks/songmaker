@@ -17,8 +17,8 @@ from typing import Any, Final, cast
 from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine.models import AceStepConfig
-from acestep_engine.progress import NOT_STARTED, AceStepPhase
+from songmaker_acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.progress import NOT_STARTED, AceStepPhase
 from songmaker_cli import audio_files, jobs
 from songmaker_cli.acestep_state import decr_queue_depth
 from songmaker_cli.api_models import (
@@ -453,7 +453,7 @@ def post_process_generation(
             generation_id,
             ".raw.wav",
         )
-        from audio_engine import write_stereo_wav
+        from songmaker_audio_engine import write_stereo_wav
 
         write_stereo_wav(
             str(raw_wav_path),

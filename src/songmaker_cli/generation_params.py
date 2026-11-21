@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 if TYPE_CHECKING:
-    from acestep_engine.models import AceStepConfig
+    from songmaker_acestep_engine.models import AceStepConfig
 
 _GEN_PARAM_MAX_STRING_LENGTH = 2000
 

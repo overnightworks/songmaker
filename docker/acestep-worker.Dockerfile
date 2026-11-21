@@ -122,8 +122,8 @@ RUN uv sync --frozen --no-dev --no-install-project --extra acestep-worker \
         --no-binary-package overnightworks-logline \
     && rm -f /tmp/uv-*.lock # why: The lock pins every package with its hashes, tandem and logline by their git commits, which a hashed pip install cannot take. nvidia-ml-py3 has only a source distribution in the lock, and tandem and logline are built from their commits; git is in the base image. Those three are the only packages uv may build; any other package without a wheel fails the build.
 
-COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
-COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
+COPY --chown=songmaker src/songmaker_acestep_engine/ src/songmaker_acestep_engine/
+COPY --chown=songmaker src/songmaker_acestep_worker/ src/songmaker_acestep_worker/
 # uv_cache.json in the project's dist-info holds the install's wall-clock time and is listed in RECORD;
 # uv has no switch to leave it out, and nothing runs `uv sync` in the image again.
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
@@ -141,4 +141,4 @@ RUN mkdir -p /app/data/audio
 # them over the authenticated worker HTTP. The worker empties it at every start.
 RUN mkdir -p /app/data/worker_output
 
-ENTRYPOINT ["uv", "run", "--no-sync", "--frozen", "--no-build", "python", "-m", "acestep_worker"]
+ENTRYPOINT ["uv", "run", "--no-sync", "--frozen", "--no-build", "python", "-m", "songmaker_acestep_worker"]

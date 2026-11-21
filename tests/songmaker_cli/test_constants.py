@@ -58,8 +58,8 @@ def test_builtin_defaults_keys_match_available_modes() -> None:
 
 
 def test_acestep_worker_size_dicts_cover_available_modes() -> None:
-    from acestep_worker.__main__ import DEFAULT_MODEL_SIZES_GB
-    from acestep_worker.downloads import ESTIMATED_MODEL_SIZE_BYTES
+    from songmaker_acestep_worker.__main__ import DEFAULT_MODEL_SIZES_GB
+    from songmaker_acestep_worker.downloads import ESTIMATED_MODEL_SIZE_BYTES
 
     assert set(ESTIMATED_MODEL_SIZE_BYTES.keys()) == MODEL_AVAILABLE_MODES
     assert set(DEFAULT_MODEL_SIZES_GB.keys()) == MODEL_AVAILABLE_MODES
