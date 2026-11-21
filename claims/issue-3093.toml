@@ -1,0 +1,8 @@
+claim_id = "a55d25a18d1d46c3aec091ea4c018a85"
+agent = "Claude 54b282ca-7891-403a-a10d-7bfdd4fe2b66"
+role = "builder"
+base = "95e932f4604c3c091a9a705da70ea92cee42fdfd"
+branch = "claude/issue-3093-polish-left-by-the-platform-move-dependa"
+scope = [".github/dependabot.yml", "docker/docker-compose.e2e-voices.yml", "docs/architecture.md", "scripts/check_pinned_images_match.py", "tests/scripts/test_check_pinned_images_match.py"]
+opened_commit = "5e6f525d13480c3e47e3260678e5dacde0de0374"
+whole_reason = "four one-line polish fixes left by one parent, landed together"
