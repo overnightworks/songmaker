@@ -16,7 +16,11 @@ from support.wrapper_deps import reserved_gpu_hold, settled_fake_redis
 from songmaker_acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from songmaker_acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks
 from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache
-from songmaker_acestep_worker.models import GenerationTaskResult, TrainLoraRequest, TrainLoraTaskResult
+from songmaker_acestep_worker.models import (
+    GenerationTaskResult,
+    TrainLoraRequest,
+    TrainLoraTaskResult,
+)
 from songmaker_acestep_worker.subprocess_runner import SubprocessHandle, make_acestep_runner
 from songmaker_acestep_worker.task_store import TaskStore
 from songmaker_acestep_worker.wrapper import (
@@ -349,7 +353,8 @@ def test_use_above_one_leaves_the_child_running_and_is_logged(
     with caplog.at_level("WARNING"):
         asyncio.run(scenario())
     assert any(
-        r.name == "songmaker_acestep_worker.model_cache" and r.levelname == "WARNING" for r in caplog.records
+        r.name == "songmaker_acestep_worker.model_cache" and r.levelname == "WARNING"
+        for r in caplog.records
     )
 
 

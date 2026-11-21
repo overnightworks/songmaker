@@ -17,7 +17,11 @@ from redis.asyncio import Redis
 
 from songmaker_acestep_worker.heartbeat import HeartbeatLoop
 from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache
-from songmaker_acestep_worker.models import GenerationTaskResult, TrainLoraRequest, TrainLoraTaskResult
+from songmaker_acestep_worker.models import (
+    GenerationTaskResult,
+    TrainLoraRequest,
+    TrainLoraTaskResult,
+)
 from songmaker_acestep_worker.registry_client import RegistryClient, WorkerRegistration
 from songmaker_acestep_worker.task_store import TaskStore
 from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app

@@ -88,7 +88,9 @@ def test_a_training_whose_hold_is_lost_at_handover_is_refused_and_its_renewal_is
         renewals.append(await start_gpu_hold_renewal(*args))
         return renewals[-1]
 
-    monkeypatch.setattr("songmaker_acestep_worker.wrapper.gpu_hold_matches", lose_the_hold_at_handover)
+    monkeypatch.setattr(
+        "songmaker_acestep_worker.wrapper.gpu_hold_matches", lose_the_hold_at_handover
+    )
     monkeypatch.setattr("songmaker_acestep_worker.wrapper._start_gpu_hold_renewal", record_renewal)
 
     async def scenario() -> tuple[int, bool, list[Any], list[str]]:

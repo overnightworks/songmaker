@@ -106,12 +106,18 @@ def test_a_settings_named_api_model_is_not_an_env_owner(
     assert "env-read-outside-settings" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize(("rel_path", "line"), [
-    ("songmaker_cli/api_models/songs.py", "    expires_at: str | None = None"),
-    ("songmaker_cli/api_models/settings.py", "    updated_at: str | None = None"),
-    ("songmaker_acestep_worker/task_store.py", "def complete(self, r: dict[str, Any]) -> None: ..."),
-    ("songmaker_cli/claude/provider.py", "x = os.getenv('FOO')"),
-])
+@pytest.mark.parametrize(
+    ("rel_path", "line"),
+    [
+        ("songmaker_cli/api_models/songs.py", "    expires_at: str | None = None"),
+        ("songmaker_cli/api_models/settings.py", "    updated_at: str | None = None"),
+        (
+            "songmaker_acestep_worker/task_store.py",
+            "def complete(self, r: dict[str, Any]) -> None: ...",
+        ),
+        ("songmaker_cli/claude/provider.py", "x = os.getenv('FOO')"),
+    ],
+)
 def test_no_file_or_line_buys_an_exemption(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     capsys: pytest.CaptureFixture[str], rel_path: str, line: str,

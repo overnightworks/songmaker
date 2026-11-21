@@ -7,7 +7,12 @@ import pytest
 
 from songmaker_acestep_engine.progress import AceStepPhase
 from songmaker_acestep_worker.clock import utcnow
-from songmaker_acestep_worker.models import GenerationTaskResult, TaskErrorKind, TaskKind, TaskSnapshot
+from songmaker_acestep_worker.models import (
+    GenerationTaskResult,
+    TaskErrorKind,
+    TaskKind,
+    TaskSnapshot,
+)
 from songmaker_acestep_worker.task_store import TaskStore
 
 

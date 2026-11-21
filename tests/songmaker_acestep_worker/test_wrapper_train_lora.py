@@ -15,7 +15,11 @@ import pytest
 from fastapi.testclient import TestClient
 from support.wrapper_deps import gpu_hold_generation, reserved_gpu_hold
 
-from songmaker_acestep_worker.models import GpuHoldTokenRequest, TrainLoraRequest, TrainLoraTaskResult
+from songmaker_acestep_worker.models import (
+    GpuHoldTokenRequest,
+    TrainLoraRequest,
+    TrainLoraTaskResult,
+)
 from songmaker_acestep_worker.task_store import TaskStore
 from songmaker_acestep_worker.wrapper import (
     build_router,
@@ -312,7 +316,10 @@ def test_handover_claim_cannot_race_a_coordinator_release(
     from fastapi import HTTPException
 
     from songmaker_acestep_worker.heartbeat import release_gpu_hold
-    from songmaker_acestep_worker.wrapper import _create_gpu_hold_handover_task, _release_gpu_hold_handover
+    from songmaker_acestep_worker.wrapper import (
+        _create_gpu_hold_handover_task,
+        _release_gpu_hold_handover,
+    )
 
     deps = train_lora_deps(tmp_path)
     claim_entered = asyncio.Event()
@@ -703,7 +710,9 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
         assert not deps.gpu_hold_handover_tokens
         assert not deps.gpu_hold_handover_tasks
 
-    monkeypatch.setattr("songmaker_acestep_worker.wrapper._renew_gpu_hold_until_done", failed_renewal)
+    monkeypatch.setattr(
+        "songmaker_acestep_worker.wrapper._renew_gpu_hold_until_done", failed_renewal
+    )
     monkeypatch.setattr("songmaker_acestep_worker.wrapper.spawn_background", spawned.append)
     _run(scenario())
 

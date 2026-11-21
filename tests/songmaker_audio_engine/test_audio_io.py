@@ -244,7 +244,9 @@ def test_read_wav_bytes_unsupported_dtype() -> None:
     from songmaker_audio_engine.errors import AudioDecodeError
 
     fake_data = np.array([1, 2, 3], dtype=np.complex128)
-    with patch("songmaker_audio_engine.audio_io.scipy_wavfile.read", return_value=(44100, fake_data)):
+    with patch(
+        "songmaker_audio_engine.audio_io.scipy_wavfile.read", return_value=(44100, fake_data)
+    ):
         valid_header = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
         with pytest.raises(AudioDecodeError, match="Unsupported WAV dtype"):
             read_wav_bytes(valid_header)
@@ -256,7 +258,9 @@ def test_read_wav_bytes_2d_single_column() -> None:
     from songmaker_audio_engine.audio_io import read_wav_bytes
 
     fake_data = np.array([[0.5], [-0.3], [0.1]], dtype=np.float32)
-    with patch("songmaker_audio_engine.audio_io.scipy_wavfile.read", return_value=(44100, fake_data)):
+    with patch(
+        "songmaker_audio_engine.audio_io.scipy_wavfile.read", return_value=(44100, fake_data)
+    ):
         valid_header = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
         left, right, rate = read_wav_bytes(valid_header)
         assert rate == 44100

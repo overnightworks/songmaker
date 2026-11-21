@@ -35,7 +35,9 @@ def test_runner_outcome_ignores_a_failed_progress_write(
 
     client_class = MagicMock()
     client_class.return_value.generate = generate
-    monkeypatch.setitem(sys.modules, "songmaker_acestep_engine.client", MagicMock(AceStepClient=client_class))
+    monkeypatch.setitem(
+        sys.modules, "songmaker_acestep_engine.client", MagicMock(AceStepClient=client_class)
+    )
 
     async def go():
         store = TaskStore()

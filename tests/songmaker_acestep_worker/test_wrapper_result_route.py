@@ -203,7 +203,8 @@ def test_a_result_stream_survives_a_delete_or_sweep_after_it_opened(
                 assert deleted.status_code == 204
             else:
                 monkeypatch.setattr(
-                    "songmaker_acestep_worker.task_store.utcnow", lambda: utcnow() + timedelta(seconds=1),
+                    "songmaker_acestep_worker.task_store.utcnow",
+                    lambda: utcnow() + timedelta(seconds=1),
                 )
                 assert await deps.task_store.cleanup_terminal() == 1
             assert not take.exists()

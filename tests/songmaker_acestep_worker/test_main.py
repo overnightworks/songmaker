@@ -244,10 +244,14 @@ def _cache_for(
     stats = VramStats(measured_used_gb, settings.vram_budget_gb)
     with (
         patch("songmaker_acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
-        patch("songmaker_acestep_worker.__main__.make_acestep_runner", return_value=(loader, unloader)),
+        patch(
+            "songmaker_acestep_worker.__main__.make_acestep_runner", return_value=(loader, unloader)
+        ),
     ):
         cache = build_deps(settings).cache
-    monkeypatch.setattr("songmaker_acestep_worker.__main__.read_gpu_vram_stats", lambda gpu_id: stats)
+    monkeypatch.setattr(
+        "songmaker_acestep_worker.__main__.read_gpu_vram_stats", lambda gpu_id: stats
+    )
     return cache, loaded
 
 

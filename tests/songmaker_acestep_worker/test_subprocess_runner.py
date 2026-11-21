@@ -138,7 +138,9 @@ def test_is_acestep_healthy_true() -> None:
 
 
 def test_is_acestep_healthy_false() -> None:
-    with patch("songmaker_acestep_worker.subprocess_runner.urlopen", side_effect=OSError("refused")):
+    with patch(
+        "songmaker_acestep_worker.subprocess_runner.urlopen", side_effect=OSError("refused")
+    ):
         assert is_acestep_healthy(8101) is False
 
 
@@ -284,7 +286,10 @@ def test_start_acestep_health_failure_stops_process(tmp_path: Path) -> None:
             "songmaker_acestep_worker.subprocess_runner.wait_for_health",
             side_effect=SubprocessStartError("nope"),
         ),
-        patch("songmaker_acestep_worker.subprocess_runner.stop_acestep_subprocess", side_effect=fake_stop),
+        patch(
+            "songmaker_acestep_worker.subprocess_runner.stop_acestep_subprocess",
+            side_effect=fake_stop,
+        ),
     ):
         with pytest.raises(SubprocessStartError):
             start_acestep_subprocess(

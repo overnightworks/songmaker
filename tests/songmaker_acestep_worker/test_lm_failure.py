@@ -18,7 +18,12 @@ from uvicorn.main import STARTUP_FAILURE
 from songmaker_acestep_worker.__main__ import serve
 from songmaker_acestep_worker.heartbeat import HeartbeatLoop
 from songmaker_acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE, lm_failure_key
-from songmaker_acestep_worker.model_cache import CapacityError, LoadedModel, ModelCache, UnknownModeError
+from songmaker_acestep_worker.model_cache import (
+    CapacityError,
+    LoadedModel,
+    ModelCache,
+    UnknownModeError,
+)
 from songmaker_acestep_worker.subprocess_runner import LmInitFailedError, SubprocessStartError
 from songmaker_acestep_worker.task_store import TaskStore
 from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app

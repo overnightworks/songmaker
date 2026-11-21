@@ -83,7 +83,9 @@ _OPERATION_IDS = [f"{method} {path}" for method, path in _PROTECTED_OPERATIONS]
 @pytest.fixture
 def recorded_process_kills(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, int]]:
     kills: list[tuple[int, int]] = []
-    monkeypatch.setattr("songmaker_acestep_worker.lm_failure.os.kill", lambda p, s: kills.append((p, s)))
+    monkeypatch.setattr(
+        "songmaker_acestep_worker.lm_failure.os.kill", lambda p, s: kills.append((p, s))
+    )
     return kills
 
 
