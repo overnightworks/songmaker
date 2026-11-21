@@ -5,6 +5,7 @@
 
 import { expect, test, type Page, type TestInfo } from './coverage-test';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
+import { openNowPlayingFromBar } from './play-album';
 import { readSeededLibrary, seedPlaylist } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -31,24 +32,6 @@ async function playCollection(page: Page, kind: 'album' | 'playlist'): Promise<v
 	).toBeVisible();
 }
 
-/** The bar's own Now Playing button: the phone's title target, the desktop's labelled button. */
-async function openNowPlayingFromBar(
-	page: Page,
-	testInfo: TestInfo,
-	songTitle: string
-): Promise<void> {
-	await page
-		.getByRole('contentinfo')
-		.getByRole('button', {
-			name:
-				shellOf(testInfo) === 'mobile'
-					? words['player.openNowPlaying']({ title: songTitle })
-					: words['transport.nowPlaying'],
-			exact: true
-		})
-		.click();
-}
-
 /**
  * The phone opens the right panel as a sheet only on This take; on Queue the
  * sheet stays shut behind a trigger that carries the tab's name.
@@ -70,7 +53,7 @@ test('one take queued opens Now Playing on This take', async ({ page, request },
 	await page.goto(`/playlist/${playlist.slug}`);
 
 	await playCollection(page, 'playlist');
-	await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
+	await openNowPlayingFromBar(page, shellOf(testInfo), playlist.songTitles[0]);
 
 	await expectOpenedOn(page, testInfo, words['nowPlaying.takeTab']);
 });
@@ -80,7 +63,7 @@ test('several takes queued open Now Playing on Queue', async ({ page, request },
 	await page.goto(`/playlist/${playlist.slug}`);
 
 	await playCollection(page, 'playlist');
-	await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
+	await openNowPlayingFromBar(page, shellOf(testInfo), playlist.songTitles[0]);
 
 	await expectOpenedOn(page, testInfo, words['nowPlaying.queueTab']);
 });
@@ -96,7 +79,7 @@ test(
 		await page.goto(`/album/${library.albumId}`);
 
 		await playCollection(page, 'album');
-		await openNowPlayingFromBar(page, testInfo, library.albumTracks[0].songTitle);
+		await openNowPlayingFromBar(page, shellOf(testInfo), library.albumTracks[0].songTitle);
 
 		await expectOpenedOn(page, testInfo, words['nowPlaying.queueTab']);
 	}
@@ -110,7 +93,7 @@ test(
 		const playlist = await seedPlaylist(request, library, 1);
 		await page.goto(`/playlist/${playlist.slug}`);
 		await playCollection(page, 'playlist');
-		await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
+		await openNowPlayingFromBar(page, shellOf(testInfo), playlist.songTitles[0]);
 		await expectOpenedOn(page, testInfo, words['nowPlaying.takeTab']);
 
 		await openAlbumFromRail(page, shellOf(testInfo), library.albumTitle);

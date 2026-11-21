@@ -3,6 +3,7 @@
 
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
+import { openNowPlayingFromBar } from './play-album';
 import type { VersionItem } from '../src/lib/api/types';
 import { formatTime } from '../src/lib/utils/format';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
@@ -204,13 +205,7 @@ test.describe('song page at phone width', () => {
 			// player names the take on Now Playing, opened from the bar's title: on
 			// its cover line, exactly, since the take panel's heading, which renders
 			// once the song has loaded, starts with the same label.
-			await page
-				.getByRole('contentinfo')
-				.getByRole('button', {
-					name: words['player.openNowPlaying']({ title: songTitle }),
-					exact: true
-				})
-				.click();
+			await openNowPlayingFromBar(page, 'mobile', songTitle);
 			const nowPlaying = page.getByRole('dialog', { name: songTitle });
 			await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
 			await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();

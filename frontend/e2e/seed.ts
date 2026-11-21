@@ -445,7 +445,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
-	const songAndTakeShares = await seedSongAndTakeShares(seed, BASE_URL, albumSongs[2]);
+	const songAndTakeShares = await seedSongAndTakeShares(seed, albumSongs[2]);
 	const sharedPlaylist = await seed.postJson<CreatedPlaylist>('/api/playlists', {
 		title: `${PLAYLIST_TITLE_PREFIX} shared ${runMarker()}`
 	});
@@ -484,9 +484,9 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumSongCount: SONG_TITLES.length,
 		albumTracks: albumSongs.map((song) => song.track),
 		albumId: album.id,
-		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
+		albumShareUrl: share.share_url,
 		...songAndTakeShares,
-		playlistShareUrl: `${BASE_URL}/share/playlist/${playlistShare.share_slug}`,
+		playlistShareUrl: playlistShare.share_url,
 		pickedSongTitle,
 		listenReorderSongs,
 		secondAlbumTitle,
