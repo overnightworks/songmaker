@@ -10,12 +10,12 @@ import fakeredis
 import fakeredis.aioredis
 from support.owner_lease_epoch import settled_epoch
 
-from acestep_engine.models import AceStepConfig
-from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks, reserve_gpu_hold
-from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader
-from acestep_worker.models import GenerationTaskResult
-from acestep_worker.task_store import TaskStore
-from acestep_worker.wrapper import WorkerDeps, build_state_payload
+from songmaker_acestep_engine.models import AceStepConfig
+from songmaker_acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks, reserve_gpu_hold
+from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache, VramReader
+from songmaker_acestep_worker.models import GenerationTaskResult
+from songmaker_acestep_worker.task_store import TaskStore
+from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload
 
 INTERNAL_TOKEN_HEADER = "X-Internal-Token"
 INTERNAL_TOKEN = "test-internal-token"

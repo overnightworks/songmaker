@@ -5,7 +5,7 @@ Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored
 ## How Songmaker Uses ACE-Step
 
 ACE-Step runs in the platform Deployment `acestep-worker` (`apps/songmaker/acestep-worker.yaml` in the platform repository); the test stack runs one `acestep-worker-N` per GPU. Each
-worker hosts a FastAPI wrapper (`src/acestep_worker/wrapper.py`) that manages
+worker hosts a FastAPI wrapper (`src/songmaker_acestep_worker/wrapper.py`) that manages
 an LRU cache of loaded models and exposes:
 
 | Method | Path | Purpose |
@@ -31,7 +31,7 @@ Every route except `GET /health` needs the `X-Internal-Token` header: a missing 
 
 Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
-Redis with a 15s TTL. The `acestep_engine.client.AceStepClient` lives inside
+Redis with a 15s TTL. The `songmaker_acestep_engine.client.AceStepClient` lives inside
 the worker container and talks to the upstream ACE-Step subprocess on
 `127.0.0.1:8101` (default base port; each loaded model mode gets its own
 port — see `ACESTEP_INNER_PORT` below).
@@ -100,7 +100,7 @@ of the backlog out of every batch. Auto-score `Job` rows are system-owned
 (`user_id=None`) — intentionally invisible and not cancelable through the
 regular per-user job endpoints.
 
-Client: `src/acestep_engine/client.py` (HTTP client with retry, polling, model info)
+Client: `src/songmaker_acestep_engine/client.py` (HTTP client with retry, polling, model info)
 Config: `src/songmaker_cli/config.py` (`build_ace_config()` merges defaults + user settings + song params)
 Scheduler: `src/songmaker_cli/scheduler.py` (worker picker + SSE consumer with reconnect)
 
@@ -154,7 +154,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **Who gets the GPU:** only the platform's `acestep-worker` Deployment (`runtimeClassName: nvidia`; `songmaker-acestep-worker-N` is the test stack's name for it). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in its platform manifest and a release/verify protocol against the acestep-worker, neither of which exists today.
 
-**GPU telemetry and health:** NVML (`pynvml`) is used only in `src/acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
+**GPU telemetry and health:** NVML (`pynvml`) is used only in `src/songmaker_acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
 
 **The inner ACE-Step venv is baked into the `acestep-base` stage at `/opt/acestep/.venv`.** A host bind mount would make uv re-sync it from scratch on every fresh container (a 5–15 minute model-load gate), so it is baked into the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
 
@@ -425,7 +425,7 @@ The server returns `cot_caption` and `cot_lyrics` in generation results — the 
 
 ## Environment Variables
 
-There are two layers of env vars: ones the **acestep-worker container** reads at startup (managed by `WorkerSettings` in `src/acestep_worker/settings.py`) and ones the worker passes to the **ACE-Step subprocess** when it spawns it (set in `src/acestep_worker/subprocess_runner.py:build_env()`).
+There are two layers of env vars: ones the **acestep-worker container** reads at startup (managed by `WorkerSettings` in `src/songmaker_acestep_worker/settings.py`) and ones the worker passes to the **ACE-Step subprocess** when it spawns it (set in `src/songmaker_acestep_worker/subprocess_runner.py:build_env()`).
 
 ### Worker container env vars (`WorkerSettings`)
 
@@ -523,9 +523,9 @@ OOM PARTIAL jobs until a newer generate-family attempt or a non-archived take
 created strictly after completion supersedes them. Historical PARTIAL rows without
 completion timestamps are not backfilled.
 The client and worker contract is verified by the `S7-*` cases in
-[`test_client.py`](../tests/acestep_engine/test_client.py),
-[`test_task_store.py`](../tests/acestep_worker/test_task_store.py) and
-[`test_wrapper.py`](../tests/acestep_worker/test_wrapper.py).
+[`test_client.py`](../tests/songmaker_acestep_engine/test_client.py),
+[`test_task_store.py`](../tests/songmaker_acestep_worker/test_task_store.py) and
+[`test_wrapper.py`](../tests/songmaker_acestep_worker/test_wrapper.py).
 
 ## VRAM Pre-flight Note
 
@@ -584,6 +584,6 @@ The pre-flight above only ever sees the batch size it's handed — and it isn't 
 - `_build_generate_music_success_payload()` puts both on the handler's result dict as `requested_batch_size` / `delivered_batch_size`.
 - `inference.py`'s `GenerationResult` carries them through to `build_generation_success_response()` and `jobs/local_cache_updates.py:update_local_cache()` — the same `/query_result` payload `error` rides on.
 
-On the songmaker side, `acestep_engine.models.ResultItem`/`AceStepResult` parse the two fields (mirroring `error`/`status_message`). `StoredGenerationParams.batch_size` persists the *requested* side onto `Generation.generation_params` whenever it isn't the trivial default of 1 (which `ParamControls`/`acestep-param-fields.ts` expose as an editable knob). The chain is wired all the way through the worker: `acestep_worker.models.GenerationTaskResult` and `src/songmaker_cli/scheduler.py`'s `GenerationTaskResultDTO` both carry `delivered_batch_size` (kept in lockstep by `tests/songmaker_cli/test_scheduler.py::test_dto_keys_match_worker_model_fields`, a drift guard), `wrapper.py`'s `default_generate_runner` copies `AceStepResult.delivered_batch_size` onto the task result, and `_persist_generation_row()` writes `StoredGenerationParams.delivered_batch_size` onto the generation — but only when it actually diverges from the requested `batch_size` (the fork always reports a concrete delivered count, matching or not, so the persistence layer is what keeps an unreduced batch from adding noise to every row).
+On the songmaker side, `songmaker_acestep_engine.models.ResultItem`/`AceStepResult` parse the two fields (mirroring `error`/`status_message`). `StoredGenerationParams.batch_size` persists the *requested* side onto `Generation.generation_params` whenever it isn't the trivial default of 1 (which `ParamControls`/`acestep-param-fields.ts` expose as an editable knob). The chain is wired all the way through the worker: `songmaker_acestep_worker.models.GenerationTaskResult` and `src/songmaker_cli/scheduler.py`'s `GenerationTaskResultDTO` both carry `delivered_batch_size` (kept in lockstep by `tests/songmaker_cli/test_scheduler.py::test_dto_keys_match_worker_model_fields`, a drift guard), `wrapper.py`'s `default_generate_runner` copies `AceStepResult.delivered_batch_size` onto the task result, and `_persist_generation_row()` writes `StoredGenerationParams.delivered_batch_size` onto the generation — but only when it actually diverges from the requested `batch_size` (the fork always reports a concrete delivered count, matching or not, so the persistence layer is what keeps an unreduced batch from adding noise to every row).
 
 `TakeRow.svelte`'s `batchReduction` turns the pair into a `⚠ N of M` badge on the take row (the same pattern as the model badge) whenever both are present and differ. The take recipe panel (`recipe-summary.ts`) shows the same value next to "Batch Size" under Model & Sampling — `delivered_batch_size` isn't an editable `ParamControls` knob, so it gets an explicit registry-adjacent entry rather than falling into the generic "Other" catch-all.

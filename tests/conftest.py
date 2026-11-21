@@ -146,7 +146,7 @@ def internal_token() -> str:
 @pytest.fixture(autouse=True)
 def _reset_settings_cache():
     """Clear the Settings lru_cache between tests so monkeypatched env wins."""
-    from acestep_worker.settings import get_worker_settings
+    from songmaker_acestep_worker.settings import get_worker_settings
     from songmaker_cli.settings import get_settings
 
     get_settings.cache_clear()

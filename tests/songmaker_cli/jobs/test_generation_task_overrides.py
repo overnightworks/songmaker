@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.generate import DecodedAudio
 from songmaker_cli.generation_params import stored_config_options
@@ -204,7 +204,7 @@ def _spliced_samples(seeded_db, tmp_path: Path, make_wav_bytes, repaint_mode: st
                 left=repainted, right=repainted.copy(), sample_rate=_SPLICE_RATE, duration=1.0,
             ),
         ),
-        patch("audio_engine.write_stereo_wav", side_effect=write_raw_wav),
+        patch("songmaker_audio_engine.write_stereo_wav", side_effect=write_raw_wav),
         patch("songmaker_cli.jobs.generation._write_output", side_effect=write_encoded_outputs),
     ):
         post_process_generation(

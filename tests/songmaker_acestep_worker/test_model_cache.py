@@ -1,0 +1,790 @@
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+
+import pytest
+
+from songmaker_acestep_worker.model_cache import (
+    CapacityError,
+    LoadedModel,
+    LoadedModelInfo,
+    ModelCache,
+    ModelNotLoadedError,
+    UnknownModeError,
+    VramStats,
+)
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _make_cache(
+    *,
+    budget: float = 24.0,
+    sizes: dict[str, float] | None = None,
+    vram_reader=None,
+    unloader=None,
+):
+    sizes = sizes or {"sft": 6.0, "xl-sft": 12.0, "huge": 30.0}
+    loaded_log: list[str] = []
+    unloaded_log: list[LoadedModel] = []
+
+    async def loader(mode: str) -> LoadedModel:
+        loaded_log.append(mode)
+        return LoadedModel(mode=mode, handle=f"handle-{mode}", port=8101)
+
+    async def recording_unloader(model: LoadedModel) -> None:
+        unloaded_log.append(model)
+
+    cache = ModelCache(
+        vram_budget_gb=budget,
+        model_sizes=sizes,
+        loader=loader,
+        unloader=unloader or recording_unloader,
+        vram_reader=vram_reader,
+    )
+    return cache, loaded_log, unloaded_log
+
+
+def test_initial_state() -> None:
+    cache, _, _ = _make_cache()
+    assert cache.loaded_modes() == []
+    assert cache.target_loading is None
+    assert cache.snapshot().vram_used_gb == 0.0
+    assert cache.vram_budget_gb == 24.0
+
+
+def test_load_unknown_mode_raises() -> None:
+    cache, _, _ = _make_cache()
+    load_operation = cache.load("nonexistent")
+    with pytest.raises(UnknownModeError):
+        _run(load_operation)
+
+
+def test_load_too_big_raises_capacity() -> None:
+    cache, _, _ = _make_cache()
+    load_operation = cache.load("huge")
+    with pytest.raises(CapacityError):
+        _run(load_operation)
+
+
+def test_load_single_model() -> None:
+    cache, loaded_log, _ = _make_cache()
+    result = _run(cache.load("sft"))
+    assert result.loaded == ["sft"]
+    assert result.evicted == []
+    assert cache.loaded_modes() == ["sft"]
+    assert cache.snapshot().vram_used_gb == 6.0
+    assert loaded_log == ["sft"]
+
+
+def test_load_idempotent_no_reload() -> None:
+    cache, loaded_log, _ = _make_cache()
+    _run(cache.load("sft"))
+    result = _run(cache.load("sft"))
+    assert result.loaded == ["sft"]
+    assert result.evicted == []
+    assert loaded_log == ["sft"]
+
+
+def test_load_lru_eviction_lru1() -> None:
+    cache, loaded_log, unloaded_log = _make_cache(budget=12.0)
+    _run(cache.load("sft"))
+    result = _run(cache.load("xl-sft"))
+    assert result.loaded == ["xl-sft"]
+    assert result.evicted == ["sft"]
+    assert cache.loaded_modes() == ["xl-sft"]
+    assert len(unloaded_log) == 1
+    assert unloaded_log[0].mode == "sft"
+
+
+def test_load_multi_model_no_eviction_when_fits() -> None:
+    cache, _, _ = _make_cache(budget=24.0)
+    _run(cache.load("sft"))
+    result = _run(cache.load("xl-sft"))
+    assert sorted(result.loaded) == ["sft", "xl-sft"]
+    assert result.evicted == []
+    assert cache.snapshot().vram_used_gb == 18.0
+
+
+def test_load_multi_then_evict_oldest() -> None:
+    cache, _, unloaded_log = _make_cache(budget=18.0)
+    _run(cache.load("sft"))
+    _run(cache.load("xl-sft"))
+    cache._loaded.move_to_end("sft")
+    result = _run(cache.load("xl-sft"))
+    assert result.loaded == ["sft", "xl-sft"]
+    assert result.evicted == []
+    assert unloaded_log == []
+
+
+def test_load_evicts_lru_first() -> None:
+    cache, _, unloaded_log = _make_cache(budget=12.0, sizes={"a": 6.0, "b": 6.0, "c": 6.0})
+    _run(cache.load("a"))
+    _run(cache.load("b"))
+    result = _run(cache.load("c"))
+    assert "a" in result.evicted
+    assert "c" in cache.loaded_modes()
+    assert len(unloaded_log) >= 1
+
+
+def test_evict_known_mode() -> None:
+    cache, _, unloaded_log = _make_cache()
+    _run(cache.load("sft"))
+    evicted = _run(cache.evict("sft"))
+    assert evicted == ["sft"]
+    assert cache.loaded_modes() == []
+    assert len(unloaded_log) == 1
+
+
+def test_evict_unknown_mode_returns_empty() -> None:
+    cache, _, unloaded_log = _make_cache()
+    evicted = _run(cache.evict("sft"))
+    assert evicted == []
+    assert unloaded_log == []
+
+
+def test_evict_all() -> None:
+    cache, _, unloaded_log = _make_cache(budget=24.0)
+    _run(cache.load("sft"))
+    _run(cache.load("xl-sft"))
+    evicted = _run(cache.evict_all())
+    assert sorted(evicted) == ["sft", "xl-sft"]
+    assert cache.loaded_modes() == []
+    assert len(unloaded_log) == 2
+
+
+def test_evict_all_empty() -> None:
+    cache, _, _ = _make_cache()
+    evicted = _run(cache.evict_all())
+    assert evicted == []
+
+
+def test_target_loading_set_during_load() -> None:
+    target_during_load: list[str | None] = []
+
+    async def slow_loader(mode: str) -> LoadedModel:
+        target_during_load.append(cache.target_loading)
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=slow_loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    assert target_during_load == ["sft"]
+    assert cache.target_loading is None
+
+
+def test_snapshot_initial_state() -> None:
+    cache, _, _ = _make_cache()
+    snap = cache.snapshot()
+    assert snap.loaded == ()
+    assert snap.target_loading is None
+    assert snap.vram_used_gb == 0.0
+    assert snap.vram_total_gb == 24.0
+
+
+def test_snapshot_after_load_is_consistent() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    snap = cache.snapshot()
+    assert snap.loaded == (LoadedModelInfo(mode="sft", size_gb=6.0),)
+    assert snap.vram_used_gb == 6.0
+    assert snap.target_loading is None
+    assert snap.pinned == ()
+    assert snap.loading_started_at is None
+
+
+def test_snapshot_is_immutable_against_subsequent_mutation() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    snap = cache.snapshot()
+    _run(cache.evict("sft"))
+    assert snap.loaded == (LoadedModelInfo(mode="sft", size_gb=6.0),)
+    assert snap.vram_used_gb == 6.0
+
+
+def test_snapshot_during_load_sees_target_loading() -> None:
+    captured: list[Any] = []
+
+    async def slow_loader(mode: str) -> LoadedModel:
+        captured.append(cache.snapshot())
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=slow_loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    assert len(captured) == 1
+    snap = captured[0]
+    assert snap.loaded == ()
+    assert snap.target_loading == "sft"
+    assert snap.vram_used_gb == 0.0
+    assert snap.loading_started_at is not None
+
+
+def test_snapshot_after_eviction_during_load_is_consistent() -> None:
+    captured: list[Any] = []
+
+    async def loader(mode: str) -> LoadedModel:
+        captured.append(cache.snapshot())
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=12.0,
+        model_sizes={"sft": 6.0, "xl-sft": 12.0},
+        loader=loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    captured.clear()
+    _run(cache.load("xl-sft"))
+    assert len(captured) == 1
+    snap = captured[0]
+    assert snap.loaded == ()
+    assert snap.vram_used_gb == 0.0
+    assert snap.target_loading == "xl-sft"
+
+
+def test_target_loading_cleared_on_loader_failure() -> None:
+    async def failing_loader(mode: str) -> LoadedModel:
+        raise RuntimeError("kaboom")
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=failing_loader,
+        unloader=unloader,
+    )
+    load_operation = cache.load("sft")
+    with pytest.raises(RuntimeError, match="kaboom"):
+        _run(load_operation)
+    assert cache.target_loading is None
+    assert cache.loaded_modes() == []
+
+
+# ── D5: pin / unpin ───────────────────────────────────────────────
+
+
+def test_pin_unknown_mode_raises() -> None:
+    cache, _, _ = _make_cache()
+    pin_operation = cache.pin("sft")
+    with pytest.raises(ModelNotLoadedError):
+        _run(pin_operation)
+
+
+def test_pin_then_is_pinned() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.pin("sft"))
+    assert cache.is_pinned("sft") is True
+    snap = cache.snapshot()
+    assert snap.pinned == ("sft",)
+
+
+def test_unpin_idempotent() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.unpin("sft"))
+    _run(cache.pin("sft"))
+    _run(cache.unpin("sft"))
+    assert cache.is_pinned("sft") is False
+
+
+def test_evict_to_fit_skips_pinned_then_capacity_error() -> None:
+    cache, _, unloaded_log = _make_cache(
+        budget=12.0, sizes={"a": 6.0, "b": 6.0, "c": 6.0},
+    )
+    _run(cache.load("a"))
+    _run(cache.load("b"))
+    _run(cache.pin("a"))
+    _run(cache.pin("b"))
+    load_operation = cache.load("c")
+    with pytest.raises(CapacityError, match="pinned"):
+        _run(load_operation)
+    assert sorted(cache.loaded_modes()) == ["a", "b"]
+    assert unloaded_log == []
+
+
+def test_evict_to_fit_skips_pinned_evicts_unpinned() -> None:
+    cache, _, unloaded_log = _make_cache(
+        budget=12.0, sizes={"a": 6.0, "b": 6.0, "c": 6.0},
+    )
+    _run(cache.load("a"))
+    _run(cache.load("b"))
+    _run(cache.pin("a"))
+    _run(cache.load("c"))
+    assert "a" in cache.loaded_modes()
+    assert "c" in cache.loaded_modes()
+    assert "b" not in cache.loaded_modes()
+    assert any(m.mode == "b" for m in unloaded_log)
+
+
+def test_evict_implicitly_unpins() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.pin("sft"))
+    _run(cache.evict("sft"))
+    assert cache.is_pinned("sft") is False
+    assert cache.loaded_modes() == []
+
+
+# ── D6: refcount / acquire-release ──────────────────────────────
+
+
+def test_acquire_for_use_unknown_mode_returns_none() -> None:
+    cache, _, _ = _make_cache()
+    result = _run(cache.acquire_for_use("sft"))
+    assert result is None
+
+
+def test_acquire_for_use_increments_refcount_and_moves_to_end() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.load("xl-sft"))
+    handle = _run(cache.acquire_for_use("sft"))
+    assert handle is not None
+    assert handle.mode == "sft"
+    assert cache.in_use_count("sft") == 1
+    assert list(cache._loaded.keys())[-1] == "sft"
+
+
+def test_release_decrements_refcount() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.acquire_for_use("sft"))
+    _run(cache.acquire_for_use("sft"))
+    assert cache.in_use_count("sft") == 2
+    _run(cache.release("sft"))
+    assert cache.in_use_count("sft") == 1
+    _run(cache.release("sft"))
+    assert cache.in_use_count("sft") == 0
+
+
+def test_release_unknown_mode_no_op() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.release("sft"))
+    assert cache.in_use_count("sft") == 0
+
+
+def test_acquire_for_use_returns_each_modes_own_port() -> None:
+    """Two loaded modes keep distinct ports (#205): the wrapper's
+    ``/generate`` endpoint reads ``loaded.port`` per request, so a request
+    for mode B must resolve to mode B's own server, never mode A's."""
+    ports = {"sft": 8101, "xl-sft": 8102}
+
+    async def loader(mode: str) -> LoadedModel:
+        return LoadedModel(mode=mode, handle=f"handle-{mode}", port=ports[mode])
+
+    async def unloader(_: LoadedModel) -> None:
+        return None
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0, "xl-sft": 12.0},
+        loader=loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("xl-sft"))
+
+    loaded_sft = _run(cache.acquire_for_use("sft"))
+    loaded_xl_sft = _run(cache.acquire_for_use("xl-sft"))
+
+    assert loaded_sft is not None
+    assert loaded_xl_sft is not None
+    assert loaded_sft.port == 8101
+    assert loaded_xl_sft.port == 8102
+
+
+def test_evict_to_fit_skips_in_use_then_capacity_error() -> None:
+    cache, _, unloaded_log = _make_cache(
+        budget=12.0, sizes={"a": 6.0, "b": 6.0, "c": 6.0},
+    )
+    _run(cache.load("a"))
+    _run(cache.load("b"))
+    _run(cache.acquire_for_use("a"))
+    _run(cache.acquire_for_use("b"))
+    load_operation = cache.load("c")
+    with pytest.raises(CapacityError, match="in use"):
+        _run(load_operation)
+    assert sorted(cache.loaded_modes()) == ["a", "b"]
+    assert unloaded_log == []
+
+
+def test_evict_to_fit_skips_in_use_evicts_idle() -> None:
+    cache, _, unloaded_log = _make_cache(
+        budget=12.0, sizes={"a": 6.0, "b": 6.0, "c": 6.0},
+    )
+    _run(cache.load("a"))
+    _run(cache.load("b"))
+    _run(cache.acquire_for_use("a"))
+    _run(cache.load("c"))
+    assert "a" in cache.loaded_modes()
+    assert "c" in cache.loaded_modes()
+    assert "b" not in cache.loaded_modes()
+    assert any(m.mode == "b" for m in unloaded_log)
+
+
+def test_evict_explicit_refuses_in_use() -> None:
+    cache, _, unloaded_log = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.acquire_for_use("sft"))
+    evict_operation = cache.evict("sft")
+    with pytest.raises(CapacityError, match="in use"):
+        _run(evict_operation)
+    assert cache.loaded_modes() == ["sft"]
+    assert unloaded_log == []
+
+
+# ── D8: loading_started_at ──────────────────────────────────────
+
+
+def test_loading_started_at_set_during_load_then_cleared() -> None:
+    captured: list[Any] = []
+
+    async def slow_loader(mode: str) -> LoadedModel:
+        captured.append(cache.snapshot())
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=slow_loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    assert len(captured) == 1
+    assert captured[0].loading_started_at is not None
+    final = cache.snapshot()
+    assert final.loading_started_at is None
+
+
+def test_snapshot_uses_vram_reader_when_available() -> None:
+    cache, _, _ = _make_cache(
+        vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    snapshot = cache.snapshot()
+    assert snapshot.vram_used_gb == 15.3
+    assert snapshot.vram_total_gb == 24.0
+
+
+def test_snapshot_falls_back_to_declared_sizes_when_reader_returns_none() -> None:
+    cache, _, _ = _make_cache(budget=22.0, vram_reader=lambda: None)
+    _run(cache.load("sft"))
+    snapshot = cache.snapshot()
+    assert snapshot.vram_used_gb == 6.0
+    assert snapshot.vram_total_gb == 22.0
+
+
+def test_snapshot_without_reader_uses_declared_sizes() -> None:
+    cache, _, _ = _make_cache(budget=22.0)
+    _run(cache.load("sft"))
+    snapshot = cache.snapshot()
+    assert snapshot.vram_used_gb == 6.0
+    assert snapshot.vram_total_gb == 22.0
+
+
+def test_loading_last_log_line_only_set_during_load() -> None:
+    cache, _, _ = _make_cache()
+    cache.set_loading_log_line("ignored — no load in progress")
+    assert cache.loading_last_log_line is None
+
+
+def test_loading_last_log_line_visible_during_load_then_cleared() -> None:
+    captured: list[str | None] = []
+
+    async def slow_loader(mode: str) -> LoadedModel:
+        cache.set_loading_log_line("loading shard 1/4")
+        captured.append(cache.snapshot().loading_last_log_line)
+        cache.set_loading_log_line("loading shard 4/4")
+        captured.append(cache.snapshot().loading_last_log_line)
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=slow_loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    assert captured == ["loading shard 1/4", "loading shard 4/4"]
+    final = cache.snapshot()
+    assert final.loading_last_log_line is None
+    assert final.target_loading is None
+
+
+# ── measured VRAM decides capacity, not the declared-size table ──
+
+
+def _reader_reporting_high_once_loaded(
+    cache_box: dict[str, ModelCache], mode: str, *, low: VramStats, high: VramStats,
+):
+    """Simulates ACE-Step's lazy loading: real usage stays low until ``mode``
+    has actually been loaded into the cache, then jumps to its true (larger
+    than declared) footprint — never a NVML reading taken before the model
+    could possibly have grown into it."""
+
+    def reader() -> VramStats:
+        return high if mode in cache_box["cache"].loaded_modes() else low
+
+    return reader
+
+
+def test_load_rejects_second_model_when_measured_vram_leaves_no_room() -> None:
+    """A model already loaded can occupy far more real VRAM than its declared
+    size suggests (e.g. ACE-Step's lazily-loaded 4B LM). The declared sizes
+    alone would say plenty of room remains; the measurement says otherwise,
+    and the measurement must win."""
+    cache_box: dict[str, ModelCache] = {}
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"turbo": 6.0, "sft": 6.0},
+        vram_reader=_reader_reporting_high_once_loaded(
+            cache_box, "turbo",
+            low=VramStats(used_gb=2.0, total_gb=24.0),
+            high=VramStats(used_gb=22.0, total_gb=24.0),
+        ),
+    )
+    cache_box["cache"] = cache
+    _run(cache.load("turbo"))
+    _run(cache.pin("turbo"))
+    load_operation = cache.load("sft")
+    with pytest.raises(CapacityError, match="measured"):
+        _run(load_operation)
+    assert cache.loaded_modes() == ["turbo"]
+    assert unloaded_log == []
+
+
+def test_load_evicts_using_declared_floor_even_when_measurement_lags() -> None:
+    """A model that has not generated yet can measure near-zero on NVML even
+    though it is genuinely loaded (ACE-Step lazy-loads on first request).
+    Capacity planning must still credit its declared size, or successive
+    "cold" loads would all stay resident well past budget — the mirror
+    image of the original declared-size-only bug."""
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"turbo": 6.0, "xl-sft": 12.0, "xl-base": 12.0},
+        vram_reader=lambda: VramStats(used_gb=0.5, total_gb=24.0),
+    )
+    _run(cache.load("turbo"))
+    _run(cache.load("xl-sft"))
+    result = _run(cache.load("xl-base"))
+    assert result.evicted == ["turbo"]
+    assert sorted(cache.loaded_modes()) == ["xl-base", "xl-sft"]
+    assert len(unloaded_log) == 1
+    assert unloaded_log[0].mode == "turbo"
+
+
+def test_load_evicts_every_planned_victim_even_when_the_reading_stays_cold() -> None:
+    """A plan with more than one victim must run to completion: the floor
+    that decides whether enough has been freed comes from the declared
+    sizes of what is still loaded, not from a reader that never reflects
+    the earlier evictions in this same call."""
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"s1": 6.0, "s2": 6.0, "big": 12.0, "incoming": 12.0},
+        vram_reader=lambda: VramStats(used_gb=0.5, total_gb=24.0),
+    )
+    _run(cache.load("s1"))
+    _run(cache.load("s2"))
+    _run(cache.load("big"))
+    result = _run(cache.load("incoming"))
+    assert result.evicted == ["s1", "s2"]
+    assert len(unloaded_log) == 2
+    declared_resident_gb = sum(info.size_gb for info in cache.snapshot().loaded)
+    assert declared_resident_gb <= cache.vram_budget_gb
+
+
+def test_load_rejects_without_destroying_anything_when_plan_would_still_fail() -> None:
+    """If evicting every eligible model still would not make room, nothing
+    may be evicted at all — deciding must happen before any destruction, not
+    interleaved with it."""
+    cache, _, unloaded_log = _make_cache(
+        budget=20.0,
+        sizes={"sft": 6.0, "xl-base": 12.0, "xl-sft": 12.0},
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("xl-base"))
+    _run(cache.pin("xl-base"))
+    load_operation = cache.load("xl-sft")
+    with pytest.raises(CapacityError):
+        _run(load_operation)
+    assert cache.loaded_modes() == ["sft", "xl-base"]
+    assert unloaded_log == []
+
+
+def test_load_rejects_without_destroying_anything_when_measured_and_plan_would_still_fail() -> None:
+    """The same no-partial-destruction guarantee must hold on the measured
+    path, not only when falling back to declared-size estimates."""
+    cache, _, unloaded_log = _make_cache(
+        budget=20.0,
+        sizes={"sft": 6.0, "xl-base": 12.0, "xl-sft": 12.0},
+        vram_reader=lambda: VramStats(used_gb=0.5, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("xl-base"))
+    _run(cache.pin("xl-base"))
+    load_operation = cache.load("xl-sft")
+    with pytest.raises(CapacityError, match="measured"):
+        _run(load_operation)
+    assert cache.loaded_modes() == ["sft", "xl-base"]
+    assert unloaded_log == []
+
+
+def test_load_does_not_destroy_both_loaded_models_when_reader_never_moves() -> None:
+    """A reader stuck at a constant reading (NVML lag, or a subprocess
+    whose child never fully released VRAM) must not force more evictions
+    than the plan calls for, and must not raise after having already
+    destroyed everything eligible — the eviction count comes from a plan
+    built once, up front, from declared sizes."""
+    cache, _, unloaded_log = _make_cache(
+        budget=24.0,
+        sizes={"sft": 6.0, "turbo": 6.0, "xl-sft": 12.0},
+        vram_reader=lambda: VramStats(used_gb=16.4, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    _run(cache.load("turbo"))
+    result = _run(cache.load("xl-sft"))
+    assert result.evicted == ["sft"]
+    assert cache.loaded_modes() == ["turbo", "xl-sft"]
+    assert len(unloaded_log) == 1
+    assert unloaded_log[0].mode == "sft"
+
+
+def test_load_does_not_evict_when_measured_vram_already_fits() -> None:
+    """Declared sizes alone would demand an eviction; the measurement shows
+    real headroom, so nothing is evicted."""
+    cache, _, unloaded_log = _make_cache(
+        budget=12.0,
+        sizes={"turbo": 6.0, "sft": 6.0},
+        vram_reader=lambda: VramStats(used_gb=2.0, total_gb=24.0),
+    )
+    _run(cache.load("turbo"))
+    result = _run(cache.load("sft"))
+    assert sorted(result.loaded) == ["sft", "turbo"]
+    assert result.evicted == []
+    assert unloaded_log == []
+
+
+def test_load_rejects_when_gpu_already_full_with_nothing_tracked_loaded() -> None:
+    """Stray VRAM usage the cache never loaded (a leaked subprocess, another
+    process) must still block a load — capacity planning cannot assume an
+    empty ``_loaded`` means an empty GPU."""
+    cache, loaded_log, _ = _make_cache(
+        budget=24.0,
+        sizes={"turbo": 6.0},
+        vram_reader=lambda: VramStats(used_gb=23.0, total_gb=24.0),
+    )
+    load_operation = cache.load("turbo")
+    with pytest.raises(CapacityError, match="measured"):
+        _run(load_operation)
+    assert cache.loaded_modes() == []
+    assert loaded_log == []
+
+
+def test_snapshot_reports_vram_measured_true_when_reader_available() -> None:
+    cache, _, _ = _make_cache(
+        vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    assert cache.snapshot().vram_measured is True
+
+
+def test_snapshot_reports_vram_measured_false_without_reader() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    assert cache.snapshot().vram_measured is False
+
+
+def test_snapshot_reports_vram_measured_false_when_reader_returns_none() -> None:
+    cache, _, _ = _make_cache(vram_reader=lambda: None)
+    _run(cache.load("sft"))
+    assert cache.snapshot().vram_measured is False
+
+
+def test_loading_last_log_line_cleared_on_loader_failure() -> None:
+    async def failing_loader(mode: str) -> LoadedModel:
+        cache.set_loading_log_line("about to crash")
+        raise RuntimeError("boom")
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=failing_loader,
+        unloader=unloader,
+    )
+    load_operation = cache.load("sft")
+    with pytest.raises(RuntimeError, match="boom"):
+        _run(load_operation)
+    assert cache.loading_last_log_line is None
+
+
+def test_release_and_stop_stops_only_with_the_last_use(caplog: pytest.LogCaptureFixture) -> None:
+    cache, _, unloaded = _make_cache()
+    _run(cache.load("sft"))
+    _run(cache.acquire_for_use("sft"))
+    loaded = _run(cache.acquire_for_use("sft"))
+    with caplog.at_level("WARNING"):
+        _run(cache.release_and_stop("sft"))
+    assert (unloaded, cache.in_use_count("sft")) == ([], 1)
+    records = [r for r in caplog.records if r.name == "songmaker_acestep_worker.model_cache"]
+    assert [r.levelname for r in records] == ["WARNING"]
+    _run(cache.release_and_stop("sft"))
+    assert (unloaded, cache.loaded_modes()) == ([loaded], [])
+
+
+@pytest.mark.parametrize("loaded", [False, True], ids=["not-loaded", "loaded-without-use"])
+def test_release_and_stop_without_a_use_is_a_no_op(loaded: bool) -> None:
+    cache, _, unloaded = _make_cache()
+    if loaded:
+        _run(cache.load("sft"))
+    _run(cache.release_and_stop("sft"))
+    assert (unloaded, cache.loaded_modes()) == ([], ["sft"] if loaded else [])
+
+
+def test_release_and_stop_drops_the_mode_keeps_the_pin_and_raises_when_the_unloader_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def failing_unloader(_: LoadedModel) -> None:
+        raise RuntimeError("child would not stop")
+
+    cache, _, _ = _make_cache(unloader=failing_unloader)
+    _run(cache.load("sft"))
+    _run(cache.pin("sft"))
+    _run(cache.acquire_for_use("sft"))
+    stop = cache.release_and_stop("sft")
+    with pytest.raises(RuntimeError, match="child would not stop"):
+        _run(stop)
+    assert (cache.loaded_modes(), cache.in_use_count("sft")) == ([], 0)
+    assert (cache.is_pinned("sft"), "child would not stop" in caplog.text) == (True, True)

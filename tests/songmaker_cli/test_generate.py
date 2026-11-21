@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from scipy.io import wavfile as scipy_wavfile
 
-from acestep_engine.models import AceStepConfig, AceStepResult
-from audio_engine import MasteringError
+from songmaker_acestep_engine.models import AceStepConfig, AceStepResult
+from songmaker_audio_engine import MasteringError
 from songmaker_cli.api_models import BaseGenerationParams
 from songmaker_cli.errors import GenerationError
 from songmaker_cli.generate import (

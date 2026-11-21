@@ -217,12 +217,12 @@ def test_list_workers_last_error_transport(
     import asyncio
     import json
 
-    from acestep_worker.clock import utcnow
-    from acestep_worker.heartbeat import HeartbeatLoop
-    from acestep_worker.last_error import LastError
-    from acestep_worker.model_cache import ModelCache
-    from acestep_worker.task_store import TaskStore
-    from acestep_worker.wrapper import WorkerDeps, build_state_payload
+    from songmaker_acestep_worker.clock import utcnow
+    from songmaker_acestep_worker.heartbeat import HeartbeatLoop
+    from songmaker_acestep_worker.last_error import LastError
+    from songmaker_acestep_worker.model_cache import ModelCache
+    from songmaker_acestep_worker.task_store import TaskStore
+    from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload
     from songmaker_cli.acestep_state import worker_state_key
 
     async def unused(*args, **kwargs):
@@ -305,7 +305,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     import json
     from unittest.mock import AsyncMock
 
-    from acestep_worker.clock import utcnow
+    from songmaker_acestep_worker.clock import utcnow
     from songmaker_cli.acestep_state import worker_state_key
     from songmaker_cli.arq_pool import init_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY

@@ -37,10 +37,10 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine.constants import GPU_HELD_DETAIL, MODE_NOT_LOADED_DETAIL
-from acestep_engine.models import AceStepConfig
-from acestep_engine.progress import AceStepPhase
-from acestep_engine.thread_handoff import acquire_in_thread
+from songmaker_acestep_engine.constants import GPU_HELD_DETAIL, MODE_NOT_LOADED_DETAIL
+from songmaker_acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.progress import AceStepPhase
+from songmaker_acestep_engine.thread_handoff import acquire_in_thread
 from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )

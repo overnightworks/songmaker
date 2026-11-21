@@ -19,7 +19,7 @@ from songmaker_cli.parser import AlbumMeta, SongMeta
 
 
 def test_decode_audio_success(make_stereo_wav_bytes: Callable[..., bytes]) -> None:
-    from acestep_engine.models import AceStepResult
+    from songmaker_acestep_engine.models import AceStepResult
 
     wav_bytes = make_stereo_wav_bytes()
     result = AceStepResult(wav_bytes=wav_bytes, seed=1)
@@ -29,7 +29,7 @@ def test_decode_audio_success(make_stereo_wav_bytes: Callable[..., bytes]) -> No
 
 
 def test_decode_audio_empty() -> None:
-    from acestep_engine.models import AceStepResult
+    from songmaker_acestep_engine.models import AceStepResult
 
     result = AceStepResult(wav_bytes=b"not wav", seed=1)
     with pytest.raises(GenerationError, match="decode failed"):

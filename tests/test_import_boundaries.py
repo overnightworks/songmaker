@@ -23,7 +23,7 @@ SOURCE_ROOT = REPOSITORY_ROOT / "src"
 CONTRACT_FILE = REPOSITORY_ROOT / ".importlinter"
 CONTRACT_SECTION = "importlinter:contract:independent-packages"
 APPLICATION_PACKAGE = "songmaker_cli"
-INDEPENDENT_PACKAGE = "acestep_engine"
+INDEPENDENT_PACKAGE = "songmaker_acestep_engine"
 INDEPENDENT_PACKAGES = ("webauth",)
 UNCOPIED_ARTEFACTS = shutil.ignore_patterns("__pycache__", "*.egg-info")
 

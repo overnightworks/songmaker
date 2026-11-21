@@ -76,7 +76,7 @@ def small_limit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _generation_dispatch(worker: _Worker):
-    from acestep_engine.models import AceStepConfig
+    from songmaker_acestep_engine.models import AceStepConfig
 
     options = DispatchOptions(
         transport=httpx.MockTransport(worker.handle), initial_reconnect_backoff_seconds=0.0,
