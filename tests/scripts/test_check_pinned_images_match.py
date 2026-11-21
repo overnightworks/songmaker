@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import textwrap
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -174,6 +175,21 @@ def test_platform_leg_fails_when_the_manifest_names_no_image(
 
     assert checker.run(compose, workflow, lambda _path: "kind: Namespace\n") == 1
     assert "no 'postgres' image" in capsys.readouterr().err
+
+
+def test_platform_leg_fails_with_one_message_per_service_when_the_fetch_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    compose = _write_compose(tmp_path, POSTGRES_PIN, REDIS_PIN)
+    workflow = _write_workflow(tmp_path, POSTGRES_PIN, REDIS_PIN)
+
+    def unreachable(_path: str) -> str:
+        raise urllib.error.URLError("name resolution failed")
+
+    assert checker.run(compose, workflow, unreachable) == 1
+    messages = capsys.readouterr().err.splitlines()
+    assert len(messages) == len(checker.SERVICE_NAMES)
+    assert all("name resolution failed" in message for message in messages)
 
 
 def test_repository_pins_match() -> None:

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -97,9 +98,13 @@ def _platform_mismatches(
     if compose_image is None:
         return []  # reported by the compose leg
     manifest_path = PLATFORM_MANIFESTS[service_name]
+    try:
+        manifest = fetch(manifest_path)
+    except urllib.error.URLError as error:
+        return [f"platform {manifest_path}: cannot fetch it ({error.reason})"]
     platform_images = [
         image
-        for document in yaml.safe_load_all(fetch(manifest_path))
+        for document in yaml.safe_load_all(manifest)
         for image in _images_in(document, service_name)
     ]
     if not platform_images:
