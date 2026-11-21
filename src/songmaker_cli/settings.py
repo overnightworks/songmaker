@@ -24,7 +24,7 @@ from urllib.parse import urlsplit
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from acestep_engine.settings import EngineSettings
+from songmaker_acestep_engine.settings import EngineSettings
 from songmaker_cli.agent.settings import AgentSettings
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
@@ -42,7 +42,7 @@ from songmaker_cli.job_timing import (
 )
 
 # The most a worker may hand music for one take. Songmaker asks ACE-Step for `audio_format:
-# "wav"` (acestep_engine/client.py); the pinned vendor/acestep saves that with
+# "wav"` (songmaker_acestep_engine/client.py); the pinned vendor/acestep saves that with
 # `torchaudio.save(..., backend="soundfile")` in acestep/audio_utils.py: stereo at 48 kHz, at
 # most 4 bytes per sample (a float tensor saves as 32-bit FLOAT). A song request asks
 # for at most 600 seconds (`audio_duration`, le=600 in api_models/songs.py). The product,
@@ -113,7 +113,7 @@ class LoraTrainingJobConfig:
         }
 
 
-# Where the container runtime mounts secret files. acestep_worker/constants.py
+# Where the container runtime mounts secret files. songmaker_acestep_worker/constants.py
 # keeps its own copy: the engine packages never import songmaker_cli.
 SECRETS_DIRECTORY: Final[Path] = Path("/run/secrets")
 DATABASE_PASSWORD_SECRET_FILE: Final[str] = "postgres_password"  # noqa: S105 - a file name and no secret
@@ -154,7 +154,7 @@ def _split_token_clients(value: str) -> list[str]:
 class Settings(BaseSettings):
     """Validated application settings, loaded from env, .env and the secret files.
 
-    All env reads in ``src/songmaker_cli`` and ``src/acestep_worker`` go
+    All env reads in ``src/songmaker_cli`` and ``src/songmaker_acestep_worker`` go
     through this class. Required fields raise at startup if missing.
     Optional fields have explicit, named defaults that are visible in
     code review (no fallback chains, no sentinel coercion).
@@ -494,9 +494,9 @@ def get_settings() -> Settings:
     return Settings()
 
 
-# WorkerSettings was moved to src/acestep_worker/settings.py on 2026-04-09
+# WorkerSettings was moved to src/songmaker_acestep_worker/settings.py on 2026-04-09
 # because the acestep-worker container does not install songmaker_cli.
 # Importing it here crashed the worker at startup with
 # ``ModuleNotFoundError: No module named 'songmaker_cli'``. The class is
-# now owned by acestep_worker. Any test or helper that needs it should
-# ``from acestep_worker.settings import WorkerSettings, get_worker_settings``.
+# now owned by songmaker_acestep_worker. Any test or helper that needs it should
+# ``from songmaker_acestep_worker.settings import WorkerSettings, get_worker_settings``.

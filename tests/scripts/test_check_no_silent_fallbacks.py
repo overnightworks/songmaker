@@ -83,7 +83,7 @@ def test_only_reads_of_the_environment_are_reported(
 
 @pytest.mark.parametrize("rel_path", [
     "songmaker_cli/settings.py",
-    "acestep_worker/settings.py",
+    "songmaker_acestep_worker/settings.py",
     "songmaker_cli/db/migrations/env.py",
     "songmaker_cli/env_override.py",
 ])
@@ -109,7 +109,7 @@ def test_a_settings_named_api_model_is_not_an_env_owner(
 @pytest.mark.parametrize(("rel_path", "line"), [
     ("songmaker_cli/api_models/songs.py", "    expires_at: str | None = None"),
     ("songmaker_cli/api_models/settings.py", "    updated_at: str | None = None"),
-    ("acestep_worker/task_store.py", "def complete(self, r: dict[str, Any]) -> None: ..."),
+    ("songmaker_acestep_worker/task_store.py", "def complete(self, r: dict[str, Any]) -> None: ..."),
     ("songmaker_cli/claude/provider.py", "x = os.getenv('FOO')"),
 ])
 def test_no_file_or_line_buys_an_exemption(

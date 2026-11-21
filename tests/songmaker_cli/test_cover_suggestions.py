@@ -24,7 +24,7 @@ from support.web_app import (
 )
 from support.xmp_packet import read_digital_source_type
 
-from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
+from songmaker_audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,

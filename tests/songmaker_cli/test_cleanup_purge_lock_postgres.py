@@ -10,7 +10,7 @@ import pytest
 from support.postgres_lock_harness import StatementPause, race
 from support.web_app import make_test_app, seed_session, seed_user
 
-from acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_cli import cleanup
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.db.models import (

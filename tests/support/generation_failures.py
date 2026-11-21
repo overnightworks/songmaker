@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from acestep_engine.errors import AudioDownloadError
+from songmaker_acestep_engine.errors import AudioDownloadError
 from songmaker_cli.messages import Message
 from songmaker_cli.scheduler import NoCapacityError
 

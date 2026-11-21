@@ -120,9 +120,9 @@ python = "src/songmaker_cli/words.py"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = [
-    "acestep_engine*",
-    "acestep_worker*",
-    "audio_engine*",
+    "songmaker_acestep_engine*",
+    "songmaker_acestep_worker*",
+    "songmaker_audio_engine*",
     "songmaker_cli*",
 ]
 

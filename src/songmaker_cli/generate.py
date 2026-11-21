@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from acestep_engine.models import AceStepConfig
-from audio_engine import (
+from songmaker_acestep_engine.models import AceStepConfig
+from songmaker_audio_engine import (
     AudioDecodeError,
     MasteringError,
     encode_mp3,
