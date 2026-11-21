@@ -7,7 +7,7 @@
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { FlowGuard, shellOf } from './helpers';
-import { openNowPlayingFromBar, playCollection } from './now-playing-flow';
+import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -77,8 +77,8 @@ test('words sung differently carry marks that show what was sung', async ({ page
 	const songTitle = library.albumTracks[0].songTitle;
 	await routeSongReads(page, songTitle);
 	await page.goto(`/album/${library.albumId}`);
-	await playCollection(page, 'album');
-	await openNowPlayingFromBar(page, testInfo, songTitle);
+	await playOpenAlbum(page);
+	await openNowPlayingFromBar(page, shellOf(testInfo), songTitle);
 
 	const lyrics = page.locator('.lyrics');
 	const marks = lyrics.getByRole('button');
