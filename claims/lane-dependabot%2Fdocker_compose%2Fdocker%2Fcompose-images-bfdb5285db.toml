@@ -1,0 +1,7 @@
+claim_id = "eb90e594653c463f8bdb8faed68db802"
+agent = "Claude 54b282ca-7891-403a-a10d-7bfdd4fe2b66"
+role = "builder"
+base = "1281e095e25c11700ea04a6e844ce302a812d02b"
+branch = "dependabot/docker_compose/docker/compose-images-bfdb5285db"
+scope = ["docker/docker-compose.test.yml"]
+opened_commit = "f53d84b26355098a06651492af1bbc7c29bf7b74"
