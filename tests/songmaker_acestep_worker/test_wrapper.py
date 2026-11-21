@@ -90,10 +90,7 @@ def recorded_process_kills(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, i
 
 
 @pytest.fixture
-def headerless_client(
-    tmp_path: Path,
-    recorded_process_kills: list[tuple[int, int]],
-) -> TestClient:
+def headerless_client(tmp_path: Path, recorded_process_kills: list[tuple[int, int]]) -> TestClient:
     deps, _ = make_deps(tmp_path)
     return TestClient(create_app(deps))
 
@@ -259,9 +256,7 @@ def test_health_stays_200_when_pynvml_not_installed(tmp_path: Path) -> None:
     assert resp.json() == {"status": "ok"}
 
 
-def test_build_state_payload_carries_gpu_healthy_false_when_gpu_unavailable(
-    tmp_path: Path,
-) -> None:
+def test_build_state_payload_carries_gpu_healthy_false_when_gpu_unavailable(tmp_path: Path) -> None:
     from songmaker_acestep_worker.wrapper import build_state_payload
 
     deps, _ = make_deps(tmp_path)
@@ -274,9 +269,7 @@ def test_build_state_payload_carries_gpu_healthy_false_when_gpu_unavailable(
     assert payload["gpu_health_detail"] == "Driver/library version mismatch"
 
 
-def test_build_state_payload_carries_gpu_healthy_true_by_default(
-    tmp_path: Path,
-) -> None:
+def test_build_state_payload_carries_gpu_healthy_true_by_default(tmp_path: Path) -> None:
     from songmaker_acestep_worker.wrapper import build_state_payload
 
     deps, _ = make_deps(tmp_path)

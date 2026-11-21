@@ -58,9 +58,7 @@ def test_train_lora_rejects_missing_training_configuration(tmp_path: Path, train
     assert response.status_code == 422
 
 
-def test_train_lora_requires_loaded_mode(
-    tmp_path: Path, train_lora_deps, train_body
-) -> None:
+def test_train_lora_requires_loaded_mode(tmp_path: Path, train_lora_deps, train_body) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
     dataset_dir.mkdir()
@@ -140,9 +138,7 @@ def test_gpu_hold_endpoints_accept_only_the_current_token(tmp_path: Path, train_
         )
 
 
-def test_worker_settings_require_a_nonempty_internal_token(
-    monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_worker_settings_require_a_nonempty_internal_token(monkeypatch: pytest.MonkeyPatch) -> None:
     from pydantic import ValidationError
 
     from songmaker_acestep_worker.settings import WorkerSettings
@@ -164,9 +160,7 @@ def test_worker_settings_require_a_nonempty_internal_token(
     assert settings.songmaker_internal_token.get_secret_value() == "token"
 
 
-def test_train_lora_501_when_runner_missing(
-    tmp_path: Path, train_lora_deps, train_body
-) -> None:
+def test_train_lora_501_when_runner_missing(tmp_path: Path, train_lora_deps, train_body) -> None:
     deps = train_lora_deps(tmp_path, with_train_runner=False)
     dataset_dir = deps.shared_audio_root / "dataset"
     dataset_dir.mkdir()
@@ -667,11 +661,7 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
         renewal_started.set()
         raise RuntimeError("renewal failed")
 
-    async def blocking_runner(
-        store: TaskStore,
-        task_id: str,
-        **kwargs,
-    ) -> None:
+    async def blocking_runner(store: TaskStore, task_id: str, **kwargs) -> None:
         training_started.set()
         await store.mark_running(task_id)
         try:
@@ -1026,9 +1016,7 @@ def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path, tra
     assert not (tmp_path / "safe-root" / "training" / task_id).exists()
 
 
-def test_default_train_lora_runner_fails_on_zero_samples(
-    tmp_path: Path, train_body
-) -> None:
+def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path, train_body) -> None:
     from unittest.mock import patch
 
     from songmaker_acestep_engine.training_client import ScanDatasetResult
