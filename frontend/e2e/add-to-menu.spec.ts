@@ -57,7 +57,9 @@ test('album ⋯ › Add to… › a new playlist by Enter holds the album songs'
 
 	const title = `${NEW_PLAYLIST_TITLE_PREFIX} ${Date.now()}`;
 	const created = page.waitForResponse(
-		(response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/playlists'
+		(response) =>
+			response.request().method() === 'POST' &&
+			new URL(response.url()).pathname === '/api/playlists'
 	);
 	await page.getByRole('textbox', { name: words['addToPicker.newPlaceholder'] }).fill(title);
 	await page.keyboard.press('Enter');
@@ -72,7 +74,10 @@ test('album ⋯ › Add to… › a new playlist by Enter holds the album songs'
 	}
 });
 
-test('take ⋯ › Add to… › an existing playlist holds that take', async ({ page, request }, testInfo) => {
+test('take ⋯ › Add to… › an existing playlist holds that take', async ({
+	page,
+	request
+}, testInfo) => {
 	const library = readSeededLibrary();
 	const playlist = await seedPlaylist(request, library, 0);
 	const headers = await sameOriginHeaders(page);

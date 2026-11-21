@@ -48,14 +48,7 @@
 		ondelete: () => void;
 	}
 
-	let {
-		gen,
-		song,
-		voices,
-		onsource,
-		onaddto,
-		ondelete
-	}: Props = $props();
+	let { gen, song, voices, onsource, onaddto, ondelete }: Props = $props();
 
 	const actions: GenerationActions = getGenerationActions();
 

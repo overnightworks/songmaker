@@ -18,8 +18,8 @@ import AddToPicker from './AddToPicker.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLElement;
-let onselect: ReturnType<typeof vi.fn>;
-let onback: ReturnType<typeof vi.fn>;
+let onselect = vi.fn<(playlistId: string) => void>();
+let onback = vi.fn<() => void>();
 
 beforeEach(() => {
 	playlistList.set([
@@ -30,8 +30,8 @@ beforeEach(() => {
 	createPlaylist.mockReset();
 	fetchPlaylists.mockReset();
 	vi.mocked(addToast).mockClear();
-	onselect = vi.fn();
-	onback = vi.fn();
+	onselect = vi.fn<(playlistId: string) => void>();
+	onback = vi.fn<() => void>();
 	target = document.createElement('div');
 	document.body.append(target);
 });
@@ -43,13 +43,15 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-async function openPicker(): Promise<void> {
+async function showPicker(): Promise<void> {
 	mounted = mount(AddToPicker, { target, props: { onselect, onback } });
 	await tick();
 }
 
 function newPlaylistField(): HTMLInputElement {
-	return target.querySelector<HTMLInputElement>('input[type="text"]')!;
+	const field = target.querySelector<HTMLInputElement>('input[type="text"]');
+	if (!field) throw new Error('Expected the New playlist field');
+	return field;
 }
 
 async function typeInto(field: HTMLInputElement, text: string, key?: string): Promise<void> {
@@ -63,7 +65,7 @@ async function typeInto(field: HTMLInputElement, text: string, key?: string): Pr
 
 describe('AddToPicker', () => {
 	it('lists every playlist with its title and entry count under the Add to heading', async () => {
-		await openPicker();
+		await showPicker();
 
 		expect(target.textContent).toContain(words['addToPicker.heading']);
 		expect(
@@ -81,22 +83,20 @@ describe('AddToPicker', () => {
 		playlistList.set([]);
 		playlistLoad.set({ status: 'idle', error: null });
 		fetchPlaylists.mockReturnValue(new Promise(() => undefined));
-		await openPicker();
+		await showPicker();
 
-		expect(target.querySelector('[role="status"]')?.textContent).toBe(
-			words['addToPicker.loading']
-		);
+		expect(target.querySelector('[role="status"]')?.textContent).toBe(words['addToPicker.loading']);
 	});
 
 	it('hands the chosen playlist to its host', async () => {
-		await openPicker();
+		await showPicker();
 		target.querySelectorAll<HTMLButtonElement>('.ap-row')[1]?.click();
 
 		expect(onselect).toHaveBeenCalledWith('p-run');
 	});
 
 	it('goes back to the menu rows from the back button', async () => {
-		await openPicker();
+		await showPicker();
 		target.querySelector<HTMLButtonElement>('.ap-back')?.click();
 
 		expect(onback).toHaveBeenCalledTimes(1);
@@ -104,7 +104,7 @@ describe('AddToPicker', () => {
 
 	it('creates a playlist from the New playlist field on Enter and adds to it', async () => {
 		createPlaylist.mockResolvedValue(playlist({ id: 'p-new', title: 'Road Trip' }));
-		await openPicker();
+		await showPicker();
 		await typeInto(newPlaylistField(), '  Road Trip ', 'Enter');
 
 		expect(createPlaylist).toHaveBeenCalledWith('Road Trip');
@@ -112,7 +112,7 @@ describe('AddToPicker', () => {
 	});
 
 	it('creates nothing from an empty field', async () => {
-		await openPicker();
+		await showPicker();
 		await typeInto(newPlaylistField(), '   ', 'Enter');
 
 		expect(createPlaylist).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('AddToPicker', () => {
 
 	it('toasts and adds nothing when the playlist cannot be created', async () => {
 		createPlaylist.mockRejectedValue(new Error('boom'));
-		await openPicker();
+		await showPicker();
 		await typeInto(newPlaylistField(), 'Road Trip', 'Enter');
 
 		expect(addToast).toHaveBeenCalledWith(words['addToPicker.createFailed'], 'error');

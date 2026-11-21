@@ -243,9 +243,7 @@ function unsavedDraftRow(): OverlayRow {
 }
 
 function addToPicker(page: Page): Locator {
-	return page
-		.getByRole('dialog', { name: words['songMenu.label'] })
-		.getByText(words['addToPicker.heading'], { exact: true });
+	return page.getByText(words['addToPicker.heading'], { exact: true });
 }
 
 const ADD_TO_PICKER_ROW: OverlayRow = {

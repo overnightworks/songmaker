@@ -152,54 +152,54 @@
 		{#if adding}
 			<AddToPicker onselect={addToAndClose} onback={() => (adding = false)} />
 		{:else}
-		<p class="menu-heading">{pageText(kindKeys[kind].heading, { title })}</p>
-		{#if kind === 'album'}
-			{#if oneditdetails}
-				{@render actionRow(
-					pageText('collectionMenu.editDetails'),
-					oneditdetails,
-					'pencil',
-					undefined,
-					closeLeavingFocusToForm
-				)}
+			<p class="menu-heading">{pageText(kindKeys[kind].heading, { title })}</p>
+			{#if kind === 'album'}
+				{#if oneditdetails}
+					{@render actionRow(
+						pageText('collectionMenu.editDetails'),
+						oneditdetails,
+						'pencil',
+						undefined,
+						closeLeavingFocusToForm
+					)}
+				{/if}
+				{#if oncoveredit}
+					{@render actionRow(
+						pageText('collectionMenu.cover'),
+						oncoveredit,
+						'image',
+						pageText('collectionMenu.coverHint')
+					)}
+				{/if}
+				{#if oncurate}
+					{@render actionRow(pageText('collectionMenu.curate'), oncurate, 'spark')}
+				{/if}
+				{#if onaddto}
+					<button class="menu-item opens-list" onclick={() => (adding = true)}>
+						<Icon name="list-plus" size={14} />
+						{pageText('collectionMenu.addTo')}
+					</button>
+				{/if}
+				{@render shareRow()}
+				{#if onarchive}
+					{@render actionRow(pageText('collectionMenu.archive'), onarchive, 'archive')}
+				{/if}
+			{:else}
+				{@render shareRow()}
+				{#if oncover}
+					{@render actionRow(pageText('collectionMenu.upload'), oncover)}
+				{/if}
+				{#if hasCover && onremovecover}
+					{@render actionRow(pageText('collectionMenu.removeCover'), onremovecover)}
+				{/if}
+				{#if onrename}
+					{@render actionRow(pageText('collectionMenu.rename'), onrename)}
+				{/if}
 			{/if}
-			{#if oncoveredit}
-				{@render actionRow(
-					pageText('collectionMenu.cover'),
-					oncoveredit,
-					'image',
-					pageText('collectionMenu.coverHint')
-				)}
-			{/if}
-			{#if oncurate}
-				{@render actionRow(pageText('collectionMenu.curate'), oncurate, 'spark')}
-			{/if}
-			{#if onaddto}
-				<button class="menu-item opens-list" onclick={() => (adding = true)}>
-					<Icon name="list-plus" size={14} />
-					{pageText('collectionMenu.addTo')}
-				</button>
-			{/if}
-			{@render shareRow()}
-			{#if onarchive}
-				{@render actionRow(pageText('collectionMenu.archive'), onarchive, 'archive')}
-			{/if}
-		{:else}
-			{@render shareRow()}
-			{#if oncover}
-				{@render actionRow(pageText('collectionMenu.upload'), oncover)}
-			{/if}
-			{#if hasCover && onremovecover}
-				{@render actionRow(pageText('collectionMenu.removeCover'), onremovecover)}
-			{/if}
-			{#if onrename}
-				{@render actionRow(pageText('collectionMenu.rename'), onrename)}
-			{/if}
-		{/if}
-		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-			<Icon name="trash" size={14} />
-			{pageText(kindKeys[kind].delete)}
-		</button>
+			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+				<Icon name="trash" size={14} />
+				{pageText(kindKeys[kind].delete)}
+			</button>
 		{/if}
 	</MenuPopover>
 	<ShareDialog songs={missingTakeSongs} onclose={closeShareWarning} />
