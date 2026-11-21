@@ -100,8 +100,9 @@ def _platform_mismatches(
     manifest_path = PLATFORM_MANIFESTS[service_name]
     try:
         manifest = fetch(manifest_path)
-    except urllib.error.URLError as error:
-        return [f"platform {manifest_path}: cannot fetch it ({error.reason})"]
+    except (urllib.error.URLError, TimeoutError) as error:
+        reason = error.reason if isinstance(error, urllib.error.URLError) else error
+        return [f"platform {manifest_path}: cannot fetch it ({reason})"]
     platform_images = [
         image
         for document in yaml.safe_load_all(manifest)

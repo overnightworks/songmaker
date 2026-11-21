@@ -177,14 +177,22 @@ def test_platform_leg_fails_when_the_manifest_names_no_image(
     assert "no 'postgres' image" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [
+        urllib.error.URLError("name resolution failed"),
+        TimeoutError("name resolution failed"),
+    ],
+    ids=["connect-error", "read-timeout"],
+)
 def test_platform_leg_fails_with_one_message_per_service_when_the_fetch_fails(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], failure: Exception
 ) -> None:
     compose = _write_compose(tmp_path, POSTGRES_PIN, REDIS_PIN)
     workflow = _write_workflow(tmp_path, POSTGRES_PIN, REDIS_PIN)
 
     def unreachable(_path: str) -> str:
-        raise urllib.error.URLError("name resolution failed")
+        raise failure
 
     assert checker.run(compose, workflow, unreachable) == 1
     messages = capsys.readouterr().err.splitlines()
