@@ -676,6 +676,23 @@ describe('NowPlayingLyrics sung marks', () => {
 		expect(sungLines()).toHaveLength(0);
 	});
 
+	it('moves the open state to another word of the same line', async () => {
+		await render({ ...markedTake(), cues: [sungCue(0, 0.5, 'the lantern hums softly tonight')] });
+		const [first, second] = Array.from(
+			target.querySelectorAll('.lyrics-line')[1].querySelectorAll('button')
+		);
+
+		first.click();
+		second.click();
+		await tick();
+
+		expect(sungLines()).toHaveLength(1);
+		expect([first, second].map((mark) => mark.getAttribute('aria-expanded'))).toEqual([
+			'false',
+			'true'
+		]);
+	});
+
 	it('reads a line nobody sang as the Sung label and the nothing glyph', async () => {
 		await render({
 			...markedTake(),

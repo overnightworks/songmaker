@@ -33,3 +33,5 @@ For anyone building or reviewing library playback pools, shuffle and the player:
 ### REQ-PLAYER-01: While a take is playing, the signed-in player identifies the current song and gives access to its single Now Playing surface.
 
 ### REQ-PLAYER-02: On every player surface, while audio is loading, a first Play request queues playback and a second Play request cancels it.
+
+### REQ-PLAYER-03: In the signed-in player's Now Playing the written lyrics stay intact; a word sung differently or not at all carries a dotted underline, and a tap or hover on it shows one "Sung" line with what was sung under that lyric line; there is no switch, no strike-through and no second printout.

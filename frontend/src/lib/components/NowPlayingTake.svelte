@@ -10,7 +10,7 @@
 	import { closeNowPlaying } from '#lib/stores/player.ts';
 	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
 	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '#lib/stores/takeActions.ts';
-			import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
+	import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
 	import { pageLanguage } from '#lib/utils/page-language.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import { formatTime } from '#lib/utils/format.ts';
@@ -19,12 +19,10 @@
 
 	let {
 		generation,
-		song,
-		lyrics
+		song
 	}: {
 		generation: GenerationItem;
 		song: SongItem;
-		lyrics: string | null;
 	} = $props();
 
 	const SCORE_LABEL_KEYS: Record<ScoreKey, TextKey> = {

@@ -70,7 +70,7 @@ interface LyricLineInterval {
 
 // A word of the line as sung, in Whisper's own spelling; `differs` when no
 // lyric word is paired with it word for word.
-export interface SungWord {
+interface SungWord {
 	text: string;
 	differs: boolean;
 }

@@ -55,19 +55,29 @@
 	// or another take starts.
 	let following = $state(true);
 
-	// The one line whose Sung line is shown: the one a tap opened, or, while a
-	// fine pointer rests on a mark, the one it rests on.
-	let tappedLine = $state<number | null>(null);
-	let hoveredLine = $state<number | null>(null);
-	const sungLineShown = $derived(hoveredLine ?? tappedLine);
+	// The one mark whose line shows its Sung line: the one a tap opened, or,
+	// while a fine pointer rests on a mark, the one it rests on.
+	interface MarkRef {
+		line: number;
+		word: number;
+	}
+	let tappedMark = $state<MarkRef | null>(null);
+	let hoveredMark = $state<MarkRef | null>(null);
+	const shownMark = $derived(hoveredMark ?? tappedMark);
+	// Words stay separate nodes, so the space between them is written out.
+	const WORD_SEPARATOR = ' ';
 	const HOVER_POINTER = '(hover: hover) and (pointer: fine)';
 
-	function toggleSungLine(index: number): void {
-		tappedLine = tappedLine === index ? null : index;
+	function isShown(line: number, word: number): boolean {
+		return shownMark?.line === line && shownMark.word === word;
 	}
 
-	function hoverSungLine(index: number | null): void {
-		if (index === null || window.matchMedia(HOVER_POINTER).matches) hoveredLine = index;
+	function toggleMark(line: number, word: number): void {
+		tappedMark = tappedMark?.line === line && tappedMark.word === word ? null : { line, word };
+	}
+
+	function hoverMark(mark: MarkRef | null): void {
+		if (mark === null || window.matchMedia(HOVER_POINTER).matches) hoveredMark = mark;
 	}
 
 	$effect(() => {
@@ -75,8 +85,8 @@
 		const takeCues = cues;
 		alignedLines = null;
 		following = true;
-		tappedLine = null;
-		hoveredLine = null;
+		tappedMark = null;
+		hoveredMark = null;
 		if (takeLyrics == null || takeLyrics.length === 0) return;
 		if (takeCues == null || takeCues.length === 0) return;
 
@@ -235,27 +245,27 @@
 										type="button"
 										class="sung-mark"
 										data-hitbox="text"
-										aria-expanded={sungLineShown === index}
+										aria-expanded={isShown(index, wordIndex)}
 										aria-controls="sung-line-{index}"
-										onclick={() => toggleSungLine(index)}
+										onclick={() => toggleMark(index, wordIndex)}
 										onpointerenter={(event) =>
-											event.pointerType === 'mouse' && hoverSungLine(index)}
-										onpointerleave={() => hoverSungLine(null)}>{word}</button
+											event.pointerType === 'mouse' && hoverMark({ line: index, word: wordIndex })}
+										onpointerleave={() => hoverMark(null)}>{word}</button
 									>
 								{:else}
 									{word}
-								{/if}{' '}
+								{/if}{WORD_SEPARATOR}
 							{/each}
 						{:else}
 							{line.text}
 						{/if}
 					</p>
-					{#if sungMarks && sungLineShown === index}
+					{#if sungMarks && shownMark?.line === index}
 						<p class="sung-line" id="sung-line-{index}">
 							<span class="sung-label">{pageText('nowPlaying.sungLine')}</span>
 							{#if line.sung}
 								{#each line.sung as word, wordIndex (wordIndex)}
-									<span class:sung-differs={word.differs}>{word.text}</span>{' '}
+									<span class:sung-differs={word.differs}>{word.text}</span>{WORD_SEPARATOR}
 								{/each}
 							{:else}
 								{pageText('nowPlaying.sungNothing')}
@@ -351,12 +361,12 @@
 	}
 	.sung-line {
 		margin: -0.3rem 0 0.5rem;
-		font-size: 0.82rem;
+		font-size: var(--label-font-size);
 		color: var(--text-subtle);
 	}
 	.sung-label {
 		font-family: var(--font-display);
-		font-size: 0.68rem;
+		font-size: var(--label-font-size);
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}

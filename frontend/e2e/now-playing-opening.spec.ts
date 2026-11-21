@@ -5,6 +5,7 @@
 
 import { expect, test, type Page, type TestInfo } from './coverage-test';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
+import { openNowPlayingFromBar, playCollection } from './now-playing-flow';
 import { readSeededLibrary, seedPlaylist } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -17,37 +18,6 @@ test.beforeEach(({ page }) => {
 test.afterEach(() => {
 	guard.assertClean();
 });
-
-async function playCollection(page: Page, kind: 'album' | 'playlist'): Promise<void> {
-	const play = workspace(page).getByRole('button', {
-		name: words[kind === 'album' ? 'collectionHeader.playAlbum' : 'collectionHeader.playPlaylist'],
-		exact: true
-	});
-	await play.click();
-	await expect(
-		page
-			.getByRole('contentinfo')
-			.getByRole('button', { name: words['transport.pause'], exact: true })
-	).toBeVisible();
-}
-
-/** The bar's own Now Playing button: the phone's title target, the desktop's labelled button. */
-async function openNowPlayingFromBar(
-	page: Page,
-	testInfo: TestInfo,
-	songTitle: string
-): Promise<void> {
-	await page
-		.getByRole('contentinfo')
-		.getByRole('button', {
-			name:
-				shellOf(testInfo) === 'mobile'
-					? words['player.openNowPlaying']({ title: songTitle })
-					: words['transport.nowPlaying'],
-			exact: true
-		})
-		.click();
-}
 
 /**
  * The phone opens the right panel as a sheet only on This take; on Queue the

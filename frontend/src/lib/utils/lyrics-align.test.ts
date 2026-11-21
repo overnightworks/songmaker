@@ -629,7 +629,7 @@ describe('alignLyricsToCues on the measured takes', () => {
 describe('activeLyricLineIndices', () => {
 	const lines = [
 		unmarked(LINE_1, { start: 0, end: 1 }),
-		{ text: '', interval: null },
+		unmarked('', null),
 		unmarked(LINE_2, { start: 1.5, end: 2.5 })
 	];
 

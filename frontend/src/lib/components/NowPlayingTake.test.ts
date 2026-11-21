@@ -52,12 +52,9 @@ afterEach(async () => {
 	activeJobs.set([]);
 });
 
-async function render(
-	overrides: Partial<{ generation: GenerationItem; song: SongItem; lyrics: string | null }> = {}
-) {
+async function render(overrides: Partial<{ generation: GenerationItem; song: SongItem }> = {}) {
 	target = document.createElement('div');
 	document.body.append(target);
-	const lyrics = 'lyrics' in overrides ? (overrides.lyrics ?? null) : 'la la';
 	mounted = mount(NowPlayingTake, {
 		target,
 		props: {
@@ -71,8 +68,7 @@ async function render(
 					lyrics: 'la la',
 					prompt: 'dreamy',
 					created_at: ''
-				}),
-			lyrics
+				})
 		}
 	});
 	await tick();
