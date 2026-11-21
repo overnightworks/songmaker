@@ -50,7 +50,8 @@ The platform runs these services; the test stack (`docker/docker-compose.test.ym
 │             │ HTTP /load_model, /generate, SSE                       │
 │             ▼                                                        │
 │  ┌──────────────────────┐  ┌──────────────────────┐                  │
-│  │  acestep-worker-0    │  │  acestep-worker-1    │ ← test stack: N   │
+│  │ songmaker-acestep-   │  │ songmaker-acestep-   │ ← test stack: N   │
+│  │ worker-0             │  │ worker-1             │                   │
 │  │  GPU + ACE-Step      │  │  (added later, no    │                   │
 │  │  subprocess          │  │   code change)       │                   │
 │  │  /load_model         │  └──────────────────────┘                   │
