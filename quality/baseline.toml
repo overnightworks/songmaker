@@ -37,7 +37,7 @@
 "frontend/src/lib/stores/libraryContext.test.ts" = 2085
 "frontend/src/lib/stores/libraryContext.ts" = 1178
 "frontend/src/lib/stores/navigation.test.ts" = 2964
-"frontend/src/lib/stores/player.test.ts" = 5105
+"frontend/src/lib/stores/player.test.ts" = 5078
 "frontend/src/lib/stores/player.ts" = 1877
 "frontend/src/lib/stores/resourceSync.test.ts" = 2019
 "frontend/src/lib/stores/resourceSync.ts" = 1054

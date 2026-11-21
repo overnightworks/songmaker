@@ -26,6 +26,14 @@ import {
 	fetchSongs
 } from '#lib/api/client.ts';
 import { toasts } from '#lib/stores/toast.ts';
+import {
+	genDefaults,
+	makePlayback,
+	playlistEntryDefaults,
+	playlistQueue,
+	QUEUE_PLAYLIST,
+	queuedSongDefaults
+} from '#lib/test-utils/queue-scenarios.ts';
 
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
@@ -169,28 +177,8 @@ import {
 import { openCollection } from '#lib/stores/collection.ts';
 import { words } from '#lib/words/en.ts';
 
-const genDefaults = {
-	mp3_path: 'a1/song_v1.mp3',
-	wav_path: 'a1/song_v1.wav',
-	seed: 42,
-	model_mode: 'sft',
-	created_at: ''
-} satisfies Partial<GenerationItem>;
-
-const playlistEntryDefaults = {
-	album_title: 'Album',
-	mp3_path: 'a1/song_v1.mp3',
-	seed: 42
-} satisfies Partial<PlaylistEntryItem>;
-
-function queuedSongDefaults(): Partial<SongItem> {
-	return { slug: 'song', title: 'Song', generations: [makeGen(genDefaults)], created_at: '' };
-}
-
 type PlaylistQueueSource = Pick<PlaylistDetailItem, 'id' | 'title'>;
 type QueueContext = Parameters<typeof queueContext.set>[0];
-
-const QUEUE_PLAYLIST: PlaylistQueueSource = { id: 'p1', title: 'Night Drive' };
 
 const playlistDefaults = {
 	id: QUEUE_PLAYLIST.id,
@@ -199,10 +187,6 @@ const playlistDefaults = {
 	share_slug: null,
 	created_at: ''
 } satisfies Partial<PlaylistDetailItem>;
-
-function playlistQueue(entries: PlaylistEntryItem[], index: number): QueueContext {
-	return { type: 'playlist', playlist: QUEUE_PLAYLIST, entries, index };
-}
 
 const poolQueueRefusal = (key: string, values: Record<string, string> = {}) =>
 	new ApiError(422, '', '/api/library/pool-queue', null, '', null, null, { key, values });
@@ -278,17 +262,6 @@ function recordLockScreenTitles(): (string | null)[] {
 function albumQueueTakeIds(): string[] {
 	const ctx = get(queueContext);
 	return ctx.type === 'album' ? (ctx.takes ?? []).map((take) => take.generation.id) : [];
-}
-
-function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
-	return {
-		generation: gen,
-		songId: song.id,
-		songTitle: song.title,
-		artist: song.artist,
-		albumTitle: song.album_title,
-		lyrics: gen.version_lyrics
-	};
 }
 
 beforeEach(() => {

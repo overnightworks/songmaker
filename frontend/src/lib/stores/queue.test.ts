@@ -6,53 +6,16 @@ import {
 	makePlaylistEntry,
 	makeSong
 } from '#lib/test-utils/factories.ts';
-import type {
-	GenerationItem,
-	PlaylistEntryItem,
-	PlaylistDetailItem,
-	SongItem
-} from '#lib/api/types.ts';
-import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 import { albumList } from '#lib/stores/libraryData.ts';
+import {
+	genDefaults,
+	makePlayback,
+	playlistEntryDefaults,
+	playlistQueue,
+	queuedSongDefaults
+} from '#lib/test-utils/queue-scenarios.ts';
 import { buildQueueViewModel, playbackSource, queueContext } from '#lib/stores/queue.ts';
-
-const genDefaults = {
-	mp3_path: 'a1/song_v1.mp3',
-	wav_path: 'a1/song_v1.wav',
-	seed: 42,
-	model_mode: 'sft',
-	created_at: ''
-} satisfies Partial<GenerationItem>;
-
-const playlistEntryDefaults = {
-	album_title: 'Album',
-	mp3_path: 'a1/song_v1.mp3',
-	seed: 42
-} satisfies Partial<PlaylistEntryItem>;
-
-function queuedSongDefaults(): Partial<SongItem> {
-	return { slug: 'song', title: 'Song', generations: [makeGen(genDefaults)], created_at: '' };
-}
-
-type QueueContext = Parameters<typeof queueContext.set>[0];
-
-const QUEUE_PLAYLIST: Pick<PlaylistDetailItem, 'id' | 'title'> = { id: 'p1', title: 'Night Drive' };
-
-function playlistQueue(entries: PlaylistEntryItem[], index: number): QueueContext {
-	return { type: 'playlist', playlist: QUEUE_PLAYLIST, entries, index };
-}
-
-function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
-	return {
-		generation: gen,
-		songId: song.id,
-		songTitle: song.title,
-		artist: song.artist,
-		albumTitle: song.album_title,
-		lyrics: gen.version_lyrics
-	};
-}
 
 afterEach(() => {
 	albumList.set([]);
