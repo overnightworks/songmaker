@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from support.postgres_lock_harness import CommitPause, StatementPause, race, wrote_to_tables
 from support.reference_rows import a_reference
 
-from acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_cli.db.models import (
     Album,
     Generation,

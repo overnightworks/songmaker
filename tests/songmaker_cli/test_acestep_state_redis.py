@@ -14,7 +14,7 @@ from redis import Redis
 from support.owner_lease_epoch import settled_epoch
 from support.refused_download import attempt_download_that_must_not_run
 
-from acestep_worker.heartbeat import reserve_gpu_hold
+from songmaker_acestep_worker.heartbeat import reserve_gpu_hold
 from songmaker_cli.acestep_state import (
     DownloadAlreadyRunning,
     admit_generation,

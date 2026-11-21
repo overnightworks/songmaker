@@ -22,8 +22,8 @@ from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 from support.wrapper_deps import reserved_gpu_hold
 
-from acestep_engine.models import TaskQueryEntry
-from acestep_engine.progress import AceStepPhase, progress_from_result
+from songmaker_acestep_engine.models import TaskQueryEntry
+from songmaker_acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
@@ -330,7 +330,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
 
 
 def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
-    from acestep_worker.heartbeat import release_gpu_hold
+    from songmaker_acestep_worker.heartbeat import release_gpu_hold
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
@@ -374,7 +374,7 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from acestep_worker.heartbeat import reserve_gpu_hold
+    from songmaker_acestep_worker.heartbeat import reserve_gpu_hold
     from songmaker_cli.scheduler import pick_worker
 
     async def exercise() -> None:
@@ -520,7 +520,7 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
@@ -564,7 +564,7 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
     tmp_path: Path,
     outcome: str,
 ) -> None:
-    from acestep_worker.heartbeat import reserve_gpu_hold
+    from songmaker_acestep_worker.heartbeat import reserve_gpu_hold
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def dispatch(**kwargs):
@@ -865,7 +865,7 @@ def test_s5_generation_job_reload_unavailable(
     tmp_path, locked_ffmpeg
 ):
     """S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
-    from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+    from songmaker_acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 
     async def exercise():
         missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))

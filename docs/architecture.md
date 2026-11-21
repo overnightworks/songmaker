@@ -974,7 +974,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
 | Worker | Job queues in PostgreSQL rows (music + scoring), hosted by arq processes, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
-| ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/acestep_worker/` (top-level package, separate from `songmaker_cli`) |
+| ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/songmaker_acestep_worker/` (top-level package, separate from `songmaker_cli`) |
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
@@ -1073,8 +1073,8 @@ Trust, tokens and the network: [Security](security.md#cover-picture-through-the-
 
 | Package | Purpose |
 |---------|---------|
-| `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
-| `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
+| `songmaker_acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
+| `songmaker_audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 
 ### The auth library (`webauth`, external)
 
@@ -1186,7 +1186,7 @@ The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TO
 
 A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes the person's own conversations and notes, starting a new conversation, ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing (except an agent account's share of its own song), publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
-The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
+The in-tree packages beside the application — `songmaker_acestep_engine`, `songmaker_acestep_worker`, `songmaker_audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
 Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, directly or through another in-tree module. The value objects both use — generation knobs (`generation_params.py`) and Whisper time marks (`whisper_cues.py`) — live beside them in `songmaker_cli/`; `api_models` re-exports them because `scripts/generate_types.py` reads its `__all__`. `.importlinter` enforces the direction (#925 G1).
 
@@ -1835,7 +1835,7 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   A generate job's percent comes from ACE-Step's own `progress` value, never
   from its free-text `progress_text` (which carries whatever the server logged
   last — checkpoint-loading bars, LM chunk counters — and made the percent
-  jump and fall back). `acestep_engine/progress.py` reads the value against
+  jump and fall back). `songmaker_acestep_engine/progress.py` reads the value against
   the fork's fixed marks (0.01 the task runs, 0.1 writing starts, 0.51
   rendering starts, 0.99 rendering ends) as an `AceStepPhase` plus the
   fraction within it. Below 0.01 ACE-Step has not started the task, so that

@@ -31,18 +31,18 @@
 [importlinter]
 include_external_packages = True
 root_packages =
-    acestep_engine
-    acestep_worker
-    audio_engine
+    songmaker_acestep_engine
+    songmaker_acestep_worker
+    songmaker_audio_engine
     songmaker_cli
 
 [importlinter:contract:independent-packages]
 name = Independent packages do not import the application
 type = forbidden
 source_modules =
-    acestep_engine
-    acestep_worker
-    audio_engine
+    songmaker_acestep_engine
+    songmaker_acestep_worker
+    songmaker_audio_engine
 forbidden_modules =
     songmaker_cli
 

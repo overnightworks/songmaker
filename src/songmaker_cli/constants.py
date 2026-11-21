@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final
 
-from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
+from songmaker_acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 
 APP_NAME = "Hallucinai"
 
@@ -384,8 +384,8 @@ class LimiterFailurePolicy(StrEnum):
 
 # Env var names stripped from the environment of every child process this
 # package spawns (the scoring subprocess, in scoring/subprocess_runner.py). The
-# acestep_worker package keeps an identical tuple of the same name in
-# acestep_worker/constants.py (it cannot import this module, see the
+# songmaker_acestep_worker package keeps an identical tuple of the same name in
+# songmaker_acestep_worker/constants.py (it cannot import this module, see the
 # independent-packages contract in .importlinter); the parity test pins them equal.
 #
 # A login is scrubbed as a pair. The name half is no secret on its own, but

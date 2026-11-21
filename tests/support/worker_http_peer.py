@@ -24,8 +24,8 @@ from support.fake_training_worker import (
 )
 from support.wrapper_deps import settled_fake_redis
 
-from acestep_worker.model_cache import LoadedModel, ModelCache
-from acestep_worker.wrapper import create_app
+from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache
+from songmaker_acestep_worker.wrapper import create_app
 from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.settings import get_settings

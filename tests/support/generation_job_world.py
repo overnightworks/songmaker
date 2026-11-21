@@ -73,7 +73,7 @@ def post_process_with_stubbed_audio(*, on_outputs_written, **kwargs):
             "songmaker_cli.jobs.generation._decode_audio",
             return_value=MagicMock(left=b"", right=b"", sample_rate=44100),
         ),
-        patch("audio_engine.write_stereo_wav", side_effect=write_raw_wav),
+        patch("songmaker_audio_engine.write_stereo_wav", side_effect=write_raw_wav),
         patch("songmaker_cli.jobs.generation._write_output", side_effect=write_encoded_outputs),
     ):
         return post_process_generation(**kwargs)

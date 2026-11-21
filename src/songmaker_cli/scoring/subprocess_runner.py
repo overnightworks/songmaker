@@ -93,7 +93,7 @@ def _scrub_secret_env_vars() -> None:
     multiprocessing's spawn start method has no ``env=`` parameter — unlike
     subprocess.Popen, the child inherits the parent's full os.environ at
     spawn time (see claude/provider.py's ``_scrub_env`` and
-    acestep_worker/subprocess_runner.py's ``build_env`` for the equivalent
+    songmaker_acestep_worker/subprocess_runner.py's ``build_env`` for the equivalent
     scrub on subprocesses that do accept ``env=``). This is the child-side
     equivalent: called first thing in ``_child_main``, before any import
     that might read the environment on its own.

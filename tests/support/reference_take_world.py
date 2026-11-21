@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine.models import AceStepConfig
+from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.jobs import _persist_generation_row
 from songmaker_cli.jobs._runtime import ReferenceDeletedDuringTake
