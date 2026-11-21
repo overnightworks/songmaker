@@ -6,6 +6,7 @@
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { FlowGuard, shellOf, workspace } from './helpers';
+import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { readSeededLibrary } from './seed';
 
 let guard: FlowGuard;
@@ -30,27 +31,14 @@ test('1906_P5: the full player says KI-generiert and the mini-player bar does no
 }, testInfo) => {
 	const library = readSeededLibrary();
 	await page.goto(`/album/${library.albumId}`);
-	await workspace(page)
-		.getByRole('button', {
-			name: words['collectionHeader.playAlbum'],
-			exact: true
-		})
-		.click();
+	await playOpenAlbum(page);
 	const bar = page.getByRole('contentinfo');
 	await expect(
 		bar.getByRole('button', { name: words['transport.pause'], exact: true })
 	).toBeVisible();
 	await expect(bar.getByText(words['aiNotice.generated'])).toHaveCount(0);
 
-	await bar
-		.getByRole('button', {
-			name:
-				shellOf(testInfo) === 'mobile'
-					? words['player.openNowPlaying']({ title: library.pickedSongTitle })
-					: words['transport.nowPlaying']
-		})
-		.first()
-		.click();
+	await openNowPlayingFromBar(page, shellOf(testInfo), library.pickedSongTitle);
 
 	// A layer on the phone, the docked complementary panel on desktop.
 	const player = page.locator('.now-playing');
