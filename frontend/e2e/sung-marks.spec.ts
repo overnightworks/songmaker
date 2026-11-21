@@ -2,7 +2,8 @@
 //
 // The seeded takes carry no cues, so the song's own responses are rewritten to
 // carry word cues built from its lyrics, one word sung as another and one left
-// out. Both shells walk the flow.
+// out. The seeded takes carry no version lyrics either, so they take the
+// song's. Both shells walk the flow.
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { FlowGuard, shellOf } from './helpers';
@@ -32,6 +33,7 @@ interface TakeBody {
 
 interface SongBody {
 	title: string;
+	lyrics: string;
 	generations: TakeBody[];
 }
 
@@ -55,7 +57,8 @@ async function singDifferently(route: Route, songTitle: string): Promise<void> {
 	const songs: SongBody[] = 'items' in body ? body.items : [body];
 	for (const song of songs.filter((candidate) => candidate.title === songTitle)) {
 		for (const take of song.generations ?? []) {
-			take.whisper_cues = sungDifferently(take.version_lyrics ?? '');
+			take.version_lyrics = song.lyrics;
+			take.whisper_cues = sungDifferently(song.lyrics);
 		}
 	}
 	await route.fulfill({ response, json: body });
