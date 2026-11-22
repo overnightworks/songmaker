@@ -23,7 +23,7 @@ frontend acceptRequests 3
 frontend baseProps 2
 frontend coldTabAt 5
 frontend cue 2
-frontend defaultProps 7
+frontend defaultProps 6
 frontend extractRule 2
 frontend findButtonByText 2
 frontend fireClick 2
@@ -39,13 +39,12 @@ frontend page 5
 frontend press 2
 frontend pressEscape 2
 frontend px 2
-frontend render 43
+frontend render 42
 frontend renderAfterPageRead 2
 frontend renderPage 4
 frontend renderRow 3
 frontend request 3
 frontend requireElement 14
-frontend shareResult 2
 frontend streamFrom 2
 frontend stubMatchMedia 5
 frontend sungCue 4

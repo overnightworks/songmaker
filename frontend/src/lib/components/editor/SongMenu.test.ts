@@ -40,9 +40,10 @@ function defaultProps() {
 		isShared: false,
 		shareSlug: null as string | null,
 		onshare: vi.fn<() => Promise<ShareResult>>().mockResolvedValue({
-			is_shared: true,
+			status: 'shared',
 			share_url: 'https://example.test/share/abc',
-			share_slug: 'abc'
+			share_slug: 'abc',
+			songs_without_playable_take: []
 		}),
 		onunshare: vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
 	};

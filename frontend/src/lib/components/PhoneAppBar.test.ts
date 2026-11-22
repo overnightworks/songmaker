@@ -31,6 +31,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { playlistList, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { resetRailSearchForTests } from '#lib/stores/railSearch.ts';
 import { railTreeQuery } from '#lib/stores/librarySearch.ts';
+import { songMenuProps } from '#lib/test-utils/song-menu.ts';
 import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
@@ -197,16 +198,7 @@ function songBar(onrename = vi.fn(async () => undefined)) {
 		kind: 'song' as const,
 		title: 'Sommerlicht',
 		onrename,
-		menu: {
-			saveDisabled: true,
-			onsave: vi.fn(),
-			onaddto: vi.fn(),
-			ondelete: vi.fn(),
-			isShared: false,
-			shareSlug: null,
-			onshare: vi.fn(),
-			onunshare: vi.fn()
-		}
+		menu: songMenuProps()
 	};
 }
 
