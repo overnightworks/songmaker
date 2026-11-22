@@ -339,6 +339,25 @@ def test_an_agent_group_without_the_mcp_client_is_unused_and_stays_off(
     assert (realm.mcp_client_id, realm.mcp_scope) == (None, None)
 
 
+def test_mcp_on_without_an_agent_group_stops_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REALM_MCP_CLIENT_ID", "agents")
+    monkeypatch.setenv("REALM_MCP_SCOPE", "songmaker:mcp")
+
+    with pytest.raises(ValidationError, match="REALM_AGENT_GROUP is required"):
+        RealmSettings()
+
+
+@pytest.mark.parametrize("key", ["REALM_MCP_CLIENT_ID", "REALM_MCP_SCOPE"])
+def test_one_mcp_value_without_the_other_stops_settings(
+    monkeypatch: pytest.MonkeyPatch, key: str,
+) -> None:
+    monkeypatch.setenv("REALM_AGENT_GROUP", AGENT_GROUP)
+    monkeypatch.setenv(key, "alone")
+
+    with pytest.raises(ValidationError, match="set together or not at all"):
+        RealmSettings()
+
+
 @pytest.mark.parametrize("key", _GROUP_KEYS)
 @pytest.mark.parametrize("malformed", ["apps/no-leading-slash", "/apps//empty", "/apps/ spaced"])
 def test_a_malformed_realm_group_stops_settings_under_its_key_without_echoing_it(

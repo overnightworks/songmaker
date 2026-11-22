@@ -382,11 +382,7 @@ def create_app(
     sveltekit_app_dir = sveltekit_dir / "_app"
 
     if sveltekit_app_dir.exists():
-        app.mount(
-            "/_app",
-            StaticFiles(directory=str(sveltekit_app_dir)),
-            name="sveltekit-app",
-        )
+        app.mount("/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app")
 
     _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
     page_shell = PageShell.read(sveltekit_dir / "index.html")
