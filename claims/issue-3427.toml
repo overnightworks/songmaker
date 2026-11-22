@@ -1,0 +1,8 @@
+claim_id = "bbc2b74df6114a8baec47b70981d2b43"
+agent = "Claude 7ce0c534-6bff-4977-9966-67605fc278e8"
+role = "builder"
+base = "8269655bb6d7416ac513b44e558b9d08754c61da"
+branch = "claude/issue-3427-music-liveness-from-leases"
+scope = ["docs/architecture.md", "scripts/arq_healthcheck.py", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/app_context.py", "src/songmaker_cli/arq_pool.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/server.py", "src/songmaker_cli/worker_base.py", "src/songmaker_cli/worker_liveness.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_worker_liveness.py", "tests/songmaker_cli/test_worker_readiness.py"]
+opened_commit = "bec5bb8b014ba89238e845e0214d269a67b769cf"
+whole_reason = "Readiness, the kind lease family, the async readers and the last-alive record must move together, or the web reads a family nothing renews or a restart reads DEAD."
