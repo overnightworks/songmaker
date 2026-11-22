@@ -48,7 +48,7 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 ## Album page
 
 - **album_rule_1** A new song lives at the end of the album’s track list: a quiet “+ New song” row turns into the inline “New song in `<album>`” card (title, CREATE, ×). An empty album says “No songs yet.” above that row. It is the only way to make a song; the mixed Create form goes.
-- **album_rule_2** The header actions are Play · Shuffle · ⋯ only, on their own row.
+- **album_rule_2** The header actions are Play · ⋯ only, on their own row; Shuffle lives in the player (1354_rule_24).
 - **album_rule_3** ⋯ opens the one popover form at both widths, clamped 8 px inside the screen, 7 rows: Edit details · Cover · Pick album takes · Add to… · Share · Archive · Delete (red, last). Rename folds into Edit details, the three cover rows into one Cover row.
 - **album_rule_4** The cover is edited in place: no standing cover card. A tap on the cover (the “Add cover” placeholder when there is none) grows it where it stands; suggestions come one image at a time, ‹ › or a swipe browse those made so far, “n / m”, one row Upload · Suggest another · USE · ×.
 - **album_rule_5** Suggest runs through the agent service. When a suggestion cannot run, the editor names one of five problems, busy, not enabled, unavailable, log in again or a spent budget.
