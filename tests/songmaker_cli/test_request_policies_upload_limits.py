@@ -51,6 +51,7 @@ def test_body_limits_keep_json_small_and_uploads_larger(path: str, expected: int
     ("path", "method"),
     [
         ("/api/albums/x/cover", "POST"),
+        ("/api/songs/x/cover", "POST"),
         ("/api/playlists/x/cover", "PUT"),
     ],
 )
@@ -66,6 +67,7 @@ def test_cover_routes_get_the_cover_budget_on_the_method_they_serve(
     ("path", "method"),
     [
         ("/api/albums/x/cover", "PUT"),
+        ("/api/songs/x/cover", "DELETE"),
         ("/api/playlists/x/cover", "POST"),
     ],
 )
