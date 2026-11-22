@@ -16,12 +16,11 @@ from pathlib import Path
 
 import pytest
 from fastapi import UploadFile
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from support.reference_rows import a_reference
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User
 from songmaker_cli.reference_api import api_upload_reference
@@ -199,7 +198,7 @@ def test_upload_refusals_are_exact_and_add_nothing(
     ctx = quota_context
     _seed_rows(ctx, "owner", 50)
     app = make_router_app(ctx, user=make_authenticated_user("owner"))
-    with TestClient(app) as client:
+    with web_client(app) as client:
         result = client.post(
             "/api/references",
             files={"file": ("ref.txt" if state == "invalid" else "ref.wav", b"a" * 100)},
@@ -223,7 +222,7 @@ def test_a_failed_file_write_answers_the_storage_error_and_leaves_no_file_or_row
     monkeypatch.setattr(os, "fdopen", failing_write)
     app = make_router_app(ctx, user=make_authenticated_user("owner"))
     with caplog.at_level(logging.INFO, logger="songmaker_cli.reference_audio"):
-        with TestClient(app) as client:
+        with web_client(app) as client:
             result = client.post("/api/references", files={"file": ("ref.wav", b"a" * 100)})
 
     assert result.status_code == 500

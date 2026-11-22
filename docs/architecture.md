@@ -81,7 +81,7 @@ post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
 
-Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id` (a cron job has none), `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
+Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app (through webauth's `front=`) and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id` (a cron job has none), `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
 
 ## Job Routing
 
@@ -969,7 +969,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
-| Auth | Sign-in through Keycloak (webauth's start, callback, logout and back-channel routes, composed in `install_sign_in`), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
+| Auth | Sign-in through Keycloak (webauth's start, callback, logout and back-channel routes, composed by `WebAuth.build` and `auth.install` in `server.create_app`), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
 | API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `take_judging_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `memory_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
@@ -1094,14 +1094,14 @@ supplies, `policies.py` the four request policies it supplies, `oidc.py` and
 of signing in and out, `sign_in_routes.py` the start, callback, logout and back-channel routes with
 the `SignInPaths` that name them, `rate_limit.py` the sliding-window counter, `middleware/` the
 rate-limit, CSRF, body-size and security-header middlewares, and
-`dependencies.py` the `current_user_dependency` factory. The sign-in transaction and the pages a refusal shows stay in the application.
+`dependencies.py` the `current_user` and `admin_user` dependencies. `web_auth.py` is the composition call: `WebAuth.build` before the routes and `auth.install` after the last one. The sign-in transaction and the pages a refusal shows stay in the application.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, rate backend, session lifetime (idle and
 absolute), cookie and header names and the Origin allowlist arrive as one frozen
 `WebAuthConfig`, built by
 `songmaker_cli/app_context.py::build_web_auth_config(ctx, settings)` and
-installed on the application in `server.create_app`. Middleware and endpoints
+installed on the application by `auth.install` at the end of `server.create_app`. Middleware and endpoints
 read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Redis
 remains the rate-limit backend; a request is admitted by its DB session, which is
@@ -1109,20 +1109,21 @@ loaded on every authenticated request, or by a verified token on a person path
 (`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client, or by a person's own agent's resource token at `/mcp` and on the marked routes while MCP is on. `session_cleanup_loop` periodically deletes expired DB
 sessions without Redis.
 
-Sign-in is songmaker's composition of that library, in `auth_api.py` (`install_sign_in`),
-`auth_stores.py` (`DatabaseSignInTransaction`) and `oidc_client.py`. `oidc_client.build_oidc_sign_in(settings)` builds the relying
-party at the Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
+Sign-in is songmaker's composition of that library: `server.build_web_auth` calls `WebAuth.build`
+with `oidc_client.py`'s client configuration and `AdmissionConfig`, `auth_stores.py`'s two
+transactions and `auth_api.sign_in_pages()`. `oidc_client.build_oidc_client_config(settings)` describes the
+Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
 issuer, client id from `OIDC_CLIENT_ID`, client secret read from the file
-`OIDC_CLIENT_SECRET_FILE`, redirect addresses from `PUBLIC_BASE_URL`) and the
-`AdmissionConfig` (the bound issuer and the groups `/apps/songmaker` and
-`/apps/songmaker/admin`). It is built once in `server.create_app`, so the workers,
+`OIDC_CLIENT_SECRET_FILE`, redirect addresses from `PUBLIC_BASE_URL`) and
+`build_admission_config` binds its issuer to the groups `/apps/songmaker` and
+`/apps/songmaker/admin`. They are built once in `server.create_app`, so the workers,
 which never create the web app, start without the realm's
-settings. `install_sign_in` (called by `server.create_app`) hands the library the paths, the relying
-party, the admission and the transaction. `GET /login/oidc` starts the login; `GET /auth/callback`
+settings. The call builds the relying party itself and keeps the handle on `app.state.web_auth`.
+`GET /login/oidc` starts the login; `GET /auth/callback`
 writes the account and the session in one `DatabaseSignInTransaction` entry (a fresh database
 session under `DatabaseWriteLock`, committed on a clean exit, rolled back when the block raises)
 and the library issues the cookies after it; `POST /auth/logout` and the back-channel route
-enter the same transaction. A refusal at the callback is answered with the SPA shell and 403 (the
+enter the same transaction, and the callback logs `sign_in.refused` or `sign_in.completed`. A refusal at the callback is answered with the SPA shell and 403 (the
 path is the marker the SPA reads), except a non-member, who is redirected to `/no-access`.
 
 `songmaker_cli/page_language.py` owns the language of every page the server answers.
@@ -1150,9 +1151,9 @@ through the `webauth.ports` protocols, implemented in
 updated; a missing row is refused, never recreated; `load` takes no row lock)
 and `DatabaseAuditSink`, which maps the library's account events (creation, role
 change) to audit rows without a person. No store commits: the endpoint owns its
-business transaction. `auth_dependencies.get_current_user` owns a separate short
-transaction that commits session renewal before the endpoint runs. Manual stream
-callers commit authentication and close the connection before streaming.
+business transaction. `current_user` (`auth_dependencies.get_current_user`) opens its own short
+`DatabaseSessionTransaction` entry that commits session renewal before the endpoint runs. Stream
+callers call it directly before they open the session their stream reads from.
 `DatabaseWriteLock` commits preceding auth work before acquiring advisory lock 9;
 endpoints must have no business changes before entry. Any further hold in the same
 transaction, nested or sequential, shares that lock; after a commit or rollback the
@@ -1165,27 +1166,30 @@ are; which of songmaker's paths each applies to is a product decision built in
 `songmaker_cli/request_policies.py` — the budget classes and their paths, the
 origin-exempt routes, the upload routes that may exceed the
 JSON body cap, and the CSP line with its inline-script hashes and cacheability
-rules. `server.create_app` installs them with one
-`install_web_auth_middleware()` call, which also takes `SIGN_IN_PATHS` and
-derives the sign-in routes' rules itself, ahead of songmaker's: `no-store`, the
+rules. `server.build_web_auth` hands them to `WebAuth.build` with `SIGN_IN_PATHS`, and the
+library derives the sign-in routes' rules itself, ahead of songmaker's: `no-store`, the
 sign-in budget on start, callback and logout, and the back-channel path's
 exemption from the rate limit and the origin check with its 32 KiB body cap.
 No middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is RequestLine → ClientAddress →
-ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → BodySize →
-IpRateLimit → [BearerGate →] CsrfOrigin → TrustedHost → HttpMetrics → Router. The request line sits
-outside the security layers, so a refused request leaves its line too. webauth's ClientAddress, which
-`server.create_app` adds with `TRUSTED_PROXIES` immediately inside the request line, decides the
+ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → PathRefusal → BodySize →
+IpRateLimit → [BearerGate →] CsrfOrigin → TrustedHost → HttpMetrics → Router. The composition call
+places it: `front=` the request line and, immediately inside it, the client-address writer with
+`TRUSTED_PROXIES`; `outside=` ResourceStreamDeadline, SelectiveGZip and CORS; the library everything from
+SecurityHeaders to CsrfOrigin, with the bearer layer from `auth.install(app, bearer=...)`; `inside=`
+TrustedHost and HttpMetrics. The call adds no session gate: songmaker passes none, and every route asks
+for `current_user`. The request line sits
+outside the security layers, so a refused request leaves its line too. The client-address writer decides the
 client address once, ahead of CORS and every library refusal, so the line's `ip` names the forwarded
 client of a preflight CORS answers itself, as it does that of every other request; webauth fills the line's `sub`
-(the gates and `current_user`, the stream endpoints' `authenticate_request` included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
+(the gates and `current_user`, the stream endpoints' direct call included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
-A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes the person's own conversations and notes, starting a new conversation, ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing (except an agent account's share of its own song), publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
+A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), while MCP is on, `/mcp` is added next, and `auth.install` after the last route places the middleware with webauth's `ProtectedResource` in the bearer gate and serves the resource metadata route. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes the person's own conversations and notes, starting a new conversation, ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing (except an agent account's share of its own song), publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
 The in-tree packages beside the application — `songmaker_acestep_engine`, `songmaker_acestep_worker`, `songmaker_audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 

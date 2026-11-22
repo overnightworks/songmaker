@@ -262,7 +262,7 @@ def limits_at_one(tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytes
     for limit in ("IP_RATE_LIMIT", "MEDIA_RATE_LIMIT", "STREAM_RATE_LIMIT"):
         monkeypatch.setenv(limit, "1")
     client, _ = make_test_app(
-        tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
+        tmp_path, factory=pg_factory, issuer=a_fake_issuer(),
     )
     return client.app
 

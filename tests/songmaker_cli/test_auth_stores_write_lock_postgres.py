@@ -113,7 +113,7 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
     subject = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     world = World(client, pg_factory, a_fake_issuer())
-    client.app.state.oidc_sign_in = world.issuer.relying_party_for_app()
+    world.issuer.serve(client.app)
     started = world.start()
     realm = web_client(client.app, cookies={})
     answers: dict[str, Response | BaseException] = {}

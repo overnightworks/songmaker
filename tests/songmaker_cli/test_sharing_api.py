@@ -24,7 +24,6 @@ from support.web_app import (
     make_test_app,
     seed_session,
     seed_user,
-    trust_proxies,
     web_client,
 )
 
@@ -1901,7 +1900,7 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
 
 
 @contextmanager
-def _shared_app_with_small_budget(client: TestClient, tmp_path: Path, trusted_proxies: str):
+def _shared_app_with_small_budget(client: TestClient, tmp_path: Path):
     """An app of its own, budget 2, so one test's listeners cannot spill into
     another's. The limiter is built at app creation from SHARING_RATE_LIMIT."""
     import songmaker_cli.constants as consts
@@ -1920,7 +1919,6 @@ def _shared_app_with_small_budget(client: TestClient, tmp_path: Path, trusted_pr
             async_redis=make_fake_async_redis(),
         )
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        trust_proxies(app, trusted_proxies)
         yield app
     finally:
         consts.SHARING_RATE_LIMIT = old_limit
@@ -1951,13 +1949,15 @@ def test_shared_rate_limit(tmp_path, monkeypatch: pytest.MonkeyPatch, stream: bo
         assert unauthed.get(f"/shared/{slug}").status_code == 200
 
 
-def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path, pg_factory) -> None:
-    """A share page is the operator's public face: one listener exhausting the
-    budget must not close the page for everyone else behind the same proxy."""
+def test_shared_rate_limit_is_per_listener_behind_a_proxy(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One listener exhausting the budget must not close the share page for the rest behind it."""
+    monkeypatch.setenv("TRUSTED_PROXIES", _PROXY_NETWORK)
     client, _ = _make_sharing_app(tmp_path, pg_factory)
     slug = _shared_album_slug(client)
 
-    with _shared_app_with_small_budget(client, tmp_path, _PROXY_NETWORK) as app:
+    with _shared_app_with_small_budget(client, tmp_path) as app:
         listener = web_client(app, cookies={}, client=(_TRUSTED_PEER, 55000))
 
         def _listen(forwarded_for: str) -> int:

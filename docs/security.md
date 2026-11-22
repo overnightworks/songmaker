@@ -49,7 +49,7 @@ Keycloak is the account owner, but songmaker applies its answers only at sign-in
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` returns the account of a verified person token on a person path (no cookie or session is read, see Person tokens above) and otherwise validates the signed cookie and the DB session, checks expiry and lifetime, and renews the existing row with an update-only `touch`, so a session deleted meanwhile stays deleted. Its own short transaction commits renewal before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
+1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` returns the account of a verified person token on a person path (no cookie or session is read, see Person tokens above) and otherwise validates the signed cookie and the DB session, checks expiry and lifetime, and renews the existing row with an update-only `touch`, so a session deleted meanwhile stays deleted. `current_user` opens its own short `stores.sessions()` entry, which commits the renewal before the endpoint runs, without committing endpoint writes. Stream callers call it directly before they open the session their stream reads from, so its entry is closed before the stream starts.
    The logout route does not depend on `get_current_user`: the library's logout route reads the session cookie itself, deletes the stored session it names, and clears the cookies either way.
 2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. The sign-in routes are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
@@ -72,8 +72,8 @@ most 60 seconds so session expiry or revocation is enforced on reconnect.
 (default: empty — no peer is trusted; the Docker deployment sets
 `172.16.0.0/12`, the bridge-network range the tunnel's container gateway sits
 in). `app_context.parse_trusted_proxies()` turns each entry into an
-`ip_network` at startup and hands the result to webauth's
-`ClientAddressMiddleware`, and a peer is trusted when its address falls inside one of them — so
+`ip_network` at startup and hands the result to the composition call's `front=`, which hands it to webauth's
+client-address writer, and a peer is trusted when its address falls inside one of them — so
 `172.16.0.0/12` covers the gateway address `172.18.0.1`, and a bare
 `10.0.0.1` covers only itself. An entry that is not a valid address or
 network (including one with host bits set, like `10.0.0.1/24`) raises at
@@ -92,7 +92,7 @@ longer decides the cookie `Secure` flag or `Strict-Transport-Security`: both
 follow the deployment's static `COOKIE_SECURE` setting instead — see
 "Authentication" above.
 
-`ClientAddressMiddleware` decides both once per request, immediately inside the
+The client-address writer, placed by `front=`, decides both once per request, immediately inside the
 request line and outside CORS, and records the result; `webauth.proxies.client_address()` and
 `webauth.proxies.request_is_https()` read the record and raise without it. No endpoint or other
 middleware reads those headers itself. The chain is read from
@@ -219,7 +219,7 @@ Every request is subject to a global per-IP rate limit, split into four
 budgets so that one traffic pattern cannot exhaust the budget another pattern
 from the same IP needs. `RateLimitPolicy.budget_for` (`webauth.policies`) is
 the single place that maps a path to a budget. The sign-in budget is
-webauth's: `install_web_auth_middleware` spends it on the sign-in routes
+webauth's: `auth.install` spends it on the sign-in routes
 songmaker names in `request_policies.SIGN_IN_PATHS`, ahead of songmaker's own
 rules. The other three are songmaker's, built by
 `request_policies.build_rate_limit_policy` and installed in
@@ -295,18 +295,14 @@ waiting on an exhausted pool, matching the resource-event stream's
 `_read_event_page_before` pattern exactly.
 
 The endpoint also takes **no request-scoped `Depends()` at all** — matching
-`api_stream_resource_events` exactly, not just in spirit. A first attempt
-(review 2026-09-01) only dropped `Depends(get_db_session)` from the
-endpoint's own signature but kept `Depends(get_current_user)`; a second,
-independent review (2026-09-02) found that `get_current_user` itself takes
-`Depends(get_db_session)`, and FastAPI keeps a yield dependency open until
-the whole *response* finishes — for a `StreamingResponse` that's the full
-stream lifetime, so the connection was still pinned one level up (measured:
-`enter=1, exit=0` after the first body chunk, `exit=1` only once the stream
-closed). `api_stream_job` is now a plain (non-`async`) `def`, so FastAPI
+`api_stream_resource_events` exactly. FastAPI keeps a yield dependency open until
+the whole *response* finishes, and for a `StreamingResponse` that is the full
+stream lifetime, so a `Depends(get_db_session)` would pin a pooled connection for it.
+`api_stream_job` is a plain (non-`async`) `def`, so FastAPI
 thread-offloads the whole handler body, exactly like
-`api_stream_resource_events`; auth (`authenticate_request(request, session)` from `auth_dependencies.py`)
-and the access check run as plain function calls against one short-lived
+`api_stream_resource_events`; auth (`get_current_user(request)` from `auth_dependencies.py`,
+which closes its own session-transaction entry before it returns)
+and then the access check run as plain function calls, the check against one short-lived
 `ctx.db()` session that closes before the slot is taken or the
 `StreamingResponse` is even constructed, and every poll opens and closes
 its own short-lived session the same way. No open job stream pins a pool
@@ -330,7 +326,7 @@ matching the resource-event cap.
 
 ## Security Headers
 
-`SecurityHeadersMiddleware` (`webauth.middleware.security_headers`) writes
+webauth's security-headers layer writes
 them; the CSP line, its inline-script hashes, and which paths may be cached
 come from songmaker's `SecurityHeadersPolicy`
 (`request_policies.build_security_headers_policy`).
@@ -365,7 +361,7 @@ All responses include:
 
 ## Request Size Limits
 
-Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (`webauth.middleware.body_size`, raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Which route may exceed the default, and by how much, is songmaker's `BodySizePolicy` (`request_policies.build_body_size_policy`).
+Songmaker itself enforces these limits: webauth's body-size layer (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Which route may exceed the default, and by how much, is songmaker's `BodySizePolicy` (`request_policies.build_body_size_policy`).
 
 JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipart uploads use a path-exact allowlist, not a suffix match:
 
@@ -430,18 +426,14 @@ It does not have the resource-event stream's outer ASGI-level send wall
 (`ResourceStreamDeadlineMiddleware` governs only the resource-event path) — a reader
 so slow its TCP window blocks the next `send()` can still hold the connection past
 the in-generator deadline check. This gap is narrower than it looks: the endpoint
-takes no request-scoped `Depends()` at all (neither `get_db_session` nor
-`get_current_user`, which itself takes `get_db_session` — see "Job streams" above)
+takes no request-scoped `Depends()` at all (no `get_db_session`, which a yield dependency would hold for the whole stream — see "Job streams" above)
 and no poll holds a DB session across a `send()` or a sleep, so a stuck slow-reader
 `send()` pins neither a pool connection nor a blocked thread — only the ASGI
 connection itself, capped in turn by the slots' concurrent-stream ceiling. This
 remaining send-side gap is tracked by #331.
-Two earlier attempts (2026-09-01 and 2026-09-02) still had a `Depends()`-held
-session somewhere in the request -- first directly, then one level up through
-`get_current_user` -- and each would have let this same slow-reader gap also pin a
-pool connection for as long as the reader stayed stuck, which is why the lease's
-own sizing docs (see "Job streams" above) depend on this fix, in its final form,
-being in place.
+A `Depends()`-held session anywhere in the request would let this same slow-reader gap pin a
+pool connection for as long as the reader stays stuck, which is why the lease's
+own sizing docs (see "Job streams" above) depend on the endpoint having none.
 
 ## Claude Chat Security
 

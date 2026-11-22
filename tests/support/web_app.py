@@ -13,14 +13,13 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.fake_oidc_issuer import IssuerSlot
 from support.job_owner import an_owner
 from support.object_store import an_object_store
 from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
 from tandem.testing import settle_epoch
-from webauth.middleware import ClientAddressMiddleware
 from webauth.ports import AuthenticatedUser
-from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
@@ -29,8 +28,7 @@ from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 if TYPE_CHECKING:
     from redis import Redis
-
-    from songmaker_cli.oidc_client import OidcSignIn
+    from support.fake_oidc_issuer import FakeIssuer
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
@@ -153,21 +151,26 @@ def _add_same_origin_fetch_metadata(request: httpx.Request) -> None:
 
 
 def install_app_context(app, ctx) -> None:
-    """Give a bare test app what ``create_app`` installs on the real one.
+    """Give a bare test app what ``create_app`` installs on the real one: the context and the
+    composition call, whose stack answers every request.
 
-    An app that serves any auth-protected or rate-limited route needs both the
-    context and the ``WebAuthConfig`` built from it, or it fails loudly on the
-    first request. The settings are read uncached, so a test that shapes its
-    environment after building its app still gets its own values back from
-    ``get_settings()``.
+    Call it after the app's last route. The realm is unreachable until a test calls
+    ``FakeIssuer.serve(app)``. The settings are read uncached, so a test that shapes its
+    environment after building its app still gets its own values back from ``get_settings()``.
     """
-    from webauth.config import install_web_auth_config
-
-    from songmaker_cli.app_context import build_web_auth_config
+    from songmaker_cli.redis_client import RedisHttpMetrics
+    from songmaker_cli.server import build_web_auth
     from songmaker_cli.settings import Settings
 
+    slot = IssuerSlot()
     app.state.ctx = ctx
-    install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
+    app.state.issuer_slot = slot
+    app.state.http_metrics = RedisHttpMetrics(ctx.redis)
+    auth = build_web_auth(
+        ctx, Settings(), script_hashes=(), issuer_calls=slot.calls(), wall_clock=slot.clock,
+    )
+    app.state.web_auth = auth
+    auth.install(app, bearer=None)
 
 
 def make_app_context(
@@ -222,10 +225,10 @@ def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -
     app = FastAPI()
     app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
     install_refusal_handler(app)
-    install_app_context(app, ctx)
     if user is not None:
         app.dependency_overrides[get_current_user] = lambda: user
     app.include_router(router)
+    install_app_context(app, ctx)
     return app
 
 
@@ -250,13 +253,14 @@ def make_test_app(
     index_html: str = BUILT_SHELL,
     *,
     factory: sessionmaker[Session],
-    oidc_sign_in: OidcSignIn | None = None,
+    issuer: FakeIssuer | None = None,
     redis: Redis | None = None,
 ) -> tuple:
     """Create a full test app with real middleware on the required ``factory``.
 
     The caller passes its database; no default builds one. ``redis`` replaces the
-    fake sync client, for a test that needs a Redis that fails.
+    fake sync client, for a test that needs a Redis that fails. ``issuer`` is the realm the
+    app's relying party talks to; without it the realm is unreachable.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
     ``seed_db`` receives a Session to add models before the app starts;
@@ -285,16 +289,16 @@ def make_test_app(
         signing_key=TEST_SECRET, redis=make_fake_redis() if redis is None else redis,
         async_redis=SettledFakeAsyncRedis(),
     )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
+    slot = IssuerSlot()
+    app = create_app(
+        audio_dir, data_dir, project_root, ctx=ctx,
+        issuer_calls=slot.calls(), wall_clock=slot.clock,
+    )
+    app.state.issuer_slot = slot
+    if issuer is not None:
+        issuer.serve(app)
     client = web_client(app, cookies={})
     return client, factory
-
-
-def trust_proxies(app: FastAPI, networks: str) -> None:
-    """Serve ``app`` as if it sat behind ``networks``: the client address writer trusts them."""
-    (writer,) = (layer for layer in app.user_middleware if layer.cls is ClientAddressMiddleware)
-    writer.kwargs["trusted_proxies"] = TrustedProxies.parse(networks)
-    app.middleware_stack = app.build_middleware_stack()
 
 
 def make_authenticated_user(

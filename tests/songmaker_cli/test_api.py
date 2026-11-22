@@ -40,6 +40,7 @@ from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.messages import Message, message
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from songmaker_cli.request_policies import API_CACHE_CONTROL
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 _DEFAULT_USER_ID = "u-test"
@@ -2653,15 +2654,13 @@ def test_stream_job_initial_state(client: TestClient) -> None:
         job_id = job.id
 
     _authenticate_job_stream_client(client)
-    events = []
     with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
-        assert resp.headers["cache-control"] == "no-cache"
+        assert resp.headers["cache-control"] == API_CACHE_CONTROL
         assert resp.headers["x-accel-buffering"] == "no"
-        for line in resp.iter_lines():
-            if line.startswith("data: "):
-                events.append(json.loads(line[len("data: "):]))
+        data_lines = [line for line in resp.iter_lines() if line.startswith("data: ")]
+    events = [json.loads(line[len("data: "):]) for line in data_lines]
 
     assert len(events) == 1
     assert events[0]["id"] == job_id
@@ -3586,27 +3585,21 @@ def test_create_album_records_audit(client: TestClient) -> None:
 # ── Body size limit middleware ───────────────────────────────────────
 
 
-def test_body_size_limit_rejects_large_request(tmp_path: Path, pg_factory) -> None:
-    from webauth.middleware import BodySizeLimitMiddleware
-
-    from songmaker_cli.request_policies import build_body_size_policy
-    from songmaker_cli.settings import get_settings
-
-    factory = pg_factory
-
+def test_the_composition_call_refuses_a_request_body_over_the_limit(
+    tmp_path: Path, pg_factory,
+) -> None:
+    """The router app sits behind webauth's stack, whose body limit answers before the route."""
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="test"),
     )
-    app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(get_settings()))
 
-    tc = web_client(app)
-    large_body = b"x" * 2_000_000
-    resp = tc.post(
+    resp = web_client(app).post(
         "/api/albums",
-        content=large_body,
+        content=b"x" * 2_000_000,
         headers={"content-type": "application/json"},
     )
+
     assert resp.status_code == 413
 
 

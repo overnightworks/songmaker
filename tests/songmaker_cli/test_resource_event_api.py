@@ -11,11 +11,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from logline import RequestLineMiddleware
 from sqlalchemy import event as sqlalchemy_event
 from support.resource_event_world import _authenticated_clients, _collect, _create_event, _parse_sse
 from support.web_app import web_client
-from webauth.middleware import ClientAddressMiddleware
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
 import songmaker_cli.redis_client as redis_client
@@ -728,11 +726,6 @@ def _set_resource_stream_deadline(app, deadline_seconds: float) -> None:
         if middleware.cls is ResourceStreamDeadlineMiddleware
     ]
     assert len(deadline_middleware) == 1
-    outside_deadline = app.user_middleware[: app.user_middleware.index(deadline_middleware[0])]
-    assert {middleware.cls for middleware in outside_deadline} == {
-        RequestLineMiddleware,
-        ClientAddressMiddleware,
-    }
     deadline_middleware[0].kwargs["deadline_seconds"] = deadline_seconds
     app.middleware_stack = app.build_middleware_stack()
 
