@@ -235,6 +235,7 @@ export type Words = {
     readonly "albumPage.coverAlt": (gaps: { readonly title: string }) => string;
     readonly "albumPage.coverAltFallback": string;
     readonly "albumPage.songTakes": (count: number) => string;
+    readonly "songRow.noPick": string;
     readonly "albumPage.coverUploadFailed": string;
     readonly "albumPage.coverDiscardFailed": string;
     readonly "albumPage.coverRemoved": string;
@@ -292,6 +293,7 @@ export type Words = {
     readonly "coverMark.runningName": (gaps: { readonly label: string }) => string;
     readonly "coverMark.waitingName": (gaps: { readonly label: string; readonly waiting: string }) => string;
     readonly "collectionHeader.songCount": (count: number) => string;
+    readonly "collectionHeader.withoutPick": (gaps: { readonly count: number }) => string;
     readonly "playlistPage.coverAlt": (gaps: { readonly title: string }) => string;
     readonly "playlistPage.coverAltEmpty": string;
     readonly "playlistPage.loading": string;
@@ -1696,6 +1698,7 @@ export const words: Words = {
         many: numberFormat.format(count) + " takes",
         other: numberFormat.format(count) + " takes",
     })[pluralRules.select(count)],
+    "songRow.noPick": "No Pick",
     "albumPage.coverUploadFailed": "Cover upload failed",
     "albumPage.coverDiscardFailed": "Cover suggestions could not be discarded",
     "albumPage.coverRemoved": "Cover removed",
@@ -1781,6 +1784,7 @@ export const words: Words = {
         many: numberFormat.format(count) + " songs",
         other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
+    "collectionHeader.withoutPick": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + " without a Pick",
     "playlistPage.coverAlt": (gaps: { readonly title: string }) => "Playlist cover for " + gaps.title,
     "playlistPage.coverAltEmpty": "Playlist cover",
     "playlistPage.loading": "Loading playlist…",

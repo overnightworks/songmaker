@@ -54,7 +54,12 @@
 	} from '#lib/constants/album.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
-	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '#lib/utils/playable.ts';
+	import {
+		albumHasPlayableTake,
+		albumSongsSettled,
+		songLacksPick,
+		songPlayability
+	} from '#lib/utils/playable.ts';
 	import type { SongItem } from '#lib/api/types.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
@@ -95,6 +100,9 @@
 			albumHasPlayableTake(selectedAlbum, albumSongs, {
 				songsComplete: albumSongsSettled(albumLoad)
 			})
+	);
+	const withoutPickCount = $derived(
+		albumSongsSettled(albumLoad) ? albumSongs.filter(songLacksPick).length : undefined
 	);
 	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
@@ -358,6 +366,7 @@
 			{artFill}
 			onplay={currentAlbumId && albumHasTakes ? () => playAlbum(currentAlbumId) : null}
 			meta={albumMeta}
+			{withoutPickCount}
 			songCount={albumLoad === 'idle' ? albumSongs.length : selectedAlbum.song_count}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
@@ -417,6 +426,7 @@
 					<SongRow
 						title={s.title}
 						meta={pageText('albumPage.songTakes', s.generation_count)}
+						noPick={songLacksPick(s)}
 						current={isSongCurrent(s.id)}
 						onclick={() => onSongTap(s)}
 						onedit={() => selectSong(s.id)}
