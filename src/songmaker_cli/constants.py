@@ -173,12 +173,7 @@ STORE_STARTUP_CONNECT_TIMEOUT_SECONDS: Final[int] = 3
 SESSION_IDLE_SECONDS_DEFAULT: Final = 7 * 24 * 60 * 60
 SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT: Final = 30 * 24 * 60 * 60
 
-# Sign-in through the Keycloak realm. The groups name who may sign in and who
-# administers; the paths are the browser-visible routes of the contract.
-OIDC_LOGIN_GROUP: Final = "/apps/songmaker"
-OIDC_ADMIN_GROUP: Final = "/apps/songmaker/admin"
-# A person's own agent reaches the MCP endpoint only with membership here.
-OIDC_MCP_GROUP: Final = "/apps/songmaker/mcp"
+# Sign-in through the Keycloak realm; the paths are the browser-visible routes of the contract.
 OIDC_LEEWAY_SECONDS: Final = 30
 OIDC_START_PATH: Final = "/login/oidc"
 OIDC_CALLBACK_PATH: Final = "/auth/callback"

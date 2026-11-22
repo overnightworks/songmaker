@@ -12,7 +12,6 @@ from pydantic import SecretStr
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.app_processes import (
-    OIDC_CLIENT_ID,
     StandIns,
     WebProcess,
     WebProcesses,
@@ -23,6 +22,7 @@ from support.fake_oidc_issuer import Person
 from support.gateway_server import serve_gateway
 from support.https_issuer import HttpsIssuer, serve_issuer
 from support.object_store import an_object_store
+from support.realm import CLIENT_ID
 from support.redis_proxy import redis_proxy
 from support.session_ids import a_session_id
 from support.web_app import issued_cookies, seed_user
@@ -145,7 +145,7 @@ def stand_in_cluster(
     gateway = HeldGateway(*gateway_replies)
     with (
         serve_gateway(gateway) as gateway_origin,
-        serve_issuer(tmp_path, client_id=OIDC_CLIENT_ID) as issuer,
+        serve_issuer(tmp_path, client_id=CLIENT_ID) as issuer,
     ):
         stand_ins = StandIns(gateway_origin, issuer.url, issuer.ca_file)
         with web_processes(

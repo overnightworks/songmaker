@@ -9,10 +9,10 @@ from __future__ import annotations
 import pytest
 from support.mcp_tool_table import ALICE, BOB
 from support.mcp_world import ADMIN_GROUPS, McpWorld
+from support.realm import LOGIN_GROUP, MCP_GROUP
 from support.token_world import TokenWorld
 from support.web_app import seed_session
 
-from songmaker_cli.constants import OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
 from songmaker_cli.db.models import Conversation
 
 
@@ -97,7 +97,7 @@ def test_get_memory_with_the_callers_song_returns_that_songs_notes(household: Mc
     assert reply.json()["song"]["body"] == f"Song notes of {ALICE}"
 
 
-@pytest.mark.parametrize("groups", [(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP), ADMIN_GROUPS],
+@pytest.mark.parametrize("groups", [(LOGIN_GROUP, MCP_GROUP), ADMIN_GROUPS],
                          ids=["member", "admin"])
 def test_get_memory_with_another_persons_song_is_not_found_and_reveals_nothing(
     admins_household: McpWorld, groups: tuple[str, ...],

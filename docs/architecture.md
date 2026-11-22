@@ -1111,12 +1111,14 @@ sessions without Redis.
 
 Sign-in is songmaker's composition of that library: `server.build_web_auth` calls `WebAuth.build`
 with `oidc_client.py`'s client configuration and `AdmissionConfig`, `auth_stores.py`'s two
-transactions and `auth_api.sign_in_pages()`. `oidc_client.build_oidc_client_config(settings)` describes the
+transactions and `auth_api.sign_in_pages()`. `oidc_client.build_oidc_client_config(settings, realm)` describes the
 Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
-issuer, client id from `OIDC_CLIENT_ID`, client secret read from the file
+issuer, client id from `REALM_CLIENT_ID`, client secret read from the file
 `OIDC_CLIENT_SECRET_FILE`, redirect addresses from `PUBLIC_BASE_URL`) and
-`build_admission_config` binds its issuer to the groups `/apps/songmaker` and
-`/apps/songmaker/admin`. They are built once in `server.create_app`, so the workers,
+`build_admission_config` binds its issuer to the login and admin groups from
+`REALM_LOGIN_GROUP` and `REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names and the
+MCP ones (`REALM_MCP_GROUP`, `REALM_MCP_CLIENT_ID`, `REALM_MCP_SCOPE`, `REALM_AGENT_GROUP`) as
+webauth `GroupPath` values. They are built once in `server.create_app`, so the workers,
 which never create the web app, start without the realm's
 settings. The call builds the relying party itself and keeps the handle on `app.state.web_auth`.
 `GET /login/oidc` starts the login; `GET /auth/callback`

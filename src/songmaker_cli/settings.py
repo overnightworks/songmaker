@@ -18,11 +18,12 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, Self
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BeforeValidator, Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from webauth.admission import GroupPath
 
 from songmaker_acestep_engine.settings import EngineSettings
 from songmaker_cli.agent.settings import AgentSettings
@@ -149,6 +150,50 @@ def process_environment_variable(name: str) -> str | None:
 
 def _split_token_clients(value: str) -> list[str]:
     return [entry.strip() for entry in value.split(",")]
+
+
+def _group_path(value: object) -> object:
+    return GroupPath(value) if isinstance(value, str) else value
+
+
+# NoDecode: pydantic-settings would JSON-decode an environment value for a dataclass field
+# before any validator ran.
+_RealmGroup = Annotated[GroupPath, NoDecode, BeforeValidator(_group_path)]
+_OptionalRealmGroup = Annotated[GroupPath | None, NoDecode, BeforeValidator(_group_path)]
+
+
+class RealmSettings(BaseSettings):
+    """The platform's realm names for the web app, read from its ``REALM_`` keys.
+
+    The one owner of these names: the client the sign-in uses, the groups that admit, administer
+    and reach the MCP endpoint, and the person's own agent's client, scope and group. The
+    environment is the only source, so ``.env`` never feeds it. Only the web reads it, so the
+    workers start without the keys. ``REALM_MCP_CLIENT_ID`` and ``REALM_MCP_SCOPE`` are set
+    together or not at all and turn the MCP endpoint on; ``REALM_AGENT_GROUP`` is read only
+    while it is on, which then requires it. A refusal names its key and never echoes the value.
+    """
+
+    model_config = SettingsConfigDict(hide_input_in_errors=True)
+
+    client_id: str = Field(min_length=1, validation_alias="REALM_CLIENT_ID")
+    login_group: _RealmGroup = Field(validation_alias="REALM_LOGIN_GROUP")
+    admin_group: _RealmGroup = Field(validation_alias="REALM_ADMIN_GROUP")
+    mcp_group: _RealmGroup = Field(validation_alias="REALM_MCP_GROUP")
+    mcp_scope: str | None = Field(None, min_length=1, validation_alias="REALM_MCP_SCOPE")
+    agent_group: _OptionalRealmGroup = Field(None, validation_alias="REALM_AGENT_GROUP")
+    mcp_client_id: str | None = Field(None, min_length=1, validation_alias="REALM_MCP_CLIENT_ID")
+
+    @model_validator(mode="after")
+    def _groups_and_mcp_values_agree(self) -> Self:
+        if not self.admin_group.lies_below(self.login_group):
+            raise ValueError("REALM_ADMIN_GROUP must lie below REALM_LOGIN_GROUP")
+        if (self.mcp_client_id is None) != (self.mcp_scope is None):
+            raise ValueError(
+                "REALM_MCP_CLIENT_ID and REALM_MCP_SCOPE are set together or not at all",
+            )
+        if self.mcp_client_id is not None and self.agent_group is None:
+            raise ValueError("REALM_AGENT_GROUP is required while the MCP endpoint is on")
+        return self
 
 
 class Settings(BaseSettings):
@@ -312,17 +357,14 @@ class Settings(BaseSettings):
         default=10, alias="MAX_CONCURRENT_SESSIONS_PER_USER", ge=1,
     )
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
-    # The OpenID Connect relying party. All three are required to serve the web
-    # app and are checked only where the relying party is built, so workers
-    # start without them. The secret is a file, never a value.
+    # The OpenID Connect relying party. Both are required to serve the web app and are checked
+    # only where the relying party is built, so workers start without them. The secret is a
+    # file, never a value. The client id and the realm groups are `RealmSettings`.
     oidc_issuer: str | None = None
-    oidc_client_id: str | None = None
     oidc_client_secret_file: Path | None = None
-    # The co-writer's gateway, read as AGENT__GATEWAY__ORIGIN,
-    # AGENT__GATEWAY__KEY_FILE, AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP, and the person's own
-    # agent's client as AGENT__MCP_CLIENT_ID and AGENT__MCP_SCOPE, plus the realm group of the
-    # agents with their own client as AGENT__MCP_AGENT_GROUP. Unset leaves the co-writer
-    # unavailable and MCP off; a partly set value stops startup, and MCP on needs the group.
+    # The co-writer's gateway, read as AGENT__GATEWAY__ORIGIN, AGENT__GATEWAY__KEY_FILE,
+    # AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP. Unset leaves the co-writer unavailable; a
+    # partly set value stops startup.
     agent: AgentSettings | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────

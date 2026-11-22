@@ -18,18 +18,13 @@ from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, NAME_BEARING_
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy.orm import sessionmaker
 from support.mcp_tool_table import ALICE, BOB
+from support.realm import ADMIN_GROUP, AGENT_GROUP, LOGIN_GROUP, MCP_GROUP
 from support.reference_rows import a_reference
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
 from support.web_app import TEST_ORIGIN, seed_user
 
-from songmaker_cli.constants import (
-    OIDC_ADMIN_GROUP,
-    OIDC_LOGIN_GROUP,
-    OIDC_MCP_GROUP,
-    LoraStatus,
-    SongWorkKind,
-)
+from songmaker_cli.constants import LoraStatus, SongWorkKind
 from songmaker_cli.db.models import (
     Album,
     Base,
@@ -54,23 +49,22 @@ MCP_SCOPE = "songmaker:mcp"
 RESOURCE_URL = "https://songmaker.test/mcp"
 SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
 FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
-ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
+ADMIN_GROUPS = (LOGIN_GROUP, ADMIN_GROUP, MCP_GROUP)
 METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
 AGENT_ENVIRONMENT = {
     "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
     "AGENT__API_GROUP": "/apps/songmaker/api",
 }
-AGENT_GROUP = "/agents"
-MCP_CLIENT_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": AGENTS_CLIENT, "AGENT__MCP_SCOPE": MCP_SCOPE}
-MCP_ENVIRONMENT = {**MCP_CLIENT_ENVIRONMENT, "AGENT__MCP_AGENT_GROUP": AGENT_GROUP}
+MCP_CLIENT_ENVIRONMENT = {"REALM_MCP_CLIENT_ID": AGENTS_CLIENT, "REALM_MCP_SCOPE": MCP_SCOPE}
+MCP_ENVIRONMENT = {**MCP_CLIENT_ENVIRONMENT, "REALM_AGENT_GROUP": AGENT_GROUP}
 AGENT_SUBJECT = "7c2e9d41-aaaa-4bbb-8ccc-00000000a9e1"
 
 
 def agent_claims(**overrides: object) -> dict[str, object]:
     """The claims of an agent with its own account: a token in the agent group, owned by Alice."""
     return {
-        "groups": (OIDC_LOGIN_GROUP, OIDC_MCP_GROUP, AGENT_GROUP),
+        "groups": (LOGIN_GROUP, MCP_GROUP, AGENT_GROUP),
         "username": "service-account-hal",
         "agent_owner": TokenWorld.ALICE,
         "agent_name": "Hal",
@@ -98,7 +92,7 @@ class McpWorld:
         self,
         subject: str = TokenWorld.ALICE,
         *,
-        groups: tuple[str, ...] = (OIDC_LOGIN_GROUP, OIDC_MCP_GROUP),
+        groups: tuple[str, ...] = (LOGIN_GROUP, MCP_GROUP),
         **claims: object,
     ) -> str:
         return self.world.token(
