@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import make_test_app, seed_user
+from support.web_app import arrange_fake_async_redis, make_test_app, seed_user
 
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
@@ -298,7 +298,7 @@ def test_last_error_worker_list_requires_admin(client: TestClient, role: str) ->
 
 
 def test_last_error_stays_out_of_public_and_musician_paths(
-    client: TestClient, mock_arq_pool, monitoring_headers, monkeypatch,
+    client: TestClient, mock_arq_pool, monitoring_headers,
 ) -> None:
     """S15-06: Last error stays out of public and musician paths."""
     import asyncio
@@ -312,7 +312,12 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     from songmaker_cli.db.queries.auth import get_user_by_username
     from songmaker_cli.db.queries.songs import create_song
     from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
-    from songmaker_cli.worker_liveness import WorkerLiveness, acestep_worker_liveness
+    from songmaker_cli.worker_liveness import (
+        MUSIC_WORKER_KIND,
+        WorkerLiveness,
+        acestep_worker_liveness,
+        worker_kind_leases,
+    )
 
     sentinel = "PRIVATE-WORKER-DIAGNOSTIC-18.5-GB"
     payload = json.dumps({
@@ -330,8 +335,10 @@ def test_last_error_stays_out_of_public_and_musician_paths(
         await pool.set(worker_state_key("w1"), payload)
 
     asyncio.run(prepare_pool())
-    for reader in ("songmaker_cli.arq_pool", "songmaker_cli.generation_api"):
-        monkeypatch.setattr(f"{reader}.is_music_worker_healthy", AsyncMock(return_value=True))
+    arrange_fake_async_redis(
+        client.app.state.ctx.async_redis,
+        lambda redis: worker_kind_leases(redis, MUSIC_WORKER_KIND).renew("music-worker"),
+    )
     client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health/details", "/metrics"):
