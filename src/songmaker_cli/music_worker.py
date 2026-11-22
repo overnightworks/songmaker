@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC
+from pathlib import Path
 
 from arq import cron
 from arq.worker import Function
@@ -58,8 +59,11 @@ class MusicWorker(WorkerBase):
     queue_name = ARQ_MUSIC_QUEUE_NAME
     lease_kind = MUSIC_WORKER_KIND
 
-    def __init__(self, settings=None) -> None:
+    def __init__(
+        self, settings=None, *, readiness_file: Path = MUSIC_WORKER_READINESS_FILE,
+    ) -> None:
         super().__init__(settings)
+        self._readiness_file = readiness_file
         self._places = asyncio.Semaphore(self._settings.music_max_jobs)
         self._arq_context: dict = {}
         self._run_logged = {
@@ -119,7 +123,7 @@ class MusicWorker(WorkerBase):
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
 
     async def on_startup(self, ctx) -> None:
-        write_readiness_file(MUSIC_WORKER_READINESS_FILE, self.owner_id, pid_one_start_ticks())
+        write_readiness_file(self._readiness_file, self.owner_id, pid_one_start_ticks())
         await super().on_startup(ctx)
         self._arq_context = ctx
         self.start_serving(self.serve_queued_jobs())

@@ -120,13 +120,15 @@ def test_a_worker_without_a_readiness_file_is_not_ready(
 
 
 def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
-    restored_logging: None, redis_url: str, readiness_file: Path, monkeypatch,
+    restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
-    monkeypatch.setattr("songmaker_cli.music_worker.MUSIC_WORKER_READINESS_FILE", readiness_file)
-    worker = MusicWorker(Settings(
-        database_url="postgresql://example", redis_url=redis_url,
-        session_secret="session-secret", songmaker_internal_token="internal-token",
-    ))
+    worker = MusicWorker(
+        Settings(
+            database_url="postgresql://example", redis_url=redis_url,
+            session_secret="session-secret", songmaker_internal_token="internal-token",
+        ),
+        readiness_file=readiness_file,
+    )
     worker.get_db_factory = MagicMock()
     worker.start_serving = MagicMock()
     worker.serve_queued_jobs = MagicMock()
@@ -155,25 +157,21 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
     assert ended == (False, set())
 
 
-def _arq_pool_on(redis_url: str) -> None:
-    arq_pool._pool = create_async_redis(redis_url)
-
-
 @pytest.fixture
-def restored_arq_pool() -> Iterator[None]:
-    saved = arq_pool._pool
-    yield
-    arq_pool._pool = saved
+def web_redis(redis_url: str, monkeypatch, fresh_settings: None) -> str:
+    """The URL the web process's arq pool connects to."""
+    monkeypatch.setenv("REDIS_URL", redis_url)
+    return redis_url
 
 
 def test_a_live_music_holder_makes_the_worker_healthy_and_none_does_not(
-    redis_url: str, restored_arq_pool: None,
+    web_redis: str,
 ) -> None:
     async def healthy_without_and_with_a_holder() -> tuple[bool, bool]:
-        _arq_pool_on(redis_url)
+        pool = await arq_pool.init_arq_pool()
         try:
             without = await arq_pool.is_music_worker_healthy()
-            await worker_kind_leases(arq_pool.get_arq_pool(), MUSIC_WORKER_KIND).renew(OWNER_ID)
+            await worker_kind_leases(pool, MUSIC_WORKER_KIND).renew(OWNER_ID)
             return without, await arq_pool.is_music_worker_healthy()
         finally:
             await arq_pool.close_arq_pool()
@@ -182,12 +180,12 @@ def test_a_live_music_holder_makes_the_worker_healthy_and_none_does_not(
 
 
 def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(
-    redis_url: str, restored_arq_pool: None,
+    web_redis: str,
 ) -> None:
     async def healthy_with_an_owner() -> bool:
-        _arq_pool_on(redis_url)
+        pool = await arq_pool.init_arq_pool()
         try:
-            await owner_leases(arq_pool.get_arq_pool()).renew(OWNER_ID)
+            await owner_leases(pool).renew(OWNER_ID)
             return await arq_pool.is_music_worker_healthy()
         finally:
             await arq_pool.close_arq_pool()
@@ -195,10 +193,14 @@ def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(
     assert asyncio.run(healthy_with_an_owner()) is False
 
 
-def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(restored_arq_pool: None) -> None:
-    arq_pool._pool = MagicMock(evalsha=AsyncMock(side_effect=StoreError("down")))
+def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(web_redis: str) -> None:
+    async def healthy_once_the_pool_is_closed() -> bool:
+        await arq_pool.init_arq_pool()
+        await worker_kind_leases(arq_pool.get_arq_pool(), MUSIC_WORKER_KIND).renew(OWNER_ID)
+        await arq_pool.close_arq_pool()
+        return await arq_pool.is_music_worker_healthy()
 
-    assert asyncio.run(arq_pool.is_music_worker_healthy()) is False
+    assert asyncio.run(healthy_once_the_pool_is_closed()) is False
 
 
 def test_a_roster_that_cannot_be_read_reads_as_none() -> None:
