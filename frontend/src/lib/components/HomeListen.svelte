@@ -17,12 +17,8 @@
 		ensureAllAlbumsLoaded
 	} from '#lib/stores/libraryData.ts';
 	import { playlistList, playlistLoad, ensurePlaylistsLoaded } from '#lib/stores/playlists.ts';
-	import {
-		collectionTransport,
-		toggleOrStartCollection,
-		playAlbum,
-		queueContext
-	} from '#lib/stores/player.ts';
+	import { collectionTransport, toggleOrStartCollection, playAlbum } from '#lib/stores/player.ts';
+	import { queueContext } from '#lib/stores/queue.ts';
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import { whenBackOnline } from '#lib/stores/connectivity.ts';

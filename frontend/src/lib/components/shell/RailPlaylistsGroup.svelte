@@ -21,9 +21,9 @@
 	import {
 		isPlaylistEntryCurrent,
 		playPlaylistEntryAndShowNowPlaying,
-		queueContext,
 		selectedSongId
 	} from '#lib/stores/player.ts';
+	import { queueContext } from '#lib/stores/queue.ts';
 	import { whenBackOnline } from '#lib/stores/connectivity.ts';
 	import { matchesRailQuery, normalizedRailTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {

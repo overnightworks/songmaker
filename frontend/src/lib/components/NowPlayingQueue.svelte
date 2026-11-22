@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { QueueStreamSkipItem } from '#lib/api/types.ts';
-	import type { QueueViewModel } from '#lib/stores/player.ts';
+	import type { QueueViewModel } from '#lib/stores/queue.ts';
 	import {
 		LIBRARY_TAKE_POOL_LABELS,
 		LIBRARY_TAKE_POOLS,

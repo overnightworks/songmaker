@@ -28,12 +28,8 @@ import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '#lib/stores/
 import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-import {
-	setShuffle,
-	queueContext,
-	pendingStart,
-	toggleOrStartCollection
-} from '#lib/stores/player.ts';
+import { setShuffle, pendingStart, toggleOrStartCollection } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { words } from '#lib/words/en.ts';
 
 const fetchPlaylists = vi.fn();

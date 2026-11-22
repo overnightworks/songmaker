@@ -1,12 +1,8 @@
 <script lang="ts">
 	import { sharePlaylist, unsharePlaylist } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
-	import {
-		isPlaylistEntryCurrent,
-		playPlaylist,
-		playPlaylistEntry,
-		queueContext
-	} from '#lib/stores/player.ts';
+	import { isPlaylistEntryCurrent, playPlaylist, playPlaylistEntry } from '#lib/stores/player.ts';
+	import { queueContext } from '#lib/stores/queue.ts';
 	import {
 		selectedPlaylist,
 		selectedPlaylistDetail,

@@ -11,7 +11,6 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
-	queueContext,
 	setShuffle,
 	shuffleEnabled,
 	playAlbum,
@@ -19,6 +18,7 @@ import {
 	pendingStart,
 	toggleOrStartCollection
 } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { makeAlbum, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';

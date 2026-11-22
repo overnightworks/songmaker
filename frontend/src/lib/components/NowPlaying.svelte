@@ -13,31 +13,33 @@
 	import { albumList, songList } from '#lib/stores/libraryData.ts';
 	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import {
-		buildQueueViewModel,
 		canPlayNextSong,
 		canPlayPrevSong,
 		chooseLibraryTakePool,
 		closeNowPlaying,
-		curationActive,
 		dockNowPlaying,
 		ensureGenerationsLoaded,
 		expandNowPlaying,
 		jumpToQueueIndex,
 		libraryQueueSkipped,
-		libraryQueueSkippedComplete,
 		navigateToPlaying,
 		nowPlayingDockable,
 		nowPlayingPanel,
 		nowPlayingSurface,
-		playbackSource,
 		playNextSong,
 		playPrevSong,
-		queueContext,
 		shuffleEnabled,
 		shuffleLabel,
 		toggleShuffle,
 		windowEnded
 	} from '#lib/stores/player.ts';
+	import {
+		buildQueueViewModel,
+		curationActive,
+		libraryQueueSkippedComplete,
+		playbackSource,
+		queueContext
+	} from '#lib/stores/queue.ts';
 	import { libraryTakePool, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
 	import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 	import { addToast } from '#lib/stores/toast.ts';
@@ -115,7 +117,7 @@
 	);
 
 	// Curation mode (issue #228) only ever plays an album's own queue. The
-	// real guarantee lives in the player store: setQueueContext (the one
+	// real guarantee lives in the queue store: setQueueContext (the one
 	// writer of queueContext) turns curationActive off on every queue build
 	// that isn't curateAlbum's own — a different album, a take clicked
 	// mid-curation, a playlist — so curationActive being true here already

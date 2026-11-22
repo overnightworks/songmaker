@@ -23,13 +23,13 @@ import {
 	nowPlayingDockable,
 	nowPlayingSurface,
 	playStartNotice,
-	queueContext,
 	selectedAlbumId,
 	selectedSongId,
 	setPendingStartForTests,
 	setShuffle,
 	shuffleEnabled
 } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import * as playerStore from '#lib/stores/player.ts';
 import { dismissToast, toasts } from '#lib/stores/toast.ts';
 import { openCollection } from '#lib/stores/collection.ts';

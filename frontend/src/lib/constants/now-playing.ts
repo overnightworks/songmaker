@@ -70,7 +70,7 @@ export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 }
 
 // Where the playing queue comes from — the album or playlist it was built
-// from. A library queue has no source. The player store owns the answer
+// from. A library queue has no source. The queue store owns the answer
 // (playbackSource); Now Playing adds how to go back there.
 type PlaybackSourceKind = 'album' | 'playlist';
 
