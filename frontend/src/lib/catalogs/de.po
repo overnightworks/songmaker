@@ -3026,30 +3026,6 @@ msgctxt "nowPlayingTake.scoreBpm"
 msgid "BPM"
 msgstr "BPM"
 
-msgctxt "nowPlayingTake.deviations"
-msgid "Sung vs. lyrics"
-msgstr "Gesungen vs. Songtext"
-
-msgctxt "nowPlayingTake.deviationsEmpty"
-msgid "Sung text matches the lyrics"
-msgstr "Der gesungene Text passt zum Songtext"
-
-msgctxt "nowPlayingTake.deviationsUnavailable"
-msgid "No transcript to compare against yet"
-msgstr "Noch kein Transkript zum Vergleichen"
-
-msgctxt "nowPlayingTake.lyricsRow"
-msgid "Lyrics: {lyrics}"
-msgstr "Songtext: {lyrics}"
-
-msgctxt "nowPlayingTake.deviationAddedTitle"
-msgid "Not in lyrics"
-msgstr "Nicht im Songtext"
-
-msgctxt "nowPlayingTake.deviationAdded"
-msgid "{value} (Not in lyrics)"
-msgstr "{value} (nicht im Songtext)"
-
 msgctxt "nowPlayingTake.rescoreAction"
 msgid "Re-score this take to follow the lyrics."
 msgstr "Bewerte diesen Take neu, damit er dem Songtext folgt."
@@ -5859,6 +5835,14 @@ msgstr "Songtext · {title}"
 msgctxt "nowPlaying.lyricsFollow"
 msgid "Follow"
 msgstr "Mitlaufen"
+
+msgctxt "nowPlaying.sungLine"
+msgid "Sung"
+msgstr "Gesungen"
+
+msgctxt "nowPlaying.sungNothing"
+msgid "—"
+msgstr "—"
 
 msgctxt "nowPlaying.lyricsUnsynced"
 msgid "Lyrics aren't synced for this take."

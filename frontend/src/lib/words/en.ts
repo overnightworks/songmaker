@@ -709,12 +709,6 @@ export type Words = {
     readonly "nowPlayingTake.scoreEnjoyment": string;
     readonly "nowPlayingTake.scoreCoherence": string;
     readonly "nowPlayingTake.scoreBpm": string;
-    readonly "nowPlayingTake.deviations": string;
-    readonly "nowPlayingTake.deviationsEmpty": string;
-    readonly "nowPlayingTake.deviationsUnavailable": string;
-    readonly "nowPlayingTake.lyricsRow": (gaps: { readonly lyrics: string }) => string;
-    readonly "nowPlayingTake.deviationAddedTitle": string;
-    readonly "nowPlayingTake.deviationAdded": (gaps: { readonly value: string }) => string;
     readonly "nowPlayingTake.rescoreAction": string;
     readonly "nowPlayingTake.rescoring": string;
     readonly "nowPlayingTake.rescore": string;
@@ -1382,6 +1376,8 @@ export type Words = {
     readonly "nowPlaying.lyricsHeading": string;
     readonly "nowPlaying.lyricsHeadingTitled": (gaps: { readonly title: string }) => string;
     readonly "nowPlaying.lyricsFollow": string;
+    readonly "nowPlaying.sungLine": string;
+    readonly "nowPlaying.sungNothing": string;
     readonly "nowPlaying.lyricsUnsynced": string;
     readonly "nowPlaying.noLyrics": string;
     readonly "nowPlaying.importedNoLyrics": string;
@@ -2335,12 +2331,6 @@ export const words: Words = {
     "nowPlayingTake.scoreEnjoyment": "Enjoyment",
     "nowPlayingTake.scoreCoherence": "Coherence",
     "nowPlayingTake.scoreBpm": "BPM",
-    "nowPlayingTake.deviations": "Sung vs. lyrics",
-    "nowPlayingTake.deviationsEmpty": "Sung text matches the lyrics",
-    "nowPlayingTake.deviationsUnavailable": "No transcript to compare against yet",
-    "nowPlayingTake.lyricsRow": (gaps: { readonly lyrics: string }) => "Lyrics: " + gaps.lyrics,
-    "nowPlayingTake.deviationAddedTitle": "Not in lyrics",
-    "nowPlayingTake.deviationAdded": (gaps: { readonly value: string }) => gaps.value + " (Not in lyrics)",
     "nowPlayingTake.rescoreAction": "Re-score this take to follow the lyrics.",
     "nowPlayingTake.rescoring": "Re-scoring…",
     "nowPlayingTake.rescore": "Re-score",
@@ -3085,6 +3075,8 @@ export const words: Words = {
     "nowPlaying.lyricsHeading": "Lyrics",
     "nowPlaying.lyricsHeadingTitled": (gaps: { readonly title: string }) => "Lyrics · " + gaps.title,
     "nowPlaying.lyricsFollow": "Follow",
+    "nowPlaying.sungLine": "Sung",
+    "nowPlaying.sungNothing": "—",
     "nowPlaying.lyricsUnsynced": "Lyrics aren't synced for this take.",
     "nowPlaying.noLyrics": "No lyrics for this take",
     "nowPlaying.importedNoLyrics": "Imported take — no lyrics were saved with it.",
