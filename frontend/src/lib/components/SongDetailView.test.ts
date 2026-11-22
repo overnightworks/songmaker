@@ -1076,7 +1076,6 @@ describe('SongDetailView phone Co-writer is a tab', () => {
 		expect(target.querySelector('.cowriter')?.closest('[hidden]')).toBeNull();
 		expect(get(phoneAppBar)?.title).toBe(songTitle);
 		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(songTitle);
-		expect(bar.querySelector('[aria-label="Share song"]')).not.toBeNull();
 		expect(bar.querySelector(`[aria-label="${words['songMenu.label']}"]`)).not.toBeNull();
 
 		showTab(target, 'edit');

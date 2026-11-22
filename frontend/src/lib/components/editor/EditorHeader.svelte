@@ -7,7 +7,6 @@
 	import Icon from '../Icon.svelte';
 	import GenerateButton from './GenerateButton.svelte';
 	import SongMenu from './SongMenu.svelte';
-	import ShareButton from '../ShareButton.svelte';
 
 	interface BreadcrumbItem {
 		label: string;
@@ -135,7 +134,6 @@
 						editLabelKey="songHeader.editTitle"
 					/>
 				</h2>
-				<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
 				<SongMenu
 					title={song.title}
 					{saveDisabled}
@@ -143,6 +141,10 @@
 					onrename={() => titleEditor?.startEdit()}
 					{onaddto}
 					ondelete={ondeletesong}
+					{isShared}
+					{shareSlug}
+					{onshare}
+					{onunshare}
 				/>
 			</div>
 			{#if songRail}
