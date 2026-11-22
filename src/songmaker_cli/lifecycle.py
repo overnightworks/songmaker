@@ -423,7 +423,8 @@ async def owner_lapse_loop(app: FastAPI) -> None:
 
     A lapse is only a trigger: the pass reads liveness again, so the jobs of the lapsed
     generation fail and those an owner that started anew has written since keep running, and
-    a lapse lost with a Redis restart is found by ``owner_gone_reaper_loop``.
+    a lapse lost with a Redis restart is found by ``owner_gone_reaper_loop``. The lapses of the
+    music workers' family are served beside them, so that family's state ends with its leases.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
@@ -436,10 +437,18 @@ async def owner_lapse_loop(app: FastAPI) -> None:
             raise
         registry.record_success(BackgroundLoopName.OWNER_LAPSES)
 
-    await ctx.owner_leases.serve_lapses(
-        fail_jobs_of_lapsed_owner,
-        every=timedelta(seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS),
-    )
+    every = timedelta(seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS)
+    async with asyncio.TaskGroup() as serving:
+        serving.create_task(ctx.owner_leases.serve_lapses(fail_jobs_of_lapsed_owner, every=every))
+        serving.create_task(ctx.music_leases.serve_lapses(_end_music_worker_lapse, every=every))
+
+
+async def _end_music_worker_lapse(_lapse: Lapse) -> None:
+    """Take a music worker's lapse off its queue, which ends the lease's last traces in Redis.
+
+    The jobs of that worker fail through its owner lease, so the lapse needs no pass of its own;
+    the sweep and the hand-out clear the family's holders and lapses.
+    """
 
 
 class OwnerLeaseNotAliveError(Exception):

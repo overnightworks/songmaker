@@ -1765,12 +1765,16 @@ too, so its roster cannot say that a music worker lives. A music worker therefor
 owner id in a second family, `music-worker` (`worker_liveness.worker_kind_leases(redis, "music")`,
 the spans of the owner family, renewed by `worker_liveness.keep_kind_lease` right after the owner
 lease). A web process reads the roster of that family, never arq's health key:
-`arq_pool.is_music_worker_healthy` says whether it holds a live lease, and the music signal of
-the liveness map reads it too (a live holder is `alive` and is recorded as the last observation;
+`arq_pool.is_music_worker_healthy` says whether it holds a live lease (the health page), and the
+music signal of the liveness map reads it too, which also admits a generation (a live holder is
+`alive` and is recorded as the last observation;
 an empty roster Redis may have lost with a restart is `unknown`; an empty roster that is complete
 falls to the last observation and the restart grace below; a roster that cannot be read is
-`unknown`). The async callers (`create_job_with_rate_limit` through `AppContext.music_leases`, the
-stale-job reaper loop and the start-up pass) read the roster first and pass it in. The readiness
+`unknown`; a generation is admitted only while the signal is `alive`, so a restart inside the
+grace refuses nothing). The async callers (`create_job_with_rate_limit` and the generation routes
+through `AppContext.music_leases`, the stale-job reaper loop and the start-up pass) read the
+roster first and pass it in. The `owner_lapses` loop serves the lapses of this family beside the
+owner family's, so the holders and lapses of ended or expired leases leave Redis. The readiness
 probe `scripts/arq_healthcheck.py music` is ready only when this container start's own owner
 lease is live: the worker writes its owner id and PID 1's start ticks (field 22 of `/proc/1/stat`)
 to `MUSIC_WORKER_READINESS_FILE` as the first step of its start, and the probe requires the
