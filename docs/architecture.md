@@ -1111,13 +1111,16 @@ sessions without Redis.
 
 Sign-in is songmaker's composition of that library: `server.build_web_auth` calls `WebAuth.build`
 with `oidc_client.py`'s client configuration and `AdmissionConfig`, `auth_stores.py`'s two
-transactions and `auth_api.sign_in_pages()`. `oidc_client.build_oidc_client_config(settings, realm)` describes the
-Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
-issuer, client id from `REALM_CLIENT_ID`, client secret read from the file
-`OIDC_CLIENT_SECRET_FILE`, redirect addresses from `PUBLIC_BASE_URL`) and
-`build_admission_config` binds its issuer to the login and admin groups from
-`REALM_LOGIN_GROUP` and `REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names. The four group names (`REALM_LOGIN_GROUP`, `REALM_ADMIN_GROUP`, `REALM_MCP_GROUP`, `REALM_AGENT_GROUP`) are webauth `GroupPath` values; the client ids and the MCP scope are plain strings. `REALM_AGENT_GROUP` is parsed and validated even while MCP is off, and required only while it is on. They are built once in `server.create_app`, so the workers,
-which never create the web app, start without the realm's
+transactions and `auth_api.sign_in_pages()`. `oidc_client.build_oidc_client_config(settings, realm)`
+describes the Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
+issuer, client id from `REALM_CLIENT_ID`, client secret read from the file `OIDC_CLIENT_SECRET_FILE`,
+redirect addresses from `PUBLIC_BASE_URL`) and
+`build_admission_config` binds its issuer to the login and admin groups from `REALM_LOGIN_GROUP` and
+`REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names. The four group names
+(`REALM_LOGIN_GROUP`, `REALM_ADMIN_GROUP`, `REALM_MCP_GROUP`, `REALM_AGENT_GROUP`) are webauth
+`GroupPath` values; the client ids and the MCP scope are plain strings. `REALM_AGENT_GROUP` is
+parsed and validated even while MCP is off, and required only while it is on. They are built once in
+`server.create_app`, so the workers, which never create the web app, start without the realm's
 settings. The call builds the relying party itself and keeps the handle on `app.state.web_auth`.
 `GET /login/oidc` starts the login; `GET /auth/callback`
 writes the account and the session in one `DatabaseSignInTransaction` entry (a fresh database
