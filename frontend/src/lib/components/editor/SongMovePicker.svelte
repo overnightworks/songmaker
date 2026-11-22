@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
 		closeSongMovePicker,
@@ -14,6 +14,7 @@
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
+	import MenuPickerHead from '../MenuPickerHead.svelte';
 
 	interface Props {
 		/** Closes the whole popover, as a move lands or before a shared album asks. */
@@ -22,11 +23,9 @@
 
 	let { onclose }: Props = $props();
 
-	let backButton: HTMLButtonElement | undefined = $state();
 	let filterInput: HTMLInputElement | undefined = $state();
 	let filterFocused = false;
 
-	onMount(() => backButton?.focus());
 	onDestroy(closeSongMovePicker);
 
 	// The filter appears with the list, after the focus already stands on Back.
@@ -60,19 +59,12 @@
 	{#if album.is_shared}<Icon name="share" size={14} class="pk-shared" />{/if}
 {/snippet}
 
-<div class="pk-head">
-	<button
-		bind:this={backButton}
-		type="button"
-		class="pk-back"
-		aria-label={pageText('songMove.back')}
-		disabled={$songMoveRun.status === 'busy'}
-		onclick={closeSongMovePicker}
-	>
-		<Icon name="chevron-right" size={16} class="pk-back-icon" />
-	</button>
-	{pageText('songMove.heading')}
-</div>
+<MenuPickerHead
+	label={pageText('songMove.back')}
+	heading={pageText('songMove.heading')}
+	onback={closeSongMovePicker}
+	disabled={$songMoveRun.status === 'busy'}
+/>
 
 {#if $songMovePicker.status === 'ready'}
 	{@const picker = $songMovePicker}
@@ -88,13 +80,13 @@
 		/>
 	{/if}
 	{#if picker.current}
-		<div class="pk-row here" aria-current="true">
+		<div class="menu-picker-row pk-row here" aria-current="true">
 			{@render albumFace(picker.current)}
 			<Icon name="check" size={16} class="pk-check" />
 		</div>
 	{/if}
 	{#if picker.hasOthers}
-		<ul class="pk-list">
+		<ul class="menu-picker-list pk-list">
 			{#each picker.others as album (album.id)}
 				{@const run = $songMoveRunHere}
 				{@const busy = run.status === 'busy' && run.albumId === album.id}
@@ -102,7 +94,7 @@
 				<li>
 					<button
 						type="button"
-						class="pk-row"
+						class="menu-picker-row pk-row"
 						class:busy
 						class:failed
 						aria-busy={busy ? 'true' : undefined}
@@ -152,41 +144,6 @@
 {/if}
 
 <style>
-	.pk-head {
-		display: flex;
-		align-items: center;
-		gap: 2px;
-		margin-bottom: 0.25rem;
-		padding: 0 0.6rem 0.3rem 0;
-		border-bottom: 1px solid var(--border);
-		font-family: var(--font-display);
-		font-size: var(--label-font-size);
-		letter-spacing: 0.5px;
-		text-transform: uppercase;
-		color: var(--text-subtle);
-	}
-
-	.pk-back {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: var(--hitbox-frequent);
-		height: var(--hitbox-frequent);
-		background: none;
-		border: none;
-		border-radius: var(--btn-radius-sm);
-		color: var(--text);
-		cursor: pointer;
-	}
-
-	.pk-back:hover {
-		background: var(--surface-hover);
-	}
-
-	.pk-back :global(.pk-back-icon) {
-		transform: rotate(180deg);
-	}
-
 	.pk-filter {
 		min-height: var(--hitbox-frequent);
 		margin: 2px 0 4px;
@@ -201,38 +158,6 @@
 
 	.pk-list {
 		position: relative;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		max-height: 268px;
-		overflow-y: auto;
-	}
-
-	.pk-row {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		min-height: var(--hitbox-frequent);
-		padding: 0 0.6rem;
-		border: none;
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		font: inherit;
-		font-size: var(--label-font-size);
-		color: var(--text);
-		text-align: left;
-	}
-
-	button.pk-row {
-		cursor: pointer;
-	}
-
-	button.pk-row:hover:not(:disabled) {
-		background: var(--surface-hover);
 	}
 
 	button.pk-row:disabled {

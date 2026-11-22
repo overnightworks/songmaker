@@ -69,7 +69,7 @@ describe('AddToPicker', () => {
 
 		expect(target.textContent).toContain(words['addToPicker.heading']);
 		expect(
-			Array.from(target.querySelectorAll('.ap-row'), (row) => ({
+			Array.from(target.querySelectorAll('.menu-picker-row'), (row) => ({
 				title: row.querySelector('.ap-title')?.textContent,
 				count: row.querySelector('.ap-count')?.textContent
 			}))
@@ -90,14 +90,14 @@ describe('AddToPicker', () => {
 
 	it('hands the chosen playlist to its host', async () => {
 		await showPicker();
-		target.querySelectorAll<HTMLButtonElement>('.ap-row')[1]?.click();
+		target.querySelectorAll<HTMLButtonElement>('.menu-picker-row')[1]?.click();
 
 		expect(onselect).toHaveBeenCalledWith('p-run');
 	});
 
 	it('goes back to the menu rows from the back button', async () => {
 		await showPicker();
-		target.querySelector<HTMLButtonElement>('.ap-back')?.click();
+		target.querySelector<HTMLButtonElement>('.menu-picker-back')?.click();
 
 		expect(onback).toHaveBeenCalledTimes(1);
 	});

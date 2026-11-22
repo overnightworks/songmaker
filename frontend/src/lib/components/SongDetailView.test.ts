@@ -285,7 +285,7 @@ describe('SongDetailView adding a take to a playlist', () => {
 		await tick();
 		menuRow(row, words['takeMenu.addTo']).click();
 		await tick();
-		row.querySelector<HTMLButtonElement>('.ap-row')?.click();
+		row.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
 		await vi.waitFor(() => expect(addGenerationToPlaylist).toHaveBeenCalled());
 		await vi.waitFor(() => expect(vi.mocked(addToast)).toHaveBeenCalled());
 

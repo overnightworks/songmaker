@@ -9,7 +9,7 @@
 	} from '#lib/stores/playlists.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
-	import Icon from './Icon.svelte';
+	import MenuPickerHead from './MenuPickerHead.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
 
 	interface Props {
@@ -21,7 +21,6 @@
 
 	let { onselect, onback }: Props = $props();
 
-	let backButton: HTMLButtonElement | undefined = $state();
 	let newTitle = $state('');
 	let creating = $state(false);
 
@@ -29,7 +28,6 @@
 	const load = $derived($playlistLoad);
 
 	onMount(() => {
-		backButton?.focus();
 		void ensurePlaylistsLoaded();
 	});
 
@@ -49,18 +47,11 @@
 	}
 </script>
 
-<div class="ap-head">
-	<button
-		bind:this={backButton}
-		type="button"
-		class="ap-back"
-		aria-label={pageText('addToPicker.back')}
-		onclick={onback}
-	>
-		<Icon name="chevron-right" size={16} class="ap-back-icon" />
-	</button>
-	{pageText('addToPicker.heading')}
-</div>
+<MenuPickerHead
+	label={pageText('addToPicker.back')}
+	heading={pageText('addToPicker.heading')}
+	{onback}
+/>
 
 {#if load.status === 'loading' && playlists.length === 0}
 	<p class="ap-status" role="status">{pageText('addToPicker.loading')}</p>
@@ -70,10 +61,10 @@
 		{pageText('addToPicker.retry')}
 	</button>
 {:else}
-	<ul class="ap-list">
+	<ul class="menu-picker-list">
 		{#each playlists as playlist (playlist.id)}
 			<li>
-				<button type="button" class="ap-row" onclick={() => onselect(playlist.id)}>
+				<button type="button" class="menu-picker-row" onclick={() => onselect(playlist.id)}>
 					<PlaylistCover
 						title={playlist.title}
 						covers={playlist.album_covers}
@@ -118,73 +109,6 @@
 </div>
 
 <style>
-	.ap-head {
-		display: flex;
-		align-items: center;
-		gap: 2px;
-		margin-bottom: 0.25rem;
-		padding: 0 0.6rem 0.3rem 0;
-		border-bottom: 1px solid var(--border);
-		font-family: var(--font-display);
-		font-size: var(--label-font-size);
-		letter-spacing: 0.5px;
-		text-transform: uppercase;
-		color: var(--text-subtle);
-	}
-
-	.ap-back {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: var(--hitbox-frequent);
-		height: var(--hitbox-frequent);
-		background: none;
-		border: none;
-		border-radius: var(--btn-radius-sm);
-		color: var(--text);
-		cursor: pointer;
-	}
-
-	.ap-back:hover {
-		background: var(--surface-hover);
-	}
-
-	.ap-back :global(.ap-back-icon) {
-		transform: rotate(180deg);
-	}
-
-	.ap-list {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		max-height: 268px;
-		overflow-y: auto;
-	}
-
-	.ap-row {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		min-height: var(--hitbox-frequent);
-		padding: 0 0.6rem;
-		border: none;
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		font: inherit;
-		font-size: var(--label-font-size);
-		color: var(--text);
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.ap-row:hover {
-		background: var(--surface-hover);
-	}
-
 	.ap-title {
 		flex: 1;
 		min-width: 0;

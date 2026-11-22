@@ -205,7 +205,7 @@ describe('TakeMenu', () => {
 			menuRow(target, words['takeMenu.addTo']).click();
 			await tick();
 			expect(target.querySelector('.menu-heading')).toBeNull();
-			target.querySelector<HTMLButtonElement>('.ap-row')?.click();
+			target.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
 			await tick();
 			expect(props.onaddto).toHaveBeenCalledWith('p-night');
 			expect(target.querySelector('.menu-panel')).toBeNull();
@@ -215,7 +215,7 @@ describe('TakeMenu', () => {
 			const { target } = await render();
 			menuRow(target, words['takeMenu.addTo']).click();
 			await tick();
-			target.querySelector<HTMLButtonElement>('.ap-back')?.click();
+			target.querySelector<HTMLButtonElement>('.menu-picker-back')?.click();
 			await tick();
 			expect(menuRowLabels(target)).toContain(words['takeMenu.addTo']);
 		});

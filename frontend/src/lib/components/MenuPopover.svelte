@@ -279,6 +279,42 @@
 		color: var(--text-subtle);
 	}
 
+	/* The list and rows of a picker that replaces the menu's rows. */
+	.menu-panel :global(.menu-picker-list) {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		max-height: 268px;
+		overflow-y: auto;
+	}
+
+	.menu-panel :global(.menu-picker-row) {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		min-height: var(--hitbox-frequent);
+		padding: 0 0.6rem;
+		border: none;
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		font: inherit;
+		font-size: var(--label-font-size);
+		color: var(--text);
+		text-align: left;
+	}
+
+	.menu-panel :global(button.menu-picker-row) {
+		cursor: pointer;
+	}
+
+	.menu-panel :global(button.menu-picker-row:hover:not(:disabled)) {
+		background: var(--surface-hover);
+	}
+
 	.menu-panel :global(.menu-item.destructive) {
 		color: var(--fail);
 	}

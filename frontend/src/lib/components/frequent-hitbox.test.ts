@@ -702,12 +702,12 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		pressEscape();
 		await tick();
 		expect(get(sheet)).toBe(false);
-		expect(addToPickerHost.querySelector('.ap-head')).not.toBeNull();
+		expect(addToPickerHost.querySelector('.menu-picker-head')).not.toBeNull();
 
 		pressEscape();
 		await tick();
 
-		expect(addToPickerHost.querySelector('.ap-head')).toBeNull();
+		expect(addToPickerHost.querySelector('.menu-picker-head')).toBeNull();
 		expect(openLibraryWall).not.toHaveBeenCalled();
 		expect(backToCollection).not.toHaveBeenCalled();
 	});

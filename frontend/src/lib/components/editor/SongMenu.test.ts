@@ -137,7 +137,7 @@ describe('SongMenu', () => {
 			expect(target.querySelector('.menu-panel')?.textContent).toContain('Night Drive');
 			expect(target.querySelector('.menu-heading')).toBeNull();
 
-			target.querySelector<HTMLButtonElement>('.ap-back')?.click();
+			target.querySelector<HTMLButtonElement>('.menu-picker-back')?.click();
 			await tick();
 			expect(menuRowLabels(target)).toContain(words['songMenu.addTo']);
 		});
@@ -148,7 +148,7 @@ describe('SongMenu', () => {
 			await tick();
 			menuRow(target, words['songMenu.addTo']).click();
 			await tick();
-			target.querySelector<HTMLButtonElement>('.ap-row')?.click();
+			target.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
 			await tick();
 			expect(props.onaddto).toHaveBeenCalledWith('p-night');
 			expect(target.querySelector('.menu-panel')).toBeNull();
@@ -182,17 +182,14 @@ describe('SongMenu', () => {
 		expect(document.activeElement).toBe(titleField);
 	});
 
-	it.each([words['songMenu.delete']])(
-		'defect:#1495: hands focus back to its trigger after %s',
-		async (label) => {
-			const { target } = await renderMenu();
-			openSongMenu(target);
-			await tick();
-			menuRow(target, label).click();
-			await focusSettled();
-			expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
-		}
-	);
+	it('defect:#1495: hands focus back to its trigger after Delete', async () => {
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		menuRow(target, words['songMenu.delete']).click();
+		await focusSettled();
+		expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
+	});
 });
 
 let renameSawHistoryAt: number | undefined;

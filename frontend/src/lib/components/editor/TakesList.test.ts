@@ -767,7 +767,7 @@ describe('TakesList', () => {
 				await tick();
 				clickMenuItem(row, words['takeMenu.addTo']);
 				await tick();
-				row.querySelector<HTMLButtonElement>('.ap-row')?.click();
+				row.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
 			}
 		}
 	];
@@ -955,7 +955,7 @@ describe('TakesList archived takes', () => {
 		clickMenuItem(liveRow, words['takeMenu.addTo']);
 		await tick();
 
-		expect(liveRow.querySelector('.menu-panel .ap-head')).not.toBeNull();
+		expect(liveRow.querySelector('.menu-panel .menu-picker-head')).not.toBeNull();
 		expect(playTake).not.toHaveBeenCalled();
 	});
 

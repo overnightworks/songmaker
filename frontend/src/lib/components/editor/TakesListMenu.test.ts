@@ -128,9 +128,9 @@ describe('TakesList menu', () => {
 		clickMenuItem(row, words['takeMenu.addTo']);
 		await tick();
 
-		expect(row.querySelector('.ap-head'), 'the picker takes the menu over').not.toBeNull();
+		expect(row.querySelector('.menu-picker-head'), 'the picker takes the menu over').not.toBeNull();
 
-		row.querySelector<HTMLButtonElement>('.ap-row')?.click();
+		row.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
 		await tick();
 		await Promise.resolve();
 
