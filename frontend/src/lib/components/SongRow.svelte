@@ -169,10 +169,10 @@
 		flex-shrink: 0;
 		padding: 0 0.5rem;
 		border: 1px solid var(--warn-line);
-		border-radius: 999px;
+		border-radius: var(--btn-radius-pill);
 		background: var(--warn-bg);
 		color: var(--warn-ink);
-		font-size: 0.7rem;
+		font-size: var(--label-font-size);
 		font-weight: 600;
 		line-height: 1.1rem;
 		white-space: nowrap;

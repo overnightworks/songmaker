@@ -24,7 +24,7 @@ import AlbumDetailView from './AlbumDetailView.svelte';
 
 const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
 
-function albumSongs() {
+function songsWithOneWaitingForPick() {
 	return [
 		song({ id: 's-picked', album_id: 'a-local', title: 'Picked', track_number: 1, has_pick: true }),
 		song({ id: 's-open', album_id: 'a-local', title: 'Open', track_number: 2, has_pick: false }),
@@ -40,7 +40,7 @@ function albumSongs() {
 }
 
 async function renderLoadedAlbum(): Promise<HTMLElement> {
-	const items = albumSongs();
+	const items = songsWithOneWaitingForPick();
 	vi.mocked(fetchSongs).mockResolvedValue({
 		items,
 		total: items.length,
@@ -92,7 +92,7 @@ describe('AlbumDetailView song rows', () => {
 	});
 
 	it('album_rule_11: the header counts no missing Picks while the songs still load', async () => {
-		songList.set(albumSongs());
+		songList.set(songsWithOneWaitingForPick());
 		const target = await renderDetail();
 
 		expect(requireElement(target, '.collection-header .header-count').textContent).toBe(
