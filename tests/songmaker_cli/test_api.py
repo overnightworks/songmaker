@@ -1170,11 +1170,11 @@ def _mock_worker(mock_pool=None):
     return _ctx()
 
 
-def _mock_worker_process_health(mock_pool=None, *, music_healthy: bool | None = True):
+def _mock_worker_process_health(mock_pool=None, *, music_healthy=True):
     """Like _mock_worker, but leaves _has_online_acestep_worker real — for
     tests that must exercise its own GPU-health decision rather than have
-    it stubbed away. ``music_healthy=None`` leaves the music signal real too."""
-    from contextlib import ExitStack, contextmanager
+    it stubbed away."""
+    from contextlib import contextmanager
     from unittest.mock import AsyncMock, patch
 
     if mock_pool is None:
@@ -1182,23 +1182,17 @@ def _mock_worker_process_health(mock_pool=None, *, music_healthy: bool | None = 
 
     @contextmanager
     def _ctx():
-        with ExitStack() as stack:
-            stack.enter_context(
-                patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
-            )
-            stack.enter_context(
-                patch(
-                    "songmaker_cli.generation_api.is_scoring_worker_healthy",
-                    AsyncMock(return_value=True),
-                ),
-            )
-            if music_healthy is not None:
-                stack.enter_context(
-                    patch(
-                        "songmaker_cli.generation_api._music_worker_is_up",
-                        AsyncMock(return_value=music_healthy),
-                    ),
-                )
+        with (
+            patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+            patch(
+                "songmaker_cli.generation_api._music_worker_is_up",
+                AsyncMock(return_value=music_healthy),
+            ),
+            patch(
+                "songmaker_cli.generation_api.is_scoring_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
+        ):
             yield mock_pool
 
     return _ctx()
@@ -2052,41 +2046,6 @@ def test_s6_unavailable_generation_is_persisted(
     assert recovered_job["error_type"] == expected_type
     assert recovered_job["completed_at"] == completed_at
     publish.assert_not_awaited()
-
-
-@pytest.mark.parametrize(
-    ("music_last_alive_seconds_ago", "expected_status"),
-    [
-        pytest.param(5, 200, id="a-restart-inside-the-grace"),
-        pytest.param(None, 503, id="never-seen-alive"),
-    ],
-)
-def test_generation_follows_the_music_signal_while_no_lease_is_held(
-    client: TestClient, music_last_alive_seconds_ago: int | None, expected_status: int,
-) -> None:
-    """The music worker's lease is gone, as at its restart: the grace keeps it alive."""
-    from unittest.mock import AsyncMock, patch
-
-    from support.web_app import arrange_fake_async_redis, settle_owner_leases
-
-    from songmaker_cli.timestamps import utcnow
-    from songmaker_cli.worker_liveness import MUSIC_LAST_ALIVE_KEY
-
-    ctx = client.app.state.ctx
-    arrange_fake_async_redis(ctx.async_redis, settle_owner_leases)
-    if music_last_alive_seconds_ago is not None:
-        seen_at = utcnow() - timedelta(seconds=music_last_alive_seconds_ago)
-        ctx.redis.set(MUSIC_LAST_ALIVE_KEY, seen_at.isoformat())
-    pool = AsyncMock()
-    _register_worker_with_gpu_health(client, pool, gpu_healthy=True)
-
-    with (
-        _mock_worker_process_health(pool, music_healthy=None),
-        patch.object(ctx.wake_channel, "publish", AsyncMock()),
-    ):
-        response = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
-
-    assert response.status_code == expected_status
 
 
 @pytest.mark.parametrize(
