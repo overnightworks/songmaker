@@ -1,5 +1,5 @@
 claim_id = "94be42f681d549e2bb5596240a9f3de9"
-agent = "Claude 21e892ab-fbe1-424c-95f4-8df2b859755f"
+agent = "Claude 7ce0c534-6bff-4977-9966-67605fc278e8"
 role = "builder"
 base = "e85845ca287f59ffcce6496dad7ac1eb564bab5a"
 branch = "claude/issue-3423-realm-keys"
