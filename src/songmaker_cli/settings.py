@@ -169,7 +169,8 @@ class RealmSettings(BaseSettings):
     and reach the MCP endpoint, and the person's own agent's client, scope and group. The
     environment is the only source, so ``.env`` never feeds it. Only the web reads it, so the
     workers start without the keys. ``REALM_MCP_CLIENT_ID`` and ``REALM_MCP_SCOPE`` are set
-    together or not at all and turn the MCP endpoint on; ``REALM_AGENT_GROUP`` is always parsed and validated, and required while it is on. A refusal names its key and never echoes the value.
+    together or not at all and turn the MCP endpoint on; ``REALM_AGENT_GROUP`` is always parsed
+    and validated, and required while it is on. A refusal names its key and never echoes the value.
     """
 
     model_config = SettingsConfigDict(hide_input_in_errors=True)
