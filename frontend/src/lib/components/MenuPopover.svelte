@@ -14,6 +14,8 @@
 		pressed?: boolean;
 		/** Draws the trigger as a small face inside its full-size touch target, for a trigger that shares a row with other controls. */
 		hitboxFace?: boolean;
+		/** Runs whenever the menu has closed, so a host can return to its first rows. */
+		onclose?: () => void;
 		trigger: Snippet;
 		children: Snippet;
 	}
@@ -24,6 +26,7 @@
 		closeLabel,
 		pressed = false,
 		hitboxFace = false,
+		onclose,
 		trigger,
 		children
 	}: Props = $props();
@@ -44,7 +47,10 @@
 
 	$effect(() => {
 		const isOpen = $shown;
-		if (wasOpen && !isOpen && focusTriggerOnClose) focusTrigger();
+		if (wasOpen && !isOpen) {
+			onclose?.();
+			if (focusTriggerOnClose) focusTrigger();
+		}
 		focusTriggerOnClose = true;
 		wasOpen = isOpen;
 	});
@@ -264,6 +270,49 @@
 	.menu-panel :global(.menu-item:disabled) {
 		opacity: 0.5;
 		cursor: default;
+	}
+
+	/* The row opens a list in this same popover. */
+	.menu-panel :global(.menu-item.opens-list::after) {
+		content: '›';
+		margin-left: auto;
+		color: var(--text-subtle);
+	}
+
+	/* The list and rows of a picker that replaces the menu's rows. */
+	.menu-panel :global(.menu-picker-list) {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		max-height: 268px;
+		overflow-y: auto;
+	}
+
+	.menu-panel :global(.menu-picker-row) {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		min-height: var(--hitbox-frequent);
+		padding: 0 0.6rem;
+		border: none;
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		font: inherit;
+		font-size: var(--label-font-size);
+		color: var(--text);
+		text-align: left;
+	}
+
+	.menu-panel :global(button.menu-picker-row) {
+		cursor: pointer;
+	}
+
+	.menu-panel :global(button.menu-picker-row:hover:not(:disabled)) {
+		background: var(--surface-hover);
 	}
 
 	.menu-panel :global(.menu-item.destructive) {

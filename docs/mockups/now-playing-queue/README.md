@@ -1,0 +1,1 @@
+- `fable-add.png` fixes the content, order, wording and rough layout of the Add to… picker (‹ Add to back, the playlists with cover and count, the New playlist… field); it has no Queue row until a later slice adds it.

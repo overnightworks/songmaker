@@ -4,12 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { words } from '#lib/words/en.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
-import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
+import { makeAlbum, makePlaylist, makeSong } from '#lib/test-utils/factories.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { closeSongMovePicker, songMoveConfirm, songMoveRun } from '#lib/stores/songMove.ts';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import SongMenu from './SongMenu.svelte';
 
@@ -34,7 +35,7 @@ function defaultProps() {
 		saveDisabled: true,
 		onsave: vi.fn(),
 		onrename: vi.fn(),
-		onaddtoplaylist: vi.fn(),
+		onaddto: vi.fn(),
 		ondelete: vi.fn()
 	};
 }
@@ -66,7 +67,7 @@ describe('SongMenu', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('915_C3: lists Save version · Rename · Add to playlist · Move · Delete song, each with an icon, Delete red and last', async () => {
+	it('915_C3: lists Save version · Rename · Add to… · Move · Delete song, each with an icon, Delete red and last', async () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
@@ -74,7 +75,7 @@ describe('SongMenu', () => {
 		expect(menuRowLabels(target)).toEqual([
 			words['songMenu.save'],
 			words['songMenu.rename'],
-			words['songMenu.addToPlaylist'],
+			words['songMenu.addTo'],
 			words['songMenu.move'],
 			words['songMenu.delete']
 		]);
@@ -100,7 +101,6 @@ describe('SongMenu', () => {
 	it.each([
 		{ label: words['songMenu.save'], handler: 'onsave' as const },
 		{ label: words['songMenu.rename'], handler: 'onrename' as const },
-		{ label: words['songMenu.addToPlaylist'], handler: 'onaddtoplaylist' as const },
 		{ label: words['songMenu.delete'], handler: 'ondelete' as const }
 	])(
 		'defect:#1495: runs only $handler and closes the menu on $label',
@@ -119,6 +119,45 @@ describe('SongMenu', () => {
 			expect(target.querySelector('.menu-panel')).toBeNull();
 		}
 	);
+
+	describe('Add to…', () => {
+		beforeEach(() => {
+			playlistList.set([makePlaylist({ id: 'p-night', title: 'Night Drive' })]);
+			playlistLoad.set({ status: 'ready', error: null });
+		});
+
+		afterEach(resetPlaylistsForTests);
+
+		it('turns the menu into the playlist picker, and Back returns to the rows', async () => {
+			const { target } = await renderMenu();
+			openSongMenu(target);
+			await tick();
+			menuRow(target, words['songMenu.addTo']).click();
+			await tick();
+			expect(target.querySelector('.menu-panel')?.textContent).toContain('Night Drive');
+			expect(target.querySelector('.menu-heading')).toBeNull();
+
+			target.querySelector<HTMLButtonElement>('.menu-picker-back')?.click();
+			await tick();
+			expect(menuRowLabels(target)).toContain(words['songMenu.addTo']);
+		});
+
+		it('adds to the chosen playlist, closes the menu and opens on its rows again', async () => {
+			const { target, props } = await renderMenu();
+			openSongMenu(target);
+			await tick();
+			menuRow(target, words['songMenu.addTo']).click();
+			await tick();
+			target.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
+			await tick();
+			expect(props.onaddto).toHaveBeenCalledWith('p-night');
+			expect(target.querySelector('.menu-panel')).toBeNull();
+
+			openSongMenu(target);
+			await tick();
+			expect(menuRowLabels(target)).toContain(words['songMenu.save']);
+		});
+	});
 
 	it('defect:#1495: closes on Escape without triggering an action and hands focus back to its trigger', async () => {
 		const { target } = await renderMenu();
@@ -143,17 +182,14 @@ describe('SongMenu', () => {
 		expect(document.activeElement).toBe(titleField);
 	});
 
-	it.each([words['songMenu.addToPlaylist'], words['songMenu.delete']])(
-		'defect:#1495: hands focus back to its trigger after %s',
-		async (label) => {
-			const { target } = await renderMenu();
-			openSongMenu(target);
-			await tick();
-			menuRow(target, label).click();
-			await focusSettled();
-			expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
-		}
-	);
+	it('defect:#1495: hands focus back to its trigger after Delete', async () => {
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		menuRow(target, words['songMenu.delete']).click();
+		await focusSettled();
+		expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
+	});
 });
 
 let renameSawHistoryAt: number | undefined;

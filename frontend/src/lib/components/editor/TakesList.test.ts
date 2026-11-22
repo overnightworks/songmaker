@@ -765,9 +765,9 @@ describe('TakesList', () => {
 				if (!row) throw new Error('Expected a take row');
 				openTakeMenu(row);
 				await tick();
-				clickMenuItem(row, words['takeMenu.addToPlaylist']);
+				clickMenuItem(row, words['takeMenu.addTo']);
 				await tick();
-				row.querySelector<HTMLButtonElement>('.picker-item')?.click();
+				row.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
 			}
 		}
 	];
@@ -939,7 +939,7 @@ describe('TakesList archived takes', () => {
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
-	it('owns and anchors its menu, and its playlist picker on a live row', async () => {
+	it('owns and anchors its menu, and its Add to… picker on a live row', async () => {
 		// CSS is off in Vitest; the browser walkthrough covers stacking (R1). This proves the structure.
 		const { target } = await renderWithArchived();
 		const [liveRow, archivedRow] = Array.from(target.querySelectorAll<HTMLElement>('.take-row'));
@@ -948,15 +948,14 @@ describe('TakesList archived takes', () => {
 		openTakeMenu(archivedRow);
 		await tick();
 		expect(archivedRow.querySelector('.menu-panel')).not.toBeNull();
-		expect(() => clickMenuItem(archivedRow, words['takeMenu.addToPlaylist'])).toThrow();
+		expect(() => clickMenuItem(archivedRow, words['takeMenu.addTo'])).toThrow();
 
 		openTakeMenu(liveRow);
 		await tick();
-		clickMenuItem(liveRow, words['takeMenu.addToPlaylist']);
+		clickMenuItem(liveRow, words['takeMenu.addTo']);
 		await tick();
 
-		const picker = liveRow.querySelector('.picker');
-		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
+		expect(liveRow.querySelector('.menu-panel .menu-picker-head')).not.toBeNull();
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
