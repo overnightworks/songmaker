@@ -1,0 +1,8 @@
+claim_id = "94be42f681d549e2bb5596240a9f3de9"
+agent = "Claude 21e892ab-fbe1-424c-95f4-8df2b859755f"
+role = "builder"
+base = "e85845ca287f59ffcce6496dad7ac1eb564bab5a"
+branch = "claude/issue-3423-realm-keys"
+scope = ["docker/docker-compose.test.yml", "docs/architecture.md", "docs/security.md", "pyproject.toml", "src/songmaker_cli/agent/mcp.py", "src/songmaker_cli/agent/settings.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/oidc_client.py", "src/songmaker_cli/settings.py", "tests/conftest.py", "tests/songmaker_cli/agent/test_mcp_person_conversation_tools.py", "tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/agent/test_mcp_share_tools.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_mcp_server_agent_account.py", "tests/songmaker_cli/test_oidc_client_person_token_paths.py", "tests/songmaker_cli/test_settings.py", "tests/support/app_processes.py", "tests/support/fake_oidc_issuer.py", "tests/support/mcp_world.py", "tests/support/token_world.py", "tests/support/web_cluster_world.py", "uv.lock"]
+opened_commit = "69cfce4d265ee7fd6c561a7d6a643a829256ac2c"
+whole_reason = "The settings section, the constants it replaces, every reader, the test stack, the tests and the pin move together, or the app would read a realm name twice or not at all."
