@@ -955,6 +955,10 @@ msgctxt "albumPage.songTakes.other"
 msgid "{count} takes"
 msgstr "{count} Takes"
 
+msgctxt "songRow.noPick"
+msgid "No Pick"
+msgstr "Kein Pick"
+
 msgctxt "albumPage.coverUploadFailed"
 msgid "Cover upload failed"
 msgstr "Cover-Upload fehlgeschlagen"
@@ -1198,6 +1202,10 @@ msgstr "{count} Song"
 msgctxt "collectionHeader.songCount.other"
 msgid "{count} songs"
 msgstr "{count} Songs"
+
+msgctxt "collectionHeader.withoutPick"
+msgid "{count} without a Pick"
+msgstr "{count} ohne Pick"
 
 msgctxt "playlistPage.coverAlt"
 msgid "Playlist cover for {title}"
