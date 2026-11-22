@@ -93,7 +93,6 @@
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
-	import PlaylistPicker from './PlaylistPicker.svelte';
 	import { songTakesLoaded } from '#lib/utils/playable.ts';
 
 	let showDeleteConfirm = $state(false);
@@ -571,8 +570,6 @@
 		}
 	}
 
-	let songPlaylistPickerOpen = $state(false);
-
 	async function onSaveVersion(): Promise<void> {
 		if (!song) return;
 		try {
@@ -605,7 +602,7 @@
 			menu: {
 				saveDisabled: !dirty,
 				onsave: () => void onSaveVersion(),
-				onaddtoplaylist: () => (songPlaylistPickerOpen = true),
+				onaddto: (playlistId) => void onAddSongToPlaylist(playlistId),
 				ondelete: () => (showDeleteConfirm = true)
 			}
 		});
@@ -706,7 +703,7 @@
 			shareSlug={song.share_slug}
 			onshare={onSongShareEnable}
 			onunshare={onSongShareDisable}
-			onaddtoplaylist={() => (songPlaylistPickerOpen = true)}
+			onaddto={(playlistId) => void onAddSongToPlaylist(playlistId)}
 			ondeletesong={() => (showDeleteConfirm = true)}
 			saveDisabled={!dirty}
 			onsave={() => void onSaveVersion()}
@@ -775,16 +772,6 @@
 			</div>
 		{/if}
 	{/snippet}
-
-	{#if songPlaylistPickerOpen}
-		<PlaylistPicker
-			onselect={(playlistId) => {
-				void onAddSongToPlaylist(playlistId);
-				songPlaylistPickerOpen = false;
-			}}
-			onclose={() => (songPlaylistPickerOpen = false)}
-		/>
-	{/if}
 {/if}
 
 {#if $pendingDirtyNavigation}

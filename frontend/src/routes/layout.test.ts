@@ -477,7 +477,7 @@ describe('app shell', () => {
 			title: 'Sommerlicht',
 			onrename: vi.fn(),
 			share: { isShared: false, shareSlug: null, onshare: vi.fn(), onunshare: vi.fn() },
-			menu: { saveDisabled: true, onsave: vi.fn(), onaddtoplaylist: vi.fn(), ondelete: vi.fn() }
+			menu: { saveDisabled: true, onsave: vi.fn(), onaddto: vi.fn(), ondelete: vi.fn() }
 		});
 		replaceHistoryEntry('/album/summer/sommerlicht');
 		const target = await renderLayout('/album/summer/sommerlicht');

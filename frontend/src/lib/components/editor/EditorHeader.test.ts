@@ -70,7 +70,7 @@ function defaultProps() {
 			songs_without_playable_take: []
 		})),
 		onunshare: vi.fn(async () => undefined),
-		onaddtoplaylist: vi.fn(),
+		onaddto: vi.fn(),
 		ondeletesong: vi.fn(),
 		saveDisabled: true,
 		onsave: vi.fn()

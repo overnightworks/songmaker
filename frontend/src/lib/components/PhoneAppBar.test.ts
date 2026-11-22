@@ -206,7 +206,7 @@ function songBar(onrename = vi.fn(async () => undefined)) {
 		menu: {
 			saveDisabled: true,
 			onsave: vi.fn(),
-			onaddtoplaylist: vi.fn(),
+			onaddto: vi.fn(),
 			ondelete: vi.fn()
 		}
 	};

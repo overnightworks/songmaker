@@ -33,7 +33,7 @@ const SAME_PLACE_TOLERANCE_PX = 0.5;
 const ROW_LABELS_IN_ORDER = [
 	words['takeMenu.repaint'],
 	words['takeMenu.cover'],
-	words['takeMenu.addToPlaylist'],
+	words['takeMenu.addTo'],
 	words['takeMenu.share'],
 	words['takeMenu.delete']
 ];

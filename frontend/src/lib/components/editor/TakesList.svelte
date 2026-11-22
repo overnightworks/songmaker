@@ -81,7 +81,6 @@
 		}, COARSE_POINTER_MEDIA);
 	});
 
-	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
 
 	const groups = $derived(
@@ -148,15 +147,12 @@
 		}
 	}
 
-	async function onAddToPlaylist(playlistId: string): Promise<void> {
-		if (!playlistFor) return;
+	async function onAddToPlaylist(playlistId: string, genId: string): Promise<void> {
 		try {
-			await actions.addToPlaylist(playlistId, playlistFor);
+			await actions.addToPlaylist(playlistId, genId);
 			addToast(pageText('takesList.addedToPlaylist'), 'success');
 		} catch (e) {
 			addToast(describeFailure(e, pageText('takesList.addFailed')), 'error');
-		} finally {
-			playlistFor = null;
 		}
 	}
 
@@ -214,11 +210,8 @@
 			{gen}
 			{song}
 			{voices}
-			playlistOpen={playlistFor === gen.id}
 			{onsource}
-			onaddtoplaylist={() => (playlistFor = gen.id)}
-			onselectplaylist={onAddToPlaylist}
-			onclosepicker={() => (playlistFor = null)}
+			onaddto={(playlistId) => void onAddToPlaylist(playlistId, gen.id)}
 			ondelete={() => (deleteFor = gen)}
 		/>
 		{#if $sourceGeneration?.id === gen.id}
