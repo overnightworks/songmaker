@@ -61,9 +61,8 @@
 		rightPanelOpenOnMount = false,
 		showTakeLabel = true,
 		lyricsEmptyLabel = pageText('nowPlaying.noLyrics'),
-		// #45: the fully-resolved take's cues/transcript, distinct from `info`
-		// (whose `generation` can still be a thin library-pool stub with no
-		// whisper data). Absent/null means "no cues yet" — static lyrics.
+		// The fully-resolved take's cues/transcript; `info`'s generation can still
+		// be a thin library-pool stub. Null means no cues yet: static lyrics.
 		lyricsCues = null,
 		whisperText = null,
 		// #138: the resolved take's lyrics, for callers whose `info` cannot
@@ -345,6 +344,7 @@
 		emptyLabel={lyricsEmptyLabel}
 		position={sungAt}
 		songTitle={isPage && collectionHead ? info.songTitle : undefined}
+		sungMarks={!isPage}
 	/>
 {/snippet}
 

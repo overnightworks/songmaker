@@ -52,12 +52,9 @@ afterEach(async () => {
 	activeJobs.set([]);
 });
 
-async function render(
-	overrides: Partial<{ generation: GenerationItem; song: SongItem; lyrics: string | null }> = {}
-) {
+async function render(overrides: Partial<{ generation: GenerationItem; song: SongItem }> = {}) {
 	target = document.createElement('div');
 	document.body.append(target);
-	const lyrics = 'lyrics' in overrides ? (overrides.lyrics ?? null) : 'la la';
 	mounted = mount(NowPlayingTake, {
 		target,
 		props: {
@@ -71,8 +68,7 @@ async function render(
 					lyrics: 'la la',
 					prompt: 'dreamy',
 					created_at: ''
-				}),
-			lyrics
+				})
 		}
 	});
 	await tick();
@@ -136,79 +132,6 @@ describe('NowPlayingTake', () => {
 	it('shows a named empty state when there are no scores yet', async () => {
 		await render({ generation: generation(generationDefaults) });
 		expect(target.textContent).toContain(words['nowPlayingTake.scoresEmpty']);
-	});
-
-	// Spec: REQ-SCORE-02
-	it('highlights only the sung word that differs from the lyrics word at that position', async () => {
-		await render({
-			lyrics: 'die Luft schmeckt weit',
-			generation: generation({ ...generationDefaults, whisper_text: 'die Luft schmeckt breit' })
-		});
-		const tokens = Array.from(target.querySelectorAll('.dev-token'));
-		expect(tokens.map((el) => el.textContent)).toEqual(['die', 'Luft', 'schmeckt', 'breit']);
-		const changed = target.querySelector('.dev-token.changed');
-		expect(changed?.textContent).toBe('breit');
-		expect(changed?.getAttribute('title')).toBe(
-			words['nowPlayingTake.lyricsRow']({ lyrics: 'weit' })
-		);
-		expect(target.querySelectorAll('.dev-token.changed, .dev-token.missing')).toHaveLength(1);
-	});
-
-	it('does not flag a punctuation-only difference as a deviation', async () => {
-		await render({
-			lyrics: 'Rahmen, Luft.',
-			generation: generation({ ...generationDefaults, whisper_text: 'rahmen luft' })
-		});
-		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
-	});
-
-	it('does not flag a case-only difference as a deviation', async () => {
-		await render({
-			lyrics: 'Die Luft Schmeckt',
-			generation: generation({ ...generationDefaults, whisper_text: 'die luft schmeckt' })
-		});
-		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
-	});
-
-	it('marks a sung word absent from the lyrics as added, with its own tooltip', async () => {
-		await render({
-			lyrics: 'die Luft schmeckt',
-			generation: generation({ ...generationDefaults, whisper_text: 'die frische Luft schmeckt' })
-		});
-		const added = target.querySelector('.dev-token.added');
-		expect(added?.textContent).toBe('frische');
-		expect(added?.getAttribute('title')).toBe(words['nowPlayingTake.deviationAddedTitle']);
-		expect(added?.getAttribute('aria-label')).toBe(
-			words['nowPlayingTake.deviationAdded']({ value: 'frische' })
-		);
-		expect(target.querySelector('.dev-token.changed')).toBeNull();
-	});
-
-	it('ignores blank lines and [Section] markers, which are never sung', async () => {
-		await render({
-			lyrics: '[Verse]\ndie Luft schmeckt weit\n\n[Chorus]\nhalt die Haende auf',
-			generation: generation({
-				...generationDefaults,
-				whisper_text: 'die Luft schmeckt weit\nhalt die Haende auf'
-			})
-		});
-		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
-	});
-
-	it('shows a matches-the-lyrics state when the transcript is identical', async () => {
-		await render({
-			lyrics: 'die Luft schmeckt weit',
-			generation: generation({ ...generationDefaults, whisper_text: 'die Luft schmeckt weit' })
-		});
-		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
-	});
-
-	it('shows an unavailable state with no transcript yet', async () => {
-		await render({
-			lyrics: 'die Luft schmeckt weit',
-			generation: generation(generationDefaults)
-		});
-		expect(target.textContent).toContain(words['nowPlayingTake.deviationsUnavailable']);
 	});
 
 	it('asks for a re-score while the take has no lyric cues', async () => {

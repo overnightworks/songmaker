@@ -792,8 +792,12 @@ msgid "Move"
 msgstr "Verschieben"
 
 msgctxt "songMenu.delete"
-msgid "Delete song"
-msgstr "Song löschen"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "songMenu.share"
+msgid "Share"
+msgstr "Teilen"
 
 msgctxt "takeMenu.label"
 msgid "More"
@@ -3030,30 +3034,6 @@ msgctxt "nowPlayingTake.scoreBpm"
 msgid "BPM"
 msgstr "BPM"
 
-msgctxt "nowPlayingTake.deviations"
-msgid "Sung vs. lyrics"
-msgstr "Gesungen vs. Songtext"
-
-msgctxt "nowPlayingTake.deviationsEmpty"
-msgid "Sung text matches the lyrics"
-msgstr "Der gesungene Text passt zum Songtext"
-
-msgctxt "nowPlayingTake.deviationsUnavailable"
-msgid "No transcript to compare against yet"
-msgstr "Noch kein Transkript zum Vergleichen"
-
-msgctxt "nowPlayingTake.lyricsRow"
-msgid "Lyrics: {lyrics}"
-msgstr "Songtext: {lyrics}"
-
-msgctxt "nowPlayingTake.deviationAddedTitle"
-msgid "Not in lyrics"
-msgstr "Nicht im Songtext"
-
-msgctxt "nowPlayingTake.deviationAdded"
-msgid "{value} (Not in lyrics)"
-msgstr "{value} (nicht im Songtext)"
-
 msgctxt "nowPlayingTake.rescoreAction"
 msgid "Re-score this take to follow the lyrics."
 msgstr "Bewerte diesen Take neu, damit er dem Songtext folgt."
@@ -3604,14 +3584,6 @@ msgstr "Teilen ausgeschaltet"
 msgctxt "shareButton.failedToast"
 msgid "Share failed"
 msgstr "Teilen fehlgeschlagen"
-
-msgctxt "shareButton.fallbackTitle"
-msgid "Share"
-msgstr "Teilen"
-
-msgctxt "shareButton.songLabel"
-msgid "Share song"
-msgstr "Song teilen"
 
 msgctxt "shareToggle.sharedTooltip"
 msgid "Shared: {path}"
@@ -5871,6 +5843,14 @@ msgstr "Songtext · {title}"
 msgctxt "nowPlaying.lyricsFollow"
 msgid "Follow"
 msgstr "Mitlaufen"
+
+msgctxt "nowPlaying.sungLine"
+msgid "Sung"
+msgstr "Gesungen"
+
+msgctxt "nowPlaying.sungNothing"
+msgid "—"
+msgstr "—"
 
 msgctxt "nowPlaying.lyricsUnsynced"
 msgid "Lyrics aren't synced for this take."

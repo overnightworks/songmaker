@@ -27,7 +27,7 @@ lib/components/NowPlayingCuration.svelte 2
 lib/components/NowPlayingFrame.svelte 23
 lib/components/NowPlayingLyrics.svelte 5
 lib/components/NowPlayingQueue.svelte 7
-lib/components/NowPlayingTake.svelte 19
+lib/components/NowPlayingTake.svelte 16
 lib/components/OfflineStrip.svelte 1
 lib/components/ParamControls.svelte 5
 lib/components/PhoneAppBar.svelte 1

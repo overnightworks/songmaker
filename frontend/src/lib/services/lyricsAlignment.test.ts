@@ -10,7 +10,7 @@ const CUES: WhisperCue[] = [
 	{ start: 1, end: 2, text: 'we count the fading city lights' }
 ];
 const WORKER_LINES: AlignedLyricLine[] = [
-	{ text: 'answered by the worker', interval: { start: 0, end: 1 } }
+	{ text: 'answered by the worker', interval: { start: 0, end: 1 }, marks: [], sung: null }
 ];
 
 // Stands in for the real worker: records what it was asked and lets the test

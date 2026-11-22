@@ -1,6 +1,6 @@
 import { createRawSnippet, mount, tick, unmount, type Snippet } from 'svelte';
 import { fromStore, writable } from 'svelte/store';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
 import { words } from '#lib/words/en.ts';
 import NowPlayingFrame from './NowPlayingFrame.svelte';
@@ -131,4 +131,35 @@ describe('NowPlayingFrame', () => {
 			} else if (line) expect(row).toHaveTextContent(line);
 		}
 	);
+	it('shows no sung marks on a share page, though its take was sung differently', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(NowPlayingFrame, {
+			target,
+			props: {
+				surface: 'page',
+				coverUrl: null,
+				lyricsCues: [
+					{
+						start: 0,
+						end: 1,
+						text: 'the lantern hums',
+						words: [{ start: 0, end: 1, text: 'the' }]
+					}
+				],
+				info: {
+					generation: makeGeneration(),
+					songId: 'song-1',
+					songTitle: 'Tide',
+					albumTitle: 'Night Drive',
+					artist: '',
+					lyrics: 'the lantern hums quietly'
+				}
+			}
+		});
+		await tick();
+		await vi.waitFor(() => expect(target.querySelector('.lyrics-line')).not.toBeNull());
+		expect(target.querySelector('.lyrics-line')).toHaveTextContent('the lantern hums quietly');
+		expect(target.querySelectorAll('.lyrics-line button')).toHaveLength(0);
+	});
 });

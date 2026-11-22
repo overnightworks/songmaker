@@ -133,7 +133,9 @@ LORA_SAMPLE_ROUTE: Final = re.compile(r"^/api/loras/[^/]+/samples\Z")
 SONG_COVER_ROUTE: Final = re.compile(r"^/api/songs/[^/]+/cover\Z")
 ALBUM_COVER_ROUTE: Final = re.compile(r"^/api/albums/[^/]+/cover\Z")
 PLAYLIST_COVER_ROUTE: Final = re.compile(r"^/api/playlists/[^/]+/cover\Z")
-COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
+SONG_COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
+ALBUM_COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
+PLAYLIST_COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"PUT"})
 
 RESOURCE_EVENT_STREAM_CACHE_CONTROL: Final = "no-cache, no-store"
 API_CACHE_CONTROL: Final = "no-store"
@@ -204,11 +206,17 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
             BodySizeRule(
                 paths=PathRules(patterns=(SONG_COVER_ROUTE,)),
                 max_bytes=settings.max_cover_upload_body_bytes,
+                methods=SONG_COVER_UPLOAD_METHODS,
             ),
             BodySizeRule(
-                paths=PathRules(patterns=(ALBUM_COVER_ROUTE, PLAYLIST_COVER_ROUTE)),
+                paths=PathRules(patterns=(ALBUM_COVER_ROUTE,)),
                 max_bytes=settings.max_cover_upload_body_bytes,
-                methods=COVER_UPLOAD_METHODS,
+                methods=ALBUM_COVER_UPLOAD_METHODS,
+            ),
+            BodySizeRule(
+                paths=PathRules(patterns=(PLAYLIST_COVER_ROUTE,)),
+                max_bytes=settings.max_cover_upload_body_bytes,
+                methods=PLAYLIST_COVER_UPLOAD_METHODS,
             ),
         ),
     )

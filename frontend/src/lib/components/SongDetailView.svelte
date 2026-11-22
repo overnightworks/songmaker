@@ -593,17 +593,15 @@
 			kind: 'song',
 			title: song.title,
 			onrename: onRenameSong,
-			share: {
-				isShared: song.is_shared,
-				shareSlug: song.share_slug,
-				onshare: onSongShareEnable,
-				onunshare: onSongShareDisable
-			},
 			menu: {
 				saveDisabled: !dirty,
 				onsave: () => void onSaveVersion(),
 				onaddto: (playlistId) => void onAddSongToPlaylist(playlistId),
-				ondelete: () => (showDeleteConfirm = true)
+				ondelete: () => (showDeleteConfirm = true),
+				isShared: song.is_shared,
+				shareSlug: song.share_slug,
+				onshare: onSongShareEnable,
+				onunshare: onSongShareDisable
 			}
 		});
 		return () => phoneAppBar.set(null);
