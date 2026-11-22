@@ -60,7 +60,6 @@
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
-	import PlaylistPicker from './PlaylistPicker.svelte';
 	import SongRow from './SongRow.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -72,7 +71,6 @@
 
 	let { albumId }: Props = $props();
 
-	let playlistPickerOpen = $state(false);
 	let showDeleteConfirm = $state(false);
 
 	const albums = $derived($albumList);
@@ -332,8 +330,6 @@
 			}
 		} catch (e) {
 			addToast(describeFailure(e, pageText('albumPage.addFailed')), 'error');
-		} finally {
-			playlistPickerOpen = false;
 		}
 	}
 
@@ -369,7 +365,7 @@
 			onunshare={onAlbumShareDisable}
 			ondelete={() => (showDeleteConfirm = true)}
 			onarchive={onAlbumArchive}
-			onaddtoplaylist={() => (playlistPickerOpen = true)}
+			onaddto={(playlistId) => void onAddToPlaylist(playlistId)}
 			oncurate={onCurate}
 			{coverMark}
 		>
@@ -402,12 +398,6 @@
 			disabled={coverBusy}
 			onchange={onCoverFile}
 		/>
-
-		{#if playlistPickerOpen}
-			<div class="picker-anchor">
-				<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerOpen = false)} />
-			</div>
-		{/if}
 
 		<div class="item-list">
 			{#if albumLoad === 'loading' && albumSongs.length === 0}
@@ -494,11 +484,6 @@
 		white-space: nowrap;
 	}
 
-	.picker-anchor {
-		position: relative;
-		margin: 0 1.5rem;
-	}
-
 	.item-list {
 		display: flex;
 		flex-direction: column;
@@ -571,8 +556,7 @@
 	}
 
 	@media (max-width: 768px) {
-		.item-list,
-		.picker-anchor {
+		.item-list {
 			padding-left: 0.8rem;
 			padding-right: 0.8rem;
 		}

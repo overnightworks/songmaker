@@ -11,6 +11,7 @@
 	} from '#lib/stores/songMove.ts';
 	import { selectedSongId } from '#lib/stores/player.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
+	import AddToPicker from '../AddToPicker.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 	import SongMovePicker from './SongMovePicker.svelte';
@@ -20,13 +21,14 @@
 		saveDisabled: boolean;
 		onsave: () => void;
 		onrename: () => void;
-		onaddtoplaylist: () => void;
+		onaddto: (playlistId: string) => void;
 		ondelete: () => void;
 	}
 
-	let { title, saveDisabled, onsave, onrename, onaddtoplaylist, ondelete }: Props = $props();
+	let { title, saveDisabled, onsave, onrename, onaddto, ondelete }: Props = $props();
 
 	let popover: MenuPopover | undefined = $state();
+	let adding = $state(false);
 
 	// A refused move after the shared-album ask finds the menu closed; it comes back on the red row.
 	$effect(() => {
@@ -42,6 +44,11 @@
 
 	onDestroy(cancelSongMove);
 
+	function addToAndClose(playlistId: string): void {
+		popover?.close();
+		onaddto(playlistId);
+	}
+
 	function runAndClose(action: () => void, restoreFocus = true): void {
 		popover?.close(restoreFocus);
 		action();
@@ -54,9 +61,12 @@
 		layer="song-menu"
 		label={pageText('songMenu.label')}
 		closeLabel={pageText('songMenu.close')}
+		onclose={() => (adding = false)}
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
-		{#if $songMovePicker.status === 'closed'}
+		{#if adding}
+			<AddToPicker onselect={addToAndClose} onback={() => (adding = false)} />
+		{:else if $songMovePicker.status === 'closed'}
 			<p class="menu-heading">{pageText('songMenu.heading', { title })}</p>
 			<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
 				<Icon name="check" size={14} />
@@ -67,9 +77,9 @@
 				<Icon name="pencil" size={14} />
 				{pageText('songMenu.rename')}
 			</button>
-			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
+			<button class="menu-item opens-list" onclick={() => (adding = true)}>
 				<Icon name="list-plus" size={14} />
-				{pageText('songMenu.addToPlaylist')}
+				{pageText('songMenu.addTo')}
 			</button>
 			<button class="menu-item opens-list" onclick={() => void openSongMovePicker()}>
 				<Icon name="library" size={14} />
@@ -95,11 +105,3 @@
 		oncancel={cancelSongMove}
 	/>
 {/if}
-
-<style>
-	.menu-item.opens-list::after {
-		content: '›';
-		margin-left: auto;
-		color: var(--text-subtle);
-	}
-</style>

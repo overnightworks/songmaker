@@ -35,7 +35,7 @@
 		oncover?: () => void;
 		/** Playlist-only, like oncover. */
 		onremovecover?: () => void;
-		onaddtoplaylist?: () => void;
+		onaddto?: (playlistId: string) => void;
 		oncurate?: () => void;
 		playlistCovers?: AlbumCoverUrls[];
 		playlistCover?: AlbumCoverUrls | null;
@@ -75,7 +75,7 @@
 		onarchive,
 		oncover,
 		onremovecover,
-		onaddtoplaylist,
+		onaddto,
 		oncurate,
 		playlistCovers,
 		playlistCover,
@@ -212,7 +212,7 @@
 		oncoveredit={coverEditor ? openCoverEditing : undefined}
 		hasCover={showCover}
 		{onremovecover}
-		{onaddtoplaylist}
+		{onaddto}
 		{oncurate}
 		oneditdetails={detailsEditor ? openDetailsEditing : undefined}
 		onrename={onrename ? triggerRename : undefined}

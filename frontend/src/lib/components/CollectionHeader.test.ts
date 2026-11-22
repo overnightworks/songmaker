@@ -62,7 +62,7 @@ function baseProps(): CollectionHeaderProps {
 		ondelete: vi.fn(),
 		oncover: vi.fn(),
 		onremovecover: vi.fn(),
-		onaddtoplaylist: vi.fn()
+		onaddto: vi.fn()
 	};
 }
 
@@ -343,7 +343,7 @@ describe('CollectionHeader', () => {
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']
@@ -554,7 +554,7 @@ describe('CollectionHeader', () => {
 		const menu = await openCollectionMenu(target);
 		expect(menuRowLabels(menu)).toEqual([
 			words['collectionMenu.editDetails'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.albumDelete']
 		]);

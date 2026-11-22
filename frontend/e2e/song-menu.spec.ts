@@ -27,7 +27,7 @@ const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const ROW_LABELS_IN_ORDER = [
 	words['songMenu.save'],
 	words['songMenu.rename'],
-	words['songMenu.addToPlaylist'],
+	words['songMenu.addTo'],
 	words['songMenu.move'],
 	words['songMenu.delete']
 ];

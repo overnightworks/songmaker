@@ -471,7 +471,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		await takeRow.getByRole('button', { name: words['takeMenu.label'] }).click();
 		await surface
 			.getByRole('dialog', { name: words['takeMenu.label'], exact: true })
-			.getByRole('button', { name: words['takeMenu.addToPlaylist'] })
+			.getByRole('button', { name: nameStartingWith(words['takeMenu.addTo']) })
 			.click();
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
@@ -635,7 +635,7 @@ test(
 		// Adding the album puts the playlist's first take in it a second time.
 		await surface.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
 		await surface
-			.getByRole('button', { name: words['collectionMenu.addToPlaylist'], exact: true })
+			.getByRole('button', { name: nameStartingWith(words['collectionMenu.addTo']) })
 			.click();
 		const albumAdded = page.waitForResponse(
 			(response) =>

@@ -2,6 +2,7 @@
 	import type { GenerationItem, ShareResult } from '#lib/api/types.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
+	import AddToPicker from '../AddToPicker.svelte';
 	import Icon from '../Icon.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 	import ShareRowContent from '../ShareRowContent.svelte';
@@ -13,7 +14,7 @@
 		onuseseed: () => void;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
-		onaddtoplaylist: () => void;
+		onaddto: (playlistId: string) => void;
 		onrestore: () => void;
 		ondelete: () => void;
 	}
@@ -25,7 +26,7 @@
 		onuseseed,
 		onshare,
 		onunshare,
-		onaddtoplaylist,
+		onaddto,
 		onrestore,
 		ondelete
 	}: Props = $props();
@@ -48,6 +49,12 @@
 	}));
 
 	let popover: MenuPopover | undefined = $state();
+	let adding = $state(false);
+
+	function addToAndClose(playlistId: string): void {
+		popover?.close();
+		onaddto(playlistId);
+	}
 
 	function runAndClose(action: () => void): void {
 		popover?.close();
@@ -61,54 +68,59 @@
 	label={pageText('takeMenu.label')}
 	closeLabel={pageText('takeMenu.close')}
 	hitboxFace
+	onclose={() => (adding = false)}
 >
 	{#snippet trigger()}<Icon name="more-horizontal" size={16} />{/snippet}
-	<p class="menu-heading">{takeLabel}</p>
-	<button class="menu-item" onclick={() => runAndClose(onrepaint)}>
-		<Icon name="paintbrush" size={14} />
-		{pageText('takeMenu.repaint')}
-	</button>
-	<button class="menu-item" onclick={() => runAndClose(oncover)}>
-		<Icon name="layers" size={14} />
-		{pageText('takeMenu.cover')}
-	</button>
-	{#if gen.seed != null}
-		<button class="menu-item" onclick={() => runAndClose(onuseseed)}>
-			<Icon name="pin" size={14} />
-			{pageText('takeMenu.useSeed')}
-			<span class="menu-item-hint">{gen.seed}</span>
-		</button>
-	{/if}
-	{#if gen.is_archived}
-		<button class="menu-item" onclick={() => runAndClose(onrestore)}>
-			<Icon name="refresh-cw" size={14} />
-			{pageText('takeMenu.restore')}
-		</button>
+	{#if adding}
+		<AddToPicker onselect={addToAndClose} onback={() => (adding = false)} />
 	{:else}
-		<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
-			<Icon name="list-plus" size={14} />
-			{pageText('takeMenu.addToPlaylist')}
+		<p class="menu-heading">{takeLabel}</p>
+		<button class="menu-item" onclick={() => runAndClose(onrepaint)}>
+			<Icon name="paintbrush" size={14} />
+			{pageText('takeMenu.repaint')}
+		</button>
+		<button class="menu-item" onclick={() => runAndClose(oncover)}>
+			<Icon name="layers" size={14} />
+			{pageText('takeMenu.cover')}
+		</button>
+		{#if gen.seed != null}
+			<button class="menu-item" onclick={() => runAndClose(onuseseed)}>
+				<Icon name="pin" size={14} />
+				{pageText('takeMenu.useSeed')}
+				<span class="menu-item-hint">{gen.seed}</span>
+			</button>
+		{/if}
+		{#if gen.is_archived}
+			<button class="menu-item" onclick={() => runAndClose(onrestore)}>
+				<Icon name="refresh-cw" size={14} />
+				{pageText('takeMenu.restore')}
+			</button>
+		{:else}
+			<button class="menu-item opens-list" onclick={() => (adding = true)}>
+				<Icon name="list-plus" size={14} />
+				{pageText('takeMenu.addTo')}
+			</button>
+		{/if}
+		{#if !gen.is_archived || gen.is_shared}
+			<button
+				class="menu-item"
+				aria-pressed={gen.is_shared}
+				aria-busy={shareToggle.busy}
+				title={shareToggle.sharedTooltip}
+				onclick={shareToggle.toggle}
+			>
+				<ShareRowContent
+					label={pageText('takeMenu.share')}
+					hint={pageText(gen.is_shared ? 'takeMenu.shareOn' : 'takeMenu.shareOff')}
+					iconName={shareToggle.iconName}
+					isShared={gen.is_shared}
+					busy={shareToggle.busy}
+				/>
+			</button>
+		{/if}
+		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+			<Icon name="trash" size={14} />
+			{pageText('takeMenu.delete')}
 		</button>
 	{/if}
-	{#if !gen.is_archived || gen.is_shared}
-		<button
-			class="menu-item"
-			aria-pressed={gen.is_shared}
-			aria-busy={shareToggle.busy}
-			title={shareToggle.sharedTooltip}
-			onclick={shareToggle.toggle}
-		>
-			<ShareRowContent
-				label={pageText('takeMenu.share')}
-				hint={pageText(gen.is_shared ? 'takeMenu.shareOn' : 'takeMenu.shareOff')}
-				iconName={shareToggle.iconName}
-				isShared={gen.is_shared}
-				busy={shareToggle.busy}
-			/>
-		</button>
-	{/if}
-	<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-		<Icon name="trash" size={14} />
-		{pageText('takeMenu.delete')}
-	</button>
 </MenuPopover>
