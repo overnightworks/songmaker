@@ -177,7 +177,7 @@ def worker_up() -> ExitStack:
         patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
     )
     for health in (
-        "is_music_worker_healthy", "is_scoring_worker_healthy", "_has_online_acestep_worker",
+        "_music_worker_is_up", "is_scoring_worker_healthy", "_has_online_acestep_worker",
     ):
         stack.enter_context(
             patch(f"songmaker_cli.generation_api.{health}", AsyncMock(return_value=True)),

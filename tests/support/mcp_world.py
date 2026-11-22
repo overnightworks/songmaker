@@ -250,7 +250,7 @@ def worker_ready() -> Iterator[None]:
     """The generation and scoring workers answer healthy."""
     with (
         patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
-        patch("songmaker_cli.generation_api.is_music_worker_healthy",
+        patch("songmaker_cli.generation_api._music_worker_is_up",
               AsyncMock(return_value=True)),
         patch("songmaker_cli.generation_api.is_scoring_worker_healthy",
               AsyncMock(return_value=True)),
