@@ -298,7 +298,7 @@ def test_last_error_worker_list_requires_admin(client: TestClient, role: str) ->
 
 
 def test_last_error_stays_out_of_public_and_musician_paths(
-    client: TestClient, mock_arq_pool, monitoring_headers,
+    client: TestClient, mock_arq_pool, monitoring_headers, monkeypatch,
 ) -> None:
     """S15-06: Last error stays out of public and musician paths."""
     import asyncio
@@ -308,7 +308,6 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     from songmaker_acestep_worker.clock import utcnow
     from songmaker_cli.acestep_state import worker_state_key
     from songmaker_cli.arq_pool import init_arq_pool
-    from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY
     from songmaker_cli.db.queries.albums import create_album
     from songmaker_cli.db.queries.auth import get_user_by_username
     from songmaker_cli.db.queries.songs import create_song
@@ -329,9 +328,10 @@ def test_last_error_stays_out_of_public_and_musician_paths(
         pool.exists = AsyncMock(return_value=True)
         pool.zcard = AsyncMock(return_value=0)
         await pool.set(worker_state_key("w1"), payload)
-        await pool.set(ARQ_MUSIC_HEALTH_KEY, "healthy")
 
     asyncio.run(prepare_pool())
+    for reader in ("songmaker_cli.arq_pool", "songmaker_cli.generation_api"):
+        monkeypatch.setattr(f"{reader}.is_music_worker_healthy", AsyncMock(return_value=True))
     client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health/details", "/metrics"):

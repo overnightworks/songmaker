@@ -5,19 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Iterable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, NamedTuple
 
 from redis.exceptions import RedisError
-from tandem import Client, Hold, Leases, LeaseState, Liveness, StoreError
+from tandem import Client, Hold, Leases, LeaseState, Liveness, Roster, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text, worker_is_online, worker_state_key
 from songmaker_cli.constants import (
-    ARQ_MUSIC_HEALTH_KEY,
     ARQ_SCORING_HEALTH_KEY,
     REDIS_KEY_PREFIX,
     WORKER_LAST_ALIVE_TTL_SECONDS,
@@ -35,6 +36,10 @@ log = logging.getLogger(__name__)
 
 _PROCESS_STARTED_AT = utcnow()
 OWNER_LEASE_FAMILY = "owner"
+MUSIC_WORKER_KIND = "music"
+PID_ONE_STAT_FILE = Path("/proc/1/stat")
+_START_TICKS_FIELD = 22
+_FIELDS_BEFORE_COMMAND_END = 2
 
 
 class WorkerLiveness(StrEnum):
@@ -52,19 +57,41 @@ MUSIC_LAST_ALIVE_KEY = _last_alive_key("music")
 SCORING_LAST_ALIVE_KEY = _last_alive_key("scoring")
 
 
+def _leases(redis: Client, family: str) -> Leases:
+    return Leases(
+        redis,
+        key_prefix=REDIS_KEY_PREFIX,
+        family=family,
+        lasts=timedelta(seconds=OWNER_LEASE_TTL_SECONDS),
+        claim_for=timedelta(seconds=OWNER_LAPSE_CLAIM_SECONDS),
+    )
+
+
 def owner_leases(redis: Client) -> Leases:
     """The leases of the processes that run jobs, one family shared by web and worker.
 
     Every process builds them from the same spans: a lease and a claim are measured by the
     process that reads them.
     """
-    return Leases(
-        redis,
-        key_prefix=REDIS_KEY_PREFIX,
-        family=OWNER_LEASE_FAMILY,
-        lasts=timedelta(seconds=OWNER_LEASE_TTL_SECONDS),
-        claim_for=timedelta(seconds=OWNER_LAPSE_CLAIM_SECONDS),
-    )
+    return _leases(redis, OWNER_LEASE_FAMILY)
+
+
+def worker_kind_leases(redis: Client, kind: str) -> Leases:
+    """The leases of the workers of one kind, held by no web process.
+
+    The owner family holds the ids of web processes too, so its roster cannot say that a worker
+    of this kind lives; this family's roster can.
+    """
+    return _leases(redis, f"{kind}-worker")
+
+
+async def read_music_roster(leases: Leases) -> Roster | None:
+    """The live music workers, or none when Redis cannot be read."""
+    try:
+        return await leases.live()
+    except StoreError:
+        log.warning("Could not read the music worker roster", exc_info=True)
+        return None
 
 
 class JobOwnerStamp(NamedTuple):
@@ -141,6 +168,29 @@ async def keep_owner_lease(
             await asyncio.gather(watching, return_exceptions=True)
 
 
+@asynccontextmanager
+async def keep_kind_lease(
+    leases: Leases,
+    holder: str,
+    *,
+    every: timedelta = timedelta(seconds=OWNER_LEASE_REFRESH_SECONDS),
+) -> AsyncIterator[None]:
+    """Hold the lease of ``holder`` in a worker-kind family for the block, renewed every ``every``.
+
+    A lease that cannot be started fails the entry; one that cannot be ended because Redis is
+    unreachable lapses by itself, so a process always shuts down.
+    """
+    ending = AsyncExitStack()
+    await ending.enter_async_context(leases.kept(holder, every=every))
+    try:
+        yield
+    finally:
+        try:
+            await ending.aclose()
+        except StoreError:
+            log.warning("Could not end the lease of %s; it lapses by itself", holder, exc_info=True)
+
+
 async def _treat_a_new_generation_as_a_start(
     hold: Hold,
     owner_id: str,
@@ -160,6 +210,42 @@ async def _treat_a_new_generation_as_a_start(
             await on_new_start()
         except Exception:
             log.exception("Could not reconcile the jobs of %s after a new start", owner_id)
+
+
+def pid_one_start_ticks(stat_file: Path = PID_ONE_STAT_FILE) -> str:
+    """When PID 1 started, in clock ticks after the machine booted: field 22 of its stat file.
+
+    A container that restarts gets a new PID 1, so the value names one start of the container.
+    The command name (field 2) may hold spaces and parentheses; the fields after it follow its
+    last closing parenthesis.
+    """
+    after_command = stat_file.read_text().rpartition(")")[2].split()
+    return after_command[_START_TICKS_FIELD - _FIELDS_BEFORE_COMMAND_END - 1]
+
+
+def write_readiness_file(readiness_file: Path, owner_id: str, start_ticks: str) -> None:
+    """Record this start's owner id and PID 1's start ticks in one atomic write."""
+    pending = readiness_file.with_name(readiness_file.name + ".pending")
+    pending.write_text(f"{owner_id} {start_ticks}")
+    os.replace(pending, readiness_file)
+
+
+async def worker_is_ready(
+    leases: Leases, readiness_file: Path, start_ticks: str,
+) -> bool:
+    """Whether this container start's worker holds a live owner lease.
+
+    The file names the owner id and the PID 1 start ticks of the start that wrote it. After a
+    container restart, its lease may still live for its lifetime, so a file written by an
+    earlier start, which carries other ticks, is not ready.
+    """
+    try:
+        owner_id, written_ticks = readiness_file.read_text().split()
+    except (OSError, ValueError):
+        return False
+    if written_ticks != start_ticks:
+        return False
+    return (await leases.state({owner_id}))[owner_id].liveness is Liveness.ALIVE
 
 
 def _record_alive(redis: Any, key: str, now: datetime) -> None:
@@ -252,21 +338,41 @@ def arq_worker_liveness(
     return _missing_signal_liveness(redis, last_alive_key, signal, aware_timestamp(now))
 
 
+def music_worker_liveness(
+    redis: Any, roster: Roster | None, *, now: datetime,
+) -> WorkerLiveness:
+    """Read the music workers' roster and fall back to their durable observation.
+
+    A roster that cannot be read, and an empty one Redis may have lost with a restart, are
+    UNKNOWN; an empty roster that is complete follows the restart grace.
+    """
+    if roster is None:
+        return WorkerLiveness.UNKNOWN
+    if roster.holders:
+        _record_alive(redis, MUSIC_LAST_ALIVE_KEY, aware_timestamp(now))
+        return WorkerLiveness.ALIVE
+    if not roster.settled:
+        return WorkerLiveness.UNKNOWN
+    return _missing_signal_liveness(
+        redis, MUSIC_LAST_ALIVE_KEY, WorkerLivenessSignal.MUSIC, aware_timestamp(now),
+    )
+
+
 def read_worker_liveness(
     redis: Any,
     acestep_worker_ids: Iterable[str],
     *,
+    music_roster: Roster | None,
     now: datetime | None = None,
 ) -> dict[JobType, WorkerLiveness]:
-    """Read each execution signal without taking ownership of database access."""
+    """Read each execution signal without taking ownership of database access.
+
+    The async callers read the music roster first (``read_music_roster``) and pass it in.
+    """
     observed_at = aware_timestamp(now or utcnow())
     return worker_liveness_by_job_type(
         acestep=acestep_worker_liveness(redis, acestep_worker_ids, now=observed_at),
-        music=arq_worker_liveness(
-            redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-            signal=WorkerLivenessSignal.MUSIC,
-            now=observed_at,
-        ),
+        music=music_worker_liveness(redis, music_roster, now=observed_at),
         scoring=arq_worker_liveness(
             redis, health_key=ARQ_SCORING_HEALTH_KEY, last_alive_key=SCORING_LAST_ALIVE_KEY,
             signal=WorkerLivenessSignal.SCORING,

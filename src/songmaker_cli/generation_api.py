@@ -304,7 +304,7 @@ async def api_generate_song(
             song_id=song_id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=None,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -434,7 +434,7 @@ async def api_repaint_generation(
             song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=repaint_task,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -503,7 +503,7 @@ async def api_cover_generation(
             song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=cover_task,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -547,7 +547,7 @@ async def api_score_generation(
     job = await create_job_with_rate_limit(
         session, user, JobType.SCORE, take.song_id,
         payload=ScorePayload(gen_id=gen_id, scorers=req.scorers),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import Path
 from typing import Final
 
 from songmaker_acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
@@ -211,11 +212,13 @@ TEXT_ACCURACY_TIMEOUT_SECONDS = 300
 # arq worker
 ARQ_MUSIC_QUEUE_NAME = "arq:queue:music"
 ARQ_SCORING_QUEUE_NAME = "arq:queue:scoring"
-ARQ_MUSIC_HEALTH_KEY = f"{ARQ_MUSIC_QUEUE_NAME}:health-check"
 ARQ_SCORING_HEALTH_KEY = f"{ARQ_SCORING_QUEUE_NAME}:health-check"
 ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
 SCORING_SERVICE_NAME: Final = "songmaker-scoring-worker"
 WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
+# The music worker writes it at its start, its readiness probe reads it: both run in one
+# container, whose /tmp starts empty.
+MUSIC_WORKER_READINESS_FILE: Final = Path("/tmp/music-worker-readiness")  # noqa: S108 - a per-container file the probe reads
 
 # Score backfill (issue #222): catches up generations that predate
 # auto-scoring, or that an auto-score attempt could not reach (worker down,

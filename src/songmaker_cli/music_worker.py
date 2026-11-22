@@ -18,7 +18,7 @@ from arq.worker import Function
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME, MUSIC_WORKER_READINESS_FILE
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
     GeneratePayload,
@@ -42,6 +42,11 @@ from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_base import WorkerBase, logged_job
+from songmaker_cli.worker_liveness import (
+    MUSIC_WORKER_KIND,
+    pid_one_start_ticks,
+    write_readiness_file,
+)
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +56,7 @@ class MusicWorker(WorkerBase):
     queue = JobQueue.MUSIC
     job_types = queue.job_types
     queue_name = ARQ_MUSIC_QUEUE_NAME
+    lease_kind = MUSIC_WORKER_KIND
 
     def __init__(self, settings=None) -> None:
         super().__init__(settings)
@@ -113,6 +119,7 @@ class MusicWorker(WorkerBase):
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
 
     async def on_startup(self, ctx) -> None:
+        write_readiness_file(MUSIC_WORKER_READINESS_FILE, self.owner_id, pid_one_start_ticks())
         await super().on_startup(ctx)
         self._arq_context = ctx
         self.start_serving(self.serve_queued_jobs())

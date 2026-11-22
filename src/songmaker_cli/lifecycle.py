@@ -12,7 +12,7 @@ from typing import Final
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
-from tandem import Client, Lapse, Liveness, Locks, StoreError
+from tandem import Client, Lapse, Liveness, Locks, Roster, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text
 from songmaker_cli.app_context import AppContext
@@ -37,7 +37,12 @@ from songmaker_cli.job_timing import (
 )
 from songmaker_cli.job_types import JobType
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.worker_liveness import JobOwnerStamp, WorkerLiveness, owner_lease_liveness
+from songmaker_cli.worker_liveness import (
+    JobOwnerStamp,
+    WorkerLiveness,
+    owner_lease_liveness,
+    read_music_roster,
+)
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
@@ -274,13 +279,15 @@ async def score_backfill_loop(app: FastAPI) -> None:
             log.exception("Score backfill tick failed")
 
 
-def read_worker_liveness(ctx: AppContext) -> dict[JobType, WorkerLiveness]:
+def read_worker_liveness(
+    ctx: AppContext, music_roster: Roster | None,
+) -> dict[JobType, WorkerLiveness]:
     """Read lifecycle liveness after the database owner supplies the registry."""
     from songmaker_cli.db.queries.workers import list_worker_identities
 
     with ctx.db() as session:
         worker_ids = [worker.id for worker in list_worker_identities(session)]
-    return read_liveness_signals(ctx.redis, worker_ids)
+    return read_liveness_signals(ctx.redis, worker_ids, music_roster=music_roster)
 
 
 def reap_stale_jobs(
@@ -288,12 +295,17 @@ def reap_stale_jobs(
     *,
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+    music_roster: Roster | None = None,
 ) -> int:
-    """Terminalize every stale job according to the shared type table."""
+    """Terminalize every stale job according to the shared type table.
+
+    ``music_roster`` is what the caller read of the music workers' leases, none when it could not;
+    it matters only when ``worker_liveness`` is not given.
+    """
     from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
 
     if worker_liveness is None:
-        worker_liveness = read_worker_liveness(ctx)
+        worker_liveness = read_worker_liveness(ctx, music_roster)
     with ctx.db() as session:
         recovered = recover_stale_jobs_by_age_and_type(
             session, now=now, worker_liveness=worker_liveness,
@@ -326,13 +338,13 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
 
 
 def _run_stale_job_reaper_tick(
-    ctx: AppContext, *, now: datetime | None = None,
+    ctx: AppContext, *, now: datetime | None = None, music_roster: Roster | None = None,
 ) -> tuple[int, int]:
     """Reap all stale jobs, reconcile crashed LoRAs and clean ended covers for one tick.
 
     Returns ``(jobs_recovered, loras_reconciled)``.
     """
-    recovered_jobs = reap_stale_jobs(ctx, now=now)
+    recovered_jobs = reap_stale_jobs(ctx, now=now, music_roster=music_roster)
     reconciled_loras = reconcile_crashed_loras(ctx)
     reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
     return recovered_jobs, reconciled_loras
@@ -353,7 +365,8 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             if await locks.acquire(JOB_REAPER_LOCK_NAME) is None:
                 registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
                 continue
-            await asyncio.to_thread(_run_stale_job_reaper_tick, ctx)
+            music_roster = await read_music_roster(ctx.music_leases)
+            await asyncio.to_thread(_run_stale_job_reaper_tick, ctx, music_roster=music_roster)
         except Exception as exc:
             registry.record_failure(BackgroundLoopName.STALE_JOB_REAPER, exc)
             log.exception("Stale job reaper tick failed")
