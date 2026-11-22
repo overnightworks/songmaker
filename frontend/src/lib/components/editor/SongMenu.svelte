@@ -9,11 +9,14 @@
 		songMovePicker,
 		songMoveRun
 	} from '#lib/stores/songMove.ts';
+	import type { ShareResult } from '#lib/api/types.ts';
 	import { selectedSongId } from '#lib/stores/player.ts';
+	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import AddToPicker from '../AddToPicker.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
+	import ShareRowContent from '../ShareRowContent.svelte';
 	import SongMovePicker from './SongMovePicker.svelte';
 
 	interface Props {
@@ -23,9 +26,32 @@
 		onrename: () => void;
 		onaddto: (playlistId: string) => void;
 		ondelete: () => void;
+		isShared: boolean;
+		shareSlug: string | null | undefined;
+		onshare: () => Promise<ShareResult>;
+		onunshare: () => Promise<void>;
 	}
 
-	let { title, saveDisabled, onsave, onrename, onaddto, ondelete }: Props = $props();
+	let {
+		title,
+		saveDisabled,
+		onsave,
+		onrename,
+		onaddto,
+		ondelete,
+		isShared,
+		shareSlug,
+		onshare,
+		onunshare
+	}: Props = $props();
+
+	const shareToggle = createShareToggle(() => ({
+		kind: 'song',
+		isShared,
+		shareSlug,
+		onshare,
+		onunshare
+	}));
 
 	let popover: MenuPopover | undefined = $state();
 	let adding = $state(false);
@@ -77,13 +103,28 @@
 				<Icon name="pencil" size={14} />
 				{pageText('songMenu.rename')}
 			</button>
+			<button class="menu-item opens-list" onclick={() => void openSongMovePicker()}>
+				<Icon name="library" size={14} />
+				{pageText('songMenu.move')}
+			</button>
 			<button class="menu-item opens-list" onclick={() => (adding = true)}>
 				<Icon name="list-plus" size={14} />
 				{pageText('songMenu.addTo')}
 			</button>
-			<button class="menu-item opens-list" onclick={() => void openSongMovePicker()}>
-				<Icon name="library" size={14} />
-				{pageText('songMenu.move')}
+			<button
+				class="menu-item"
+				aria-pressed={isShared}
+				aria-busy={shareToggle.busy}
+				title={shareToggle.sharedTooltip}
+				onclick={shareToggle.toggle}
+			>
+				<ShareRowContent
+					label={pageText('songMenu.share')}
+					hint={pageText(isShared ? 'collectionMenu.shareOn' : 'collectionMenu.shareOff')}
+					iconName={shareToggle.iconName}
+					{isShared}
+					busy={shareToggle.busy}
+				/>
 			</button>
 			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 				<Icon name="trash" size={14} />

@@ -5,7 +5,7 @@ import { words } from '#lib/words/en.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { makeAlbum, makePlaylist, makeSong } from '#lib/test-utils/factories.ts';
-import type { AlbumItem, SongItem } from '#lib/api/types.ts';
+import type { AlbumItem, ShareResult, SongItem } from '#lib/api/types.ts';
 import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
@@ -36,7 +36,16 @@ function defaultProps() {
 		onsave: vi.fn(),
 		onrename: vi.fn(),
 		onaddto: vi.fn(),
-		ondelete: vi.fn()
+		ondelete: vi.fn(),
+		isShared: false,
+		shareSlug: null as string | null,
+		onshare: vi.fn<() => Promise<ShareResult>>().mockResolvedValue({
+			status: 'shared',
+			share_url: 'https://example.test/share/abc',
+			share_slug: 'abc',
+			songs_without_playable_take: []
+		}),
+		onunshare: vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
 	};
 }
 
@@ -64,10 +73,9 @@ describe('SongMenu', () => {
 		openSongMenu(target);
 		await tick();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Song · Sommerlicht');
-		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('915_C3: lists Save version · Rename · Add to… · Move · Delete song, each with an icon, Delete red and last', async () => {
+	it('915_C3: lists Save version · Rename · Move · Add to… · Share · Delete, each with an icon, Delete red and last', async () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
@@ -75,12 +83,33 @@ describe('SongMenu', () => {
 		expect(menuRowLabels(target)).toEqual([
 			words['songMenu.save'],
 			words['songMenu.rename'],
-			words['songMenu.addTo'],
 			words['songMenu.move'],
+			words['songMenu.addTo'],
+			words['songMenu.share'],
 			words['songMenu.delete']
 		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
 	});
+
+	it.each([
+		{ isShared: false, hint: words['collectionMenu.shareOff'], handler: 'onshare' as const },
+		{ isShared: true, hint: words['collectionMenu.shareOn'], handler: 'onunshare' as const }
+	])(
+		'shows the Share row $hint and runs $handler on a tap, keeping the menu open',
+		async ({ isShared, hint, handler }) => {
+			const { target, props } = await renderMenu({ isShared, shareSlug: isShared ? 'abc' : null });
+			openSongMenu(target);
+			await tick();
+			const share = menuRow(target, words['songMenu.share']);
+			expect(share.getAttribute('aria-pressed')).toBe(String(isShared));
+			expect(share.querySelector('.menu-item-hint')?.textContent).toContain(hint);
+
+			share.click();
+			await tick();
+			expect(props[handler]).toHaveBeenCalled();
+			expect(target.querySelector('.menu-panel')).not.toBeNull();
+		}
+	);
 
 	it.each([true, false])(
 		'defect:#1495: enables saving only when the draft is dirty (disabled: %s)',

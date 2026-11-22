@@ -22,6 +22,10 @@ const RAIN_FALLS = 'silver rain falls on the roof';
 const RAIN_CALLS = 'silver rain calls on the roof';
 const RAIN_WALLS = 'silver rain walls on the roof';
 
+function unmarked(text: string, interval: AlignedLyricLine['interval']): AlignedLyricLine {
+	return { text, interval, marks: [], sung: null };
+}
+
 function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
 }
@@ -137,7 +141,7 @@ describe('alignLyricsToCues without word timestamps (cue window fallback)', () =
 	it('stops assigning once every line has already been used (monotone, never revisited)', () => {
 		const aligned = alignLyricsToCues(LINE_1, [cue(0, 1, LINE_1), cue(1, 2, LINE_1)]);
 
-		expect(aligned).toEqual([{ text: LINE_1, interval: { start: 0, end: 1 } }]);
+		expect(aligned.map((line) => line.interval)).toEqual([{ start: 0, end: 1 }]);
 	});
 
 	it('leaves every line unmatched when there are no cues', () => {
@@ -483,6 +487,98 @@ describe('alignLyricsToCues with word timestamps', () => {
 	});
 });
 
+describe('alignLyricsToCues marks what was sung differently', () => {
+	it.each([
+		{
+			name: 'a substituted word',
+			cues: [sungCue(0, 0.5, 'the lantern hums softly tonight')],
+			marks: [3]
+		},
+		{
+			name: 'an unsung word',
+			cues: [sungCue(0, 0.5, 'the lantern quietly tonight')],
+			marks: [2]
+		},
+		{
+			name: 'a word spelled with a different case and punctuation',
+			cues: [sungCue(0, 0.5, 'The lantern, hums quietly tonight.')],
+			marks: []
+		},
+		{
+			name: 'a segment without word timestamps',
+			cues: [cue(0, 3, 'the lantern hums softly tonight')],
+			marks: [3]
+		}
+	])('underlines $name', ({ cues, marks }) => {
+		expect(alignLyricsToCues(LINE_1, cues)[0].marks).toEqual(marks);
+	});
+
+	it.each([
+		{
+			name: 'an umlaut Whisper wrote and the lyrics spelled out',
+			lyrics: 'Die Wölfe heulen',
+			sung: 'die Woelfe heulen'
+		},
+		{
+			name: 'a number the lyrics spell out',
+			lyrics: 'siebzehn Nächte lang',
+			sung: '17 Nächte lang'
+		},
+		{
+			name: 'a spelled-out word Whisper split at its hyphens',
+			lyrics: 'Yeah, A-M-I-F',
+			sung: 'yeah A -M -I -F'
+		}
+	])('leaves $name unmarked', ({ lyrics, sung }) => {
+		expect(alignLyricsToCues(lyrics, [sungCue(0, 0.5, sung)])[0].marks).toEqual([]);
+	});
+
+	it('gives the line as sung in Whisper spelling, flagging only the words that differ', () => {
+		const aligned = alignLyricsToCues(LINE_1, [
+			sungCue(0, 0.5, 'The lantern, hums softly oh tonight.')
+		]);
+
+		expect(aligned[0].sung).toEqual([
+			{ text: 'The', differs: false },
+			{ text: 'lantern,', differs: false },
+			{ text: 'hums', differs: false },
+			{ text: 'softly', differs: true },
+			{ text: 'oh', differs: true },
+			{ text: 'tonight.', differs: false }
+		]);
+	});
+
+	it('marks a line the take only half sings, though it stays dark', () => {
+		const aligned = alignLyricsToCues([LINE_1, LINE_2].join('\n'), [
+			sungCue(0, 0.5, `${LINE_1} city`)
+		]);
+
+		expect(aligned[1]).toMatchObject({
+			interval: null,
+			marks: [0, 1, 2, 3, 5],
+			sung: [{ text: 'city', differs: false }]
+		});
+	});
+
+	it('underlines a line nobody sang whole and gives it no sung words', () => {
+		const aligned = alignLyricsToCues([LINE_1, LINE_2].join('\n'), [sungCue(0, 0.5, LINE_1)]);
+
+		expect(aligned[1]).toMatchObject({ marks: [0, 1, 2, 3, 4, 5], sung: null });
+	});
+
+	it('gives section markers and blank lines no marks', () => {
+		const aligned = alignLyricsToCues(['[Verse]', '', LINE_1].join('\n'), [
+			sungCue(0, 0.5, LINE_1)
+		]);
+
+		expect(aligned.map(({ marks, sung }) => ({ marks, sung }))).toMatchObject([
+			{ marks: [], sung: null },
+			{ marks: [], sung: null },
+			{ marks: [] }
+		]);
+	});
+});
+
 describe('golden alignments from scripts/lyric_alignment_golden.py', () => {
 	it.each(golden.alignments)('matches the reference implementation — $name', (fixture) => {
 		const aligned = alignLyricsToCues(fixture.lyrics, fixture.cues as WhisperCue[]);
@@ -532,9 +628,9 @@ describe('alignLyricsToCues on the measured takes', () => {
 
 describe('activeLyricLineIndices', () => {
 	const lines = [
-		{ text: LINE_1, interval: { start: 0, end: 1 } },
-		{ text: '', interval: null },
-		{ text: LINE_2, interval: { start: 1.5, end: 2.5 } }
+		unmarked(LINE_1, { start: 0, end: 1 }),
+		unmarked('', null),
+		unmarked(LINE_2, { start: 1.5, end: 2.5 })
 	];
 
 	it('is active exactly at an interval start (inclusive)', () => {
@@ -562,14 +658,11 @@ describe('activeLyricLineIndices', () => {
 	});
 
 	it('has no active line for an alignment with no matched lines at all', () => {
-		expect(activeLyricLineIndices([{ text: LINE_1, interval: null }], 0)).toEqual([]);
+		expect(activeLyricLineIndices([unmarked(LINE_1, null)], 0)).toEqual([]);
 	});
 
 	it('lights every line of a cue window together, in display order', () => {
-		const window = [
-			{ text: LINE_1, interval: { start: 0, end: 3 } },
-			{ text: LINE_2, interval: { start: 0, end: 3 } }
-		];
+		const window = [unmarked(LINE_1, { start: 0, end: 3 }), unmarked(LINE_2, { start: 0, end: 3 })];
 
 		expect(activeLyricLineIndices(window, 1.5)).toEqual([0, 1]);
 	});

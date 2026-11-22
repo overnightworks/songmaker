@@ -1,5 +1,4 @@
 import type { ComponentProps } from 'svelte';
-import type ShareButton from '#lib/components/ShareButton.svelte';
 import type SongMenu from '#lib/components/editor/SongMenu.svelte';
 import { get, readonly, writable } from 'svelte/store';
 import { fetchTheme, updateTheme } from '#lib/api/settings.ts';
@@ -15,7 +14,6 @@ interface PhoneAppBarState {
 	kind: 'song';
 	title: string;
 	onrename: (title: string) => Promise<void>;
-	share: ComponentProps<typeof ShareButton>;
 	menu: Omit<ComponentProps<typeof SongMenu>, 'title' | 'onrename'>;
 }
 

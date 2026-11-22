@@ -297,7 +297,7 @@
 				windowEnded={$windowEnded}
 			/>
 		{:else if playingGeneration && song}
-			<NowPlayingTake generation={playingGeneration} {song} lyrics={info.lyrics} />
+			<NowPlayingTake generation={playingGeneration} {song} />
 		{/if}
 	</div>
 {/snippet}

@@ -34,6 +34,8 @@ For anyone building or reviewing library playback pools, shuffle and the player:
 
 ### REQ-PLAYER-02: On every player surface, while audio is loading, a first Play request queues playback and a second Play request cancels it.
 
+### REQ-PLAYER-03: In the signed-in player's Now Playing the written lyrics stay intact; a word sung differently or not at all carries a dotted underline, and a tap or hover on it shows one "Sung" line with what was sung under that lyric line; there is no switch, no strike-through and no second printout.
+
 ### REQ-PLAYER-20: A take or a queue stream that is loaded without saying whether to play starts playing.
 
 ### REQ-PLAYER-21: Where the continuous stream holds no take at the playhead, the position shown follows the audio clock, and a load of another take starts a fresh stream.
