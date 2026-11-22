@@ -141,7 +141,7 @@ afterEach(async () => {
 });
 
 describe('AlbumDetailView menu', () => {
-	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to playlist, Share, Archive, Delete in the menu', async () => {
+	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to…, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe(
@@ -151,7 +151,7 @@ describe('AlbumDetailView menu', () => {
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']
