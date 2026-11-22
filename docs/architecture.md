@@ -1593,8 +1593,9 @@ SIGKILLed and even the values the run did produce would be lost.
   (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed (arq hosts these crons and the process's health key). A web process fails a stopped worker's running jobs through the
-  owner lease; see "Owner liveness".
+  has passed (arq hosts these crons). A web process fails a stopped worker's running jobs through the
+  owner lease; see "Owner liveness". Whether a music worker lives is read from the lease family
+  `music-worker` and its readiness from its own owner lease; see "Owner liveness".
 - Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
@@ -1759,6 +1760,25 @@ the stored job status still fences every write to a job that was failed. A cover
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in
 training until the next stale-job reaper tick reconciles it.
 
+**Music worker liveness and readiness.** The owner family holds the bare ids of web processes
+too, so its roster cannot say that a music worker lives. A music worker therefore also renews its
+owner id in a second family, `music-worker` (`worker_liveness.worker_kind_leases(redis, "music")`,
+the spans of the owner family, renewed by `worker_liveness.keep_kind_lease` right after the owner
+lease). A web process reads the roster of that family, never arq's health key:
+`arq_pool.is_music_worker_healthy` says whether it holds a live lease, and the music signal of
+the liveness map reads it too (a live holder is `alive` and is recorded as the last observation;
+an empty roster Redis may have lost with a restart is `unknown`; an empty roster that is complete
+falls to the last observation and the restart grace below; a roster that cannot be read is
+`unknown`). The async callers (`create_job_with_rate_limit` through `AppContext.music_leases`, the
+stale-job reaper loop and the start-up pass) read the roster first and pass it in. The readiness
+probe `scripts/arq_healthcheck.py music` is ready only when this container start's own owner
+lease is live: the worker writes its owner id and PID 1's start ticks (field 22 of `/proc/1/stat`)
+to `MUSIC_WORKER_READINESS_FILE` as the first step of its start, and the probe requires the
+ticks to equal the current ones and `owner_leases(...).state({owner_id})` to read `alive`. A file
+left by an earlier start of the container carries other ticks, so the lease of a stopped worker,
+which lives on for its lifespan, never makes a restarting container ready. The scoring probe
+still reads arq's key.
+
 The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.
 When the ephemeral signal disappears, a missing signal within the 300-second
@@ -1781,8 +1801,8 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   makes its current state disappear; it is not the restart grace. `dead` is
   only declared after the observing web process itself has run longer than the
   grace, measured from the observer process start time.
-- `lora_training` uses the music arq worker health key, and `score` uses the
-  scoring arq worker health key. A live ACE-Step signal does not prove the
+- `lora_training` uses the music worker signal (the `music-worker` roster, "Owner
+  liveness"), and `score` uses the scoring arq worker health key. A live ACE-Step signal does not prove the
   MusicWorker is live; that case remains `unknown` and uses the appropriate
   age/full-queue guard.
 - `chat` runs in the web process rather than a worker queue, so it has no

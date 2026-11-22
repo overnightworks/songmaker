@@ -29,6 +29,8 @@ OWNER_ID = "owner-of-this-start"
 THIS_START_TICKS = "4242"
 EARLIER_START_TICKS = "4141"
 ARQ_CONTEXT = {"redis": MagicMock()}
+Observation = tuple[bool, set[str]]
+"""Whether the worker reads ready, and who holds a music-worker lease."""
 
 
 @pytest.fixture
@@ -40,10 +42,6 @@ def restored_logging() -> Iterator[None]:
 @pytest.fixture
 def readiness_file(tmp_path: Path) -> Path:
     return tmp_path / "readiness"
-
-
-def _run(coroutine):
-    return asyncio.run(coroutine)
 
 
 def _stat_line(command_name: str, start_ticks: str) -> str:
@@ -105,7 +103,7 @@ def test_a_worker_is_ready_only_with_this_starts_ticks_and_a_live_owner_lease(
         finally:
             await redis.aclose()
 
-    assert _run(read_readiness()) is ready
+    assert asyncio.run(read_readiness()) is ready
 
 
 def test_a_worker_without_a_readiness_file_is_not_ready(
@@ -118,7 +116,7 @@ def test_a_worker_without_a_readiness_file_is_not_ready(
         finally:
             await redis.aclose()
 
-    assert _run(read_readiness()) is False
+    assert asyncio.run(read_readiness()) is False
 
 
 def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
@@ -133,11 +131,13 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
     worker.start_serving = MagicMock()
     worker.serve_queued_jobs = MagicMock()
 
-    async def observe_the_start_and_the_end() -> tuple[tuple[bool, set[str]], tuple[bool, set[str]]]:
+    async def observe_the_start_and_the_end() -> tuple[Observation, Observation]:
         reader = create_async_redis(redis_url)
 
-        async def observation() -> tuple[bool, set[str]]:
-            ready = await worker_is_ready(owner_leases(reader), readiness_file, pid_one_start_ticks())
+        async def observation() -> Observation:
+            ready = await worker_is_ready(
+                owner_leases(reader), readiness_file, pid_one_start_ticks(),
+            )
             roster = await worker_kind_leases(reader, MUSIC_WORKER_KIND).live()
             return ready, set(roster.holders)
 
@@ -149,7 +149,7 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
         finally:
             await reader.aclose()
 
-    running, ended = _run(observe_the_start_and_the_end())
+    running, ended = asyncio.run(observe_the_start_and_the_end())
 
     assert running == (True, {worker.owner_id})
     assert ended == (False, set())
@@ -178,7 +178,7 @@ def test_a_live_music_holder_makes_the_worker_healthy_and_none_does_not(
         finally:
             await arq_pool.close_arq_pool()
 
-    assert _run(healthy_without_and_with_a_holder()) == (False, True)
+    assert asyncio.run(healthy_without_and_with_a_holder()) == (False, True)
 
 
 def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(
@@ -192,16 +192,16 @@ def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(
         finally:
             await arq_pool.close_arq_pool()
 
-    assert _run(healthy_with_an_owner()) is False
+    assert asyncio.run(healthy_with_an_owner()) is False
 
 
 def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(restored_arq_pool: None) -> None:
     arq_pool._pool = MagicMock(evalsha=AsyncMock(side_effect=StoreError("down")))
 
-    assert _run(arq_pool.is_music_worker_healthy()) is False
+    assert asyncio.run(arq_pool.is_music_worker_healthy()) is False
 
 
 def test_a_roster_that_cannot_be_read_reads_as_none() -> None:
     leases = MagicMock(live=AsyncMock(side_effect=StoreError("down")))
 
-    assert _run(read_music_roster(leases)) is None
+    assert asyncio.run(read_music_roster(leases)) is None

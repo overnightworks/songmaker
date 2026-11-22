@@ -14,6 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from redis import Redis
 from redis.exceptions import RedisError
 from tandem import Client, Hold, Leases, LeaseState, Liveness, Roster, StoreError
 
@@ -339,7 +340,7 @@ def arq_worker_liveness(
 
 
 def music_worker_liveness(
-    redis: Any, roster: Roster | None, *, now: datetime,
+    redis: Redis, roster: Roster | None, *, now: datetime,
 ) -> WorkerLiveness:
     """Read the music workers' roster and fall back to their durable observation.
 
