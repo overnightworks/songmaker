@@ -1,0 +1,7 @@
+claim_id = "0f51520deef64d0fbb287e37f5d4731c"
+agent = "Claude 21e892ab-fbe1-424c-95f4-8df2b859755f"
+role = "builder"
+base = "fed71945156998a0d69639d6494d43968987e308"
+branch = "claude/issue-3413-song-move-trace"
+scope = ["frontend/e2e/song-move.spec.ts"]
+opened_commit = "e9bd8f681e43e9341f176ec7d16524fb5db94e10"
