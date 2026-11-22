@@ -31,6 +31,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { playlistList, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { resetRailSearchForTests } from '#lib/stores/railSearch.ts';
 import { railTreeQuery } from '#lib/stores/librarySearch.ts';
+import { songMenuProps } from '#lib/test-utils/song-menu.ts';
 import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
@@ -197,18 +198,7 @@ function songBar(onrename = vi.fn(async () => undefined)) {
 		kind: 'song' as const,
 		title: 'Sommerlicht',
 		onrename,
-		share: {
-			isShared: false,
-			shareSlug: null,
-			onshare: vi.fn(),
-			onunshare: vi.fn()
-		},
-		menu: {
-			saveDisabled: true,
-			onsave: vi.fn(),
-			onaddtoplaylist: vi.fn(),
-			ondelete: vi.fn()
-		}
+		menu: songMenuProps()
 	};
 }
 
@@ -231,7 +221,6 @@ describe('PhoneAppBar', () => {
 		for (const name of [
 			words['pageBack.backTo']({ page: 'Cold Harbour' }),
 			words['phoneAppBar.searchOpen'],
-			words['shareButton.songLabel'],
 			words['songMenu.label']
 		]) {
 			expectFrequentHitbox(getByRoleButton(target, name), name);
@@ -259,24 +248,23 @@ describe('PhoneAppBar', () => {
 		await tick();
 		const songControls = (): Element[] => [
 			target.querySelector('h1') as Element,
-			getByRoleButton(target, words['shareButton.songLabel']),
 			getByRoleButton(target, words['songMenu.label'])
 		];
 		const otherControls = [getByRoleButton(target, words['phoneAppBar.searchOpen'])];
 
-		expect(songControls().map(isInert)).toEqual([true, true, true]);
+		expect(songControls().map(isInert)).toEqual([true, true]);
 		expect(otherControls.map(isInert)).toEqual([false]);
 
 		libraryAddressOverlayActive.set(false);
 		await tick();
-		expect(songControls().map(isInert)).toEqual([false, false, false]);
+		expect(songControls().map(isInert)).toEqual([false, false]);
 		getByRoleButton(target, words['songMenu.label']).click();
 		await tick();
 		expect(getByRoleButton(target, words['songMenu.delete'])).toBeTruthy();
 
 		libraryAddressOverlayActive.set(true);
 		await tick();
-		expect(songControls().map(isInert)).toEqual([true, true, true]);
+		expect(songControls().map(isInert)).toEqual([true, true]);
 	});
 
 	it("carries search and the viewer's account circle at the right on the Library", async () => {

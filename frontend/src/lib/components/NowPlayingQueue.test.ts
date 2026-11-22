@@ -1,7 +1,7 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { fromStore, writable } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { QueueRowItem, QueueViewModel } from '#lib/stores/player.ts';
+import type { QueueRowItem, QueueViewModel } from '#lib/stores/queue.ts';
 import { words } from '#lib/words/en.ts';
 import NowPlayingQueue from './NowPlayingQueue.svelte';
 

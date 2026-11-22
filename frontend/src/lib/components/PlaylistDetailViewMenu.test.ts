@@ -7,7 +7,8 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { closeNowPlaying, queueContext, setShuffle } from '#lib/stores/player.ts';
+import { closeNowPlaying, setShuffle } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 

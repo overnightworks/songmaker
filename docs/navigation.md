@@ -48,8 +48,8 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 ## Album page
 
 - **album_rule_1** A new song lives at the end of the album’s track list: a quiet “+ New song” row turns into the inline “New song in `<album>`” card (title, CREATE, ×). An empty album says “No songs yet.” above that row. It is the only way to make a song; the mixed Create form goes.
-- **album_rule_2** The header actions are Play · Shuffle · ⋯ only, on their own row.
-- **album_rule_3** ⋯ opens the one popover form at both widths, clamped 8 px inside the screen, 7 rows: Edit details · Cover · Pick album takes · Add to playlist · Share · Archive · Delete (red, last). Rename folds into Edit details, the three cover rows into one Cover row.
+- **album_rule_2** The header actions are Play · ⋯ only, on their own row; Shuffle lives in the player (1354_rule_24).
+- **album_rule_3** ⋯ opens the one popover form at both widths, clamped 8 px inside the screen, 7 rows: Edit details · Cover · Pick album takes · Add to… · Share · Archive · Delete (red, last). Rename folds into Edit details, the three cover rows into one Cover row.
 - **album_rule_4** The cover is edited in place: no standing cover card. A tap on the cover (the “Add cover” placeholder when there is none) grows it where it stands; suggestions come one image at a time, ‹ › or a swipe browse those made so far, “n / m”, one row Upload · Suggest another · USE · ×.
 - **album_rule_5** Suggest runs through the agent service. When a suggestion cannot run, the editor names one of five problems, busy, not enabled, unavailable, log in again or a spent budget.
 - **album_rule_6** A suggestion keeps running when you leave: Back, Escape, another page or another album stop nothing and discard nothing; only ×, USE and Upload stop a running suggestion and discard the unused ones.
@@ -57,6 +57,7 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **album_rule_8** The grown cover keeps its place and shows a turning ring and the time since the server started the run, Making a cover · 0:42; no percentage, because the image call has none. The time comes from the job’s start, so it is right after coming back and on a second device.
 - **album_rule_9** The cover carries a quiet strip at its foot: a small turning ring and the time, 0:58. It counts every unused suggestion, from the server, the same on every device (“● 3 waiting”). The mark stays until USE, Upload or × discards the unused ones; opening and closing the editor does not remove it.
 - **album_rule_10** Rows carry no play glyph — the row is the target, the playing row shows the equalizer.
+- **album_rule_11** An album song row with at least one take and no Pick carries an amber No Pick badge after its title; a song without takes carries none. Once the album’s songs are loaded, the header line reads “n songs · k without a Pick” (k in amber; no k part when none lacks a Pick). Share pages show neither. *e.g. Lantern Song has 3 takes and no Pick: “Lantern Song [No Pick]”, and the header reads “9 songs · 2 without a Pick”. Not: a badge on Low Tide, which has no takes.*
 
 ## Create, account and settings
 

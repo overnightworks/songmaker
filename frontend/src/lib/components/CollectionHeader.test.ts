@@ -11,7 +11,6 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
-	queueContext,
 	setShuffle,
 	shuffleEnabled,
 	playAlbum,
@@ -19,6 +18,7 @@ import {
 	pendingStart,
 	toggleOrStartCollection
 } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { makeAlbum, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
@@ -62,7 +62,7 @@ function baseProps(): CollectionHeaderProps {
 		ondelete: vi.fn(),
 		oncover: vi.fn(),
 		onremovecover: vi.fn(),
-		onaddtoplaylist: vi.fn()
+		onaddto: vi.fn()
 	};
 }
 
@@ -343,7 +343,7 @@ describe('CollectionHeader', () => {
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']
@@ -554,7 +554,7 @@ describe('CollectionHeader', () => {
 		const menu = await openCollectionMenu(target);
 		expect(menuRowLabels(menu)).toEqual([
 			words['collectionMenu.editDetails'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.albumDelete']
 		]);

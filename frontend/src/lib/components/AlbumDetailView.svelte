@@ -54,13 +54,17 @@
 	} from '#lib/constants/album.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
-	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '#lib/utils/playable.ts';
+	import {
+		albumHasPlayableTake,
+		albumSongsSettled,
+		songLacksPick,
+		songPlayability
+	} from '#lib/utils/playable.ts';
 	import type { SongItem } from '#lib/api/types.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
-	import PlaylistPicker from './PlaylistPicker.svelte';
 	import SongRow from './SongRow.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -72,7 +76,6 @@
 
 	let { albumId }: Props = $props();
 
-	let playlistPickerOpen = $state(false);
 	let showDeleteConfirm = $state(false);
 
 	const albums = $derived($albumList);
@@ -97,6 +100,9 @@
 			albumHasPlayableTake(selectedAlbum, albumSongs, {
 				songsComplete: albumSongsSettled(albumLoad)
 			})
+	);
+	const withoutPickCount = $derived(
+		albumSongsSettled(albumLoad) ? albumSongs.filter(songLacksPick).length : undefined
 	);
 	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
@@ -332,8 +338,6 @@
 			}
 		} catch (e) {
 			addToast(describeFailure(e, pageText('albumPage.addFailed')), 'error');
-		} finally {
-			playlistPickerOpen = false;
 		}
 	}
 
@@ -362,6 +366,7 @@
 			{artFill}
 			onplay={currentAlbumId && albumHasTakes ? () => playAlbum(currentAlbumId) : null}
 			meta={albumMeta}
+			{withoutPickCount}
 			songCount={albumLoad === 'idle' ? albumSongs.length : selectedAlbum.song_count}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
@@ -369,7 +374,7 @@
 			onunshare={onAlbumShareDisable}
 			ondelete={() => (showDeleteConfirm = true)}
 			onarchive={onAlbumArchive}
-			onaddtoplaylist={() => (playlistPickerOpen = true)}
+			onaddto={(playlistId) => void onAddToPlaylist(playlistId)}
 			oncurate={onCurate}
 			{coverMark}
 		>
@@ -403,12 +408,6 @@
 			onchange={onCoverFile}
 		/>
 
-		{#if playlistPickerOpen}
-			<div class="picker-anchor">
-				<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerOpen = false)} />
-			</div>
-		{/if}
-
 		<div class="item-list">
 			{#if albumLoad === 'loading' && albumSongs.length === 0}
 				<p class="empty-tab" role="status">{pageText('albumPage.loading')}</p>
@@ -427,6 +426,7 @@
 					<SongRow
 						title={s.title}
 						meta={pageText('albumPage.songTakes', s.generation_count)}
+						noPick={songLacksPick(s)}
 						current={isSongCurrent(s.id)}
 						onclick={() => onSongTap(s)}
 						onedit={() => selectSong(s.id)}
@@ -492,11 +492,6 @@
 		overflow: hidden;
 		clip: rect(0 0 0 0);
 		white-space: nowrap;
-	}
-
-	.picker-anchor {
-		position: relative;
-		margin: 0 1.5rem;
 	}
 
 	.item-list {
@@ -571,8 +566,7 @@
 	}
 
 	@media (max-width: 768px) {
-		.item-list,
-		.picker-anchor {
+		.item-list {
 			padding-left: 0.8rem;
 			padding-right: 0.8rem;
 		}

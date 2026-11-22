@@ -193,9 +193,10 @@ export type Words = {
     readonly "songMenu.heading": (gaps: { readonly title: string }) => string;
     readonly "songMenu.save": string;
     readonly "songMenu.rename": string;
-    readonly "songMenu.addToPlaylist": string;
+    readonly "songMenu.addTo": string;
     readonly "songMenu.move": string;
     readonly "songMenu.delete": string;
+    readonly "songMenu.share": string;
     readonly "takeMenu.label": string;
     readonly "takeMenu.close": string;
     readonly "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => string;
@@ -204,7 +205,7 @@ export type Words = {
     readonly "takeMenu.cover": string;
     readonly "takeMenu.useSeed": string;
     readonly "takeMenu.restore": string;
-    readonly "takeMenu.addToPlaylist": string;
+    readonly "takeMenu.addTo": string;
     readonly "takeMenu.share": string;
     readonly "takeMenu.shareOn": string;
     readonly "takeMenu.shareOff": string;
@@ -217,7 +218,7 @@ export type Words = {
     readonly "collectionMenu.cover": string;
     readonly "collectionMenu.coverHint": string;
     readonly "collectionMenu.curate": string;
-    readonly "collectionMenu.addToPlaylist": string;
+    readonly "collectionMenu.addTo": string;
     readonly "collectionMenu.archive": string;
     readonly "collectionMenu.albumShare": string;
     readonly "collectionMenu.playlistShare": string;
@@ -234,6 +235,7 @@ export type Words = {
     readonly "albumPage.coverAlt": (gaps: { readonly title: string }) => string;
     readonly "albumPage.coverAltFallback": string;
     readonly "albumPage.songTakes": (count: number) => string;
+    readonly "songRow.noPick": string;
     readonly "albumPage.coverUploadFailed": string;
     readonly "albumPage.coverDiscardFailed": string;
     readonly "albumPage.coverRemoved": string;
@@ -291,6 +293,7 @@ export type Words = {
     readonly "coverMark.runningName": (gaps: { readonly label: string }) => string;
     readonly "coverMark.waitingName": (gaps: { readonly label: string; readonly waiting: string }) => string;
     readonly "collectionHeader.songCount": (count: number) => string;
+    readonly "collectionHeader.withoutPick": (gaps: { readonly count: number }) => string;
     readonly "playlistPage.coverAlt": (gaps: { readonly title: string }) => string;
     readonly "playlistPage.coverAltEmpty": string;
     readonly "playlistPage.loading": string;
@@ -313,14 +316,14 @@ export type Words = {
     readonly "playlistPage.deleteTitle": (gaps: { readonly title: string }) => string;
     readonly "playlistPage.songCount": (count: number) => string;
     readonly "playlistPage.deleteConfirm": string;
-    readonly "playlistPicker.label": string;
-    readonly "playlistPicker.heading": string;
-    readonly "playlistPicker.loading": string;
-    readonly "playlistPicker.error": string;
-    readonly "playlistPicker.retry": string;
-    readonly "playlistPicker.newPlaceholder": string;
-    readonly "playlistPicker.add": string;
-    readonly "playlistPicker.createFailed": string;
+    readonly "addToPicker.heading": string;
+    readonly "addToPicker.back": string;
+    readonly "addToPicker.loading": string;
+    readonly "addToPicker.error": string;
+    readonly "addToPicker.retry": string;
+    readonly "addToPicker.newPlaceholder": string;
+    readonly "addToPicker.add": string;
+    readonly "addToPicker.createFailed": string;
     readonly "songRow.openInEditor": (gaps: { readonly title: string }) => string;
     readonly "homeWrite.openInEditor": (gaps: { readonly title: string }) => string;
     readonly "songPage.coverAlt": (gaps: { readonly title: string }) => string;
@@ -708,12 +711,6 @@ export type Words = {
     readonly "nowPlayingTake.scoreEnjoyment": string;
     readonly "nowPlayingTake.scoreCoherence": string;
     readonly "nowPlayingTake.scoreBpm": string;
-    readonly "nowPlayingTake.deviations": string;
-    readonly "nowPlayingTake.deviationsEmpty": string;
-    readonly "nowPlayingTake.deviationsUnavailable": string;
-    readonly "nowPlayingTake.lyricsRow": (gaps: { readonly lyrics: string }) => string;
-    readonly "nowPlayingTake.deviationAddedTitle": string;
-    readonly "nowPlayingTake.deviationAdded": (gaps: { readonly value: string }) => string;
     readonly "nowPlayingTake.rescoreAction": string;
     readonly "nowPlayingTake.rescoring": string;
     readonly "nowPlayingTake.rescore": string;
@@ -847,8 +844,6 @@ export type Words = {
     readonly "shareButton.copiedToast": string;
     readonly "shareButton.unsharedToast": string;
     readonly "shareButton.failedToast": string;
-    readonly "shareButton.fallbackTitle": string;
-    readonly "shareButton.songLabel": string;
     readonly "shareToggle.sharedTooltip": (gaps: { readonly path: string }) => string;
     readonly "shareLink.copiedToast": string;
     readonly "shareLink.copyFailedToast": string;
@@ -1383,6 +1378,8 @@ export type Words = {
     readonly "nowPlaying.lyricsHeading": string;
     readonly "nowPlaying.lyricsHeadingTitled": (gaps: { readonly title: string }) => string;
     readonly "nowPlaying.lyricsFollow": string;
+    readonly "nowPlaying.sungLine": string;
+    readonly "nowPlaying.sungNothing": string;
     readonly "nowPlaying.lyricsUnsynced": string;
     readonly "nowPlaying.noLyrics": string;
     readonly "nowPlaying.importedNoLyrics": string;
@@ -1652,9 +1649,10 @@ export const words: Words = {
     "songMenu.heading": (gaps: { readonly title: string }) => "Song · " + gaps.title,
     "songMenu.save": "Save version",
     "songMenu.rename": "Rename",
-    "songMenu.addToPlaylist": "Add to playlist",
+    "songMenu.addTo": "Add to…",
     "songMenu.move": "Move",
-    "songMenu.delete": "Delete song",
+    "songMenu.delete": "Delete",
+    "songMenu.share": "Share",
     "takeMenu.label": "More",
     "takeMenu.close": "Close menu",
     "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => "Take · v" + gaps.version + " · " + gaps.take,
@@ -1663,7 +1661,7 @@ export const words: Words = {
     "takeMenu.cover": "Cover",
     "takeMenu.useSeed": "Use seed",
     "takeMenu.restore": "Restore",
-    "takeMenu.addToPlaylist": "Add to playlist",
+    "takeMenu.addTo": "Add to…",
     "takeMenu.share": "Share",
     "takeMenu.shareOn": "on",
     "takeMenu.shareOff": "off",
@@ -1676,7 +1674,7 @@ export const words: Words = {
     "collectionMenu.cover": "Cover",
     "collectionMenu.coverHint": "upload · suggest",
     "collectionMenu.curate": "Pick album takes",
-    "collectionMenu.addToPlaylist": "Add to playlist",
+    "collectionMenu.addTo": "Add to…",
     "collectionMenu.archive": "Archive",
     "collectionMenu.albumShare": "Share",
     "collectionMenu.playlistShare": "Share playlist",
@@ -1700,6 +1698,7 @@ export const words: Words = {
         many: numberFormat.format(count) + " takes",
         other: numberFormat.format(count) + " takes",
     })[pluralRules.select(count)],
+    "songRow.noPick": "No Pick",
     "albumPage.coverUploadFailed": "Cover upload failed",
     "albumPage.coverDiscardFailed": "Cover suggestions could not be discarded",
     "albumPage.coverRemoved": "Cover removed",
@@ -1785,6 +1784,7 @@ export const words: Words = {
         many: numberFormat.format(count) + " songs",
         other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
+    "collectionHeader.withoutPick": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + " without a Pick",
     "playlistPage.coverAlt": (gaps: { readonly title: string }) => "Playlist cover for " + gaps.title,
     "playlistPage.coverAltEmpty": "Playlist cover",
     "playlistPage.loading": "Loading playlist…",
@@ -1814,14 +1814,14 @@ export const words: Words = {
         other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
     "playlistPage.deleteConfirm": "Delete Playlist",
-    "playlistPicker.label": "Add to Playlist",
-    "playlistPicker.heading": "Add to Playlist",
-    "playlistPicker.loading": "Loading playlists…",
-    "playlistPicker.error": "Failed to load playlists",
-    "playlistPicker.retry": "Retry",
-    "playlistPicker.newPlaceholder": "New playlist...",
-    "playlistPicker.add": "Add playlist",
-    "playlistPicker.createFailed": "Failed to create playlist",
+    "addToPicker.heading": "Add to",
+    "addToPicker.back": "Back",
+    "addToPicker.loading": "Loading playlists…",
+    "addToPicker.error": "Failed to load playlists",
+    "addToPicker.retry": "Retry",
+    "addToPicker.newPlaceholder": "New playlist…",
+    "addToPicker.add": "Add playlist",
+    "addToPicker.createFailed": "Failed to create playlist",
     "songRow.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
     "homeWrite.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
     "songPage.coverAlt": (gaps: { readonly title: string }) => "Song " + gaps.title,
@@ -2335,12 +2335,6 @@ export const words: Words = {
     "nowPlayingTake.scoreEnjoyment": "Enjoyment",
     "nowPlayingTake.scoreCoherence": "Coherence",
     "nowPlayingTake.scoreBpm": "BPM",
-    "nowPlayingTake.deviations": "Sung vs. lyrics",
-    "nowPlayingTake.deviationsEmpty": "Sung text matches the lyrics",
-    "nowPlayingTake.deviationsUnavailable": "No transcript to compare against yet",
-    "nowPlayingTake.lyricsRow": (gaps: { readonly lyrics: string }) => "Lyrics: " + gaps.lyrics,
-    "nowPlayingTake.deviationAddedTitle": "Not in lyrics",
-    "nowPlayingTake.deviationAdded": (gaps: { readonly value: string }) => gaps.value + " (Not in lyrics)",
     "nowPlayingTake.rescoreAction": "Re-score this take to follow the lyrics.",
     "nowPlayingTake.rescoring": "Re-scoring…",
     "nowPlayingTake.rescore": "Re-score",
@@ -2488,8 +2482,6 @@ export const words: Words = {
     "shareButton.copiedToast": "Link copied to clipboard",
     "shareButton.unsharedToast": "Sharing disabled",
     "shareButton.failedToast": "Share failed",
-    "shareButton.fallbackTitle": "Share",
-    "shareButton.songLabel": "Share song",
     "shareToggle.sharedTooltip": (gaps: { readonly path: string }) => "Shared: " + gaps.path,
     "shareLink.copiedToast": "Link copied",
     "shareLink.copyFailedToast": "Copy failed",
@@ -3087,6 +3079,8 @@ export const words: Words = {
     "nowPlaying.lyricsHeading": "Lyrics",
     "nowPlaying.lyricsHeadingTitled": (gaps: { readonly title: string }) => "Lyrics · " + gaps.title,
     "nowPlaying.lyricsFollow": "Follow",
+    "nowPlaying.sungLine": "Sung",
+    "nowPlaying.sungNothing": "—",
     "nowPlaying.lyricsUnsynced": "Lyrics aren't synced for this take.",
     "nowPlaying.noLyrics": "No lyrics for this take",
     "nowPlaying.importedNoLyrics": "Imported take — no lyrics were saved with it.",

@@ -12,7 +12,6 @@
 	import { pageText } from '#lib/utils/page-words.ts';
 	import AccountMenu from './AccountMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
-	import ShareButton from './ShareButton.svelte';
 	import SongMenu from './editor/SongMenu.svelte';
 	import RailSearch from './shell/RailSearch.svelte';
 
@@ -122,9 +121,6 @@
 			/>
 		</h1>
 		{@render searchButton()}
-		<div class="song-control" {@attach inertWhileAddressOverlay}>
-			<ShareButton {...$phoneAppBar.share} iconOnly />
-		</div>
 		<div class="song-control" {@attach inertWhileAddressOverlay}>
 			<SongMenu
 				{...$phoneAppBar.menu}

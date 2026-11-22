@@ -21,12 +21,8 @@ import { coverSuggestions } from '#lib/test-utils/album-cover-editor.ts';
 import { clearHitboxStyles, clearPointer } from '#lib/test-utils/hitbox.ts';
 import { clearComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
-import {
-	curationActive,
-	nowPlayingSurface,
-	queueContext,
-	selectedAlbumId
-} from '#lib/stores/player.ts';
+import { nowPlayingSurface, selectedAlbumId } from '#lib/stores/player.ts';
+import { curationActive, queueContext } from '#lib/stores/queue.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();
@@ -145,7 +141,7 @@ afterEach(async () => {
 });
 
 describe('AlbumDetailView menu', () => {
-	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to playlist, Share, Archive, Delete in the menu', async () => {
+	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to…, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe(
@@ -155,7 +151,7 @@ describe('AlbumDetailView menu', () => {
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
-			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']

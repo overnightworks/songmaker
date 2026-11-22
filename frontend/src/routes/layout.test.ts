@@ -69,6 +69,7 @@ import {
 } from '#lib/constants/now-playing.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { songMenuProps } from '#lib/test-utils/song-menu.ts';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
@@ -476,8 +477,7 @@ describe('app shell', () => {
 			kind: 'song',
 			title: 'Sommerlicht',
 			onrename: vi.fn(),
-			share: { isShared: false, shareSlug: null, onshare: vi.fn(), onunshare: vi.fn() },
-			menu: { saveDisabled: true, onsave: vi.fn(), onaddtoplaylist: vi.fn(), ondelete: vi.fn() }
+			menu: songMenuProps()
 		});
 		replaceHistoryEntry('/album/summer/sommerlicht');
 		const target = await renderLayout('/album/summer/sommerlicht');

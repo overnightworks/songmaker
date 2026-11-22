@@ -1,4 +1,4 @@
-import { makeGeneration as gen } from '#lib/test-utils/factories.ts';
+import { makeGeneration as gen, makePlaylist } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +6,7 @@ import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts'
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { HITBOX_STYLE as hitboxCss } from '#lib/styles/hitbox.ts';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import TakeMenu from './TakeMenu.svelte';
 import { words } from '#lib/words/en.ts';
 
@@ -49,7 +50,7 @@ function defaultProps() {
 			songs_without_playable_take: []
 		})),
 		onunshare: vi.fn(async () => undefined),
-		onaddtoplaylist: vi.fn(),
+		onaddto: vi.fn(),
 		onrestore: vi.fn(),
 		ondelete: vi.fn()
 	};
@@ -127,7 +128,7 @@ describe('TakeMenu', () => {
 				words['takeMenu.repaint'],
 				words['takeMenu.cover'],
 				...seedRows,
-				words['takeMenu.addToPlaylist'],
+				words['takeMenu.addTo'],
 				words['takeMenu.share'],
 				words['takeMenu.delete']
 			]);
@@ -144,7 +145,7 @@ describe('TakeMenu', () => {
 		{ shared: false, rows: [] as string[] },
 		{ shared: true, rows: [words['takeMenu.share']] }
 	])(
-		'offers Restore in place of Add to playlist on an archived take, with Share only while shared is $shared',
+		'offers Restore in place of Add to… on an archived take, with Share only while shared is $shared',
 		async ({ shared, rows: shareRows }) => {
 			const { target } = await render({
 				gen: gen({
@@ -191,11 +192,39 @@ describe('TakeMenu', () => {
 		expect(target.querySelector('[role="menu"], [role="menuitem"]')).toBeNull();
 	});
 
+	describe('Add to…', () => {
+		beforeEach(() => {
+			playlistList.set([makePlaylist({ id: 'p-night', title: 'Night Drive' })]);
+			playlistLoad.set({ status: 'ready', error: null });
+		});
+
+		afterEach(resetPlaylistsForTests);
+
+		it('adds the take to the chosen playlist and closes the menu', async () => {
+			const { target, props } = await render();
+			menuRow(target, words['takeMenu.addTo']).click();
+			await tick();
+			expect(target.querySelector('.menu-heading')).toBeNull();
+			target.querySelector<HTMLButtonElement>('.menu-picker-row')?.click();
+			await tick();
+			expect(props.onaddto).toHaveBeenCalledWith('p-night');
+			expect(target.querySelector('.menu-panel')).toBeNull();
+		});
+
+		it('returns to the take rows from Back', async () => {
+			const { target } = await render();
+			menuRow(target, words['takeMenu.addTo']).click();
+			await tick();
+			target.querySelector<HTMLButtonElement>('.menu-picker-back')?.click();
+			await tick();
+			expect(menuRowLabels(target)).toContain(words['takeMenu.addTo']);
+		});
+	});
+
 	it.each([
 		[words['takeMenu.repaint'], 'onrepaint'],
 		[words['takeMenu.cover'], 'oncover'],
 		[words['takeMenu.useSeed'], 'onuseseed'],
-		[words['takeMenu.addToPlaylist'], 'onaddtoplaylist'],
 		[words['takeMenu.delete'], 'ondelete'],
 		[words['takeMenu.restore'], 'onrestore']
 	] as const)(

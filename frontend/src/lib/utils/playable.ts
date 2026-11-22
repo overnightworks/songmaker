@@ -25,6 +25,11 @@ export function bestTake(song: SongItem): GenerationItem | undefined {
 	return pickedTake(song) ?? playableTakes(song)[0];
 }
 
+// A song with takes and no Pick is waiting for one; a song without takes is not.
+export function songLacksPick(song: Pick<SongItem, 'generation_count' | 'has_pick'>): boolean {
+	return song.generation_count > 0 && !song.has_pick;
+}
+
 export function songTakesLoaded(song: SongItem): boolean {
 	return song.generations.length >= song.generation_count;
 }

@@ -2,7 +2,11 @@
 	import type { WhisperCue } from '#lib/api/types.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { alignInWorker } from '#lib/services/lyricsAlignment.svelte.ts';
-	import { activeLyricLineIndices, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
+	import {
+		activeLyricLineIndices,
+		displayWords,
+		type AlignedLyricLine
+	} from '#lib/utils/lyrics-align.ts';
 	import { preferredScrollBehavior } from '#lib/utils/motion.ts';
 
 	let {
@@ -11,7 +15,8 @@
 		whisperText,
 		emptyLabel,
 		position,
-		songTitle
+		songTitle,
+		sungMarks = false
 	}: {
 		lyrics: string | null;
 		cues: WhisperCue[] | null;
@@ -22,6 +27,9 @@
 		position: number | null;
 		// Names the song above its words where several songs share one page.
 		songTitle?: string;
+		// Underlines the words sung differently and opens what was sung under
+		// their line; the signed-in player sets it, the share pages do not.
+		sungMarks?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -47,11 +55,47 @@
 	// or another take starts.
 	let following = $state(true);
 
+	// The one mark whose line shows its Sung line: the one a tap opened, or,
+	// while nothing is opened and a fine pointer rests on a mark, the one it
+	// rests on. A hover never replaces an opened line: closing it would pull
+	// a lower mark out from under the pointer.
+	interface MarkRef {
+		line: number;
+		word: number;
+	}
+	let tappedMark = $state<MarkRef | null>(null);
+	let hoveredMark = $state<MarkRef | null>(null);
+	const shownMark = $derived(tappedMark ?? hoveredMark);
+	// Words stay separate nodes, so the space between them is written out.
+	const WORD_SEPARATOR = ' ';
+	const HOVER_POINTER = '(hover: hover) and (pointer: fine)';
+
+	function isShown(line: number, word: number): boolean {
+		return shownMark?.line === line && shownMark.word === word;
+	}
+
+	function toggleMark(line: number, word: number): void {
+		if (tappedMark?.line === line && tappedMark.word === word) {
+			// The pointer still rests on the mark and fires no new enter, so the
+			// hover must not keep the closed line showing.
+			tappedMark = null;
+			hoveredMark = null;
+		} else {
+			tappedMark = { line, word };
+		}
+	}
+
+	function hoverMark(mark: MarkRef | null): void {
+		if (mark === null || window.matchMedia(HOVER_POINTER).matches) hoveredMark = mark;
+	}
+
 	$effect(() => {
 		const takeLyrics = lyrics;
 		const takeCues = cues;
 		alignedLines = null;
 		following = true;
+		tappedMark = null;
+		hoveredMark = null;
 		if (takeLyrics == null || takeLyrics.length === 0) return;
 		if (takeCues == null || takeCues.length === 0) return;
 
@@ -149,7 +193,9 @@
 		if (following) followOrPauseAt(container);
 	}
 
+	// Space on a focused mark activates the button; it is no reader scroll.
 	function pauseOnScrollKey(event: KeyboardEvent): void {
+		if (event.target instanceof HTMLButtonElement) return;
 		if (SCROLL_KEYS.has(event.key)) pauseFollowing();
 	}
 
@@ -203,8 +249,40 @@
 						class:active={activeIndices.includes(index)}
 						data-line-index={index}
 					>
-						{line.text}
+						{#if sungMarks && line.marks.length > 0}
+							{#each displayWords(line.text) as word, wordIndex (wordIndex)}
+								{#if line.marks.includes(wordIndex)}
+									<button
+										type="button"
+										class="sung-mark"
+										data-hitbox="text"
+										aria-expanded={isShown(index, wordIndex)}
+										aria-controls="sung-line-{index}"
+										onclick={() => toggleMark(index, wordIndex)}
+										onpointerenter={(event) =>
+											event.pointerType === 'mouse' && hoverMark({ line: index, word: wordIndex })}
+										onpointerleave={() => hoverMark(null)}>{word}</button
+									>
+								{:else}
+									{word}
+								{/if}{WORD_SEPARATOR}
+							{/each}
+						{:else}
+							{line.text}
+						{/if}
 					</p>
+					{#if sungMarks && shownMark?.line === index}
+						<p class="sung-line" id="sung-line-{index}">
+							<span class="sung-label">{pageText('nowPlaying.sungLine')}</span>
+							{#if line.sung}
+								{#each line.sung as word, wordIndex (wordIndex)}
+									<span class:sung-differs={word.differs}>{word.text}</span>{WORD_SEPARATOR}
+								{/each}
+							{:else}
+								{pageText('nowPlaying.sungNothing')}
+							{/if}
+						</p>
+					{/if}
 				{/each}
 			{:else}
 				<p class="lyrics-text">{lyrics}</p>
@@ -281,6 +359,31 @@
 	.lyrics-line.active {
 		color: var(--text);
 		font-weight: 600;
+	}
+	.sung-mark {
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		color: inherit;
+		text-decoration: underline dotted;
+		text-underline-offset: 3px;
+		cursor: pointer;
+	}
+	.sung-line {
+		margin: -0.3rem 0 0.5rem;
+		font-size: var(--label-font-size);
+		color: var(--text-subtle);
+	}
+	.sung-label {
+		font-family: var(--font-display);
+		font-size: var(--label-font-size);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.sung-differs {
+		font-weight: 600;
+		color: var(--text-muted);
 	}
 	/* Over the faded strip's right end, where left-aligned lines leave room.
 	   Placed without a transform: the app's press feedback scales buttons

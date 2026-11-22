@@ -27,14 +27,13 @@ lib/components/NowPlayingCuration.svelte 2
 lib/components/NowPlayingFrame.svelte 23
 lib/components/NowPlayingLyrics.svelte 5
 lib/components/NowPlayingQueue.svelte 7
-lib/components/NowPlayingTake.svelte 19
+lib/components/NowPlayingTake.svelte 16
 lib/components/OfflineStrip.svelte 1
 lib/components/ParamControls.svelte 5
 lib/components/PhoneAppBar.svelte 1
 lib/components/PlayerBar.svelte 3
 lib/components/PlaylistCover.svelte 2
 lib/components/PlaylistDetailView.svelte 4
-lib/components/PlaylistPicker.svelte 4
 lib/components/QueueStreamFeedback.svelte 4
 lib/components/ShareDialog.svelte 5
 lib/components/ShareLinkChip.svelte 1

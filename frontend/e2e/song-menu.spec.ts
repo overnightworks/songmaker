@@ -27,8 +27,9 @@ const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const ROW_LABELS_IN_ORDER = [
 	words['songMenu.save'],
 	words['songMenu.rename'],
-	words['songMenu.addToPlaylist'],
 	words['songMenu.move'],
+	words['songMenu.addTo'],
+	words['songMenu.share'],
 	words['songMenu.delete']
 ];
 
@@ -196,7 +197,9 @@ async function expectTextSizesOfAlbumMenu(
 
 async function expectAlbumForm(page: Page, menu: Locator, title: string): Promise<void> {
 	const rows = menu.locator('.menu-item');
-	await expect(rows).toHaveText(ROW_LABELS_IN_ORDER);
+	await expect(rows).toHaveCount(ROW_LABELS_IN_ORDER.length);
+	for (const [index, label] of ROW_LABELS_IN_ORDER.entries())
+		await expect(rows.nth(index)).toContainText(label);
 	for (const row of await rows.all()) await expect(row.locator('svg')).toHaveCount(1);
 	for (const rowBox of await boundingBoxes(...(await rows.all())))
 		expect(rowBox.height).toBeCloseTo(HITBOX_FREQUENT_PX, 0);
@@ -234,6 +237,42 @@ for (const { id, shell, width, title } of CELLS) {
 					contentType: 'image/png'
 				});
 				await expectTextSizesOfAlbumMenu(page, menu, albumId);
+			});
+		}
+	);
+}
+
+for (const { shell, width } of [WIDTHS[0], WIDTHS[1]]) {
+	test(
+		`1480_R1: the song Share row is one 44 px target that shows off and on at ${width} px`,
+		{ tag: ONLY_IN_SHELL[shell] },
+		async ({ page }) => {
+			await onOwnSong(page, TITLES[0], width, async ({ songId }) => {
+				const menu = await openSongMenu(page);
+				const share = menu.getByRole('button', { name: words['songMenu.share'], exact: true });
+				const expectShareState = async (shared: boolean): Promise<void> => {
+					await expect(share).toHaveAttribute('aria-pressed', String(shared));
+					await expect(share.locator('.menu-item-hint')).toHaveText(
+						shared ? words['collectionMenu.shareOn'] : words['collectionMenu.shareOff']
+					);
+				};
+
+				const [row] = await boundingBoxes(share);
+				expect(row.height).toBeCloseTo(HITBOX_FREQUENT_PX, 0);
+				await expectShareState(false);
+
+				const sharing = page.waitForResponse(
+					(response) =>
+						response.url().endsWith(`/api/songs/${songId}/share`) &&
+						response.request().method() === 'POST'
+				);
+				await share.click();
+				expect((await sharing).ok()).toBe(true);
+				await expectShareState(true);
+				await expectMenuInsideViewport(page, menu);
+
+				await share.press('Enter');
+				await expectShareState(false);
 			});
 		}
 	);

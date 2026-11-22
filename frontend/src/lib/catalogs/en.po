@@ -771,8 +771,8 @@ msgctxt "songMenu.rename"
 msgid "Rename"
 msgstr ""
 
-msgctxt "songMenu.addToPlaylist"
-msgid "Add to playlist"
+msgctxt "songMenu.addTo"
+msgid "Add to…"
 msgstr ""
 
 msgctxt "songMenu.move"
@@ -780,7 +780,11 @@ msgid "Move"
 msgstr ""
 
 msgctxt "songMenu.delete"
-msgid "Delete song"
+msgid "Delete"
+msgstr ""
+
+msgctxt "songMenu.share"
+msgid "Share"
 msgstr ""
 
 msgctxt "takeMenu.label"
@@ -815,8 +819,8 @@ msgctxt "takeMenu.restore"
 msgid "Restore"
 msgstr ""
 
-msgctxt "takeMenu.addToPlaylist"
-msgid "Add to playlist"
+msgctxt "takeMenu.addTo"
+msgid "Add to…"
 msgstr ""
 
 msgctxt "takeMenu.share"
@@ -867,8 +871,8 @@ msgctxt "collectionMenu.curate"
 msgid "Pick album takes"
 msgstr ""
 
-msgctxt "collectionMenu.addToPlaylist"
-msgid "Add to playlist"
+msgctxt "collectionMenu.addTo"
+msgid "Add to…"
 msgstr ""
 
 msgctxt "collectionMenu.archive"
@@ -937,6 +941,10 @@ msgstr ""
 
 msgctxt "albumPage.songTakes.other"
 msgid "{count} takes"
+msgstr ""
+
+msgctxt "songRow.noPick"
+msgid "No Pick"
 msgstr ""
 
 msgctxt "albumPage.coverUploadFailed"
@@ -1183,6 +1191,10 @@ msgctxt "collectionHeader.songCount.other"
 msgid "{count} songs"
 msgstr ""
 
+msgctxt "collectionHeader.withoutPick"
+msgid "{count} without a Pick"
+msgstr ""
+
 msgctxt "playlistPage.coverAlt"
 msgid "Playlist cover for {title}"
 msgstr ""
@@ -1275,35 +1287,35 @@ msgctxt "playlistPage.deleteConfirm"
 msgid "Delete Playlist"
 msgstr ""
 
-msgctxt "playlistPicker.label"
-msgid "Add to Playlist"
+msgctxt "addToPicker.heading"
+msgid "Add to"
 msgstr ""
 
-msgctxt "playlistPicker.heading"
-msgid "Add to Playlist"
+msgctxt "addToPicker.back"
+msgid "Back"
 msgstr ""
 
-msgctxt "playlistPicker.loading"
+msgctxt "addToPicker.loading"
 msgid "Loading playlists…"
 msgstr ""
 
-msgctxt "playlistPicker.error"
+msgctxt "addToPicker.error"
 msgid "Failed to load playlists"
 msgstr ""
 
-msgctxt "playlistPicker.retry"
+msgctxt "addToPicker.retry"
 msgid "Retry"
 msgstr ""
 
-msgctxt "playlistPicker.newPlaceholder"
-msgid "New playlist..."
+msgctxt "addToPicker.newPlaceholder"
+msgid "New playlist…"
 msgstr ""
 
-msgctxt "playlistPicker.add"
+msgctxt "addToPicker.add"
 msgid "Add playlist"
 msgstr ""
 
-msgctxt "playlistPicker.createFailed"
+msgctxt "addToPicker.createFailed"
 msgid "Failed to create playlist"
 msgstr ""
 
@@ -2929,30 +2941,6 @@ msgctxt "nowPlayingTake.scoreBpm"
 msgid "BPM"
 msgstr ""
 
-msgctxt "nowPlayingTake.deviations"
-msgid "Sung vs. lyrics"
-msgstr ""
-
-msgctxt "nowPlayingTake.deviationsEmpty"
-msgid "Sung text matches the lyrics"
-msgstr ""
-
-msgctxt "nowPlayingTake.deviationsUnavailable"
-msgid "No transcript to compare against yet"
-msgstr ""
-
-msgctxt "nowPlayingTake.lyricsRow"
-msgid "Lyrics: {lyrics}"
-msgstr ""
-
-msgctxt "nowPlayingTake.deviationAddedTitle"
-msgid "Not in lyrics"
-msgstr ""
-
-msgctxt "nowPlayingTake.deviationAdded"
-msgid "{value} (Not in lyrics)"
-msgstr ""
-
 msgctxt "nowPlayingTake.rescoreAction"
 msgid "Re-score this take to follow the lyrics."
 msgstr ""
@@ -3491,14 +3479,6 @@ msgstr ""
 
 msgctxt "shareButton.failedToast"
 msgid "Share failed"
-msgstr ""
-
-msgctxt "shareButton.fallbackTitle"
-msgid "Share"
-msgstr ""
-
-msgctxt "shareButton.songLabel"
-msgid "Share song"
 msgstr ""
 
 msgctxt "shareToggle.sharedTooltip"
@@ -5671,6 +5651,14 @@ msgstr ""
 
 msgctxt "nowPlaying.lyricsFollow"
 msgid "Follow"
+msgstr ""
+
+msgctxt "nowPlaying.sungLine"
+msgid "Sung"
+msgstr ""
+
+msgctxt "nowPlaying.sungNothing"
+msgid "—"
 msgstr ""
 
 msgctxt "nowPlaying.lyricsUnsynced"

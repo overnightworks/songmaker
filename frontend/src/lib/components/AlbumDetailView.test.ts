@@ -45,12 +45,8 @@ import {
 	songList
 } from '#lib/stores/libraryData.ts';
 import { fetchSongs } from '#lib/api/songs.ts';
-import {
-	curationActive,
-	nowPlayingSurface,
-	queueContext,
-	selectedAlbumId
-} from '#lib/stores/player.ts';
+import { nowPlayingSurface, selectedAlbumId } from '#lib/stores/player.ts';
+import { curationActive, queueContext } from '#lib/stores/queue.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();
@@ -545,6 +541,7 @@ describe('AlbumDetailView song row', () => {
 				album_title: 'Night Drive',
 				title: 'Tide',
 				generations: [generation({ song_id: 's-tide' })],
+				has_pick: true,
 				generation_count: 2
 			}),
 			song({

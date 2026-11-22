@@ -31,7 +31,6 @@
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
-	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import TakeMenu from './TakeMenu.svelte';
 
 	const PLAY_LABEL_KEYS = {
@@ -44,25 +43,12 @@
 		gen: GenerationItem;
 		song: SongItem;
 		voices: UserLoraItem[];
-		playlistOpen: boolean;
 		onsource: (gen: GenerationItem, mode: SourceMode) => void;
-		onaddtoplaylist: () => void;
-		onselectplaylist: (playlistId: string) => void;
-		onclosepicker: () => void;
+		onaddto: (playlistId: string) => void;
 		ondelete: () => void;
 	}
 
-	let {
-		gen,
-		song,
-		voices,
-		playlistOpen,
-		onsource,
-		onaddtoplaylist,
-		onselectplaylist,
-		onclosepicker,
-		ondelete
-	}: Props = $props();
+	let { gen, song, voices, onsource, onaddto, ondelete }: Props = $props();
 
 	const actions: GenerationActions = getGenerationActions();
 
@@ -404,20 +390,10 @@
 				onuseseed={() => actions.useSeed(gen)}
 				onshare={() => actions.share(gen.id)}
 				onunshare={() => actions.unshare(gen.id)}
-				{onaddtoplaylist}
+				{onaddto}
 				onrestore={() => restoreTake(song.id, gen.id)}
 				{ondelete}
 			/>
-			{#if playlistOpen}
-				<div
-					class="take-picker-anchor"
-					onclick={(e) => e.stopPropagation()}
-					onkeydown={(e) => e.stopPropagation()}
-					role="presentation"
-				>
-					<PlaylistPicker onselect={onselectplaylist} onclose={onclosepicker} />
-				</div>
-			{/if}
 		{/if}
 	</span>
 </div>
@@ -652,15 +628,9 @@
 		margin-left: auto;
 	}
 
-	/* The picker is `position: absolute` against its anchor — without one it
-	   escapes the row and lands wherever the nearest positioned ancestor is. */
-	.take-picker-anchor {
-		position: relative;
-	}
-
 	/* Dims the row's own identity, never the row box: `opacity` on the row
 	   would create a stacking context and clip its own popovers (take menu,
-	   playlist picker) under the next row. */
+	   add-to picker) under the next row. */
 	.take-row.archived {
 		cursor: default;
 	}

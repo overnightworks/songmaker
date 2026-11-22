@@ -16,9 +16,9 @@ import {
 	closeNowPlaying,
 	nowPlayingOpen,
 	nowPlayingPanel,
-	queueContext,
 	selectedSongId
 } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
 import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
 import {

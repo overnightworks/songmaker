@@ -19,7 +19,7 @@ import {
 } from './sharedCollection';
 import { updateMediaSessionMetadata } from '#lib/services/mediaSession.ts';
 import { shuffled } from '#lib/utils/shuffle.ts';
-import type { QueueRowItem, QueueViewModel } from '#lib/stores/player.ts';
+import type { QueueRowItem, QueueViewModel } from '#lib/stores/queue.ts';
 
 export type ShareStreamFetcher = () => Promise<QueueStreamManifest>;
 
