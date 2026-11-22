@@ -3,5 +3,5 @@ agent = "Claude 7ce0c534-6bff-4977-9966-67605fc278e8"
 role = "builder"
 base = "fed71945156998a0d69639d6494d43968987e308"
 branch = "claude/issue-3410-playlist-cover-budget"
-scope = ["src/songmaker_cli/request_policies.py", "tests/songmaker_cli/test_request_policies_upload_limits.py"]
+scope = ["docs/security.md", "src/songmaker_cli/request_policies.py", "tests/songmaker_cli/test_request_policies_upload_limits.py"]
 opened_commit = "01201ca7a12d17be665409397bac8464758c8d6d"
