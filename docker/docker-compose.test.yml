@@ -160,13 +160,18 @@ services:
       # ALLOWED_HOSTS lists.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-},localhost,127.0.0.1,songmaker-web
       OIDC_ISSUER: ${OIDC_ISSUER:?OIDC_ISSUER must be set}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-songmaker}
       OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_client_secret
       # The co-writer's gateway; hal owns these values (its docs/agent-service.md, "An app's side").
       AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
       AGENT__GATEWAY__KEY_FILE: /run/secrets/gateway_key
       AGENT__API_GROUP: /services/agent-service/api
-      AGENT__MCP_AGENT_GROUP: /agents
+      # The realm names, under the platform's REALM_ keys; the MCP endpoint stays off without
+      # REALM_MCP_CLIENT_ID and REALM_MCP_SCOPE.
+      REALM_CLIENT_ID: ${REALM_CLIENT_ID:-songmaker}
+      REALM_LOGIN_GROUP: /apps/songmaker
+      REALM_ADMIN_GROUP: /apps/songmaker/admin
+      REALM_MCP_GROUP: /apps/songmaker/mcp
+      REALM_AGENT_GROUP: /agents
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       TOKEN_CLIENTS: ${TOKEN_CLIENTS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}

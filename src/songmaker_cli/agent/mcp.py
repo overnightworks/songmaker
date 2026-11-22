@@ -26,15 +26,13 @@ from webauth.middleware.bearer_gate import (
 )
 from webauth.policies import AuthorizedParties
 
-from songmaker_cli.constants import OIDC_MCP_GROUP
-
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from fastapi import FastAPI
     from starlette.types import Scope
 
-    from songmaker_cli.settings import Settings
+    from songmaker_cli.settings import RealmSettings, Settings
 
 
 class Exclusion(StrEnum):
@@ -65,23 +63,18 @@ def collect_route_tools(app: FastAPI) -> RouteTools:
 
 def build_protected_resource(
     settings: Settings,
+    realm: RealmSettings,
     marks: frozenset[MarkedRoute],
 ) -> ProtectedResource | None:
     """The resource at ``/mcp`` while the agent client and scope are configured, else none."""
-    agent = settings.agent
-    if (
-        agent is None
-        or agent.mcp_client_id is None
-        or agent.mcp_scope is None
-        or agent.mcp_agent_group is None
-    ):
+    if realm.mcp_client_id is None or realm.mcp_scope is None or realm.agent_group is None:
         return None
     return ProtectedResource(
         url=f"{settings.public_base_url}{MCP_ENDPOINT_PATH}",
-        scope=agent.mcp_scope,
-        required_group=OIDC_MCP_GROUP,
-        agent_group=agent.mcp_agent_group,
-        authorized_parties=AuthorizedParties(frozenset({agent.mcp_client_id})),
+        scope=realm.mcp_scope,
+        required_group=realm.mcp_group,
+        agent_group=realm.agent_group,
+        authorized_parties=AuthorizedParties(frozenset({realm.mcp_client_id})),
         marked_routes=marks,
     )
 

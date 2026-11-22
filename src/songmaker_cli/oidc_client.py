@@ -16,10 +16,8 @@ from webauth.oidc import OidcClientConfig
 from webauth.policies import AuthorizedParties, PathRules
 
 from songmaker_cli.constants import (
-    OIDC_ADMIN_GROUP,
     OIDC_CALLBACK_PATH,
     OIDC_LEEWAY_SECONDS,
-    OIDC_LOGIN_GROUP,
     SIGNED_OUT_PATH,
 )
 from songmaker_cli.request_policies import API_PATH_PREFIX, MEDIA_PATH_PREFIX
@@ -27,7 +25,7 @@ from songmaker_cli.request_policies import API_PATH_PREFIX, MEDIA_PATH_PREFIX
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from songmaker_cli.settings import Settings
+    from songmaker_cli.settings import RealmSettings, Settings
 
 _REALM_ENDPOINT_PREFIX = "protocol/openid-connect"
 
@@ -51,9 +49,9 @@ def read_client_secret(secret_file: Path) -> SecretStr:
     return SecretStr(secret)
 
 
-def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
-    if not settings.oidc_issuer or not settings.oidc_client_id:
-        raise ValueError("OIDC_ISSUER and OIDC_CLIENT_ID are required to serve the web app")
+def build_oidc_client_config(settings: Settings, realm: RealmSettings) -> OidcClientConfig:
+    if not settings.oidc_issuer:
+        raise ValueError("OIDC_ISSUER is required to serve the web app")
     if settings.oidc_client_secret_file is None:
         raise ValueError("OIDC_CLIENT_SECRET_FILE is required to serve the web app")
     if not settings.public_base_url:
@@ -66,7 +64,7 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         token_endpoint=f"{endpoints}/token",
         jwks_url=f"{endpoints}/certs",
         end_session_endpoint=f"{endpoints}/logout",
-        client_id=settings.oidc_client_id,
+        client_id=realm.client_id,
         client_secret=read_client_secret(settings.oidc_client_secret_file),
         redirect_uri=f"{settings.public_base_url}{OIDC_CALLBACK_PATH}",
         post_logout_redirect_uri=f"{settings.public_base_url}{SIGNED_OUT_PATH}",
@@ -74,11 +72,13 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
     )
 
 
-def build_admission_config(client_config: OidcClientConfig) -> AdmissionConfig:
+def build_admission_config(
+    client_config: OidcClientConfig, realm: RealmSettings,
+) -> AdmissionConfig:
     return AdmissionConfig(
         bound_issuer=client_config.issuer,
-        login_group=OIDC_LOGIN_GROUP,
-        admin_group=OIDC_ADMIN_GROUP,
+        login_group=realm.login_group,
+        admin_group=realm.admin_group,
     )
 
 

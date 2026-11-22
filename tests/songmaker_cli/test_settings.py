@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from support.realm import ADMIN_GROUP, AGENT_GROUP, CLIENT_ID, LOGIN_GROUP, MCP_GROUP
 from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.api_models.songs import generation_expiry
@@ -19,6 +20,7 @@ from songmaker_cli.db.database_url import (
 from songmaker_cli.settings import (
     UNKNOWN_COMMIT,
     UNRELEASED_TAG,
+    RealmSettings,
     Settings,
     _find_env_file,
     get_settings,
@@ -310,26 +312,79 @@ def test_a_fully_set_agent_is_read_from_the_nested_environment(
     )
 
 
-_MCP_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": "agents", "AGENT__MCP_SCOPE": "songmaker:mcp"}
+_GROUP_KEYS = ("REALM_LOGIN_GROUP", "REALM_ADMIN_GROUP", "REALM_MCP_GROUP", "REALM_AGENT_GROUP")
+
+
+def test_the_realm_names_are_read_from_the_realm_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REALM_AGENT_GROUP", AGENT_GROUP)
+
+    realm = RealmSettings()
+
+    assert (
+        realm.client_id,
+        str(realm.login_group),
+        str(realm.admin_group),
+        str(realm.mcp_group),
+        str(realm.agent_group),
+    ) == (CLIENT_ID, LOGIN_GROUP, ADMIN_GROUP, MCP_GROUP, AGENT_GROUP)
 
 
 def test_an_agent_group_without_the_mcp_client_is_unused_and_stays_off(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, "AGENT__MCP_AGENT_GROUP": "/agents"})
+    monkeypatch.setenv("REALM_AGENT_GROUP", AGENT_GROUP)
 
-    agent = Settings(**_required_settings()).agent
+    realm = RealmSettings()
 
-    assert agent is not None
-    assert (agent.mcp_client_id, agent.mcp_agent_group) == (None, "/agents")
+    assert (realm.mcp_client_id, realm.mcp_scope) == (None, None)
 
 
-def test_mcp_on_without_an_agent_group_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, **_MCP_ENVIRONMENT})
-    required = _required_settings()
+def test_mcp_on_without_an_agent_group_stops_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REALM_MCP_CLIENT_ID", "agents")
+    monkeypatch.setenv("REALM_MCP_SCOPE", "songmaker:mcp")
 
-    with pytest.raises(ValidationError, match="mcp_agent_group"):
-        Settings(**required)
+    with pytest.raises(ValidationError, match="REALM_AGENT_GROUP is required"):
+        RealmSettings()
+
+
+@pytest.mark.parametrize("key", ["REALM_MCP_CLIENT_ID", "REALM_MCP_SCOPE"])
+def test_one_mcp_value_without_the_other_stops_settings(
+    monkeypatch: pytest.MonkeyPatch, key: str,
+) -> None:
+    monkeypatch.setenv("REALM_AGENT_GROUP", AGENT_GROUP)
+    monkeypatch.setenv(key, "alone")
+
+    with pytest.raises(ValidationError, match="set together or not at all"):
+        RealmSettings()
+
+
+@pytest.mark.parametrize("key", _GROUP_KEYS)
+@pytest.mark.parametrize("malformed", ["apps/no-leading-slash", "/apps//empty", "/apps/ spaced"])
+def test_a_malformed_realm_group_stops_settings_under_its_key_without_echoing_it(
+    monkeypatch: pytest.MonkeyPatch, key: str, malformed: str,
+) -> None:
+    monkeypatch.setenv("REALM_AGENT_GROUP", AGENT_GROUP)
+    monkeypatch.setenv(key, malformed)
+
+    with pytest.raises(ValidationError, match=key) as refused:
+        RealmSettings()
+
+    assert malformed not in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    "admin_group", ["/apps/songmaker", "/apps/songmaker2/admin", "/apps/other/admin"],
+    ids=["equal", "sibling-prefix", "other-tree"],
+)
+def test_an_admin_group_outside_the_login_group_stops_settings_without_echoing_it(
+    monkeypatch: pytest.MonkeyPatch, admin_group: str,
+) -> None:
+    monkeypatch.setenv("REALM_ADMIN_GROUP", admin_group)
+
+    with pytest.raises(ValidationError, match="REALM_ADMIN_GROUP must lie below") as refused:
+        RealmSettings()
+
+    assert admin_group not in str(refused.value)
 
 
 @pytest.mark.parametrize(

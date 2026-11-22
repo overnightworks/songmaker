@@ -25,7 +25,6 @@ os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
 os.environ.setdefault(
     "ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,songmaker-web,songmaker.test")
 os.environ.setdefault("OIDC_ISSUER", "https://issuer.test/realms/test")
-os.environ.setdefault("OIDC_CLIENT_ID", "songmaker-test")
 # Several pytest-xdist workers populating librosa's shared on-disk numba cache at once crash in
 # compiled code (Fatal Python error: Segmentation fault); each process gets its own cache.
 _numba_cache_dir = tempfile.mkdtemp(prefix="numba-cache-")
@@ -48,6 +47,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from support.fake_cli_process import close_fake_cli_processes  # noqa: E402
 from support.generation_failures import SONGMAKER_FAILURE_CASES  # noqa: E402
 from support.oidc_client import write_test_client_secret  # noqa: E402
+from support.realm import REALM_ENVIRONMENT  # noqa: E402
 from support.web_app import make_fake_redis  # noqa: E402
 from support.worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
@@ -55,6 +55,9 @@ from songmaker_cli.scheduler import (  # noqa: E402
     WorkerGenerationUnavailable,
     WorkerGpuOutOfMemory,
 )
+
+for _realm_key, _realm_value in REALM_ENVIRONMENT.items():
+    os.environ.setdefault(_realm_key, _realm_value)
 
 pytest_plugins = [
     "support.redis_server",

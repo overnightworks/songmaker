@@ -160,14 +160,15 @@ def install_app_context(app, ctx) -> None:
     """
     from songmaker_cli.redis_client import RedisHttpMetrics
     from songmaker_cli.server import build_web_auth
-    from songmaker_cli.settings import Settings
+    from songmaker_cli.settings import RealmSettings, Settings
 
     slot = IssuerSlot()
     app.state.ctx = ctx
     app.state.issuer_slot = slot
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
     auth = build_web_auth(
-        ctx, Settings(), script_hashes=(), issuer_calls=slot.calls(), wall_clock=slot.clock,
+        ctx, Settings(), RealmSettings(),
+        script_hashes=(), issuer_calls=slot.calls(), wall_clock=slot.clock,
     )
     app.state.web_auth = auth
     auth.install(app, bearer=None)

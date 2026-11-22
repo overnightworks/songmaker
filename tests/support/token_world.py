@@ -9,9 +9,9 @@ from typing import ClassVar
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.fake_oidc_issuer import FakeIssuer, a_fake_issuer
+from support.realm import LOGIN_GROUP
 from support.web_app import TEST_ORIGIN, make_test_app, seed_user
 
-from songmaker_cli.constants import OIDC_LOGIN_GROUP
 from songmaker_cli.db.models import Album, AuditLog, Generation, Song, User, Version
 
 
@@ -36,7 +36,7 @@ class TokenWorld:
         self,
         subject: str = ALICE,
         *,
-        groups: tuple[str, ...] = (OIDC_LOGIN_GROUP,),
+        groups: tuple[str, ...] = (LOGIN_GROUP,),
         username: str = "alice",
         **claims: object,
     ) -> str:

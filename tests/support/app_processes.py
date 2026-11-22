@@ -37,6 +37,7 @@ from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from support.cowriter_gateway import agent_config
 from support.object_store import configured_bucket
+from support.realm import REALM_ENVIRONMENT
 from tandem import Leases
 from tandem.testing import settle_epoch
 
@@ -62,7 +63,6 @@ LOG_TAIL_BYTES: Final = 4000
 # endpoint, region and credentials file (AWS_*). Nothing else leaks in.
 INHERITED_VARIABLES: Final = ("PATH", "HOME", "LANG", "VIRTUAL_ENV")
 INHERITED_PREFIXES: Final = ("COVERAGE_", "AWS_")
-OIDC_CLIENT_ID: Final = "songmaker-test"
 TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
 MUSIC_WORKER_SETTINGS: Final = "songmaker_cli.music_worker.MusicWorkerSettings"
 SCORING_WORKER_SETTINGS: Final = "songmaker_cli.scoring_worker.ScoringWorkerSettings"
@@ -179,7 +179,6 @@ class WebProcesses:
             "session_secret": self.session_secret,
             "songmaker_internal_token": secrets.token_hex(16),
             "oidc_issuer": "https://issuer.invalid/realms/test",
-            "oidc_client_id": OIDC_CLIENT_ID,
             "oidc_client_secret_file": str(client_secret),
             "public_base_url": "https://songmaker.invalid",
             "allowed_hosts": LOOPBACK,
@@ -188,6 +187,7 @@ class WebProcesses:
             "songmaker_s3_bucket": configured_bucket(),
         }
         environment = {environment_name(Settings, field): value for field, value in values.items()}
+        environment.update(REALM_ENVIRONMENT)
         if self._stand_ins is not None:
             environment.update(self._stand_in_environment(self._stand_ins))
         return environment

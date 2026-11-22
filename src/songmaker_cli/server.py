@@ -89,7 +89,7 @@ from songmaker_cli.request_policies import (
     build_rate_limit_policy,
     build_security_headers_policy,
 )
-from songmaker_cli.settings import DEFAULT_SERVER_PORT, Settings, get_settings
+from songmaker_cli.settings import DEFAULT_SERVER_PORT, RealmSettings, Settings, get_settings
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import keep_owner_lease
 
@@ -273,6 +273,7 @@ def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
 def build_web_auth(
     ctx: AppContext,
     settings: Settings,
+    realm: RealmSettings,
     script_hashes: Sequence[str],
     issuer_calls: IssuerCalls | None,
     wall_clock: WallClock,
@@ -285,7 +286,7 @@ def build_web_auth(
     stack with its headers; one in `inside` sees only the requests the stack admitted.
     WARNING: reordering the entries of the two slots changes security behavior.
     """
-    client = build_oidc_client_config(settings)
+    client = build_oidc_client_config(settings, realm)
     return WebAuth.build(
         WebAuthSettings(
             config=replace(build_web_auth_config(ctx, settings), wall_clock=wall_clock),
@@ -302,7 +303,7 @@ def build_web_auth(
             sign_in=DatabaseSignInTransaction(ctx.db),
             sessions=DatabaseSessionTransaction(ctx.db),
         ),
-        groups=build_admission_config(client),
+        groups=build_admission_config(client, realm),
         pages=sign_in_pages(),
         front=parse_trusted_proxies(settings),
         outside=(
@@ -359,8 +360,9 @@ def create_app(
     from songmaker_cli.redis_client import RedisHttpMetrics
 
     settings = get_settings()
+    realm = RealmSettings()
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
-    auth = build_web_auth(ctx, settings, script_hashes, issuer_calls, wall_clock)
+    auth = build_web_auth(ctx, settings, realm, script_hashes, issuer_calls, wall_clock)
     app.state.web_auth = auth
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
@@ -369,7 +371,7 @@ def create_app(
     # Every route that appears in the schema is registered, so the marks are read from a
     # complete schema; the gate needs them before it is installed.
     agent_tools = collect_route_tools(app)
-    mcp_resource = build_protected_resource(settings, agent_tools.marks)
+    mcp_resource = build_protected_resource(settings, realm, agent_tools.marks)
     # `/mcp` is a route of the host: it registers before `auth.install`.
     app.state.mcp_front = mount_mcp_front(
         app, agent_tools, mcp_resource, auth.admission.bound_issuer,
@@ -380,11 +382,7 @@ def create_app(
     sveltekit_app_dir = sveltekit_dir / "_app"
 
     if sveltekit_app_dir.exists():
-        app.mount(
-            "/_app",
-            StaticFiles(directory=str(sveltekit_app_dir)),
-            name="sveltekit-app",
-        )
+        app.mount("/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app")
 
     _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
     page_shell = PageShell.read(sveltekit_dir / "index.html")

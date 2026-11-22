@@ -19,7 +19,6 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from support.mcp_tool_table import ALL_TOOLS, Tool
 from support.mcp_world import (
     ADMIN_GROUPS,
-    AGENT_ENVIRONMENT,
     MCP_CLIENT_ENVIRONMENT,
     MCP_SCOPE,
     METADATA_URL,
@@ -31,18 +30,14 @@ from support.mcp_world import (
     build_mcp_world,
     worker_ready,
 )
+from support.realm import LOGIN_GROUP, MCP_GROUP
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import seed_session
 
 from songmaker_cli.agent.mcp import collect_route_tools
-from songmaker_cli.constants import (
-    MODEL_AVAILABLE_MODES,
-    OIDC_LOGIN_GROUP,
-    OIDC_MCP_GROUP,
-)
+from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 from songmaker_cli.db.models import Album, Generation, Job, Song
 from songmaker_cli.messages import message
-from songmaker_cli.settings import Settings, get_settings
 
 MARKED_TOOLS = {
     "list_albums", "create_album", "list_songs", "create_song", "get_song", "generate_song",
@@ -389,13 +384,13 @@ def test_a_token_of_another_audience_or_party_is_refused_at_mcp(
 
 
 def test_a_token_of_a_non_member_of_the_mcp_group_is_refused(mcp: McpWorld) -> None:
-    reply = mcp.rpc("tools/list", headers=mcp.agent(groups=(OIDC_LOGIN_GROUP,)))
+    reply = mcp.rpc("tools/list", headers=mcp.agent(groups=(LOGIN_GROUP,)))
 
     assert reply.status_code == 403
 
 
 def test_a_member_of_the_mcp_group_alone_is_admitted_as_an_app_member(mcp: McpWorld) -> None:
-    assert mcp.tool_names(groups=(OIDC_MCP_GROUP,)) == MARKED_TOOLS
+    assert mcp.tool_names(groups=(MCP_GROUP,)) == MARKED_TOOLS
 
 
 def test_an_expired_token_is_refused(mcp: McpWorld) -> None:
@@ -517,26 +512,19 @@ def test_with_the_mcp_values_unset_post_answers_403_and_get_and_metadata_answer_
 def test_one_mcp_value_without_the_other_stops_startup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker, name: str,
 ) -> None:
-    for key, value in {**AGENT_ENVIRONMENT, name: MCP_CLIENT_ENVIRONMENT[name]}.items():
-        monkeypatch.setenv(key, value)
-    get_settings.cache_clear()
+    monkeypatch.setenv(name, MCP_CLIENT_ENVIRONMENT[name])
 
-    with pytest.raises(ValidationError, match="agent"):
-        Settings()
-    with pytest.raises(ValidationError, match="agent"):
+    with pytest.raises(ValidationError, match=name):
         make_token_world(tmp_path, factory=pg_factory)
 
 
 def test_mcp_on_without_the_agent_group_stops_startup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
 ) -> None:
-    for key, value in {**AGENT_ENVIRONMENT, **MCP_CLIENT_ENVIRONMENT}.items():
+    for key, value in MCP_CLIENT_ENVIRONMENT.items():
         monkeypatch.setenv(key, value)
-    get_settings.cache_clear()
 
-    with pytest.raises(ValidationError, match="mcp_agent_group"):
-        Settings()
-    with pytest.raises(ValidationError, match="mcp_agent_group"):
+    with pytest.raises(ValidationError, match="REALM_AGENT_GROUP"):
         make_token_world(tmp_path, factory=pg_factory)
 
 
