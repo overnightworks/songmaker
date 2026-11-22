@@ -65,6 +65,7 @@ test('album_rule_11: a seeded album with one song without a Pick shows the badge
 
 		const publicContext = await browser.newContext({
 			storageState: undefined,
+			locale: 'en',
 			viewport: page.viewportSize(),
 			isMobile: Boolean(isMobile),
 			hasTouch: Boolean(isMobile)

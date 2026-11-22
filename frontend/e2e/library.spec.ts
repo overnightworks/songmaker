@@ -60,8 +60,6 @@ const PHONE_ROW_HEIGHT_PX = 62;
 // the action cluster onto its own row rather than shrinking the title past
 // this (see .header-titles in CollectionHeaderFrame.svelte).
 const HEADER_MIN_TITLE_PX = 160;
-// The header's line under the title: how many songs the page lists.
-const SONG_COUNT = /^\d+ songs?$/;
 const songForm = (n: number) => words['libraryWall.songCount'](n).replace(String(n), '\\d+');
 const WALL_SONG_COUNT = new RegExp(`^(${songForm(1)}|${songForm(2)})$`);
 
@@ -98,7 +96,7 @@ test.afterEach(() => {
 async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Promise<void> {
 	const surface = workspace(page);
 	const title = surface.getByRole('heading', { name: albumTitle });
-	const songCount = surface.locator('.collection-header').getByText(SONG_COUNT);
+	const songCount = surface.locator('.collection-header .header-count');
 
 	await page.setViewportSize(NARROW_VIEWPORT);
 	await expect(title).toHaveText(albumTitle);
