@@ -1,8 +1,0 @@
-claim_id = "a7bd02628170482bbc5665e806d9ba7b"
-agent = "Claude 7ce0c534-6bff-4977-9966-67605fc278e8"
-role = "builder"
-base = "e85845ca287f59ffcce6496dad7ac1eb564bab5a"
-branch = "claude/issue-3418-no-pick-badge"
-scope = ["docs/mockups/now-playing-queue", "docs/navigation.md", "frontend/e2e", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/AlbumDetailViewSongRows.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionHeaderFrame.svelte", "frontend/src/lib/components/SongRow.svelte", "frontend/src/lib/components/SongRow.test.ts", "frontend/src/lib/utils/playable.ts", "frontend/src/lib/words", "scripts/style-literals.txt", "src/songmaker_cli/words.py"]
-opened_commit = "025e4f3632abc1ac6ba3160fffec3d81049caf69"
-whole_reason = "The badge, the header count, the album rule, its test and the frozen picture state one rule together; a part alone would show a count without the rows it counts."
