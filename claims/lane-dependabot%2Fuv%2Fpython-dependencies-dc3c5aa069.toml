@@ -1,7 +1,0 @@
-claim_id = "592f34cd0eda47dfaf5045ef4729dff8"
-agent = "Claude 7ce0c534-6bff-4977-9966-67605fc278e8"
-role = "builder"
-base = "81c74b0d04bee8bd16953aafd45336b56195165b"
-branch = "dependabot/uv/python-dependencies-dc3c5aa069"
-scope = ["uv.lock"]
-opened_commit = "faef47a598955b09d2c7d83f09dc576de7329845"
