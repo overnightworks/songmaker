@@ -780,7 +780,11 @@ msgid "Move"
 msgstr ""
 
 msgctxt "songMenu.delete"
-msgid "Delete song"
+msgid "Delete"
+msgstr ""
+
+msgctxt "songMenu.share"
+msgid "Share"
 msgstr ""
 
 msgctxt "takeMenu.label"
@@ -3491,14 +3495,6 @@ msgstr ""
 
 msgctxt "shareButton.failedToast"
 msgid "Share failed"
-msgstr ""
-
-msgctxt "shareButton.fallbackTitle"
-msgid "Share"
-msgstr ""
-
-msgctxt "shareButton.songLabel"
-msgid "Share song"
 msgstr ""
 
 msgctxt "shareToggle.sharedTooltip"

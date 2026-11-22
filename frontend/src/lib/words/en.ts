@@ -196,6 +196,7 @@ export type Words = {
     readonly "songMenu.addTo": string;
     readonly "songMenu.move": string;
     readonly "songMenu.delete": string;
+    readonly "songMenu.share": string;
     readonly "takeMenu.label": string;
     readonly "takeMenu.close": string;
     readonly "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => string;
@@ -847,8 +848,6 @@ export type Words = {
     readonly "shareButton.copiedToast": string;
     readonly "shareButton.unsharedToast": string;
     readonly "shareButton.failedToast": string;
-    readonly "shareButton.fallbackTitle": string;
-    readonly "shareButton.songLabel": string;
     readonly "shareToggle.sharedTooltip": (gaps: { readonly path: string }) => string;
     readonly "shareLink.copiedToast": string;
     readonly "shareLink.copyFailedToast": string;
@@ -1654,7 +1653,8 @@ export const words: Words = {
     "songMenu.rename": "Rename",
     "songMenu.addTo": "Add to…",
     "songMenu.move": "Move",
-    "songMenu.delete": "Delete song",
+    "songMenu.delete": "Delete",
+    "songMenu.share": "Share",
     "takeMenu.label": "More",
     "takeMenu.close": "Close menu",
     "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => "Take · v" + gaps.version + " · " + gaps.take,
@@ -2488,8 +2488,6 @@ export const words: Words = {
     "shareButton.copiedToast": "Link copied to clipboard",
     "shareButton.unsharedToast": "Sharing disabled",
     "shareButton.failedToast": "Share failed",
-    "shareButton.fallbackTitle": "Share",
-    "shareButton.songLabel": "Share song",
     "shareToggle.sharedTooltip": (gaps: { readonly path: string }) => "Shared: " + gaps.path,
     "shareLink.copiedToast": "Link copied",
     "shareLink.copyFailedToast": "Copy failed",

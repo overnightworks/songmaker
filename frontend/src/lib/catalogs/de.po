@@ -792,8 +792,12 @@ msgid "Move"
 msgstr "Verschieben"
 
 msgctxt "songMenu.delete"
-msgid "Delete song"
-msgstr "Song löschen"
+msgid "Delete"
+msgstr "Löschen"
+
+msgctxt "songMenu.share"
+msgid "Share"
+msgstr "Teilen"
 
 msgctxt "takeMenu.label"
 msgid "More"
@@ -3596,14 +3600,6 @@ msgstr "Teilen ausgeschaltet"
 msgctxt "shareButton.failedToast"
 msgid "Share failed"
 msgstr "Teilen fehlgeschlagen"
-
-msgctxt "shareButton.fallbackTitle"
-msgid "Share"
-msgstr "Teilen"
-
-msgctxt "shareButton.songLabel"
-msgid "Share song"
-msgstr "Song teilen"
 
 msgctxt "shareToggle.sharedTooltip"
 msgid "Shared: {path}"

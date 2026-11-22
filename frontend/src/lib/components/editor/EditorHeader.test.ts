@@ -98,9 +98,9 @@ describe('EditorHeader', () => {
 		expect(generateButtons[0].textContent).toContain(words['generate.button']);
 	});
 
-	it('keeps Share beside the desktop song menu', async () => {
+	it('carries Share only inside the song menu', async () => {
 		const { target } = await render();
-		expect(target.querySelector('.title-row > .share-btn')).not.toBeNull();
+		expect(target.querySelector('.title-row > .share-btn')).toBeNull();
 		expect(target.querySelector('.song-menu')).not.toBeNull();
 	});
 
