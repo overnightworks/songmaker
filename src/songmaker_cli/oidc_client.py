@@ -7,19 +7,14 @@ app and names only the path, never the secret.
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, overload
 
 from pydantic import SecretStr
 from webauth.admission import AdmissionConfig
-from webauth.https_client import fetch_key_set_over_https
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths, ProtectedResource
-from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.oidc_transport import post_token_request_over_https
+from webauth.oidc import OidcClientConfig
 from webauth.policies import AuthorizedParties, PathRules
 
-from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
     OIDC_CALLBACK_PATH,
@@ -31,8 +26,6 @@ from songmaker_cli.request_policies import API_PATH_PREFIX, MEDIA_PATH_PREFIX
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from sqlalchemy.orm import Session, sessionmaker
 
     from songmaker_cli.settings import Settings
 
@@ -81,16 +74,6 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
     )
 
 
-def build_relying_party(client_config: OidcClientConfig) -> OidcRelyingParty:
-    return OidcRelyingParty(
-        client_config,
-        post_token_request=post_token_request_over_https,
-        fetch_key_set=fetch_key_set_over_https,
-        wall_clock=time.time,
-        monotonic_clock=time.monotonic,
-    )
-
-
 def build_admission_config(client_config: OidcClientConfig) -> AdmissionConfig:
     return AdmissionConfig(
         bound_issuer=client_config.issuer,
@@ -99,26 +82,8 @@ def build_admission_config(client_config: OidcClientConfig) -> AdmissionConfig:
     )
 
 
-@dataclass(frozen=True)
-class OidcSignIn:
-    """What the sign-in routes need, built once and kept on the app."""
-
-    relying_party: OidcRelyingParty
-    admission: AdmissionConfig
-
-
-def build_oidc_sign_in(settings: Settings) -> OidcSignIn:
-    client_config = build_oidc_client_config(settings)
-    return OidcSignIn(
-        relying_party=build_relying_party(client_config),
-        admission=build_admission_config(client_config),
-    )
-
-
 def build_bearer_gate(
     settings: Settings,
-    oidc_sign_in: OidcSignIn,
-    database: sessionmaker[Session],
     resource: ProtectedResource | None = None,
 ) -> BearerGate | None:
     """The gate that admits a token: a person's on the person paths while a client is named,
@@ -129,14 +94,8 @@ def build_bearer_gate(
         PersonPaths(
             PathRules(prefixes=(API_PATH_PREFIX, MEDIA_PATH_PREFIX)),
             AuthorizedParties(settings.token_client_ids),
-            DatabaseSignInTransaction(database),
         )
         if settings.token_client_ids
         else None
     )
-    return BearerGate(
-        relying_party=oidc_sign_in.relying_party,
-        admission=oidc_sign_in.admission,
-        person_paths=person_paths,
-        resource=resource,
-    )
+    return BearerGate(person_paths=person_paths, resource=resource)

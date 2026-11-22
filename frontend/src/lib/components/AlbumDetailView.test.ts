@@ -45,12 +45,8 @@ import {
 	songList
 } from '#lib/stores/libraryData.ts';
 import { fetchSongs } from '#lib/api/songs.ts';
-import {
-	curationActive,
-	nowPlayingSurface,
-	queueContext,
-	selectedAlbumId
-} from '#lib/stores/player.ts';
+import { nowPlayingSurface, selectedAlbumId } from '#lib/stores/player.ts';
+import { curationActive, queueContext } from '#lib/stores/queue.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();

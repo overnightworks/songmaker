@@ -21,12 +21,8 @@ import { coverSuggestions } from '#lib/test-utils/album-cover-editor.ts';
 import { clearHitboxStyles, clearPointer } from '#lib/test-utils/hitbox.ts';
 import { clearComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
-import {
-	curationActive,
-	nowPlayingSurface,
-	queueContext,
-	selectedAlbumId
-} from '#lib/stores/player.ts';
+import { nowPlayingSurface, selectedAlbumId } from '#lib/stores/player.ts';
+import { curationActive, queueContext } from '#lib/stores/queue.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();

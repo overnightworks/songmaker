@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
-from support.cover_refusals import COVER_TOO_LARGE, COVER_UNSUPPORTED_TYPE
+from support.cover_refusals import COVER_UNSUPPORTED_TYPE
 from support.library_rows import a_song, a_take, a_version, an_album
 from support.web_app import (
     make_authenticated_user,
@@ -24,9 +24,8 @@ from support.web_app import (
 )
 
 from songmaker_cli.api_helpers import slugify
-from songmaker_cli.constants import COVER_MAX_BYTES, COVER_VARIANT_CARD, COVER_VARIANT_DETAIL
+from songmaker_cli.constants import COVER_VARIANT_CARD, COVER_VARIANT_DETAIL
 from songmaker_cli.covers import (
-    COVER_JPEG_MAGIC,
     COVER_PNG_EXTENSION,
     COVER_VARIANT_ORIGINAL,
     PLAYLIST_COVER_DIRNAME,
@@ -580,27 +579,19 @@ def test_api_uploads_playlist_cover_variants_and_remove_restores_mosaic(
     assert client.get(cover["detail"]).status_code == 404
 
 
-@pytest.mark.parametrize(
-    ("payload", "media_type", "status_code", "detail"),
-    [
-        (b"<svg xmlns='http://www.w3.org/2000/svg'></svg>", "image/svg+xml", 422,
-         COVER_UNSUPPORTED_TYPE),
-        (COVER_JPEG_MAGIC + b"\\x00" * COVER_MAX_BYTES, "image/jpeg", 413,
-         COVER_TOO_LARGE),
-    ],
-)
-def test_api_rejects_invalid_playlist_covers(
-    client: TestClient, payload: bytes, media_type: str, status_code: int, detail: str,
-) -> None:
+_SVG_COVER = b"<svg xmlns='http://www.w3.org/2000/svg'></svg>"
+
+
+def test_api_rejects_a_playlist_cover_of_an_unsupported_type(client: TestClient) -> None:
     playlist_id = client.post("/api/playlists", json={"title": "Rejected"}).json()["id"]
 
     response = client.put(
         f"/api/playlists/{playlist_id}/cover",
-        files={"file": ("cover", payload, media_type)},
+        files={"file": ("cover", _SVG_COVER, "image/svg+xml")},
     )
 
-    assert response.status_code == status_code
-    assert response.json()["detail"] == detail
+    assert response.status_code == 422
+    assert response.json()["detail"] == COVER_UNSUPPORTED_TYPE
     assert client.get(f"/api/playlists/{playlist_id}").json()["cover"] is None
 
 

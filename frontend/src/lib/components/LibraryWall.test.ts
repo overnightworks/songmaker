@@ -59,11 +59,11 @@ import {
 	playAlbum,
 	setShuffle,
 	shuffleEnabled,
-	queueContext,
 	pendingStart,
 	playStartNotice,
 	toggleOrStartCollection
 } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { fetchSong } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants/library.ts';

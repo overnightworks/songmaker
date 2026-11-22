@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from logline import REQUEST_EVENT, RequestLineMiddleware
+from logline import REQUEST_EVENT
 from logline.testing import configured
 from sqlalchemy.orm import Session
 from support.object_store import an_object_store
@@ -50,7 +50,6 @@ def _build_auth_app(_db, tmp_path: Path, redis=None):
         signing_key=_TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
     )
     app = FastAPI()
-    install_app_context(app, ctx)
 
     @app.get("/protected")
     def protected(
@@ -71,12 +70,13 @@ def _build_auth_app(_db, tmp_path: Path, redis=None):
     def public():
         return {"status": "ok"}
 
+    install_app_context(app, ctx)
     return app
 
 
 @pytest.fixture
 def auth_app(_db, tmp_path: Path) -> TestClient:
-    """Minimal FastAPI app with auth dependency — no middleware stack."""
+    """Minimal FastAPI app with auth dependency, behind the composition call's stack."""
     app = _build_auth_app(_db, tmp_path)
     return web_client(app, cookies={})
 
@@ -156,7 +156,6 @@ def test_an_authenticated_request_line_names_the_account(
     auth_app: TestClient, create_session_id, capsys
 ) -> None:
     sid = create_session_id()
-    auth_app.app.add_middleware(RequestLineMiddleware)
     auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
     session_factory = auth_app.app.state.ctx.db
 

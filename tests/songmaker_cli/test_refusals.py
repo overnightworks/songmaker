@@ -16,6 +16,7 @@ from support.web_app import (
     refusal_body,
     seed_session,
     seed_user,
+    web_client,
 )
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, Version
@@ -143,9 +144,7 @@ def test_the_router_app_answers_the_same_refusal_body_as_the_live_app(
     tmp_path: Path, pg_factory
 ) -> None:
     ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_song_with_archived_take)
-    router = TestClient(
-        make_router_app(ctx, user=make_authenticated_user(OWNER, username=OWNER))
-    )
+    router = web_client(make_router_app(ctx, user=make_authenticated_user(OWNER, username=OWNER)))
 
     response = router.post("/api/generations/take/pick")
 
@@ -155,9 +154,7 @@ def test_the_router_app_answers_the_same_refusal_body_as_the_live_app(
 
 def test_an_inactive_model_is_refused_by_name_with_its_key(tmp_path: Path, pg_factory) -> None:
     ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_song_with_archived_take)
-    router = TestClient(
-        make_router_app(ctx, user=make_authenticated_user(OWNER, username=OWNER))
-    )
+    router = web_client(make_router_app(ctx, user=make_authenticated_user(OWNER, username=OWNER)))
 
     response = router.post("/api/songs/song/generate", json={"model": "sft"})
 

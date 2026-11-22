@@ -8,7 +8,6 @@
 		albumSongsLoad
 	} from '#lib/stores/libraryData.ts';
 	import {
-		buildQueueViewModel,
 		closeNowPlaying,
 		ensureGenerationsLoaded,
 		idlePlayTarget,
@@ -17,13 +16,11 @@
 		openNowPlaying,
 		pendingStart,
 		playIdleStart,
-		playbackSource,
 		playNextSong,
 		playPrevSong,
 		canPlayPrevSong,
 		canPlayNextSong,
 		playStartNotice,
-		queueContext,
 		registerNowPlayingTrigger,
 		retryLastPlayIntent,
 		shuffleEnabled,
@@ -32,6 +29,7 @@
 		toggleShuffle,
 		waitingStartOf
 	} from '#lib/stores/player.ts';
+	import { buildQueueViewModel, playbackSource, queueContext } from '#lib/stores/queue.ts';
 	import { openAlbum } from '#lib/stores/navigation.ts';
 	import { queueHoldsOneTake } from '#lib/utils/playable.ts';
 	import { addToast } from '#lib/stores/toast.ts';

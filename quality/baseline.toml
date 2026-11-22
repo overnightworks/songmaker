@@ -20,7 +20,7 @@
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1800
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
 "frontend/src/lib/components/LoraDetail.svelte" = 952
-"frontend/src/lib/components/NowPlaying.test.ts" = 1077
+"frontend/src/lib/components/NowPlaying.test.ts" = 1076
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1095
 "frontend/src/lib/components/PlayerBar.test.ts" = 1615
 "frontend/src/lib/components/SongDetailView.svelte" = 1015
@@ -37,8 +37,8 @@
 "frontend/src/lib/stores/libraryContext.test.ts" = 2085
 "frontend/src/lib/stores/libraryContext.ts" = 1178
 "frontend/src/lib/stores/navigation.test.ts" = 2964
-"frontend/src/lib/stores/player.test.ts" = 5277
-"frontend/src/lib/stores/player.ts" = 2219
+"frontend/src/lib/stores/player.test.ts" = 5078
+"frontend/src/lib/stores/player.ts" = 1877
 "frontend/src/lib/stores/resourceSync.test.ts" = 2019
 "frontend/src/lib/stores/resourceSync.ts" = 1054
 "frontend/src/routes/layout.test.ts" = 1395
@@ -52,17 +52,17 @@
 "tests/songmaker_acestep_worker/test_wrapper_train_lora.py" = 1177
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1821
 "tests/songmaker_cli/test_admin_api.py" = 966
-"tests/songmaker_cli/test_api.py" = 4427
+"tests/songmaker_cli/test_api.py" = 4420
 "tests/songmaker_cli/test_db.py" = 2404
 "tests/songmaker_cli/test_db_postgresql.py" = 831
 "tests/songmaker_cli/test_jobs.py" = 3024
 "tests/songmaker_cli/test_library_api.py" = 1621
 "tests/songmaker_cli/test_lora_api.py" = 1138
-"tests/songmaker_cli/test_playlist_api.py" = 1068
+"tests/songmaker_cli/test_playlist_api.py" = 1059
 "tests/songmaker_cli/test_queue_streams.py" = 1929
-"tests/songmaker_cli/test_resource_event_api.py" = 1110
+"tests/songmaker_cli/test_resource_event_api.py" = 1103
 "tests/songmaker_cli/test_scheduler.py" = 1279
-"tests/songmaker_cli/test_server.py" = 1800
+"tests/songmaker_cli/test_server.py" = 1749
 "tests/songmaker_cli/test_sharing_api.py" = 2393
 
 [function_lines."src/songmaker_acestep_worker/__main__.py"]
@@ -118,7 +118,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 123
+"create_app" = 71
 
 [function_lines."tests/songmaker_acestep_worker/test_wrapper_train_lora.py"]
 "test_default_train_lora_runner_dispatches" = 140

@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
-import { queueContext } from '#lib/stores/player.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import PlayerBar from './PlayerBar.svelte';
 
 let component: ReturnType<typeof mount> | undefined;

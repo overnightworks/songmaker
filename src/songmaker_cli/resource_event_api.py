@@ -26,7 +26,7 @@ from songmaker_cli.api_models import (
     ResourceResyncEvent,
 )
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.auth_dependencies import authenticate_request
+from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
@@ -438,8 +438,8 @@ def api_stream_resource_events(
     of a connection opened with the query cursor carries the newer position.
     """
     ctx: AppContext = request.app.state.ctx
+    user = get_current_user(request)
     with ctx.db() as session:
-        user = authenticate_request(request, session)
         high_water_mark = get_resource_event_high_water_mark(session, user.id)
         oldest_retained = get_oldest_resource_event_sequence(session, user.id)
         session.commit()

@@ -234,14 +234,15 @@ def attach_cowriter_gateway(
     """Wire a test app so ``POST /chat/turn`` runs through a gateway that answers "ok".
 
     The client leaves signed in as ``user_id`` with a session that holds ``refresh_token``, and
-    the realm names ``groups`` for that person at every renewal.
+    the realm names ``groups`` for that person at every renewal. An app that already serves a realm
+    keeps it, so the tokens that realm signed stay valid.
     """
     from webauth.config import installed_web_auth_config
 
     app = client.app
-    issuer = a_fake_issuer()
+    issuer = app.state.issuer_slot.issuer or a_fake_issuer()
     issuer.person = Person(subject=user_id, groups=groups)
-    app.state.oidc_sign_in = issuer.relying_party_for_app()
+    issuer.serve(app)
 
     config = installed_web_auth_config(app)
     session_id = open_session(app, factory, user_id, refresh_token)
