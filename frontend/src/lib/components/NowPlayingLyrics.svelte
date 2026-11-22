@@ -193,7 +193,9 @@
 		if (following) followOrPauseAt(container);
 	}
 
+	// Space on a focused mark activates the button; it is no reader scroll.
 	function pauseOnScrollKey(event: KeyboardEvent): void {
+		if (event.target instanceof HTMLButtonElement) return;
 		if (SCROLL_KEYS.has(event.key)) pauseFollowing();
 	}
 

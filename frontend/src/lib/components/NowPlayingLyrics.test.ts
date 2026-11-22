@@ -623,6 +623,16 @@ describe('NowPlayingLyrics sung marks', () => {
 		expect(target.querySelector('.lyrics-line')?.textContent?.trim()).toBe(LINE_1);
 	});
 
+	it('keeps following when Space activates a focused mark', async () => {
+		layOutSyncedLyrics();
+		await render(markedTake());
+
+		marks()[0].dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+		await tick();
+
+		expect(target.querySelector('.lyrics-follow')).toBeNull();
+	});
+
 	it('opens the Sung line under the tapped word and closes it with a second tap', async () => {
 		await render(markedTake());
 		const [quietly] = marks();
