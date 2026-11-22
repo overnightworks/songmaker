@@ -188,12 +188,12 @@
 			data-hitbox="text"
 			onclick={() => void actions.clickVersion(version.versionId)}
 		>
-			<span class="version-open"
-				>{pageText('takesList.openVersion', { number: String(version.versionNumber) })}<Icon
+			<span class="version-open">
+				{pageText('takesList.openVersion', { number: String(version.versionNumber) })}<Icon
 					name="chevron-right"
 					size={14}
-				/></span
-			>
+				/>
+			</span>
 		</button>
 	{/if}
 {/snippet}
@@ -325,11 +325,11 @@
 							{foldedLabel(group)}
 						</span>
 						{#if !open && group.pick}
-							<span class="version-pick"
-								><Icon name="star-filled" size={12} />{pageText('takesList.takeLabel', {
+							<span class="version-pick">
+								<Icon name="star-filled" size={12} />{pageText('takesList.takeLabel', {
 									number: String(group.pick.generation_number)
-								})}</span
-							>
+								})}
+							</span>
 						{/if}
 					</button>
 					{#if !groups.current && index === 0}{@render takesTip()}{/if}
@@ -354,9 +354,9 @@
 				<button type="button" class="toolbar-btn destructive" onclick={openBulkDelete}>
 					{pageText('takesList.bulkDeleteLabel', tickedIds.length)}
 				</button>
-				<button type="button" class="toolbar-btn cancel" onclick={clearSelection}
-					>{pageText('takesList.cancel')}</button
-				>
+				<button type="button" class="toolbar-btn cancel" onclick={clearSelection}>
+					{pageText('takesList.cancel')}
+				</button>
 			</div>
 		{/if}
 	</div>

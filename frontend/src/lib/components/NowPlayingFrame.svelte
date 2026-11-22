@@ -236,9 +236,9 @@
 
 {#snippet coverMeta()}
 	<div class="cover-meta">
-		<svelte:element this={isPage ? 'h1' : 'span'} class="cover-title"
-			>{info.songTitle}</svelte:element
-		>
+		<svelte:element this={isPage ? 'h1' : 'span'} class="cover-title">
+			{info.songTitle}
+		</svelte:element>
 		{#if stacked && source}
 			<button
 				type="button"
@@ -248,8 +248,10 @@
 				aria-label={pageText(
 					source.kind === 'album' ? 'nowPlaying.openAlbumSource' : 'nowPlaying.openPlaylistSource',
 					{ title: source.title }
-				)}>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
+				)}
 			>
+				{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
+			</button>
 		{:else if albumLine && showTakeLabel}<span class="cover-line">{albumLine}</span>{/if}
 		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
 	</div>
@@ -267,9 +269,10 @@
 
 {#snippet playButton()}
 	{#if ended}
-		<button type="button" class="play-again" onclick={onTogglePlay}
-			><span aria-hidden="true">↻</span> {pageText('nowPlaying.playAgain')}</button
-		>
+		<button type="button" class="play-again" onclick={onTogglePlay}>
+			<span aria-hidden="true">↻</span>
+			{pageText('nowPlaying.playAgain')}
+		</button>
 	{:else}
 		<button
 			type="button"
@@ -364,9 +367,9 @@
 
 {#snippet goToSongButton()}
 	{#if onGoToSong}
-		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}
-			>{pageText('nowPlaying.goToSong')}</button
-		>
+		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}>
+			{pageText('nowPlaying.goToSong')}
+		</button>
 	{/if}
 {/snippet}
 
@@ -422,13 +425,13 @@
 				<div class="np-header-actions">
 					{#if stacked}{@render goToSongButton()}{/if}
 					{#if isDocked && onExpand}
-						<button type="button" class="surface-btn" onclick={onExpand}
-							>{pageText('nowPlaying.expand')}</button
-						>
+						<button type="button" class="surface-btn" onclick={onExpand}>
+							{pageText('nowPlaying.expand')}
+						</button>
 					{:else if !isDocked && onCollapse}
-						<button type="button" class="surface-btn" onclick={onCollapse}
-							>{pageText('nowPlaying.collapse')}</button
-						>
+						<button type="button" class="surface-btn" onclick={onCollapse}>
+							{pageText('nowPlaying.collapse')}
+						</button>
 					{/if}
 					{@render iconButton('x', pageText('nowPlaying.close'), onclose)}
 				</div>
@@ -468,14 +471,14 @@
 					aria-expanded={$sheetOpen}
 				>
 					{#if upNextTitle}
-						<span class="trigger-up-next"
-							>{pageText('nowPlaying.upNext', { title: upNextTitle })}</span
-						>
+						<span class="trigger-up-next">
+							{pageText('nowPlaying.upNext', { title: upNextTitle })}
+						</span>
 					{/if}
-					<span class="trigger-label"
-						>{rightPanelLabel}
-						<Icon name="chevron-up" size={14} /></span
-					>
+					<span class="trigger-label">
+						{rightPanelLabel}
+						<Icon name="chevron-up" size={14} />
+					</span>
 				</button>
 				{#if $sheetOpen}
 					<button

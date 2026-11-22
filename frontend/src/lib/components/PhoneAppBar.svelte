@@ -141,9 +141,9 @@
 		</button>
 		{@render searchButton()}
 	{:else}
-		<button type="button" class="brand" onclick={() => openHome()} data-text={pageText('app.name')}
-			>{pageText('app.name')}</button
-		>
+		<button type="button" class="brand" onclick={() => openHome()} data-text={pageText('app.name')}>
+			{pageText('app.name')}
+		</button>
 		{@render searchButton()}
 		<AccountMenu {username} {accountHref} {onlogout} />
 	{/if}

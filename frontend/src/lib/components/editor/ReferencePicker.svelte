@@ -175,24 +175,24 @@
 				</li>
 			{/if}
 			<li class="po up">
-				<label class="upload"
-					><Icon name="arrow-up" size={16} />{uploading
+				<label class="upload">
+					<Icon name="arrow-up" size={16} />{uploading
 						? pageText('referencePicker.uploading')
 						: pageText('referencePicker.upload')}<input
 						type="file"
 						accept={REFERENCE_AUDIO_ACCEPT}
 						disabled={uploading}
 						onchange={attach}
-					/></label
-				>
+					/>
+				</label>
 			</li>
 			{#if uploadError}
 				<li class="error" role="alert">{uploadError}</li>
 			{/if}
 			<li class="po more">
-				<a href={REFERENCES_PATH} onclick={(event) => followAppPageLink(event, REFERENCES_PATH)}
-					>{pageText('referencePicker.all')}<Icon name="chevron-right" size={16} /></a
-				>
+				<a href={REFERENCES_PATH} onclick={(event) => followAppPageLink(event, REFERENCES_PATH)}>
+					{pageText('referencePicker.all')}<Icon name="chevron-right" size={16} />
+				</a>
 			</li>
 		</ul>
 		{#if playFault}<p class="error" role="alert">{playFault}</p>{/if}

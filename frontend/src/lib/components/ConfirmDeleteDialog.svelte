@@ -67,9 +67,9 @@
 		</ul>
 		<p class="warning">{warning}</p>
 		<div class="actions">
-			<button class="cancel-btn" bind:this={cancelButton} onclick={cancel}
-				>{pageText('deleteDialog.cancel')}</button
-			>
+			<button class="cancel-btn" bind:this={cancelButton} onclick={cancel}>
+				{pageText('deleteDialog.cancel')}
+			</button>
 			<button class="confirm-btn" onclick={historyLayer.answer(onconfirm)}>{confirmLabel}</button>
 		</div>
 	</div>

@@ -155,14 +155,14 @@
 						{:else if albumArtFill}
 							<span class="album-line-cover-fallback" style:background={albumArtFill}></span>
 						{:else}
-							<span class="album-line-cover-fallback album-line-cover-initials"
-								>{albumInitials}</span
-							>
+							<span class="album-line-cover-fallback album-line-cover-initials">
+								{albumInitials}
+							</span>
 						{/if}
 					</span>
-					<span class="album-line-title"
-						>{pageText('songHeader.albumLine', albumSongCount, { album: albumTitle })}</span
-					>
+					<span class="album-line-title">
+						{pageText('songHeader.albumLine', albumSongCount, { album: albumTitle })}
+					</span>
 					<div class="song-neighbors">
 						<button
 							type="button"

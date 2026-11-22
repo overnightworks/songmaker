@@ -40,21 +40,22 @@
 	{:else if fill}
 		<span class="tile-cover-fill" style:background={fill} aria-hidden="true"></span>
 	{:else}
-		<span class="tile-cover-fill tile-cover-initials" aria-hidden="true"
-			>{titleInitials(initialsSource ?? title)}</span
-		>
+		<span class="tile-cover-fill tile-cover-initials" aria-hidden="true">
+			{titleInitials(initialsSource ?? title)}
+		</span>
 	{/if}
 </span>
 <span class="tile-meta" class:row={presentation === 'row'} class:current>
 	<span class="tile-title">{title}</span>
-	<span class="tile-subtitle"
-		>{#if presentation === 'row'}<PlayingMark {current} />{/if}{#if subtitleYielding}<span
+	<span class="tile-subtitle">
+		{#if presentation === 'row'}<PlayingMark {current} />{/if}{#if subtitleYielding}<span
 				class="subtitle-joined"
-				><span class="subtitle-yielding">{subtitleYielding}</span><span class="subtitle-rest"
-					>{` · ${subtitle}`}</span
-				></span
-			>{:else}{subtitle}{/if}</span
-	>
+			>
+				<span class="subtitle-yielding">{subtitleYielding}</span><span class="subtitle-rest">
+					{` · ${subtitle}`}
+				</span>
+			</span>{:else}{subtitle}{/if}
+	</span>
 </span>
 
 <style>

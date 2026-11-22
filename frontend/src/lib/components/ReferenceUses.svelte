@@ -85,8 +85,9 @@
 			<section class="uses-song">
 				<h3 class="uses-song-title">
 					{song.title}
-					{#if song.trashed}<span class="uses-tag">{pageText('referenceUses.deletedTag')}</span
-						>{/if}
+					{#if song.trashed}<span class="uses-tag">
+							{pageText('referenceUses.deletedTag')}
+						</span>{/if}
 				</h3>
 				<ul>
 					{#each song.takes as take (take.generation_number)}
@@ -94,9 +95,9 @@
 							{#if song.trashed}
 								<span class="uses-row">
 									{takeLabel(take)}
-									{#if take.is_archived}<span class="uses-tag"
-											>{pageText('referenceUses.archivedTag')}</span
-										>{/if}
+									{#if take.is_archived}<span class="uses-tag">
+											{pageText('referenceUses.archivedTag')}
+										</span>{/if}
 								</span>
 							{:else}
 								<a
@@ -104,9 +105,9 @@
 									href={takeRoutePath(take.album_id, take.song_slug, take.generation_number)}
 								>
 									{takeLabel(take)}
-									{#if take.is_archived}<span class="uses-tag"
-											>{pageText('referenceUses.archivedTag')}</span
-										>{/if}
+									{#if take.is_archived}<span class="uses-tag">
+											{pageText('referenceUses.archivedTag')}
+										</span>{/if}
 									<Icon name="chevron-right" size={16} />
 								</a>
 							{/if}

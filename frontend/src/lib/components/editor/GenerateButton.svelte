@@ -55,14 +55,14 @@
 					style:width={presentation.indeterminate ? undefined : `${presentation.progress}%`}
 					aria-hidden="true"
 				></span>
-				<span class="progress-label"
-					>{progressLabel}{#if presentation.indeterminate}<span
+				<span class="progress-label">
+					{progressLabel}{#if presentation.indeterminate}<span
 							class="elapsed-time"
 							aria-hidden="true"
 						>
-							{presentation.elapsedLabel ? ` ${presentation.elapsedLabel}` : ''}</span
-						>{/if}</span
-				>
+							{presentation.elapsedLabel ? ` ${presentation.elapsedLabel}` : ''}
+						</span>{/if}
+				</span>
 			{/if}
 		</div>
 		{#if offersCancel(presentation)}
@@ -113,8 +113,9 @@
 					<a
 						href={resolve(ADMIN_WORKER_POOL_HREF)}
 						onclick={(event) => followAppPageLink(event, ADMIN_WORKER_POOL_HREF)}
-						>{pageText('generate.openWorkerPool')}</a
 					>
+						{pageText('generate.openWorkerPool')}
+					</a>
 				{/if}
 			</p>
 		{/if}

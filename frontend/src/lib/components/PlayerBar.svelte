@@ -244,23 +244,25 @@
 					class="track-title"
 					class:glowing={isPlaying}
 					style={titleGlowStyle}
-					{@attach mobileTransport && scrollTitleOnceWhenCut}>{shownTake.songTitle}</span
+					{@attach mobileTransport && scrollTitleOnceWhenCut}
 				>
+					{shownTake.songTitle}
+				</span>
 			{/key}
 			{#if !mobileTransport}
 				{#if playingAlbumId}
-					<button class="track-album" onclick={() => playingAlbumId && openAlbum(playingAlbumId)}
-						>{shownTake.albumTitle}</button
-					>
+					<button class="track-album" onclick={() => playingAlbumId && openAlbum(playingAlbumId)}>
+						{shownTake.albumTitle}
+					</button>
 				{:else}
 					<span class="track-album">{shownTake.albumTitle}</span>
 				{/if}
 			{/if}
-			<span class="track-detail" id={detailId}
-				>{detailLine}{#if isLoading}<span class="loading-text"
-						>{pageText('player.detailLoading')}</span
-					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
-			>
+			<span class="track-detail" id={detailId}>
+				{detailLine}{#if isLoading}<span class="loading-text">
+						{pageText('player.detailLoading')}
+					</span>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}
+			</span>
 		{:else if waitingSong}
 			<span class="track-title">{waitingSong.songTitle}</span>
 			<span class="track-detail">{waitingSong.albumTitle}</span>
@@ -270,8 +272,9 @@
 		{:else if startNotice === 'empty'}
 			<span class="track-title">{pageText('player.nothingToPlay')}</span>
 		{:else if startNotice === 'error'}
-			<span class="track-title">{pageText('player.startFailed', { source: idleTarget.label })}</span
-			>
+			<span class="track-title">
+				{pageText('player.startFailed', { source: idleTarget.label })}
+			</span>
 			<span class="track-detail">{pageText('player.pressPlayToRetry')}</span>
 		{:else}
 			<span class="track-title">{idleTarget.label}</span>

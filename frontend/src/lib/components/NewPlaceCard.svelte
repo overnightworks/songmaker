@@ -111,9 +111,9 @@
 	{@render children()}
 	<div class="card-foot">
 		<small>{hint}</small>
-		<button type="submit" class="create-btn" disabled={!canCreate}
-			>{pageText('newPlace.create')}</button
-		>
+		<button type="submit" class="create-btn" disabled={!canCreate}>
+			{pageText('newPlace.create')}
+		</button>
 	</div>
 </form>
 

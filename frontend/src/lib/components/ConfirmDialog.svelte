@@ -63,13 +63,13 @@
 		<div class="actions">
 			<button class="cancel-btn" onclick={cancel}>{pageText('dialog.cancel')}</button>
 			{#if secondaryLabel && onsecondary}
-				<button class="secondary-btn" onclick={historyLayer.answer(onsecondary)}
-					>{secondaryLabel}</button
-				>
+				<button class="secondary-btn" onclick={historyLayer.answer(onsecondary)}>
+					{secondaryLabel}
+				</button>
 			{/if}
-			<button class="confirm-btn" class:destructive onclick={historyLayer.answer(onconfirm)}
-				>{confirmLabel}</button
-			>
+			<button class="confirm-btn" class:destructive onclick={historyLayer.answer(onconfirm)}>
+				{confirmLabel}
+			</button>
 		</div>
 	</div>
 </div>

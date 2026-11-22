@@ -382,9 +382,9 @@
 						{/if}
 						<div class="card-row">
 							<span class="row-label">{pageText('workerPool.queueLabel')}</span>
-							<span class="row-value"
-								>{pageText('workerPool.queueJobs', worker.state.queue_depth)}</span
-							>
+							<span class="row-value">
+								{pageText('workerPool.queueJobs', worker.state.queue_depth)}
+							</span>
 						</div>
 					{:else}
 						<div class="card-row">
@@ -443,12 +443,14 @@
 							: null}
 						<div class="last-error">
 							<div class="last-error-heading">
-								<strong><span aria-hidden="true">✕</span> {pageText('workerPool.lastError')}</strong
-								>
+								<strong>
+									<span aria-hidden="true">✕</span>
+									{pageText('workerPool.lastError')}
+								</strong>
 								{#if errorAt && !Number.isNaN(errorAt.getTime())}
-									<time datetime={worker.state.last_error_at ?? undefined}
-										>{localClockTime(errorAt)} · {formatLastSeen(worker.state.last_error_at)}</time
-									>
+									<time datetime={worker.state.last_error_at ?? undefined}>
+										{localClockTime(errorAt)} · {formatLastSeen(worker.state.last_error_at)}
+									</time>
 								{/if}
 							</div>
 							<p class="error-text">{worker.state.last_error}</p>
@@ -489,17 +491,19 @@
 							<strong>{title}</strong>
 							<p>{pageText('workerPool.restartWarning')}</p>
 							<div class="confirmation-actions">
-								<button class="action-btn" onclick={current.layer.answer(closeConfirmation)}
-									>{pageText('workerPool.cancel')}</button
-								>
+								<button class="action-btn" onclick={current.layer.answer(closeConfirmation)}>
+									{pageText('workerPool.cancel')}
+								</button>
 								<button
 									class="action-btn danger"
 									disabled={!canRestart(worker)}
 									onclick={current.layer.answer(() => {
 										closeConfirmation();
 										void handleRestart(worker.identity.id);
-									})}>{pageText('workerPool.restartConfirm')}</button
+									})}
 								>
+									{pageText('workerPool.restartConfirm')}
+								</button>
 							</div>
 						</div>
 					{/if}

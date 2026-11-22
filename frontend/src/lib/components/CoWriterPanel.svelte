@@ -891,8 +891,9 @@
 			class="tool-target"
 			class:foreign={target.foreign}
 			title={target.foreign ? pageText('cowriter.toolForeignTarget') : undefined}
-			>{pageText('cowriter.toolTarget', { title: target.title })}</span
 		>
+			{pageText('cowriter.toolTarget', { title: target.title })}
+		</span>
 	{/if}
 {/snippet}
 
@@ -922,8 +923,9 @@
 					<button
 						class="mention-remove"
 						onclick={() => (mentionedSongIds = mentionedSongIds.filter((id) => id !== song.id))}
-						>&#x2715;</button
 					>
+						&#x2715;
+					</button>
 				</span>
 			{/each}
 			{#each mentionedVersions as version (version.id)}
@@ -933,8 +935,9 @@
 						class="mention-remove"
 						onclick={() =>
 							(mentionedVersionIds = mentionedVersionIds.filter((id) => id !== version.id))}
-						>&#x2715;</button
 					>
+						&#x2715;
+					</button>
 				</span>
 			{/each}
 		</div>
@@ -983,8 +986,9 @@
 						class="convo-new"
 						data-hitbox="text"
 						onclick={() => chooseFromConversationMenu(startNew)}
-						>{pageText('cowriter.newConversation')}</button
 					>
+						{pageText('cowriter.newConversation')}
+					</button>
 					<button
 						type="button"
 						role="menuitem"
@@ -993,10 +997,11 @@
 							memoryProposalWaiting ? 'cowriter.memoryWaiting' : 'cowriter.memory'
 						)}
 						onclick={() => chooseFromConversationMenu(openMemory)}
-						>{pageText(
-							'cowriter.memory'
-						)}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>
+						{pageText(
+							'cowriter.memory'
+						)}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}
+					</button>
 					{#each menuConversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
 							<button
@@ -1014,8 +1019,10 @@
 								class="conv-del"
 								data-hitbox="frequent"
 								onclick={() => chooseFromConversationMenu(() => askToDelete(conv))}
-								aria-label={pageText('cowriter.deleteConversation')}>&#x2715;</button
+								aria-label={pageText('cowriter.deleteConversation')}
 							>
+								&#x2715;
+							</button>
 						</div>
 					{/each}
 				</div>
