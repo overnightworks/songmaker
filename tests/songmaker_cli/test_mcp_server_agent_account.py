@@ -11,16 +11,15 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import sessionmaker
 from support.mcp_world import (
-    AGENT_GROUP,
     AGENT_SUBJECT,
     McpWorld,
     agent_claims,
     build_mcp_world,
 )
+from support.realm import ADMIN_GROUP, AGENT_GROUP, LOGIN_GROUP, MCP_GROUP
 from support.token_world import TokenWorld
 from webauth.ports import AccountKind
 
-from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
 from songmaker_cli.db.models import AuditLog, User
 
 
@@ -51,7 +50,7 @@ def test_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
 
     world.world.seed_take(TokenWorld.ALICE, "alices")
     world.world.seed_take(TokenWorld.BOB, "bobs")
-    groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP, AGENT_GROUP)
+    groups = (LOGIN_GROUP, ADMIN_GROUP, MCP_GROUP, AGENT_GROUP)
 
     songs = world.call("list_songs", **agent_claims(username="alice", groups=groups))
     others = world.call("get_song", {"song_id": "song-bobs"},
@@ -100,6 +99,6 @@ def test_an_agent_token_with_bad_agent_claims_is_refused_and_creates_no_account(
 
 
 def test_agent_claims_outside_the_agent_group_keep_a_person_account_a_person(mcp: McpWorld) -> None:
-    mcp.call("list_albums", {}, **agent_claims(groups=(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP)))
+    mcp.call("list_albums", {}, **agent_claims(groups=(LOGIN_GROUP, MCP_GROUP)))
 
     assert _account_kinds(mcp)[TokenWorld.ALICE] == AccountKind.PERSON

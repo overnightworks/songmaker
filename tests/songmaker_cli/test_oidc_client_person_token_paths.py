@@ -19,11 +19,12 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 from starlette.requests import ClientDisconnect
 from starlette.types import ASGIApp
+from support.realm import ADMIN_GROUP, LOGIN_GROUP
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, make_test_app, refusal_body, seed_session, seed_user
 
 from songmaker_cli.auth_stores import DatabaseAuditSink
-from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LEEWAY_SECONDS, OIDC_LOGIN_GROUP
+from songmaker_cli.constants import OIDC_LEEWAY_SECONDS
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
@@ -116,7 +117,7 @@ def test_t7_an_admin_route_needs_the_admin_group(token_world: TokenWorld) -> Non
     refused = token_world.client.get("/api/admin/voices", headers=token_world.bearer())
     admitted = token_world.client.get(
         "/api/admin/voices",
-        headers=token_world.bearer(TokenWorld.BOB, groups=(OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP)),
+        headers=token_world.bearer(TokenWorld.BOB, groups=(LOGIN_GROUP, ADMIN_GROUP)),
     )
 
     assert (refused.status_code, refused.json()) == (403, {"detail": "Admin access required"})
@@ -315,8 +316,8 @@ def test_t26_a_preflight_keeps_authorization_out_of_the_allowed_headers(
 @pytest.mark.parametrize(
     ("before", "groups", "after"),
     [
-        pytest.param("user", (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP), "admin", id="promoted"),
-        pytest.param("admin", (OIDC_LOGIN_GROUP,), "user", id="demoted"),
+        pytest.param("user", (LOGIN_GROUP, ADMIN_GROUP), "admin", id="promoted"),
+        pytest.param("admin", (LOGIN_GROUP,), "user", id="demoted"),
     ],
 )
 def test_t16_the_groups_of_a_token_rewrite_the_stored_role_and_audit_it(

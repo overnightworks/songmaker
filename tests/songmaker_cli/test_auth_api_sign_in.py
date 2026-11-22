@@ -17,6 +17,7 @@ from httpx import Response
 from support.fake_oidc_issuer import Person
 from support.oidc_client import TEST_CLIENT_SECRET
 from support.oidc_world import World
+from support.realm import REALM_ENVIRONMENT
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client
 
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
@@ -557,7 +558,7 @@ def test_an_unusable_secret_file_stops_the_web_app_and_names_only_its_path(
 
 
 @pytest.mark.parametrize(
-    "missing", ["OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE", "PUBLIC_BASE_URL"],
+    "missing", ["OIDC_ISSUER", "REALM_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE", "PUBLIC_BASE_URL"],
 )
 def test_a_missing_sign_in_setting_stops_the_web_app_but_not_the_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str, pg_factory, fresh_settings,
@@ -574,7 +575,7 @@ def test_a_missing_sign_in_setting_stops_the_web_app_but_not_the_settings(
 def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secret_file(
     monkeypatch: pytest.MonkeyPatch, fresh_settings,
 ) -> None:
-    for variable in ("OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE"):
+    for variable in ("OIDC_ISSUER", *REALM_ENVIRONMENT, "OIDC_CLIENT_SECRET_FILE"):
         monkeypatch.delenv(variable)
     # Both entry modules read the settings when they are first imported.
     from songmaker_cli.music_worker import MusicWorker
@@ -585,9 +586,7 @@ def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secre
     get_settings.cache_clear()
     settings = get_settings()
 
-    assert (
-        settings.oidc_issuer, settings.oidc_client_id, settings.oidc_client_secret_file,
-    ) == (None, None, None)
+    assert (settings.oidc_issuer, settings.oidc_client_secret_file) == (None, None)
     assert build_arq_redis_settings(settings.redis_url) is not None
     assert MusicWorker(settings).queue_name
     assert ScoringWorker(settings).queue_name
@@ -710,9 +709,9 @@ def test_only_the_configured_hosts_are_served(
 
 def test_the_realm_endpoints_are_derived_from_the_issuer() -> None:
     from songmaker_cli.oidc_client import build_oidc_client_config
-    from songmaker_cli.settings import get_settings
+    from songmaker_cli.settings import RealmSettings, get_settings
 
-    config = build_oidc_client_config(get_settings())
+    config = build_oidc_client_config(get_settings(), RealmSettings())
 
     realm = "https://issuer.test/realms/test/protocol/openid-connect"
     assert (config.authorization_endpoint, config.token_endpoint, config.jwks_url) == (

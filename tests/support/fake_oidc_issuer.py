@@ -23,7 +23,7 @@ from webauth.oidc import (
 )
 from webauth.web_auth import IssuerCalls
 
-from songmaker_cli.settings import get_settings
+from songmaker_cli.settings import RealmSettings, get_settings
 
 KEY_ID = "test-key"
 RSA_PUBLIC_EXPONENT = 65537
@@ -198,7 +198,7 @@ class IssuerSlot:
 
 def a_fake_issuer() -> FakeIssuer:
     settings = get_settings()
-    assert settings.oidc_issuer and settings.oidc_client_id
-    return FakeIssuer(settings.oidc_issuer, settings.oidc_client_id)
+    assert settings.oidc_issuer
+    return FakeIssuer(settings.oidc_issuer, RealmSettings().client_id)
 
 
