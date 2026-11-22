@@ -12,6 +12,8 @@
 		meta?: string;
 		/** Whether the take is the one picked for its song. */
 		picked?: boolean;
+		/** Whether the song has takes and none of them is its Pick: an amber badge follows the title. */
+		noPick?: boolean;
 		/** Whether the transport holds this song: the box turns violet and carries the playing mark. */
 		current: boolean;
 		/** What a tap anywhere on the box does. */
@@ -22,7 +24,17 @@
 		menu?: Snippet;
 	}
 
-	let { title, detail, meta, picked = false, current, onclick, onedit, menu }: Props = $props();
+	let {
+		title,
+		detail,
+		meta,
+		picked = false,
+		noPick = false,
+		current,
+		onclick,
+		onedit,
+		menu
+	}: Props = $props();
 
 	const controlCount = $derived(Number(Boolean(onedit)) + Number(Boolean(menu)));
 </script>
@@ -34,9 +46,12 @@
 	<button type="button" class="song-row-body" data-hitbox="text" {onclick}>
 		<PlayingMark {current} />
 		<span class="song-row-text">
-			<span class="song-row-title">
-				{#if picked}<span class="picked-star">★</span>{/if}
-				{title}
+			<span class="song-row-heading">
+				<span class="song-row-title">
+					{#if picked}<span class="picked-star">★</span>{/if}
+					{title}
+				</span>
+				{#if noPick}<span class="no-pick-badge">{pageText('songRow.noPick')}</span>{/if}
 			</span>
 			{#if detail}<span class="song-row-detail">{detail}</span>{/if}
 		</span>
@@ -134,13 +149,33 @@
 		gap: 2px;
 	}
 
-	.song-row-title {
+	.song-row-heading {
 		max-width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.song-row-title {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: 1rem;
 		line-height: var(--song-row-line-height);
+	}
+
+	.no-pick-badge {
+		flex-shrink: 0;
+		padding: 0 0.5rem;
+		border: 1px solid var(--warn-line);
+		border-radius: 999px;
+		background: var(--warn-bg);
+		color: var(--warn-ink);
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1.1rem;
+		white-space: nowrap;
 	}
 
 	.picked-star {

@@ -7,6 +7,7 @@
 	import PlaylistCover from './PlaylistCover.svelte';
 	import type { CoverMark } from './CoverActivityMark.svelte';
 	import { pageText } from '#lib/utils/page-words.ts';
+	import { PLACE_LINE_SEPARATOR } from '#lib/constants/album.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import type { TextKey } from '#lib/utils/page-words.ts';
 	import { collectionTransport, toggleOrStartCollection, setShuffle } from '#lib/stores/player.ts';
@@ -41,6 +42,8 @@
 		playlistCover?: AlbumCoverUrls | null;
 		/** Album-only: the subtitle and year line read under the title, empty when neither is set. */
 		meta?: string;
+		/** Album-only: how many songs have takes and no Pick; unset until the album's songs are loaded, and nothing shows for none. */
+		withoutPickCount?: number;
 		/**
 		 * Album-only: edits the details -- title, subtitle and year -- in place of
 		 * the title, opened from the menu's Edit details and ended through the
@@ -80,6 +83,7 @@
 		playlistCovers,
 		playlistCover,
 		meta = '',
+		withoutPickCount,
 		detailsEditor,
 		coverEditor,
 		coverMark
@@ -195,7 +199,14 @@
 		</h2>
 		{#if meta}<p class="header-meta">{meta}</p>{/if}
 	{/if}
-	<p class="header-count">{pageText('collectionHeader.songCount', songCount)}</p>
+	<p class="header-count">
+		{pageText(
+			'collectionHeader.songCount',
+			songCount
+		)}{#if withoutPickCount}{PLACE_LINE_SEPARATOR}<span class="header-without-pick"
+				>{pageText('collectionHeader.withoutPick', { count: withoutPickCount })}</span
+			>{/if}
+	</p>
 {/snippet}
 
 {#snippet actions()}
@@ -258,6 +269,11 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.header-without-pick {
+		color: var(--warn-ink);
+		font-weight: 600;
 	}
 
 	.header-meta,

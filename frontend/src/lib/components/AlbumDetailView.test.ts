@@ -541,6 +541,7 @@ describe('AlbumDetailView song row', () => {
 				album_title: 'Night Drive',
 				title: 'Tide',
 				generations: [generation({ song_id: 's-tide' })],
+				has_pick: true,
 				generation_count: 2
 			}),
 			song({
