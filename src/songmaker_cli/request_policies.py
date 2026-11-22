@@ -133,6 +133,7 @@ LORA_SAMPLE_ROUTE: Final = re.compile(r"^/api/loras/[^/]+/samples\Z")
 SONG_COVER_ROUTE: Final = re.compile(r"^/api/songs/[^/]+/cover\Z")
 ALBUM_COVER_ROUTE: Final = re.compile(r"^/api/albums/[^/]+/cover\Z")
 PLAYLIST_COVER_ROUTE: Final = re.compile(r"^/api/playlists/[^/]+/cover\Z")
+SONG_COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 ALBUM_COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 PLAYLIST_COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"PUT"})
 
@@ -205,6 +206,7 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
             BodySizeRule(
                 paths=PathRules(patterns=(SONG_COVER_ROUTE,)),
                 max_bytes=settings.max_cover_upload_body_bytes,
+                methods=SONG_COVER_UPLOAD_METHODS,
             ),
             BodySizeRule(
                 paths=PathRules(patterns=(ALBUM_COVER_ROUTE,)),
