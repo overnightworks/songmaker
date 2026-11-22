@@ -57,6 +57,7 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **album_rule_8** The grown cover keeps its place and shows a turning ring and the time since the server started the run, Making a cover · 0:42; no percentage, because the image call has none. The time comes from the job’s start, so it is right after coming back and on a second device.
 - **album_rule_9** The cover carries a quiet strip at its foot: a small turning ring and the time, 0:58. It counts every unused suggestion, from the server, the same on every device (“● 3 waiting”). The mark stays until USE, Upload or × discards the unused ones; opening and closing the editor does not remove it.
 - **album_rule_10** Rows carry no play glyph — the row is the target, the playing row shows the equalizer.
+- **album_rule_11** An album song row with at least one take and no Pick carries an amber No Pick badge after its title; a song without takes carries none. Once the album’s songs are loaded, the header line reads “n songs · k without a Pick” (k in amber; no k part when none lacks a Pick). Share pages show neither. *e.g. Lantern Song has 3 takes and no Pick: “Lantern Song [No Pick]”, and the header reads “9 songs · 2 without a Pick”. Not: a badge on Low Tide, which has no takes.*
 
 ## Create, account and settings
 
