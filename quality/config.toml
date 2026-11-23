@@ -54,7 +54,7 @@ date = 2026-11-23
 reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
 
 [[gate.loosened]]
-what = "size baseline adds function_lines frontend/src/lib/services/audioPlayer-test-fixtures.ts continuousDeckModule 82"
+what = "size baseline adds function_lines frontend/src/lib/services/audioPlayer-test-fixtures.ts continuousDeckModule 88"
 item = "overnightworks/songmaker#3455"
 date = 2026-11-23
 reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"

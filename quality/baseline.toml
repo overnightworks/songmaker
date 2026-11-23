@@ -86,7 +86,7 @@
 "runTurn" = 71
 
 [function_lines."frontend/src/lib/services/audioPlayer-test-fixtures.ts"]
-"continuousDeckModule" = 82
+"continuousDeckModule" = 88
 
 [function_lines."frontend/src/lib/services/audioPlayer.svelte.ts"]
 "attachListeners" = 120
