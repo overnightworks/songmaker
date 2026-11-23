@@ -43,10 +43,26 @@ def session(pg_factory):
 
 
 @pytest.fixture
-def production_factory(postgresql_url: str):
-    factory = connect_db(postgresql_url)
-    yield factory
-    factory.kw["bind"].dispose()
+def production_factory_on(postgresql_url):
+    """Builds session factories through the production engine setup.
+
+    Every engine is disposed before the database's reset.
+    """
+    built = []
+
+    def build(url):
+        factory = connect_db(url)
+        built.append(factory)
+        return factory
+
+    yield build
+    for factory in built:
+        factory.kw["bind"].dispose()
+
+
+@pytest.fixture
+def production_factory(production_factory_on, postgresql_url):
+    return production_factory_on(postgresql_url)
 
 
 @pytest.fixture
@@ -489,10 +505,8 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
 
 
 @pytest.fixture
-def unreachable_factory(postgresql_url, refused_port):
-    factory = connect_db(postgresql_url.set(host="127.0.0.1", port=refused_port))
-    yield factory
-    factory.kw["bind"].dispose()
+def unreachable_factory(production_factory_on, postgresql_url, refused_port):
+    return production_factory_on(postgresql_url.set(host="127.0.0.1", port=refused_port))
 
 
 def _load_in_the_session_transaction(factory) -> None:
