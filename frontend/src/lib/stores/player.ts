@@ -464,7 +464,7 @@ function playNativeAlbumTakes(
 function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index: number): void {
 	const takes = ctx.takes;
 	if (!takes || index < 0 || index >= takes.length) return;
-	if (ctx.type === 'song' && songQueueTakeIsGone(ctx, takes[index])) return;
+	if (ctx.type === 'song' && songQueueTakeIsGone(ctx, takes[index], get(songList))) return;
 	queueContext.set({ ...ctx, index });
 	loadNativeTake(takes[index]);
 }

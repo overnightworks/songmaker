@@ -83,7 +83,11 @@ describe('buildQueueViewModel', () => {
 			makeSong({ ...queuedSongDefaults(), id: 's2' })
 		);
 
-		const vm = buildQueueViewModel({ type: 'library', takes: [first, second], index: 1 }, null);
+		const vm = buildQueueViewModel(
+			{ type: 'library', takes: [first, second], index: 1 },
+			null,
+			get(songList)
+		);
 
 		expect(vm.currentIndex).toBe(1);
 		expect(vm.upNext?.generationId).toBe('g1');
@@ -92,7 +96,8 @@ describe('buildQueueViewModel', () => {
 	it('classic-mode contexts without takes render current only, with no up next', () => {
 		const vm = buildQueueViewModel(
 			{ type: 'library' },
-			makePlayback(makeGen(genDefaults), makeSong(queuedSongDefaults()))
+			makePlayback(makeGen(genDefaults), makeSong(queuedSongDefaults())),
+			get(songList)
 		);
 		expect(vm.items).toEqual([]);
 		expect(vm.currentIndex).toBe(-1);
@@ -108,7 +113,7 @@ describe('buildQueueViewModel', () => {
 		const next = makePlayback(makeGen({ ...genDefaults, id: 'g2' }), songs[1]);
 		const ctx = { type: 'library' as const, takes: [current, next], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, current);
+		const vm = buildQueueViewModel(ctx, current, get(songList));
 
 		expect(vm.items.map((item) => item.generationId)).toEqual(['g1', 'g2']);
 		expect(vm.items[0]?.durationSec).toBe(200);
@@ -125,7 +130,7 @@ describe('buildQueueViewModel', () => {
 		const unmeasured = makePlayback(makeGen({ ...genDefaults, id: 'g2' }), song);
 		const ctx = { type: 'library' as const, takes: [ownDuration, unmeasured], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, ownDuration);
+		const vm = buildQueueViewModel(ctx, ownDuration, get(songList));
 
 		expect(vm.items.map((item) => item.durationSec)).toEqual([141, null]);
 	});
@@ -142,7 +147,7 @@ describe('buildQueueViewModel', () => {
 		);
 		const ctx = { type: 'library' as const, takes: [requestedAuto], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, requestedAuto);
+		const vm = buildQueueViewModel(ctx, requestedAuto, get(songList));
 
 		expect(vm.items.map((item) => item.durationSec)).toEqual([188]);
 	});
@@ -159,7 +164,7 @@ describe('buildQueueViewModel', () => {
 		];
 		const ctx = playlistQueue(entries, 0);
 
-		const vm = buildQueueViewModel(ctx, null);
+		const vm = buildQueueViewModel(ctx, null, get(songList));
 
 		expect(vm.items.map((item) => item.durationSec)).toEqual([141, null]);
 	});
@@ -172,7 +177,7 @@ describe('buildQueueViewModel', () => {
 		);
 		const ctx = { type: 'library' as const, takes: [current], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, current);
+		const vm = buildQueueViewModel(ctx, current, get(songList));
 
 		expect(vm.items[0]).toEqual(
 			expect.objectContaining({ versionNumber: null, generationNumber: 5 })
@@ -184,7 +189,7 @@ describe('buildQueueViewModel', () => {
 		const current = makePlayback(makeGen(genDefaults), song);
 		const ctx = { type: 'library' as const, takes: [current], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, current);
+		const vm = buildQueueViewModel(ctx, current, get(songList));
 
 		expect(vm.upNext).toBeNull();
 	});
@@ -206,7 +211,7 @@ describe('buildQueueViewModel', () => {
 		];
 		const ctx = playlistQueue(entries, 0);
 
-		const vm = buildQueueViewModel(ctx, null);
+		const vm = buildQueueViewModel(ctx, null, get(songList));
 
 		expect(vm.currentIndex).toBe(0);
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 4, generationNumber: 1 }));
@@ -258,7 +263,7 @@ describe('songTakeQueue', () => {
 		const next = adjacentQueueTake(queue, queue.takes[queue.index]);
 
 		expect(next.kind === 'take' && next.take.generation.id).toBe('g-v3a');
-		expect(buildQueueViewModel(queue, null).again).toBe(song.title);
+		expect(buildQueueViewModel(queue, null, get(songList)).again).toBe(song.title);
 	});
 
 	it('names no start over for a queue with no other take to wrap to', () => {
@@ -266,7 +271,7 @@ describe('songTakeQueue', () => {
 		const queue = songTakeQueue(lone, 'g-v3a');
 		if (!queue) throw new Error('Expected a queue');
 
-		expect(buildQueueViewModel(queue, null).again).toBeUndefined();
+		expect(buildQueueViewModel(queue, null, get(songList)).again).toBeUndefined();
 	});
 
 	it('names no start over once the only other take is archived in the song list', () => {
@@ -286,7 +291,7 @@ describe('songTakeQueue', () => {
 			}
 		]);
 
-		expect(buildQueueViewModel(queue, null).again).toBeUndefined();
+		expect(buildQueueViewModel(queue, null, get(songList)).again).toBeUndefined();
 	});
 
 	it.each(['g-archived', 'g-absent'])('is nothing for the unplayable or absent take %s', (id) => {

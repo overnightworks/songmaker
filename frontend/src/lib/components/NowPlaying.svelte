@@ -87,10 +87,7 @@
 	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
 	// The again line follows which takes of a song queue can still play, which
 	// songs decides.
-	const queueVm = $derived.by(() => {
-		void songs;
-		return buildQueueViewModel(ctx, audioPlayer.current);
-	});
+	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current, songs));
 	const source: NowPlayingSource | null = $derived.by(() => {
 		const playing = $playbackSource;
 		return playing ? { ...playing, open: () => leaveFor(() => openSource(playing)) } : null;

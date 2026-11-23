@@ -234,8 +234,12 @@ export function songTakeQueue(song: SongItem, startGenerationId: string): SongQu
 // A take of a song queue that was archived, lost its audio or was deleted since
 // the queue was built is skipped when its turn comes, never replaced
 // (REQ-LISTENING-06, REQ-LIBRARY-07).
-export function songQueueTakeIsGone(ctx: SongQueue, take: PlaybackInfo): boolean {
-	const song = get(songList).find((item) => item.id === ctx.songId);
+export function songQueueTakeIsGone(
+	ctx: SongQueue,
+	take: PlaybackInfo,
+	songs: SongItem[]
+): boolean {
+	const song = songs.find((item) => item.id === ctx.songId);
 	if (!song || !songTakesLoaded(song)) return false;
 	const live = song.generations.find((gen) => gen.id === take.generation.id);
 	return live === undefined || !isPlayableTake(live);
@@ -244,8 +248,8 @@ export function songQueueTakeIsGone(ctx: SongQueue, take: PlaybackInfo): boolean
 // The line after the last row promises a start over, which only a queue with
 // at least two takes that can still play keeps: a lone one has no other to
 // start over with.
-function songQueueWraps(ctx: SongQueue): boolean {
-	return ctx.takes.filter((take) => queueTakeCanPlay(ctx, take)).length >= 2;
+function songQueueWraps(ctx: SongQueue, songs: SongItem[]): boolean {
+	return ctx.takes.filter((take) => queueTakeCanPlay(ctx, take, songs)).length >= 2;
 }
 
 export function albumQueueTake(song: SongItem, gen: GenerationItem): PlaybackInfo {
@@ -312,8 +316,8 @@ export function adjacentQueueTake(
 	);
 }
 
-function queueTakeCanPlay(ctx: QueueContext, take: PlaybackInfo): boolean {
-	return !ctx.skipped?.has(take) && !(ctx.type === 'song' && songQueueTakeIsGone(ctx, take));
+function queueTakeCanPlay(ctx: QueueContext, take: PlaybackInfo, songs: SongItem[]): boolean {
+	return !ctx.skipped?.has(take) && !(ctx.type === 'song' && songQueueTakeIsGone(ctx, take, songs));
 }
 
 interface QueuePlace {
@@ -329,11 +333,12 @@ function firstPlayableInDirection(
 	direction: QueueDirection
 ): NextQueueTake {
 	const windowEnd: NextQueueTake = place.endsWithItsWindow ? { kind: 'window-end' } : NO_NEXT_TAKE;
+	const songs = get(songList);
 	for (let step = 1; step < place.length; step++) {
 		if (place.endsWithItsWindow && place.index + step === place.length) return windowEnd;
 		const index = (place.index + direction * step + place.length) % place.length;
 		const take = place.takeAt(index);
-		if (queueTakeCanPlay(ctx, take)) return { kind: 'take', index, take };
+		if (queueTakeCanPlay(ctx, take, songs)) return { kind: 'take', index, take };
 	}
 	return windowEnd;
 }
@@ -427,7 +432,8 @@ function playlistQueueItem(entry: PlaylistEntryItem): QueueRowItem {
 // title/duration still come from the caller's own `PlaybackInfo` prop.
 export function buildQueueViewModel(
 	ctx: QueueContext,
-	current: PlaybackInfo | null
+	current: PlaybackInfo | null,
+	songs: SongItem[]
 ): QueueViewModel {
 	if (ctx.type === 'playlist') {
 		const items = ctx.entries.map((entry) => playlistQueueItem(entry));
@@ -440,5 +446,7 @@ export function buildQueueViewModel(
 	const items = ctx.takes.map((take) => nativeQueueItem(take));
 	const currentIndex = nativeTakeIndex(ctx, current);
 	const queue = { items, currentIndex, upNext: upNextItem(items, ctx, current) };
-	return ctx.type === 'song' && songQueueWraps(ctx) ? { ...queue, again: ctx.songTitle } : queue;
+	return ctx.type === 'song' && songQueueWraps(ctx, songs)
+		? { ...queue, again: ctx.songTitle }
+		: queue;
 }

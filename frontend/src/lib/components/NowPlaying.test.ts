@@ -28,7 +28,7 @@ import {
 	shuffleEnabled,
 	shuffleLabel
 } from '#lib/stores/player.ts';
-import { curationActive, queueContext } from '#lib/stores/queue.ts';
+import { curationActive, queueContext, songTakeQueue } from '#lib/stores/queue.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { setLibraryTakePool } from '#lib/stores/playbackSettings.ts';
 import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
@@ -75,6 +75,7 @@ import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 import NowPlaying from './NowPlaying.svelte';
 import { queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { words } from '#lib/words/en.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 function playingSongDefaults(): Partial<SongItem> {
 	return {
@@ -370,6 +371,37 @@ describe('NowPlaying', () => {
 			const ctx = get(queueContext);
 			expect(ctx.type === 'playlist' && ctx.index).toBe(1);
 		});
+	});
+
+	it('drops the start-over line of a song queue once the song list archives its other take', async () => {
+		const playing = song({
+			...playingSongDefaults(),
+			generation_count: 2,
+			generations: [
+				generation({ id: 'g1', mp3_path: 'a.mp3' }),
+				generation({ id: 'g2', generation_number: 1, mp3_path: 'b.mp3' })
+			]
+		});
+		songList.set([playing]);
+		const queue = songTakeQueue(playing, 'g1');
+		if (!queue) throw new Error('Expected a song queue');
+		queueContext.set(queue);
+		await renderSurface(info());
+		expect(target.querySelector('.queue-again')?.textContent).toBe(
+			pageText('nowPlaying.queueAgain', { title: 'Tide' })
+		);
+
+		songList.set([
+			{
+				...playing,
+				generations: playing.generations.map((gen) =>
+					gen.id === 'g2' ? { ...gen, is_archived: true } : gen
+				)
+			}
+		]);
+		await tick();
+
+		expect(target.querySelector('.queue-again')).toBeNull();
 	});
 
 	it('toggles shuffle from the overlay, scoped to the current queue', async () => {
