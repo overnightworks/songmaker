@@ -82,11 +82,8 @@ def test_init_db_connects_as_a_role_with_a_kept_apart_password(empty_postgresql_
     password = "p%a@s/s:w ord"
     admin = create_engine(empty_postgresql_url)
     with admin.begin() as connection:
-        role = text(
-            "SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', "
-            "CAST(:name AS text), CAST(:password AS text))"
-        )
-        statement = connection.execute(role, {"name": name, "password": password}).scalar_one()
+        role = text(f"SELECT format('CREATE ROLE {name} LOGIN PASSWORD %L', CAST(:secret AS text))")
+        statement = connection.execute(role, {"secret": password}).scalar_one()
         # text() reads ":" as a bind marker, so the password's colon is escaped.
         connection.execute(text(statement.replace(":", r"\:")))
         connection.execute(text(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"'))
