@@ -110,13 +110,26 @@ export function savedPlayback(): SavedPlayback | null {
 	return saved;
 }
 
-// A record another tab has since written for another take is not this
-// restore's to drop.
-function forgetSavedPlayback(gone: SavedPlayback): void {
-	const userId = signedInUserId();
-	if (userId === null) return;
+// The entries are sorted, so the order a record wrote the fields in is no
+// difference.
+function sameQueueSource(a: ResumeQueueSource, b: ResumeQueueSource): boolean {
+	const entriesOf = (source: ResumeQueueSource) => JSON.stringify(Object.entries(source).sort());
+	return entriesOf(a) === entriesOf(b);
+}
+
+// A record that another tab has written since, for another take or from
+// another queue, or one of another user, is not this restore's to drop. Only
+// the position may differ: it moves on while the record still names the
+// same gone thing.
+function forgetSavedPlayback(userId: string | null, gone: SavedPlayback): void {
+	if (userId === null || signedInUserId() !== userId) return;
 	const stored = parseSavedPlayback(readStorage(storageKey(userId)));
-	if (stored?.songId === gone.songId && stored.generationId === gone.generationId) {
+	if (
+		stored !== null &&
+		stored.songId === gone.songId &&
+		stored.generationId === gone.generationId &&
+		sameQueueSource(stored.source, gone.source)
+	) {
 		retireCurrentPlaybackResume(userId);
 	}
 }
@@ -125,11 +138,15 @@ function forgetSavedPlayback(gone: SavedPlayback): void {
 // answer refusing the request, is no take to restore. A 404 means the record
 // names something gone, so the record goes with it and later page loads do
 // not ask again; any other failure keeps it for the next load.
-async function quietly<T>(saved: SavedPlayback, request: () => Promise<T>): Promise<T | null> {
+async function quietly<T>(
+	userId: string | null,
+	saved: SavedPlayback,
+	request: () => Promise<T>
+): Promise<T | null> {
 	try {
 		return await request();
 	} catch (err) {
-		if (err instanceof ApiError && err.status === 404) forgetSavedPlayback(saved);
+		if (err instanceof ApiError && err.status === 404) forgetSavedPlayback(userId, saved);
 		if (err instanceof ApiError || err instanceof NetworkError) return null;
 		throw err;
 	}
@@ -144,11 +161,12 @@ async function quietly<T>(saved: SavedPlayback, request: () => Promise<T>): Prom
 export async function loadSavedTake(
 	saved: SavedPlayback
 ): Promise<{ song: SongItem; take: GenerationItem } | null> {
-	const song = await quietly(saved, () => fetchSong(saved.songId));
+	const userId = signedInUserId();
+	const song = await quietly(userId, saved, () => fetchSong(saved.songId));
 	if (song === null) return null;
 	const take = song.generations.find((gen) => gen.id === saved.generationId && isPlayableTake(gen));
 	if (take === undefined) {
-		forgetSavedPlayback(saved);
+		forgetSavedPlayback(userId, saved);
 		return null;
 	}
 	return { song, take };
@@ -159,7 +177,7 @@ export function loadSavedPlaylist(
 	saved: SavedPlayback,
 	playlistId: string
 ): Promise<PlaylistDetailItem | null> {
-	return quietly(saved, () => fetchPlaylist(playlistId));
+	return quietly(signedInUserId(), saved, () => fetchPlaylist(playlistId));
 }
 
 interface PlaybackToFollow {

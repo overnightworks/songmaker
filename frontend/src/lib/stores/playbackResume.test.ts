@@ -414,8 +414,14 @@ describe('playback resume record', () => {
 	});
 
 	describe('loading the saved take for a restore', () => {
-		function saveWholeRecord(): SavedPlayback {
-			localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(WHOLE_RECORD));
+		const PLAYLIST_RECORD = {
+			...WHOLE_RECORD,
+			source: { type: 'playlist', playlistId: 'b3a4c5d6-1e2f-4a3b-8c4d-5e6f7a8b9c0d' }
+		} as const;
+		const OTHER_PLAYLIST = 'c4b5d6e7-2f30-4b4c-9d5e-6f708192a3b4';
+
+		function saveWholeRecord(record: object = WHOLE_RECORD): SavedPlayback {
+			localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(record));
 			const saved = savedPlayback();
 			if (saved === null) throw new Error('the record was not read');
 			return saved;
@@ -481,6 +487,42 @@ describe('playback resume record', () => {
 			await expect(loadSavedPlaylist(saved, 'p-saved')).resolves.toBeNull();
 
 			expect(storedRecord(LISTENER.id)).toBeNull();
+		});
+
+		it.each([
+			{ rewritten: 'from the song queue', record: { source: { type: 'song' } } },
+			{
+				rewritten: 'from another playlist',
+				record: { source: { type: 'playlist', playlistId: OTHER_PLAYLIST } }
+			}
+		])(
+			"keeps a record another tab rewrote for the same take $rewritten while its playlist's 404 was in flight",
+			async ({ record }) => {
+				const saved = saveWholeRecord(PLAYLIST_RECORD);
+				const newerRecord = { ...PLAYLIST_RECORD, ...record };
+				vi.mocked(fetchPlaylist).mockImplementationOnce(() => {
+					localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+					return Promise.reject(new ApiError(404, 'gone', '/x'));
+				});
+
+				await loadSavedPlaylist(saved, PLAYLIST_RECORD.source.playlistId);
+
+				expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
+			}
+		);
+
+		it("keeps the record of a user whose tab another user took over while the playlist's 404 was in flight", async () => {
+			const saved = saveWholeRecord(PLAYLIST_RECORD);
+			vi.mocked(fetchPlaylist).mockImplementationOnce(() => {
+				currentUser.set(OTHER_LISTENER);
+				localStorage.setItem(recordKey(OTHER_LISTENER.id), JSON.stringify(PLAYLIST_RECORD));
+				return Promise.reject(new ApiError(404, 'gone', '/x'));
+			});
+
+			await loadSavedPlaylist(saved, PLAYLIST_RECORD.source.playlistId);
+
+			expect(storedRecord(OTHER_LISTENER.id)).toEqual(PLAYLIST_RECORD);
+			expect(storedRecord(LISTENER.id)).toEqual(PLAYLIST_RECORD);
 		});
 
 		it("keeps a record that names another take than the one found gone, as another tab's save", async () => {
