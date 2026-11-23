@@ -1,5 +1,5 @@
 claim_id = "bbc2b74df6114a8baec47b70981d2b43"
-agent = "Claude 7ce0c534-6bff-4977-9966-67605fc278e8"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
 role = "builder"
 base = "8269655bb6d7416ac513b44e558b9d08754c61da"
 branch = "claude/issue-3427-music-liveness-from-leases"
