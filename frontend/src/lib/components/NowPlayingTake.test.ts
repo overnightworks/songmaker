@@ -264,7 +264,7 @@ describe('NowPlayingTake', () => {
 	it('flips pick through takeActions', async () => {
 		await render({ generation: generation(generationDefaults) });
 		target
-			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlaying.pick']}"]`)
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlayingTake.pick']}"]`)
 			?.click();
 		await tick();
 		expect(setPick).toHaveBeenCalledWith('s1', 'g1', true);
@@ -273,7 +273,7 @@ describe('NowPlayingTake', () => {
 	it('flips keep through takeActions', async () => {
 		await render({ generation: generation({ ...generationDefaults, is_kept: true }) });
 		target
-			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlaying.unkeep']}"]`)
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlayingTake.unkeep']}"]`)
 			?.click();
 		await tick();
 		expect(setKeep).toHaveBeenCalledWith('s1', 'g1', false);

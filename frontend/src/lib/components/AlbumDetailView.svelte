@@ -25,13 +25,7 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '#lib/stores/libraryData.ts';
-	import {
-		curateAlbum,
-		isSongCurrent,
-		playAlbum,
-		playAlbumSong,
-		selectedAlbumId
-	} from '#lib/stores/player.ts';
+	import { isSongCurrent, playAlbum, playAlbumSong, selectedAlbumId } from '#lib/stores/player.ts';
 	import { selectSong } from '#lib/stores/navigation.ts';
 	import { historyLayerState, holdOpenWhile } from '#lib/stores/layers.ts';
 	import { setOpenCollection } from '#lib/stores/collection.ts';
@@ -338,11 +332,6 @@
 		return toastPlaylistAdd(() => addAlbumToPlaylist(playlistId, albumId));
 	}
 
-	function onCurate(): void {
-		if (!currentAlbumId) return;
-		void curateAlbum(currentAlbumId);
-	}
-
 	// Unknown takes go straight to the player, which owns loading and cancellation.
 	// Only a song already known to have nothing to hear opens the editor.
 	function onSongTap(song: SongItem): void {
@@ -372,7 +361,6 @@
 			ondelete={() => (showDeleteConfirm = true)}
 			onarchive={onAlbumArchive}
 			onaddto={(playlistId) => void onAddToPlaylist(playlistId)}
-			oncurate={onCurate}
 			{coverMark}
 		>
 			{#snippet detailsEditor(close: () => void)}

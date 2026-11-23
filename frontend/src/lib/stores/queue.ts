@@ -58,20 +58,8 @@ export const queueContext = writable<QueueContext>({ type: 'library' });
 // queue even where a playlist holds one take twice.
 const playbackInfoOfEntry = new WeakMap<PlaylistEntryItem, PlaybackInfo>();
 
-// Curation mode (issue #228): whether the listener is walking an album's
-// candidate takes one after another via curateAlbum. setQueueContext is the
-// one writer of queueContext and owns turning this off — every fresh queue
-// build clears it (a different album, a take clicked mid-curation that
-// rebuilds a thin context, a playlist) unless the caller opts back in, which
-// only curateAlbum's own write does. A bare index move within the queue
-// that is already playing (Skip's playNextSong, a queue-row jump) never
-// goes through this funnel — see playNativeIndex — so it carries curation
-// forward instead of ending it on every single advance.
-export const curationActive = writable(false);
-
-export function setQueueContext(ctx: QueueContext, opts: { curating?: boolean } = {}): void {
+export function setQueueContext(ctx: QueueContext): void {
 	queueContext.set(ctx);
-	curationActive.set(opts.curating ?? false);
 }
 
 export const libraryQueueSkippedComplete = writable(true);
@@ -348,8 +336,7 @@ function firstPlayableInDirection(
 
 // An album queue plays each song's pick, so a take picked for a song still
 // ahead takes that song's place in the queue. Songs already played keep the
-// take they played, and a move within the queue keeps curation going, as
-// playNativeIndex does. Returns whether the queue changed, so the caller can
+// take they played. Returns whether the queue changed, so the caller can
 // move the preload after it.
 export function followPicksAheadInAlbumQueue(songs: SongItem[]): boolean {
 	const ctx = get(queueContext);

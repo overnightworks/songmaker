@@ -263,14 +263,13 @@ function albumMenuProps() {
 		oncover: vi.fn(),
 		onremovecover: vi.fn(),
 		hasCover: true,
-		oncurate: vi.fn(),
 		onaddto: vi.fn(),
 		onarchive: vi.fn()
 	};
 }
 
 describe('CollectionMenu album rows', () => {
-	it('915_C3: lists exactly Edit details · Cover · Pick album takes · Add to… · Share · Archive · Delete, Delete red and last', async () => {
+	it('915_C3: lists exactly Edit details · Cover · Add to… · Share · Archive · Delete, Delete red and last', async () => {
 		const { target } = await render(albumMenuProps());
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
@@ -278,7 +277,6 @@ describe('CollectionMenu album rows', () => {
 		expect(menuRowLabels(target)).toEqual([
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
-			words['collectionMenu.curate'],
 			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
