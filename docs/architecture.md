@@ -1236,6 +1236,8 @@ flowchart TB
 
 The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A third lists the modules that import the agents library at all, because the contract tool sees the installed package as one node; which submodule each imports is reviewed: only `agent/backend.py` and `agent/mcp.py` import its run and MCP machinery, only `agent/settings.py` its `config`, and the route and tool modules only its `tools`, except `conversation_api.py`, which also imports its `turn`. A new module breaks the contract until it takes a row.
 
+The pure core, the code that runs without a server or a session, imports neither `webauth`, `agents` nor `agent_runtime_client`; the `pure-core-without-sign-in-and-agents` contract lists it: the packages `songmaker_audio_engine`, `songmaker_acestep_engine` and `songmaker_cli.scoring` and the framework-free leaf modules of `songmaker_cli`. Every other part of the app uses the sign-in library directly, and a new leaf module joins the core by joining that list.
+
 ## Data Model
 
 ```
