@@ -879,10 +879,6 @@ msgctxt "collectionMenu.coverHint"
 msgid "upload · suggest"
 msgstr "hochladen · vorschlagen"
 
-msgctxt "collectionMenu.curate"
-msgid "Pick album takes"
-msgstr "Album-Takes auswählen"
-
 msgctxt "collectionMenu.addTo"
 msgid "Add to…"
 msgstr "Hinzufügen zu…"
@@ -5859,38 +5855,6 @@ msgstr "Kein Songtext für diesen Take"
 msgctxt "nowPlaying.importedNoLyrics"
 msgid "Imported take — no lyrics were saved with it."
 msgstr "Importierter Take – mit ihm wurde kein Songtext gespeichert."
-
-msgctxt "nowPlaying.curateGroup"
-msgid "Pick album takes"
-msgstr "Album-Takes auswählen"
-
-msgctxt "nowPlaying.curateProgress"
-msgid "Pick album takes · Song {index} of {total}"
-msgstr "Album-Takes auswählen · Song {index} von {total}"
-
-msgctxt "nowPlaying.pick"
-msgid "Pick"
-msgstr "Fürs Album"
-
-msgctxt "nowPlaying.keep"
-msgid "Keep"
-msgstr "Behalten"
-
-msgctxt "nowPlaying.unkeep"
-msgid "Unkeep"
-msgstr "Nicht behalten"
-
-msgctxt "nowPlaying.skip"
-msgid "Skip"
-msgstr "Überspringen"
-
-msgctxt "nowPlaying.skipName"
-msgid "Skip — Next song"
-msgstr "Überspringen – nächster Song"
-
-msgctxt "nowPlaying.done"
-msgid "Done"
-msgstr "Fertig"
 
 msgctxt "nowPlaying.takePool"
 msgid "Take pool"

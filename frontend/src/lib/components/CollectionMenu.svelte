@@ -33,7 +33,6 @@
 		onremovecover?: () => void;
 		/** Adds the album's songs, or the playlist's entries, to the playlist chosen in the menu. */
 		onaddto?: (playlistId: string) => void;
-		oncurate?: () => void;
 	}
 
 	const kindKeys = {
@@ -65,8 +64,7 @@
 		oncoveredit,
 		hasCover = false,
 		onremovecover,
-		onaddto,
-		oncurate
+		onaddto
 	}: Props = $props();
 
 	const shareToggle = createShareToggle(() => ({
@@ -198,9 +196,6 @@
 						'image',
 						pageText('collectionMenu.coverHint')
 					)}
-				{/if}
-				{#if oncurate}
-					{@render actionRow(pageText('collectionMenu.curate'), oncurate, 'spark')}
 				{/if}
 				{#if onaddto}
 					{@render opensListRow(pageText('collectionMenu.addTo'), 'addTo', 'list-plus')}

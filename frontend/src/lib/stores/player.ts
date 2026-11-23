@@ -67,7 +67,6 @@ import {
 	adjacentQueueTake,
 	albumQueueTake,
 	albumTitle,
-	curationActive,
 	currentPlaylistIndex,
 	followPicksAheadInAlbumQueue,
 	holdsEntryTake,
@@ -452,11 +451,8 @@ function playNativeAlbumTakes(
 	loadNativeTake(takes[index], firstTakeLoad(start));
 }
 
-// Moves the index within the queue that is already playing (Skip and Pick's
-// auto-advance during curation, a queue-row jump, plain Previous/Next) —
-// deliberately bypassing setQueueContext, so an advance never ends curation
-// mode the way building a genuinely different queue does; a queue that
-// wasn't curating stays not-curating either way.
+// Moves the index within the queue that is already playing (a queue-row jump,
+// plain Previous/Next), keeping the queue's own context.
 function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index: number): void {
 	const takes = ctx.takes;
 	if (!takes || index < 0 || index >= takes.length) return;
@@ -895,8 +891,7 @@ async function collectAlbumEntries(
 function setAlbumQueueTakes(
 	albumId: string,
 	entries: PlaylistEntryItem[],
-	startGenerationId: string | undefined,
-	opts: { curating?: boolean } = {}
+	startGenerationId: string | undefined
 ): void {
 	if (entries.length === 0) return;
 	const startIndex = startGenerationId
@@ -912,8 +907,7 @@ function setAlbumQueueTakes(
 			albumId,
 			takes: ordered.items.map(playlistEntryToPlaybackInfo),
 			index: ordered.startIndex
-		},
-		opts
+		}
 	);
 }
 
@@ -1011,7 +1005,6 @@ export function closeNowPlaying(): void {
 	if (surface === 'closed') return;
 	nowPlayingSurface.set('closed');
 	fullSurfaceChosen.set(false);
-	curationActive.set(false);
 	restoreNowPlayingTriggerFocus(surface === 'full');
 }
 
@@ -1314,37 +1307,6 @@ async function gatherAlbumQueueAround(
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	setAlbumQueueTakes(albumId, entries, gen.id);
 	preloadNextTake();
-}
-
-// The one entry point for curation: the same per-song candidate takes
-// playAlbum already builds (existing pick, else bestTake), started at the
-// first song without a pick — or track 1 once every song has one, so
-// re-curating an already-picked album still starts somewhere sensible.
-export async function curateAlbum(albumId: string): Promise<void> {
-	const { seq } = beginPlayStart();
-	clearWindowEnd();
-	clearLibraryQueueSkipFeedback();
-	playStartNotice.set('building');
-	await loadSongsForAlbum(albumId);
-	if (!playStartIsCurrent(seq)) return;
-	const entries = await collectAlbumEntries(albumId, seq);
-	if (entries === null || !playStartIsCurrent(seq)) return;
-	if (entries.length === 0) {
-		playStartNotice.set('idle');
-		reportNothingPlayable(() => curateAlbum(albumId));
-		return;
-	}
-	playStartNotice.set('idle');
-	const startIndex = Math.max(
-		0,
-		entries.findIndex((entry) => !entry.is_picked)
-	);
-	setAlbumQueueTakes(albumId, entries, entries[startIndex].generation_id, { curating: true });
-	const ctx = get(queueContext);
-	if (ctx.type === 'album' && ctx.takes) {
-		loadNativeTake(ctx.takes[ctx.index ?? 0], { restart: true });
-	}
-	openNowPlaying('take');
 }
 
 function playPlaylistIndex(

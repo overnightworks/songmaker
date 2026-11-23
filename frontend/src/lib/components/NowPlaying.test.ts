@@ -28,7 +28,7 @@ import {
 	shuffleEnabled,
 	shuffleLabel
 } from '#lib/stores/player.ts';
-import { curationActive, queueContext, songTakeQueue } from '#lib/stores/queue.ts';
+import { queueContext, songTakeQueue } from '#lib/stores/queue.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { setLibraryTakePool } from '#lib/stores/playbackSettings.ts';
 import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
@@ -178,7 +178,6 @@ afterEach(async () => {
 	resetLibraryDataForTests();
 	toasts.set([]);
 	queueContext.set({ type: 'library' });
-	curationActive.set(false);
 	selectedPlaylistDetail.set(null);
 	setShuffle(false);
 	setLibraryTakePool('picks');
@@ -903,172 +902,108 @@ describe('NowPlaying source line on the phone (#1052)', () => {
 	});
 });
 
-describe('NowPlaying curation mode (#228)', () => {
-	function albumSong(id: string, genId: string, trackNumber: number): SongItem {
-		return song({
-			...playingSongDefaults(),
-			id,
-			title: `Song ${trackNumber}`,
-			track_number: trackNumber,
-			generations: [
-				generation({
-					generation_number: 2,
-					seed: 1,
-					model_mode: 'sft',
-					version_lyrics: 'old verse',
-					created_at: '',
-					id: genId,
-					song_id: id,
-					mp3_path: `${id}.mp3`
-				})
-			]
-		});
+describe('NowPlaying P and K keys', () => {
+	function playingTake(isPicked: boolean, isKept: boolean): PlaybackInfo {
+		const generations = [
+			generation({
+				generation_number: 2,
+				created_at: '',
+				id: 'g1',
+				song_id: 's1',
+				mp3_path: 's1.mp3',
+				is_picked: isPicked,
+				is_kept: isKept
+			})
+		];
+		songList.set([song({ ...playingSongDefaults(), id: 's1', generations })]);
+		const other = generation({ ...generations[0], id: 'g2', song_id: 's2' });
+		const queued = [
+			info({ generation: generations[0], songId: 's1', songTitle: 'Song 1' }),
+			info({ generation: other, songId: 's2', songTitle: 'Song 2' })
+		];
+		queueContext.set({ type: 'album', albumId: 'a1', takes: queued, index: 0 });
+		return queued[0];
 	}
 
-	// Songs, none picked yet — the shape curateAlbum leaves behind, so
-	// the curation bar and its shortcuts have somewhere real to act.
-	function setupAlbumCuration(songCount = 2): PlaybackInfo[] {
-		const songs = Array.from({ length: songCount }, (_, index) =>
-			albumSong(`s${index + 1}`, `g${index + 1}`, index + 1)
-		);
-		songList.set(songs);
-		albumList.set([album({ created_at: '' })]);
-		const takes = songs.map((item) =>
-			info({ generation: item.generations[0], songId: item.id, songTitle: item.title })
-		);
-		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
-		curationActive.set(true);
-		return takes;
-	}
-
-	function albumQueueIndex(): number | false | undefined {
+	function queueIndex(): number | false | undefined {
 		const ctx = get(queueContext);
 		return ctx.type === 'album' && ctx.index;
 	}
 
-	it('shows the album progress while curating', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
-		const progress = words['nowPlaying.curateProgress']({ index: '1', total: '2' });
-		expect(target.textContent).toContain(progress);
-	});
+	function press(key: string, init: KeyboardEventInit = {}): void {
+		window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }));
+	}
 
-	it('does not render the curation bar outside curation mode', async () => {
-		songList.set([song(playingSongDefaults())]);
-		await renderSurface(info());
-		expect(target.querySelector('.curation-bar')).toBeNull();
-	});
+	it('P picks the playing take and stays on the song', async () => {
+		await renderSurface(playingTake(false, false));
 
-	it('Pick sets this take as the song pick and advances to the next song', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
-
-		queryButtonByLabel(target, words['nowPlaying.pick'])?.click();
+		press('p');
 
 		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
-		await vi.waitFor(() => expect(albumQueueIndex()).toBe(1));
-		expect(get(curationActive)).toBe(true);
+		expect(queueIndex()).toBe(0);
 	});
 
-	it('a failed Pick does not advance to the next song', async () => {
-		// #251 REVISE: setPick reports a failed request as a toast, not a
-		// throw — onCuratePick has to read its return value or it would
-		// advance past a song that was never actually picked.
-		vi.mocked(setPick).mockResolvedValueOnce(false);
-		await renderSurface(setupAlbumCuration()[0]);
+	it('P on the picked take unpicks it', async () => {
+		await renderSurface(playingTake(true, false));
 
-		queryButtonByLabel(target, words['nowPlaying.pick'])?.click();
+		press('p');
 
-		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
-		await tick();
-		expect(albumQueueIndex()).toBe(0);
+		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', false));
 	});
 
-	it('Keep toggles keep on this take without advancing', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
+	it('K keeps the playing take and stays on the song', async () => {
+		await renderSurface(playingTake(false, false));
 
-		queryButtonByLabel(target, words['nowPlaying.keep'])?.click();
+		press('K');
 
 		await vi.waitFor(() => expect(setKeep).toHaveBeenCalledWith('s1', 'g1', true));
-		expect(albumQueueIndex()).toBe(0);
+		expect(queueIndex()).toBe(0);
 	});
 
-	it('Skip advances without touching pick or keep', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
+	it('K on the kept take unkeeps it', async () => {
+		await renderSurface(playingTake(false, true));
 
-		queryButtonByLabel(target, words['nowPlaying.skip'], '*=')?.click();
+		press('k');
 
-		await vi.waitFor(() => expect(albumQueueIndex()).toBe(1));
+		await vi.waitFor(() => expect(setKeep).toHaveBeenCalledWith('s1', 'g1', false));
+	});
+
+	it('the keys act in a library queue too', async () => {
+		await renderSurface(playingTake(false, false));
+		queueContext.set({ type: 'library' });
+
+		press('p');
+
+		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
+	});
+
+	it('S does nothing', async () => {
+		await renderSurface(playingTake(false, false));
+
+		press('s');
+		await tick();
+
+		expect(queueIndex()).toBe(0);
 		expect(setPick).not.toHaveBeenCalled();
 		expect(setKeep).not.toHaveBeenCalled();
 	});
 
-	it('disables Skip when the curation queue has only one song', async () => {
-		// Matches the transport's own Next button (canPlayNextSong): a native
-		// album/library queue of more than one take wraps around rather than
-		// stopping at an end, so "last song" is not a real boundary here —
-		// only a single-song queue has nowhere to skip to.
-		await renderSurface(setupAlbumCuration(1)[0]);
-
-		expect(queryButtonByLabel(target, words['nowPlaying.skip'], '*=')?.disabled).toBe(true);
-	});
-
-	it('Done closes Now Playing and exits curation mode', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
-
-		const done = Array.from(target.querySelectorAll('button')).find(
-			(button) => button.textContent === words['nowPlaying.done']
-		);
-		done?.click();
-
-		expect(get(nowPlayingSurface)).toBe('closed');
-		expect(get(curationActive)).toBe(false);
-	});
-
-	it('hides the curation bar once playback moves off the curated album', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
-		expect(target.querySelector('.curation-bar')).not.toBeNull();
-
-		queueContext.set({ type: 'library' });
-		await tick();
-
-		expect(target.querySelector('.curation-bar')).toBeNull();
-	});
-
-	it('P picks and advances, matching the button', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
-
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
-
-		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
-	});
-
-	it('K and S keys also act, scoped to curation mode', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
-
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }));
-		await vi.waitFor(() => expect(setKeep).toHaveBeenCalledWith('s1', 'g1', true));
-
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
-		await vi.waitFor(() => expect(albumQueueIndex()).toBe(1));
-	});
-
-	it('ignores the P/K/S keys outside curation mode', async () => {
-		songList.set([song(playingSongDefaults())]);
-		queueContext.set({ type: 'library' });
-		await renderSurface(info());
-
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
-		await tick();
-
-		expect(setPick).not.toHaveBeenCalled();
-	});
-
-	it('ignores curation shortcuts while a text field has focus', async () => {
-		await renderSurface(setupAlbumCuration()[0]);
+	it('ignores the keys while a text field has focus', async () => {
+		await renderSurface(playingTake(false, false));
 		const textarea = document.createElement('textarea');
 		target.append(textarea);
 		textarea.focus();
 
 		textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
+		await tick();
+
+		expect(setPick).not.toHaveBeenCalled();
+	});
+
+	it('ignores the keys with a modifier held', async () => {
+		await renderSurface(playingTake(false, false));
+
+		press('p', { ctrlKey: true });
 		await tick();
 
 		expect(setPick).not.toHaveBeenCalled();

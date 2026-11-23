@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
+	import type { GenerationItem } from '#lib/api/types.ts';
 	import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
@@ -8,7 +9,6 @@
 		type PlaybackSource,
 		takeVersion
 	} from '#lib/constants/now-playing.ts';
-	import { formatDecimal } from '#lib/utils/format.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { albumList, songList } from '#lib/stores/libraryData.ts';
 	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
@@ -35,7 +35,6 @@
 	} from '#lib/stores/player.ts';
 	import {
 		buildQueueViewModel,
-		curationActive,
 		libraryQueueSkippedComplete,
 		playbackSource,
 		queueContext
@@ -46,7 +45,6 @@
 	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { isEditableElement } from '#lib/utils/escape-level-up.ts';
-	import NowPlayingCuration from './NowPlayingCuration.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
 	import NowPlayingTake from './NowPlayingTake.svelte';
@@ -118,15 +116,6 @@
 			: pageText('nowPlaying.noLyrics')
 	);
 
-	// Curation mode (issue #228) only ever plays an album's own queue. The
-	// real guarantee lives in the queue store: setQueueContext (the one
-	// writer of queueContext) turns curationActive off on every queue build
-	// that isn't curateAlbum's own — a different album, a take clicked
-	// mid-curation, a playlist — so curationActive being true here already
-	// implies an album context. The type check stays as a defensive belt for
-	// this component's own read, not the actual enforcement.
-	const curating = $derived($curationActive && ctx.type === 'album');
-
 	const takeDetailsReloads = reloadWhileUnreachable(() => loadTakeDetails(info.songId));
 
 	$effect(() => {
@@ -195,53 +184,26 @@
 		leaveFor(navigateToPlaying);
 	}
 
-	// Curation's three actions all act on the resolved take (song/
-	// playingGeneration), never on info.generation — an album queue entry's
-	// own generation snapshot goes stale the moment a pick or keep lands
-	// elsewhere, exactly what NowPlayingTake's badges already avoid.
-	async function onCuratePick(): Promise<void> {
-		if (!song || !playingGeneration) return;
-		// setPick reports its own failures as a toast rather than throwing, so
-		// only its return value tells a real pick from one that never landed —
-		// advancing past a failed pick would silently skip the song instead.
-		const picked = await setPick(song.id, playingGeneration.id, true);
-		if (!picked) return;
-		playNextSong();
-	}
-
-	async function onCurateKeep(): Promise<void> {
-		if (!song || !playingGeneration) return;
-		await setKeep(song.id, playingGeneration.id, !playingGeneration.is_kept);
-	}
-
-	function onCurateSkip(): void {
-		playNextSong();
-	}
-
-	function onCurateDone(): void {
-		closeNowPlaying();
-	}
-
-	const CURATION_KEY_HANDLERS: Record<string, () => void> = {
-		p: () => void onCuratePick(),
-		k: () => void onCurateKeep(),
-		s: onCurateSkip
+	// P and K judge the playing take like the Take tab's Pick and Keep do, from
+	// anywhere in the surface (docked or full, whichever tab is open) and never
+	// while a text field has focus (the rating notes textarea, an editable title
+	// elsewhere on the page). isEditableElement is the same check the app's own
+	// global Escape handling uses (utils/escape-level-up), so it also yields to a
+	// contenteditable, not just input/textarea. They act on the resolved take,
+	// not info.generation, whose snapshot goes stale once a pick or keep lands.
+	const JUDGING_KEY_HANDLERS: Record<string, (songId: string, take: GenerationItem) => unknown> = {
+		p: (songId, take) => setPick(songId, take.id, !take.is_picked),
+		k: (songId, take) => setKeep(songId, take.id, !take.is_kept)
 	};
 
-	// Global so Pick/Keep/Skip work from anywhere in the surface (docked or
-	// full, whichever tab is open) — but only while curation mode is active,
-	// and never while a text field has focus (the rating notes textarea, an
-	// editable title elsewhere on the page). isEditableElement is the same
-	// check the app's own global Escape handling uses (utils/escape-level-up),
-	// so it also yields to a contenteditable, not just input/textarea.
-	function onCurationKeydown(event: KeyboardEvent): void {
-		if (!curating) return;
+	function onJudgingKeydown(event: KeyboardEvent): void {
+		if (!song || !playingGeneration) return;
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
 		if (isEditableElement(event.target)) return;
-		const handler = CURATION_KEY_HANDLERS[event.key.toLowerCase()];
+		const handler = JUDGING_KEY_HANDLERS[event.key.toLowerCase()];
 		if (!handler) return;
 		event.preventDefault();
-		handler();
+		void handler(song.id, playingGeneration);
 	}
 </script>
 
@@ -305,25 +267,7 @@
 	</div>
 {/snippet}
 
-{#snippet curationBar()}
-	{#if song && playingGeneration}
-		<NowPlayingCuration
-			progressLabel={pageText('nowPlaying.curateProgress', {
-				index: formatDecimal(queueVm.currentIndex + 1, 0),
-				total: formatDecimal(queueVm.items.length, 0)
-			})}
-			picked={playingGeneration.is_picked}
-			kept={playingGeneration.is_kept}
-			canSkip={canNext}
-			onpick={() => void onCuratePick()}
-			onkeep={() => void onCurateKeep()}
-			onskip={onCurateSkip}
-			ondone={onCurateDone}
-		/>
-	{/if}
-{/snippet}
-
-<svelte:window onkeydown={onCurationKeydown} />
+<svelte:window onkeydown={onJudgingKeydown} />
 
 <NowPlayingFrame
 	{info}
@@ -349,7 +293,6 @@
 	lyricsCues={playingGeneration?.whisper_cues ?? null}
 	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}
-	curationBar={curating ? curationBar : undefined}
 />
 
 <style>
