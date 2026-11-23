@@ -12,8 +12,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from redis.asyncio import Redis
-from support.redis_clock import redis_ms, until, until_redis_has_passed
+from support.redis_clock import (
+    redis_ms,
+    until,
+    until_no_file_cleanup_tick_within,
+    until_redis_has_passed,
+    until_redis_ms,
+)
 
+from songmaker_cli import cron_schedule
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.cron_schedule import Cron, cron_deadlines, next_tick, serve_due_crons
 from songmaker_cli.redis_client import create_async_redis
@@ -65,6 +72,8 @@ HELD_CLAIM_FOR = timedelta(seconds=30)
 SHORT_CLAIM_FOR = timedelta(milliseconds=1500)
 STOP_WAIT = SHORT_CLAIM_FOR * 2 / 3
 SETTLED = timedelta(milliseconds=300)
+# Longer than any scenario that counts runs: the file cleanup recurs to the next even minute.
+COUNTED_WINDOW = timedelta(seconds=5)
 DUE_NOW = timedelta(0)
 FAR_AWAY = timedelta(hours=1)
 Body = Callable[[], Awaitable[object]]
@@ -151,6 +160,7 @@ def test_each_cron_runs_once_across_two_workers_that_start_together(
 
     async def scenario() -> None:
         async with reading(redis_url) as redis:
+            await until_no_file_cleanup_tick_within(redis, COUNTED_WINDOW)
             if due_time == "passed while no worker ran":
                 for cron in Cron:
                     await cron_deadlines(redis).set(cron, DUE_NOW)
@@ -170,6 +180,7 @@ def test_a_due_time_missed_while_the_worker_was_down_runs_once_after_its_restart
 
     async def scenario() -> None:
         async with reading(redis_url) as redis:
+            await until_no_file_cleanup_tick_within(redis, COUNTED_WINDOW)
             async with serving(redis_url, runs):
                 await until(_every_cron_ran(runs))
             await cron_deadlines(redis).set(Cron.CLEANUP_FILES, DUE_NOW)
@@ -207,6 +218,7 @@ def test_reconciling_while_a_claim_is_held_neither_voids_it_nor_runs_the_cron_tw
 
     async def scenario() -> None:
         async with reading(redis_url) as redis:
+            await until_no_file_cleanup_tick_within(redis, COUNTED_WINDOW)
             async with serving(redis_url, runs), serving(redis_url, runs):
                 await until(lambda: runs.count(Cron.CLEANUP_FILES) >= 1)
                 await until_redis_has_passed(redis, SETTLED)
@@ -225,6 +237,7 @@ def test_a_redis_flush_costs_each_cron_one_more_run(redis_url: str) -> None:
 
     async def scenario() -> None:
         async with reading(redis_url) as redis:
+            await until_no_file_cleanup_tick_within(redis, COUNTED_WINDOW)
             async with serving(redis_url, runs):
                 await until(_every_cron_ran(runs))
                 await until_redis_has_passed(redis, SETTLED)
@@ -279,8 +292,10 @@ def test_a_stop_waits_for_the_running_body_recurs_it_and_starts_no_further_key(
 
     async def scenario() -> None:
         async with reading(redis_url) as redis:
+            await until_no_file_cleanup_tick_within(redis, COUNTED_WINDOW)
             async with serving(redis_url, first_worker, claim_for=SHORT_CLAIM_FOR) as worker:
                 await until(lambda: len(first_worker.started) == 1)
+                cancelled_at_ms = await redis_ms(redis)
                 worker.task.cancel()
                 await until_redis_has_passed(redis, SETTLED)
                 stopped_while_waiting.append(worker.task.done())
@@ -288,14 +303,45 @@ def test_a_stop_waits_for_the_running_body_recurs_it_and_starts_no_further_key(
                 await asyncio.wait({worker.task})
                 assert worker.task.cancelled()
             async with serving(redis_url, second_worker, claim_for=SHORT_CLAIM_FOR):
-                await until(lambda: len(second_worker.started) == len(Cron) - 1)
-                await until_redis_has_passed(redis, SETTLED)
+                await until(lambda: len(second_worker.started) >= len(Cron) - 1)
+                # Until a claim the stop left unrecurred has run out and come due again.
+                run_out_ms = int((SHORT_CLAIM_FOR + SETTLED).total_seconds() * 1000)
+                await until_redis_ms(redis, cancelled_at_ms + run_out_ms)
 
     _run_within_a_minute(scenario())
 
     held, = first_worker.started
     assert stopped_while_waiting == [False]
     assert sorted(second_worker.started) == sorted(set(Cron) - {held})
+
+
+def test_a_stop_stays_a_stop_when_the_ended_body_cannot_be_recurred(
+    redis_url: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    runs = Runs()
+    release = asyncio.Event()
+    for cron in Cron:
+        runs.actions[cron] = release.wait
+
+    async def clock_is_unreadable(_redis: Redis) -> datetime:
+        raise ConnectionError("Redis TIME is unreadable")
+
+    async def scenario() -> None:
+        async with serving(redis_url, runs, claim_for=SHORT_CLAIM_FOR) as worker:
+            await until(lambda: len(runs.started) == 1)
+            monkeypatch.setattr(cron_schedule, "redis_now", clock_is_unreadable)
+            worker.task.cancel()
+            release.set()
+            await until(worker.task.done)
+            assert worker.task.cancelled()
+
+    with caplog.at_level(logging.ERROR):
+        _run_within_a_minute(scenario())
+
+    assert len(runs.started) == 1
+    assert [record.cron_key for record in caplog.records if record.levelno == logging.ERROR] == [
+        runs.started[0].value,
+    ]
 
 
 def test_a_body_that_outlasts_the_stop_wait_is_cut_not_recurred_and_not_run_elsewhere_meanwhile(

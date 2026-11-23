@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 CRON_DEADLINES_KIND = "worker-crons"
 UNKNOWN_CRON_EVENT = "cron_job.unknown"
+RECUR_FAILED_AT_STOP_EVENT = "cron_job.recur_failed_at_stop"
 FILE_CLEANUP_MINUTES = 2
 CLAIM_FOR = timedelta(seconds=CRON_CLAIM_FOR_SECONDS)
 EVERY = timedelta(seconds=CRON_EVERY_SECONDS)
@@ -116,7 +117,7 @@ class _DueCrons:
             await asyncio.shield(running)
         except asyncio.CancelledError:
             if await self._ended_within_the_stop_wait(running):
-                await self._recur(cron, due)
+                await self._recur_without_replacing_the_stop(cron, due)
             raise
         except Exception:
             await self._recur(cron, due)
@@ -132,6 +133,14 @@ class _DueCrons:
         if not running.cancelled():
             running.exception()  # the body's own line names it; no unretrieved error is left
         return not unfinished
+
+    async def _recur_without_replacing_the_stop(self, cron: Cron, due: Due) -> None:
+        """Recur, and log a failure instead of raising it: a raised error would replace the stop's
+        cancellation, and tandem would hand this worker the next key of its batch."""
+        try:
+            await self._recur(cron, due)
+        except Exception:
+            log.exception(RECUR_FAILED_AT_STOP_EVENT, extra={"cron_key": cron.value})
 
     async def _recur(self, cron: Cron, due: Due) -> None:
         now = await redis_now(self._redis)
