@@ -1,0 +1,8 @@
+claim_id = "631c6550e73c46dd91b5c3fdd4e2ddce"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "40170cb8e1999506a5e39b5c1666dcf1ef2a6065"
+branch = "claude/issue-3455-quality-v0-25-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "frontend/vitest.config.ts", "quality/baseline.toml", "quality/config.toml"]
+opened_commit = "d588ea5f0c76fddd8be94318f747bfc2d7d5dc6d"
+whole_reason = "One release pin across its workflows, the one fix it demands and the size entries it records with their declared loosenings are one adoption; split, the gate stays red for the wrong reason."
