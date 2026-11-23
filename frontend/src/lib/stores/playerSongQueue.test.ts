@@ -87,7 +87,7 @@ describe('a tap on a take row', () => {
 	it('a take row plays the tapped take in a queue of its song', async () => {
 		const song = versionedSong();
 
-		await playTake(song.generations[2], song);
+		playTake(song.generations[2], song);
 
 		expect(audioPlayer.current?.generation.id).toBe('g-v2b');
 		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'song', songId: song.id }));
@@ -97,7 +97,7 @@ describe('a tap on a take row', () => {
 	it('a take archived after the queue was built is skipped when its turn comes', async () => {
 		const song = versionedSong();
 		songList.set([song]);
-		await playTake(song.generations[1], song);
+		playTake(song.generations[1], song);
 		songList.set([
 			{
 				...song,
@@ -124,7 +124,7 @@ describe('a tap on a take row', () => {
 	it('a take archived while it waits as the next one is put right at once', async () => {
 		const song = versionedSong();
 		songList.set([song]);
-		await playTake(song.generations[4], song);
+		playTake(song.generations[4], song);
 
 		songList.set([withTakeArchived(song, 'g-v2a')]);
 
@@ -135,7 +135,7 @@ describe('a tap on a take row', () => {
 		const song = versionedSong();
 		const pair = { ...song, generations: [song.generations[1], song.generations[2]] };
 		songList.set([pair]);
-		await playTake(pair.generations[0], pair);
+		playTake(pair.generations[0], pair);
 		const withdraw = vi.spyOn(audioPlayer, 'withdrawPreload').mockImplementation(() => {});
 
 		songList.set([withTakeArchived(pair, 'g-v2b')]);
@@ -146,7 +146,7 @@ describe('a tap on a take row', () => {
 	it('a Queue row of a take archived since the queue was built plays nothing', async () => {
 		const song = versionedSong();
 		songList.set([song]);
-		await playTake(song.generations[4], song);
+		playTake(song.generations[4], song);
 		songList.set([withTakeArchived(song, 'g-v2b')]);
 		vi.mocked(audioPlayer.load).mockClear();
 
@@ -158,7 +158,7 @@ describe('a tap on a take row', () => {
 	it('toggling shuffle reorders the whole song queue and back, though the song list holds only part of its takes', async () => {
 		const song = versionedSong();
 		songList.set([{ ...song, generations: [song.generations[4]] }]);
-		await playTake(song.generations[4], song);
+		playTake(song.generations[4], song);
 		vi.spyOn(Math, 'random').mockReturnValue(0);
 
 		await toggleShuffle();
@@ -174,7 +174,7 @@ describe('a tap on a take row', () => {
 		setShuffle(true);
 		const song = versionedSong();
 
-		await playTake(song.generations[0], song);
+		playTake(song.generations[0], song);
 
 		expect(get(shuffleEnabled)).toBe(false);
 		expect(queuedGenerationIds()).toEqual(['g-v3', 'g-v2a', 'g-v2b', 'g-v1']);
@@ -183,7 +183,7 @@ describe('a tap on a take row', () => {
 	it('a take that cannot play starts nothing', async () => {
 		const song = versionedSong();
 
-		await playTake(song.generations[3], song);
+		playTake(song.generations[3], song);
 
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
@@ -195,7 +195,7 @@ describe('a tap on a take row', () => {
 		audioPlayer.status = 'playing';
 		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
 
-		await playTake(gen, song);
+		playTake(gen, song);
 
 		expect(toggle).toHaveBeenCalledOnce();
 		expect(audioPlayer.load).not.toHaveBeenCalled();

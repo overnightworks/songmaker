@@ -1051,7 +1051,7 @@ export function escapeNowPlaying(): void {
 // from here", so no leftover shuffle reorders the queue, as with a playlist
 // entry. The listener stays where they are; the bar and the playing row show
 // the result.
-export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
+export function playTake(gen: GenerationItem, song: SongItem): void {
 	if (isTakeCurrent(gen)) {
 		audioPlayer.toggle();
 		return;

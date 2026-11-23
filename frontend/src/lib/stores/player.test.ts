@@ -413,7 +413,7 @@ describe('playback dispatch', () => {
 			album_title: 'Nachtstrom',
 			generations: [gen]
 		});
-		await playTake(gen, song);
+		playTake(gen, song);
 		expect(audioPlayer.current).toMatchObject({
 			songId: 's1',
 			songTitle: 'Song',
@@ -1584,7 +1584,7 @@ describe('rebuilding a library queue from the playing take', () => {
 				audioPlayer.status = 'idle';
 			});
 
-			await playTake(gen, song);
+			playTake(gen, song);
 
 			expect({
 				status: audioPlayer.status,
@@ -2989,7 +2989,7 @@ describe('curateAlbum', () => {
 		await curateAlbum('a1');
 		expect(get(curationActive)).toBe(true);
 
-		await playTake(other, { ...song, generations: [gen, other] });
+		playTake(other, { ...song, generations: [gen, other] });
 
 		expect(get(curationActive)).toBe(false);
 	});
@@ -4373,7 +4373,7 @@ describe('restoring the last playback after a reload', () => {
 		QUEUES.album.serve();
 		const { restoring, answer } = restoreWaitingOnTheSavedSong();
 		await playIdleStart();
-		await playTake(nextTake, nextSong);
+		playTake(nextTake, nextSong);
 
 		answer(Promise.resolve(savedSong));
 		await restoring;

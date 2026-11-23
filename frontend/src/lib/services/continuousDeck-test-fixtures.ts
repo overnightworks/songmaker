@@ -271,8 +271,15 @@ class FakeNetwork {
 		this.rangeAnswers.set(url, answer);
 	}
 
-	readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-		const url = String(input);
+	readonly fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		try {
+			return Promise.resolve(this.respond(requestedUrl(input), init));
+		} catch (error) {
+			return Promise.reject(error);
+		}
+	};
+
+	private respond(url: string, init?: RequestInit): Response {
 		const range = new Headers(init?.headers).get('Range');
 		this.requests.push({ url, range });
 		if (init?.signal) this.signals.push(init.signal);
@@ -297,7 +304,7 @@ class FakeNetwork {
 		return new Response(
 			piecewise(file.subarray(from, cut?.at), {
 				pieceBytes: this.pieceBytes,
-				end: cut === undefined ? 'closes' : cut.stalls ? 'stalls' : 'breaks',
+				end: bodyEnd(cut),
 				signal: init?.signal,
 				cancelled: () => {
 					answer.bodyCancelled = true;
@@ -305,7 +312,7 @@ class FakeNetwork {
 			}),
 			{ status, headers }
 		);
-	};
+	}
 
 	private cutAt(url: string, filePositions: number[], stalls: boolean): void {
 		this.cuts.set(url, [
@@ -313,6 +320,16 @@ class FakeNetwork {
 			...filePositions.map((at) => ({ at, stalls }))
 		]);
 	}
+}
+
+function requestedUrl(input: RequestInfo | URL): string {
+	if (typeof input === 'string') return input;
+	return input instanceof URL ? input.href : input.url;
+}
+
+function bodyEnd(cut: { stalls: boolean } | undefined): PiecewiseOptions['end'] {
+	if (cut === undefined) return 'closes';
+	return cut.stalls ? 'stalls' : 'breaks';
 }
 
 function erroredBody(): ReadableStream<Uint8Array> {
