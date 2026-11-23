@@ -124,7 +124,8 @@ export function savedPlayback(): SavedPlayback | null {
  */
 function forgetGoneSavedPlayback(saved: SavedPlayback): void {
 	const origin = readFrom.get(saved);
-	if (origin === undefined || signedInUserId() !== origin.userId) return;
+	if (origin === undefined) return;
+	if (signedInUserId() !== origin.userId) return;
 	if (readStorage(storageKey(origin.userId)) === origin.text) {
 		retireCurrentPlaybackResume(origin.userId);
 	}

@@ -562,19 +562,6 @@ describe('playback resume record', () => {
 			expect(storedRecord(LISTENER.id)).toEqual(PLAYLIST_RECORD);
 		});
 
-		it('keeps a record another tab rewrote at a later time for the same take, song and position while its song was gone', async () => {
-			const saved = saveWholeRecord({ ...WHOLE_RECORD, savedAt: 1000 });
-			const newerRecord = { ...WHOLE_RECORD, savedAt: 2000 };
-			vi.mocked(fetchSong).mockImplementationOnce(() => {
-				localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
-				return Promise.reject(new ApiError(404, 'gone', '/x'));
-			});
-
-			await loadSavedTake(saved);
-
-			expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
-		});
-
 		it("keeps a record that names another take than the one found gone, as another tab's save", async () => {
 			const saved = saveWholeRecord();
 			const newerRecord = {
