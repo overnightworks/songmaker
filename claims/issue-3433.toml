@@ -1,8 +1,0 @@
-claim_id = "8760ce20abe742789f07535d0d1adbf2"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "9a54758033e0cec86d2e67cc5b49ec6b9eede850"
-branch = "claude/issue-3433-webauth-v0-46-0-store-outage"
-scope = ["docs/security.md", "pyproject.toml", "src/songmaker_cli/auth_stores.py", "tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_auth_stores_contract_postgres.py", "uv.lock"]
-opened_commit = "4a8b057bcdd8c74197e1bd9d64642bc6e390bbfe"
-whole_reason = "The webauth pin, its outage helper around songmaker's two auth transactions, their proof and the security text are one change: the new pin brings the outage contract the wrapping fulfils."
