@@ -55,6 +55,7 @@ import {
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetNavigationForTests } from '#lib/stores/navigation.ts';
 import { songList } from '#lib/stores/libraryData.ts';
+import { setDesktopNowPlayingSurface } from '#lib/stores/playbackSettings.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {
 	closeNowPlaying,
@@ -247,9 +248,14 @@ afterEach(async () => {
 	await unmountCurrentLayout();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
+	delete document.documentElement.dataset.transportBar;
 	openCollection.set(null);
 	selectedSongId.set(null);
 	closeNowPlaying();
+	nowPlayingSurface.set('closed');
+	nowPlayingDockable.set(false);
+	setDesktopNowPlayingSurface('docked');
+	localStorage.removeItem('nowPlayingDesktopSurface');
 	audioPlayer.current = null;
 	songList.set([]);
 	currentUser.set(null);
