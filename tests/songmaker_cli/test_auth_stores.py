@@ -8,9 +8,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
 from support.session_ids import a_session_id
 from webauth.ports import (
     AccountEvent,
@@ -489,9 +488,11 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     assert _StoredRows.of(session) == before
 
 
-def _on_an_unreachable_database(postgresql_url, refused_port):
-    unreachable = postgresql_url.set(host="127.0.0.1", port=refused_port)
-    return sessionmaker(bind=create_engine(unreachable))
+@pytest.fixture
+def unreachable_factory(postgresql_url, refused_port):
+    factory = connect_db(postgresql_url.set(host="127.0.0.1", port=refused_port))
+    yield factory
+    factory.kw["bind"].dispose()
 
 
 def _load_in_the_session_transaction(factory) -> None:
@@ -513,15 +514,9 @@ def _enter_the_sign_in_transaction(factory) -> None:
         pytest.param(_enter_the_sign_in_transaction, id="entering the sign-in transaction"),
     ],
 )
-def test_an_unreachable_database_raises_store_unavailable(
-    postgresql_url, refused_port, use,
-) -> None:
-    factory = _on_an_unreachable_database(postgresql_url, refused_port)
-    try:
-        with pytest.raises(StoreUnavailableError):
-            use(factory)
-    finally:
-        factory.kw["bind"].dispose()
+def test_an_unreachable_database_raises_store_unavailable(unreachable_factory, use) -> None:
+    with pytest.raises(StoreUnavailableError):
+        use(unreachable_factory)
 
 
 def _store_call_after_the_loss(sessions) -> None:
@@ -530,6 +525,15 @@ def _store_call_after_the_loss(sessions) -> None:
 
 def _nothing_after_the_loss(sessions) -> None:
     """The block ends, so the commit meets the lost connection."""
+
+
+def _lose_the_connection_in(pg_factory, transaction_on, sessions_of, after_the_loss) -> None:
+    with transaction_on(pg_factory)() as opened:
+        sessions = sessions_of(opened)
+        backend = sessions.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+        with pg_factory() as other:
+            other.execute(text("SELECT pg_terminate_backend(:backend)"), {"backend": backend})
+        after_the_loss(sessions)
 
 
 @pytest.mark.parametrize(
@@ -554,12 +558,17 @@ def test_a_connection_lost_inside_a_transaction_raises_store_unavailable(
     pg_factory, transaction_on, sessions_of, after_the_loss,
 ) -> None:
     with pytest.raises(StoreUnavailableError):
-        with transaction_on(pg_factory)() as opened:
-            sessions = sessions_of(opened)
-            backend = sessions.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
-            with pg_factory() as other:
-                other.execute(text("SELECT pg_terminate_backend(:backend)"), {"backend": backend})
-            after_the_loss(sessions)
+        _lose_the_connection_in(pg_factory, transaction_on, sessions_of, after_the_loss)
+
+
+def _touch_after_a_concurrent_touch(pg_factory, session_id) -> None:
+    with DatabaseSessionTransaction(pg_factory)() as sessions:
+        sessions.session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
+        sessions.load(session_id)
+        with pg_factory() as concurrent:
+            DatabaseSessionRecordStore(concurrent).touch(session_id, expires_at=_later(2))
+            concurrent.commit()
+        sessions.touch(session_id, expires_at=_later(3))
 
 
 def test_a_serialization_failure_inside_a_transaction_stays_a_session_store_error(
@@ -577,10 +586,4 @@ def test_a_serialization_failure_inside_a_transaction_stays_a_session_store_erro
         setup.commit()
 
     with pytest.raises(SessionStoreError):
-        with DatabaseSessionTransaction(pg_factory)() as sessions:
-            sessions.session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
-            sessions.load(session_id)
-            with pg_factory() as concurrent:
-                DatabaseSessionRecordStore(concurrent).touch(session_id, expires_at=_later(2))
-                concurrent.commit()
-            sessions.touch(session_id, expires_at=_later(3))
+        _touch_after_a_concurrent_touch(pg_factory, session_id)
