@@ -246,8 +246,18 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	await unmountCurrentLayout();
-	await historyComesToRest();
+	// A layer the unmount closes steps back off its entry, and the test browser
+	// would land that Back tasks later, in the next test.
+	const back = watchBack();
+	try {
+		await unmountCurrentLayout();
+		await historyComesToRest();
+	} finally {
+		back.stop();
+	}
+	// The test browser keeps the entry a test left, and the resets below read
+	// it as the entry the next page loads onto.
+	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 	sessionStorage.clear();
 	resetLibraryContextForTests();
 	resetNavigationForTests();
