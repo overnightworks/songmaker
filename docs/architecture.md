@@ -501,8 +501,8 @@ into `AddToPicker`, which offers the other playlists and New playlist…. A
 choice calls `POST /api/playlists/{id}/entries/playlist`, which checks both
 playlists' ownership, appends the source's playable entries to the chosen one
 in order and answers as the album's add does (`AddEntriesToPlaylistResponse`:
-the count added and the songs skipped with a reason, an entry whose song was deleted
-among them, an entry in an album the person cannot open left out). Both adds share one
+the count added and the songs skipped with a reason; an entry whose song is in the
+trash or whose album the person cannot open is left out, neither added nor counted). Both adds share one
 append in `db/queries/playlists.py`, which locks the takes through `lock_takes`.
 The Share row is a 44 px menu row that
 shows its state ("on"/"off", a link or share icon, `aria-pressed`); it and
