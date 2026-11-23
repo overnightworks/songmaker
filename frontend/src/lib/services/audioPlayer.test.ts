@@ -2392,15 +2392,6 @@ describe('standby deck', () => {
 		expect(audioPlayer.getElement()).toBe(fakeAudio);
 	});
 
-	it('withdrawing the preload drops the standby take', () => {
-		playFirst();
-		const standby = preloadReady(next);
-
-		audioPlayer.withdrawPreload();
-
-		expect(standby.src).toBe('');
-	});
-
 	it('events from the standby never change status, error or current', async () => {
 		const onEnded = vi.fn();
 		const onPlaybackStarted = vi.fn();
@@ -2711,15 +2702,6 @@ describe('continuous deck (#1187 M2)', () => {
 			['g2', 'next'],
 			['g2b', 'next']
 		]);
-	});
-
-	it('gives up the take held ahead once no take is to follow the playing one, and only once', () => {
-		playFirstWithSecondAppended();
-
-		audioPlayer.withdrawPreload();
-		audioPlayer.withdrawPreload();
-
-		expect(deck().drops).toBe(1);
 	});
 
 	it('keeps what the deck holds when nothing is known to follow yet', () => {

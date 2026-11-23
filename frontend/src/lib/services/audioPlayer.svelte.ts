@@ -1,5 +1,6 @@
 import type { QueueStreamManifest } from '#lib/api/types.ts';
 import { pageText, type TextKey } from '#lib/utils/page-words.ts';
+import { bufferedUntil, decodeMediaError, ranOutOfAudio } from './audioElement';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
@@ -154,9 +155,6 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 };
 
 const AUDIO_URL_PREFIX = '/audio/';
-// A deck whose playhead is this close to the end of what it holds, with
-// nothing more on its way, has played its last take.
-const END_OF_DECK_SLACK_SECONDS = 0.5;
 // How often a stalled take is looked at again and, unless the owner reports
 // the network gone, reloaded.
 export const STALL_RECOVERY_MS = 5000;
@@ -1639,35 +1637,10 @@ function wasHandedTo(session: DeckSession, take: PlaybackInfo): boolean {
 	return session.tail === take || session.deck.manifest.some((entry) => entry.take === take);
 }
 
-function bufferedUntil(el: HTMLAudioElement): number {
-	const ranges = el.buffered;
-	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
-}
-
-// The playhead stands at the end of what the element holds.
-function ranOutOfAudio(el: HTMLAudioElement): boolean {
-	return bufferedUntil(el) - el.currentTime <= END_OF_DECK_SLACK_SECONDS;
-}
-
 // A clock frozen over audio the deck already holds is the element's own
 // fault, not the download's: it is unfrozen in place.
 function unfreezesInPlace(reason: RecoveryReason, el: HTMLAudioElement): boolean {
 	return reason === 'frozen-clock' && bufferedUntil(el) > el.currentTime;
-}
-
-// A lost network is never decoded here: where the owner's strip names it
-// (#1039), the player adds no network wording of its own.
-function decodeMediaError(err: MediaError): string {
-	switch (err.code) {
-		case MediaError.MEDIA_ERR_ABORTED:
-			return pageText('transport.aborted');
-		case MediaError.MEDIA_ERR_DECODE:
-			return pageText('transport.fileCorrupted');
-		case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-			return pageText('transport.formatUnsupported');
-		default:
-			return pageText('transport.playbackFailed');
-	}
 }
 
 export const audioPlayer = new AudioPlayer();

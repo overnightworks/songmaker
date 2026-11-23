@@ -1,5 +1,5 @@
 import { writable, derived, get, readonly } from 'svelte/store';
-import { ApiError, describeFailure, NetworkError } from '#lib/api/fetch.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { fetchLibraryPoolQueue, fetchPlaylist, fetchSong } from '#lib/api/client.ts';
 import { recordSongListen } from '#lib/api/songs.ts';
 import {
@@ -65,7 +65,6 @@ import {
 	type SavedPlayback
 } from '#lib/stores/playbackResume.ts';
 import { pageText, type TextKey } from '#lib/utils/page-words.ts';
-import type { Key } from '#lib/words/en.ts';
 import { type NowPlayingSurfaceKind, type PlaybackSource } from '#lib/constants/now-playing.ts';
 import {
 	adjacentQueueTake,
@@ -91,6 +90,7 @@ import {
 	type SkipNotice,
 	type SongQueue
 } from '#lib/stores/queue.ts';
+import { isEmptyPoolError, libraryStreamFailureToast } from '#lib/stores/libraryQueueFailure.ts';
 import { shuffled } from '#lib/utils/shuffle.ts';
 import { readStorage, writeStorage } from '#lib/utils/storage.ts';
 
@@ -141,7 +141,7 @@ export function clearGenerationSelection(): void {
 
 songList.subscribe((songs) => {
 	if (followPicksAheadInAlbumQueue(songs)) preloadNextTake();
-	refreshSongQueuePreload();
+	if (get(queueContext).type === 'song') preloadNextTake();
 });
 
 const SHUFFLE_STORAGE_KEY = 'queueShuffleEnabled';
@@ -209,23 +209,6 @@ function librarySnapshotOpts(): { shuffle: boolean; pool: LibraryTakePool } {
 	return { shuffle: get(shuffleEnabled), pool: get(libraryTakePool) };
 }
 
-const POOL_QUEUE_FAILED_KEYS = {
-	picks: 'player.picksQueueFailed',
-	mix: 'player.keepsQueueFailed',
-	all: 'player.allTakesQueueFailed'
-} as const satisfies Record<LibraryTakePool, TextKey>;
-
-const EMPTY_POOL_REFUSAL: Key = 'libraryQueueRefusal.emptyPool';
-const UNPLAYABLE_START_REFUSAL: Key = 'libraryQueueRefusal.startUnplayable';
-
-function isEmptyPoolError(err: unknown): boolean {
-	return err instanceof ApiError && err.refusal?.key === EMPTY_POOL_REFUSAL;
-}
-
-function isUnplayableStartError(err: unknown): boolean {
-	return err instanceof ApiError && err.refusal?.key === UNPLAYABLE_START_REFUSAL;
-}
-
 function reportNothingPlayable(retry: () => Promise<void>): void {
 	retryPlayIntent = retry;
 	playStartNotice.set('empty');
@@ -237,12 +220,6 @@ function reportNothingPlayable(retry: () => Promise<void>): void {
 function toastAlbumSongsFailure(err: unknown): void {
 	if (err instanceof NetworkError && get(offline)) return;
 	addToast(albumSongsErrorMessage(err), 'error');
-}
-
-function libraryStreamFailureToast(err: unknown): string {
-	if (isEmptyPoolError(err)) return pageText('player.nothingToPlay');
-	const queueFailed = pageText(POOL_QUEUE_FAILED_KEYS[get(libraryTakePool)]);
-	return isUnplayableStartError(err) ? describeFailure(err, queueFailed) : queueFailed;
 }
 
 // --- Playback dispatch ---
@@ -1173,17 +1150,13 @@ function takeAfterTheEnd(): PlaybackInfo | null {
 	return next.kind === 'take' ? next.take : null;
 }
 
-function preloadNextTake(): void {
-	if (playsTheAppsTakes()) audioPlayer.preload(takeAfterCurrent());
-}
-
 // A take of a song queue can be archived, lose its audio or be deleted while it
-// waits as the next one, already loading: the take readied is put right, or
-// taken back where none is left to follow.
-function refreshSongQueuePreload(): void {
-	if (get(queueContext).type !== 'song' || !playsTheAppsTakes()) return;
+// waits as the next one, already loading: with none left to follow, what was
+// readied is taken back.
+function preloadNextTake(): void {
+	if (!playsTheAppsTakes()) return;
 	const next = takeAfterCurrent();
-	if (next) audioPlayer.preload(next);
+	if (next || get(queueContext).type !== 'song') audioPlayer.preload(next);
 	else audioPlayer.withdrawPreload();
 }
 
