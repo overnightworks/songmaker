@@ -1,0 +1,8 @@
+claim_id = "cc5527bd5062446bb0f5a3cc5e88e852"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "c90c27a282355df7c31b3a286a292e0bb89fcaa5"
+branch = "claude/issue-3461-pick-album-takes-goes"
+scope = ["docs/architecture.md", "docs/navigation.md", "frontend/e2e", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/AlbumDetailViewMenu.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/NowPlayingCuration.svelte", "frontend/src/lib/components/NowPlayingCuration.test.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/queue.test.ts", "frontend/src/lib/stores/queue.ts", "frontend/src/lib/words", "quality/baseline.toml", "scripts/style-literals.txt", "src/songmaker_cli/words.py"]
+opened_commit = "bf470e4d789badf6b01ae2e47736dda293093721"
+whole_reason = "Removing one feature (the album curation walk) takes its store state, component, menu row, key, words, docs and specs together; a part left behind is a dead caller or a menu row that opens nothing."
