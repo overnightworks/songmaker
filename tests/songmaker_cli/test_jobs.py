@@ -270,7 +270,7 @@ def test_a_generation_the_hold_requeues_twice_keeps_the_arguments_of_its_row(
         session.commit()
     worker = MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._arq_context = {"redis": MagicMock()}
+    worker._job_context = {"redis": MagicMock()}
     with (
         patch.object(worker, "get_db_factory", return_value=seeded_db),
         patch.object(worker, "audio_dir", return_value=tmp_path / "audio"),

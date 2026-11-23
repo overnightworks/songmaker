@@ -10,7 +10,6 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from arq.connections import RedisSettings
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from songmaker_cli.constants import (
@@ -24,6 +23,7 @@ from songmaker_cli.constants import (
 )
 
 if TYPE_CHECKING:
+    from arq.connections import RedisSettings
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
     from tandem import Slots
@@ -98,6 +98,7 @@ def build_arq_redis_settings(url: str, *, ride_out_outage: bool = False) -> Redi
     survives a Redis outage instead of ending on the first lost connection; a web
     process keeps failing fast.
     """
+    from arq.connections import RedisSettings
     from redis.asyncio.retry import Retry
     from redis.backoff import ConstantBackoff
     from redis.exceptions import ConnectionError, TimeoutError

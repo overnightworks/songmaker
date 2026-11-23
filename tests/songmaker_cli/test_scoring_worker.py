@@ -7,7 +7,6 @@ import os
 import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from logline.testing import configured
 from support.job_owner import an_owner
 from tandem.testing import FakeWakeBus
@@ -153,7 +152,7 @@ def test_scoring_worker_settings_queue_name() -> None:
 
 def test_scoring_worker_has_no_periodic_job_reaper() -> None:
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
-    assert ScoringWorkerSettings.cron_jobs == []
+    assert not getattr(ScoringWorkerSettings, "cron_jobs", [])
 
 
 def test_scoring_worker_settings_functions() -> None:
@@ -186,16 +185,6 @@ def test_scoring_worker_functions_registered_under_job_function_names() -> None:
 
     registered = _asyncio.run(_build_and_inspect())
     assert JobFunction.SCORE in registered
-
-
-@pytest.fixture
-def stop_signal_handlers():
-    """Leave the process's handlers of the stop signals as the test found them."""
-    stop_signals = (signal.SIGINT, signal.SIGTERM)
-    before = {number: signal.getsignal(number) for number in stop_signals}
-    yield
-    for number, handler in before.items():
-        signal.signal(number, handler)
 
 
 def test_a_stop_signal_ends_the_claiming_though_the_loops_own_handler_still_gets_it(

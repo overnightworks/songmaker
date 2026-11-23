@@ -18,10 +18,8 @@ from support.redis_server import configured_redis_url, database_number
 
 from songmaker_cli import arq_pool
 from songmaker_cli.arq_codec import deserialize_arq
-from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.job_types import JobFunction
 from songmaker_cli.job_types import JobStatus as RowStatus
-from songmaker_cli.music_worker import MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorkerSettings
 from songmaker_cli.worker_base import JOB_ENDED_EVENT, logged_job
 
@@ -51,68 +49,16 @@ def codec_worker(settings, redis_url, function, name):
     )
 
 
-GENERATION_ARGS = ("job", "song", "version", 2, "owner", None, "turbo")
-REFERENCE_AUDIO = dict(
-    src_wav_path="owner/source.wav",
-    src_generation_id="source",
-    lyrics="Grüße 🎵",
-    prompt="warm",
-)
 JOB_CASES = [
-    (MusicWorkerSettings, JobFunction.GENERATE, GENERATION_ARGS, False),
-    (
-        MusicWorkerSettings,
-        JobFunction.GENERATE,
-        (
-            *GENERATION_ARGS,
-            RepaintTaskParams(
-                **REFERENCE_AUDIO,
-                repainting_start=0.2,
-                repainting_end=0.8,
-            ).model_dump(),
-        ),
-        False,
-    ),
-    (
-        MusicWorkerSettings,
-        JobFunction.GENERATE,
-        (
-            *GENERATION_ARGS,
-            None,
-            CoverTaskParams(
-                **REFERENCE_AUDIO,
-                audio_cover_strength=0.5,
-            ).model_dump(),
-        ),
-        False,
-    ),
     (ScoringWorkerSettings, JobFunction.SCORE, ("job", "generation", ["bpm", "lyrics"]), False),
     (ScoringWorkerSettings, JobFunction.SCORE, ("job", "generation", None), False),
-    (MusicWorkerSettings, JobFunction.LOAD_MODEL_ON_WORKER, ("job", "worker", "turbo"), False),
-    (MusicWorkerSettings, JobFunction.DOWNLOAD_MODEL_ON_WORKER, ("job", "turbo"), False),
-    (MusicWorkerSettings, JobFunction.LORA_TRAINING, ("job", "lora", "owner"), False),
-    (MusicWorkerSettings, JobFunction.LORA_TRAINING, ("job", "lora", "owner", "turbo"), True),
-    (MusicWorkerSettings, JobFunction.GENERATE, (*GENERATION_ARGS, None, None), True),
-    (MusicWorkerSettings, "cron:cleanup_files_cron", (), False),
 ]
 
 
 @pytest.mark.parametrize(
     "settings,function,args,deferred",
     JOB_CASES,
-    ids=[
-        "generation",
-        "repaint",
-        "audio-cover",
-        "score",
-        "auto-score",
-        "load-model",
-        "download-model",
-        "lora",
-        "deferred-lora",
-        "deferred-generation",
-        "cron",
-    ],
+    ids=["score", "auto-score"],
 )
 def test_configured_producers_and_workers_exchange_json(
     settings, function, args, deferred, redis_url, monkeypatch
@@ -152,7 +98,7 @@ def test_configured_producers_and_workers_exchange_json(
     asyncio.run(asyncio.wait_for(scenario(), timeout=30))
 
 
-@pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
+@pytest.mark.parametrize("settings", [ScoringWorkerSettings])
 @pytest.mark.parametrize("outcome", ["success", "failure", "cancelled"])
 def test_results_remain_readable_with_correct_success(settings, outcome, redis_url, monkeypatch):
     """1301-F1-CODEC-RESULTS: public readers distinguish success from inert failure."""
@@ -199,7 +145,7 @@ def test_unsupported_values_cannot_be_enqueued(value, redis_url, monkeypatch):
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
             job_id = "unsupported-value"
-            queue = MusicWorkerSettings.queue_name
+            queue = ScoringWorkerSettings.queue_name
             with pytest.raises(SerializationError):
                 await pool.enqueue_job("rejected", value, _job_id=job_id, _queue_name=queue)
             assert await pool.exists(job_key_prefix + job_id) == 0
@@ -239,7 +185,7 @@ def test_unsupported_values_cannot_be_enqueued(value, redis_url, monkeypatch):
         ],
     ],
 )
-@pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
+@pytest.mark.parametrize("settings", [ScoringWorkerSettings])
 def test_invalid_json_fails_visibly_without_execution(
     payload, settings, redis_url, monkeypatch, caplog
 ):
@@ -286,7 +232,7 @@ class PickleSentinel:
         return Path.touch, (self.marker,)
 
 
-@pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
+@pytest.mark.parametrize("settings", [ScoringWorkerSettings])
 def test_legacy_jobs_and_results_never_execute_pickle(settings, redis_url, monkeypatch, tmp_path):
     """1301-F1-CODEC-LEGACY / 1301-F1-CODEC-REJECT: rejection is visible and inert."""
     marker = tmp_path / "pickle-executed"
@@ -341,7 +287,7 @@ def test_cron_scheduler_uses_the_worker_json_pool(redis_url, monkeypatch):
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
             worker = create_worker(
-                MusicWorkerSettings,
+                ScoringWorkerSettings,
                 redis_settings=RedisSettings.from_dsn(redis_url),
                 functions=[],
                 on_startup=None,
@@ -429,14 +375,14 @@ def test_a_job_ends_with_one_line_carrying_its_id_and_outcome(
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
             worker = codec_worker(
-                MusicWorkerSettings,
+                ScoringWorkerSettings,
                 redis_url,
                 logged_job("probe", job, status_of=read_status),
                 "probe",
             )
             try:
                 queued = await pool.enqueue_job(
-                    "probe", *arguments, _queue_name=MusicWorkerSettings.queue_name
+                    "probe", *arguments, _queue_name=ScoringWorkerSettings.queue_name
                 )
                 await worker.async_run()
                 if reason == "status_unreadable":
@@ -480,15 +426,17 @@ def test_a_job_runs_in_its_enqueuers_trace_and_a_failed_job_leaves_none_behind(
 
     async def scenario():
         async with codec_pool(redis_url, monkeypatch) as pool:
-            worker = codec_worker(MusicWorkerSettings, redis_url, logged_job("probe", job), "probe")
+            worker = codec_worker(
+                ScoringWorkerSettings, redis_url, logged_job("probe", job), "probe",
+            )
             try:
                 with unit_trace(None):
                     enqueuer_traceparent = current_traceparent()
                     await pool.enqueue_job(
-                        "probe", "failing", True, _queue_name=MusicWorkerSettings.queue_name
+                        "probe", "failing", True, _queue_name=ScoringWorkerSettings.queue_name
                     )
                 await pool.enqueue_job(
-                    "probe", "good", False, _queue_name=MusicWorkerSettings.queue_name
+                    "probe", "good", False, _queue_name=ScoringWorkerSettings.queue_name
                 )
                 await worker.async_run()
             finally:

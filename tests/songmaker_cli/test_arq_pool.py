@@ -26,7 +26,7 @@ def _isolate_pool(monkeypatch: pytest.MonkeyPatch):
 def test_init_arq_pool_creates_pool() -> None:
     mock_pool = AsyncMock()
     with patch(
-        "songmaker_cli.arq_pool.create_pool", new_callable=AsyncMock, return_value=mock_pool,
+        "arq.create_pool", new_callable=AsyncMock, return_value=mock_pool,
     ):
         result = _run(pool_mod.init_arq_pool())
 

@@ -37,7 +37,7 @@ the worker container and talks to the upstream ACE-Step subprocess on
 port — see `ACESTEP_INNER_PORT` below).
 
 ```
-music worker (songmaker_cli.music_worker.MusicWorkerSettings)
+music worker (python -m songmaker_cli.music_worker)
   → on a claimed generate job: scheduler dispatches the admitted worker
     → POST /load_model on worker (if needed)
     → POST /generate on worker → task_id

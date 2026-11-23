@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 import shutil
+import signal
 import socket
 import tempfile
 
@@ -163,12 +164,20 @@ def _reset_settings_cache():
 @pytest.fixture(autouse=True)
 def _reset_worker_singletons():
     yield
-    from songmaker_cli import music_worker as mw_mod
     from songmaker_cli import scoring_worker as sw_mod
 
-    for worker in (mw_mod._music_worker, sw_mod._scoring_worker):
-        worker._db_factory = None
-        worker._db_engine = None
+    sw_mod._scoring_worker._db_factory = None
+    sw_mod._scoring_worker._db_engine = None
+
+
+@pytest.fixture
+def stop_signal_handlers():
+    """Leave the process's handlers of the stop signals as the test found them."""
+    stop_signals = (signal.SIGINT, signal.SIGTERM)
+    before = {number: signal.getsignal(number) for number in stop_signals}
+    yield
+    for number, handler in before.items():
+        signal.signal(number, handler)
 
 
 @pytest.fixture
