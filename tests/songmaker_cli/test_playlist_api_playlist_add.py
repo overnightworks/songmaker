@@ -1,4 +1,5 @@
-"""Adding one playlist's playable entries to another: ownership, order, skip report, lock."""
+"""Adding one playlist's playable entries to another: ownership, order, skip report, lock; the
+album add shares its skip report."""
 
 from __future__ import annotations
 
@@ -163,6 +164,18 @@ def test_a_playlist_add_neither_adds_nor_reports_an_entry_whose_song_was_deleted
     assert body["added_count"] == len(PLAYABLE_IN_ORDER) - 1
     assert "song-take-a" not in [item["song_id"] for item in body["skipped"]]
     assert world.takes_of(TARGET) == ["take-a", "take-b", "take-b"]
+
+
+def test_an_album_add_neither_adds_nor_reports_a_song_in_the_trash(pg_factory, tmp_path) -> None:
+    world = _World(pg_factory, tmp_path)
+    world.delete_song("song-take-a")
+
+    body = world.client.post(
+        f"/api/playlists/{TARGET}/entries/album", json={"album_id": "album-1"},
+    ).json()
+
+    assert body["added_count"] == 1
+    assert "song-take-a" not in [item["song_id"] for item in body["skipped"]]
 
 
 def test_a_playlist_add_leaves_a_deleted_song_in_an_album_the_person_cannot_open_unreported(

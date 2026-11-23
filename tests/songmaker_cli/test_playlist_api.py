@@ -57,7 +57,6 @@ from songmaker_cli.db.queries.playlists import (
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.db.queries.songs import soft_delete_song
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -745,21 +744,6 @@ def test_api_add_album_to_playlist(client: TestClient) -> None:
 
     resp = client.get(f"/api/playlists/{pid}")
     assert len(resp.json()["entries"]) == 2
-
-
-def test_api_add_album_neither_adds_nor_reports_a_song_in_the_trash(client: TestClient) -> None:
-    with client.app.state.ctx.db() as session:
-        soft_delete_song(session, "s2")
-        session.commit()
-    playlist_id = client.post("/api/playlists", json={"title": "Test"}).json()["id"]
-
-    response = client.post(
-        f"/api/playlists/{playlist_id}/entries/album", json={"album_id": "a1"},
-    )
-
-    body = response.json()
-    assert body["added_count"] == 1
-    assert body["skipped"] == []
 
 
 def _point_take_outside_the_audio_root(client: TestClient, generation_id: str) -> None:
