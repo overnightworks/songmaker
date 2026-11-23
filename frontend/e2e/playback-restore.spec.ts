@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { sameOriginHeaders, FlowGuard, shellOf, workspace, type Shell } from './helpers';
+import { playOpenAlbum } from './play-album';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong, seedTake } from './seed';
 
 /**
@@ -208,18 +209,23 @@ async function playTheSongsTake(
 	await expect(transportOf(page).pause).toHaveAttribute('aria-busy', 'false');
 }
 
-// Plays the song's one take from its album, pauses it mid-take and reloads,
-// as a page Android killed and the listener reopened. A flow that must catch
-// the reopened page before its take arrives arranges that before the reload.
+// Plays the album from its header, so its songs follow one another.
+async function playTheAlbum(page: Page, albumId: string): Promise<void> {
+	await page.goto(`/album/${albumId}`);
+	await playOpenAlbum(page);
+	await expect(transportOf(page).pause).toHaveAttribute('aria-busy', 'false');
+}
+
+// Starts playback, pauses it mid-take and reloads, as a page Android killed
+// and the listener reopened. A flow that must catch the reopened page before
+// its take arrives arranges that before the reload.
 async function pauseMidTakeAndReload(
 	page: Page,
-	shell: Shell,
-	albumId: string,
-	songTitle: string,
+	start: () => Promise<void>,
 	beforeTheReload: () => Promise<void> = async () => {}
 ): Promise<void> {
 	const { play, pause } = transportOf(page);
-	await playTheSongsTake(page, shell, albumId, songTitle);
+	await start();
 	await seekThePlayingDeck(page, MID_TAKE_SECONDS);
 	await pause.click();
 	await expect(play).toBeVisible();
@@ -372,7 +378,7 @@ test('reload mid-take shows the same take at the same position, paused', async (
 	const { transport, play: transportPlay, pause: transportPause } = transportOf(page);
 
 	await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
-		await pauseMidTakeAndReload(page, shell, albumId, songTitle);
+		await pauseMidTakeAndReload(page, () => playTheSongsTake(page, shell, albumId, songTitle));
 
 		await expect(transport).toContainText(songTitle);
 		await expect(transportPlay).toBeVisible();
@@ -387,7 +393,7 @@ test('reload mid-take shows the same take at the same position, paused', async (
 		await expect(transportPause).toBeVisible();
 		await transportPause.click();
 		await expect(transportPlay).toBeVisible();
-		expect(await savedQueueSource(page)).toEqual({ type: 'album', albumId });
+		expect(await savedQueueSource(page)).toEqual({ type: 'song' });
 	});
 
 	console.log(`Playback restore flow /api requests (${shell}): ${guard.apiRequestCount}`);
@@ -408,9 +414,13 @@ test.describe('a slow network holds the restored take back', () => {
 		let releaseTheTake: () => void = () => {};
 
 		await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
-			await pauseMidTakeAndReload(page, shell, albumId, songTitle, async () => {
-				releaseTheTake = await holdTakeAudioBack(page);
-			});
+			await pauseMidTakeAndReload(
+				page,
+				() => playTheSongsTake(page, shell, albumId, songTitle),
+				async () => {
+					releaseTheTake = await holdTakeAudioBack(page);
+				}
+			);
 
 			await expect(transport).toContainText(songTitle);
 			await expect(play).toHaveAttribute('aria-busy', 'false');
@@ -446,9 +456,13 @@ test.describe('a slow network holds the restore back before its take is known', 
 		let savedSong = { sent: Promise.resolve() as Promise<unknown>, release: () => {} };
 
 		await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
-			await pauseMidTakeAndReload(page, shell, albumId, songTitle, async () => {
-				savedSong = await holdTheSavedSongBack(page);
-			});
+			await pauseMidTakeAndReload(
+				page,
+				() => playTheSongsTake(page, shell, albumId, songTitle),
+				async () => {
+					savedSong = await holdTheSavedSongBack(page);
+				}
+			);
 			await savedSong.sent;
 
 			await expect(transport).not.toContainText(songTitle);
@@ -480,7 +494,7 @@ test('reload mid-album, one tap plays on, and the next song follows when the tak
 	const [first, second] = [`Restore Queue ${marker} first`, `Restore Queue ${marker} second`];
 
 	await withAlbumOfItsOwn(page, marker, [{ title: first }, { title: second }], async (albumId) => {
-		await pauseMidTakeAndReload(page, shell, albumId, first);
+		await pauseMidTakeAndReload(page, () => playTheAlbum(page, albumId));
 
 		await expect(transport).toContainText(first);
 		await play.click();
@@ -508,7 +522,7 @@ test("reload after a pause in the album's second take shows it at its saved posi
 	const songs = [{ title: first }, { title: second, takeAudio: longTakeAudio() }];
 
 	await withAlbumOfItsOwn(page, marker, songs, async (albumId) => {
-		await playTheSongsTake(page, shell, albumId, first);
+		await playTheAlbum(page, albumId);
 		await expect(transport).toContainText(second, {
 			timeout: TRACK_CHANGE_TIMEOUT_MS
 		});

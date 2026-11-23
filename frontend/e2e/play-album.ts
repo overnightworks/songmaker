@@ -29,9 +29,9 @@ export async function openNowPlayingFromBar(
 }
 
 /**
- * Now Playing's This take panel, raised from the bar: it opens on the Queue
- * tab for a song's takes. On the phone the panel is a sheet that the tab
- * strip's trigger raises first.
+ * Now Playing's This take panel, raised from the bar. On the phone the panel
+ * is a sheet: a song of one take opens it already (and on This take), a
+ * song of several leaves it shut behind the tab strip's trigger.
  */
 export async function openThisTakeFromBar(
 	page: Page,
@@ -39,10 +39,11 @@ export async function openThisTakeFromBar(
 	songTitle: string
 ): Promise<void> {
 	await openNowPlayingFromBar(page, shell, songTitle);
-	if (shell === 'mobile')
+	const takeTab = page.getByRole('tab', { name: words['nowPlaying.takeTab'] });
+	if (shell === 'mobile' && !(await takeTab.isVisible()))
 		await page
 			.getByRole('dialog', { name: songTitle })
 			.getByRole('button', { name: new RegExp(`${words['nowPlaying.queueTab']}$`) })
 			.click();
-	await page.getByRole('tab', { name: words['nowPlaying.takeTab'] }).click();
+	await takeTab.click();
 }
