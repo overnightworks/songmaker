@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Final
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from songmaker_cli.api_models.songs import (
     AlbumCoverUrls,
@@ -231,6 +231,8 @@ class AddPlaylistToPlaylistRequest(BaseModel):
 
 
 class PlaylistAlbumSkipResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     song_id: str
     title: str
     reason: str
@@ -242,6 +244,8 @@ class PlaylistAlbumSkipResponse(BaseModel):
 
 class AddEntriesToPlaylistResponse(BaseModel):
     """What an add of an album's or a playlist's songs did: how many entries, which were skipped."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     added_count: int
     skipped: list[PlaylistAlbumSkipResponse]

@@ -403,9 +403,10 @@ def api_add_playlist_to_playlist(
 ) -> AddEntriesToPlaylistResponse:
     check_playlist_access(session, playlist_id, user)
     source = check_playlist_access(session, req.source_playlist_id, user)
+    reaches = _albums_reached_by(user)
     reached_entries = [
         entry for entry in presented_playlist_entries(source)
-        if can_access_album(entry.generation.song.album, user)
+        if reaches(entry.generation.song.album)
     ]
     result = add_playlist_entries_to_playlist(
         session, playlist_id, reached_entries, is_readable=_audio_reader(ctx),
