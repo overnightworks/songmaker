@@ -84,7 +84,7 @@ describe('a tap on a take row', () => {
 	}
 
 	// Spec: REQ-LISTENING-08 -- a tap on a take row plays that take and starts the song's queue on it.
-	it('a take row plays the tapped take in a queue of its song', async () => {
+	it('a take row plays the tapped take in a queue of its song', () => {
 		const song = versionedSong();
 
 		playTake(song.generations[2], song);
@@ -94,7 +94,7 @@ describe('a tap on a take row', () => {
 		expect(get(playbackSource)).toEqual({ kind: 'song', id: song.id, title: song.title });
 	});
 
-	it('a take archived after the queue was built is skipped when its turn comes', async () => {
+	it('a take archived after the queue was built is skipped when its turn comes', () => {
 		const song = versionedSong();
 		songList.set([song]);
 		playTake(song.generations[1], song);
@@ -121,7 +121,7 @@ describe('a tap on a take row', () => {
 		};
 	}
 
-	it('a take archived while it waits as the next one is put right at once', async () => {
+	it('a take archived while it waits as the next one is put right at once', () => {
 		const song = versionedSong();
 		songList.set([song]);
 		playTake(song.generations[4], song);
@@ -131,7 +131,7 @@ describe('a tap on a take row', () => {
 		expect(vi.mocked(audioPlayer.preload).mock.lastCall?.[0]?.generation.id).toBe('g-v2b');
 	});
 
-	it('a take archived while it waits as the only next one is taken back', async () => {
+	it('a take archived while it waits as the only next one is taken back', () => {
 		const song = versionedSong();
 		const pair = { ...song, generations: [song.generations[1], song.generations[2]] };
 		songList.set([pair]);
@@ -143,7 +143,7 @@ describe('a tap on a take row', () => {
 		expect(withdraw).toHaveBeenCalled();
 	});
 
-	it('a Queue row of a take archived since the queue was built plays nothing', async () => {
+	it('a Queue row of a take archived since the queue was built plays nothing', () => {
 		const song = versionedSong();
 		songList.set([song]);
 		playTake(song.generations[4], song);
@@ -170,7 +170,7 @@ describe('a tap on a take row', () => {
 		expect(queuedGenerationIds()).toEqual(['g-v3', 'g-v2a', 'g-v2b', 'g-v1']);
 	});
 
-	it('a tap says play from here, so a leftover shuffle does not reorder the queue', async () => {
+	it('a tap says play from here, so a leftover shuffle does not reorder the queue', () => {
 		setShuffle(true);
 		const song = versionedSong();
 
@@ -180,7 +180,7 @@ describe('a tap on a take row', () => {
 		expect(queuedGenerationIds()).toEqual(['g-v3', 'g-v2a', 'g-v2b', 'g-v1']);
 	});
 
-	it('a take that cannot play starts nothing', async () => {
+	it('a take that cannot play starts nothing', () => {
 		const song = versionedSong();
 
 		playTake(song.generations[3], song);
@@ -188,7 +188,7 @@ describe('a tap on a take row', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
-	it('toggles pause instead of restarting when the row take is already playing', async () => {
+	it('toggles pause instead of restarting when the row take is already playing', () => {
 		const gen = makeGen(genDefaults);
 		const song = makeSong(queuedSongDefaults());
 		audioPlayer.current = makePlayback(gen, song);

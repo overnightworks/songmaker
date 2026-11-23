@@ -405,7 +405,7 @@ describe('browsing state', () => {
 });
 
 describe('playback dispatch', () => {
-	it('playing a take uses its version lyrics, never the song draft', async () => {
+	it('playing a take uses its version lyrics, never the song draft', () => {
 		const gen = makeGen({ ...genDefaults, version_lyrics: 'old verse' });
 		const song = makeSong({
 			...queuedSongDefaults(),
