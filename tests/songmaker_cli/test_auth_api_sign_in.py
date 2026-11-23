@@ -441,13 +441,11 @@ def test_an_anonymous_share_manifest_post_passes_the_csrf_checks(world: World) -
     assert response.status_code == 404
 
 
-def test_a_worker_call_with_the_internal_token_passes_the_csrf_checks(world: World) -> None:
-    from songmaker_cli.settings import get_settings
-
-    token = get_settings().songmaker_internal_token.get_secret_value()
-
+def test_a_worker_call_with_the_internal_token_passes_the_csrf_checks(
+    world: World, internal_token: str,
+) -> None:
     response = world.client.post(
-        "/api/internal/workers/register", json={}, headers={"X-Internal-Token": token},
+        "/api/internal/workers/register", json={}, headers={"X-Internal-Token": internal_token},
     )
 
     assert response.status_code == 422

@@ -141,7 +141,7 @@ def _close_fake_cli_pipes():
 
 @pytest.fixture
 def internal_token() -> str:
-    """1301-F10-FIXTURE: configured credential expected at worker boundaries."""
+    """The configured internal token: the credential workers and the control plane exchange."""
     from songmaker_cli.settings import get_settings
 
     return get_settings().songmaker_internal_token.get_secret_value()

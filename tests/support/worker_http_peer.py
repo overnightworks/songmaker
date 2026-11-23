@@ -28,7 +28,6 @@ from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache
 from songmaker_acestep_worker.wrapper import create_app
 from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.db.queries.workers import register_worker
-from songmaker_cli.settings import get_settings
 
 PEER_DEADLINE_SECONDS = 15
 PEER_CLEANUP_DEADLINE_SECONDS = 3
@@ -165,7 +164,7 @@ async def unload_peer_model(model: LoadedModel) -> None:
 
 
 class GenerationWorkerPeer:
-    def __init__(self, tmp_path: Path, scenario: WorkerScenario) -> None:
+    def __init__(self, tmp_path: Path, internal_token: str, scenario: WorkerScenario) -> None:
         self.phase = "startup"
         self.redis = settled_fake_redis(ARQ_SCORING_HEALTH_KEY)
         self.audio_dir = tmp_path / "audio"
@@ -173,7 +172,7 @@ class GenerationWorkerPeer:
         self.data_dir.mkdir(exist_ok=True)
         self.settings = FakeTrainingWorkerSettings(
             redis_url="redis://unused",
-            internal_token=get_settings().songmaker_internal_token.get_secret_value(),
+            internal_token=internal_token,
             audio_dir=self.audio_dir,
             output_dir=tmp_path / "worker-output",
             control_plane_url="",
@@ -307,13 +306,14 @@ class GenerationWorkerPeer:
 @asynccontextmanager
 async def open_generation_worker_peer(
     tmp_path: Path,
+    internal_token: str,
     scenario: WorkerScenario = WorkerScenario(),
     *,
     db_factory=None,
     deadline_seconds: float = PEER_DEADLINE_SECONDS,
     startup_deadline_seconds: float = PEER_DEADLINE_SECONDS,
 ) -> AsyncIterator[GenerationWorkerPeer]:
-    peer = GenerationWorkerPeer(tmp_path, scenario)
+    peer = GenerationWorkerPeer(tmp_path, internal_token, scenario)
     stack = AsyncExitStack()
     stalled_phase = None
 
@@ -365,10 +365,10 @@ async def open_generation_worker_peer(
 
 
 @pytest.fixture
-def generation_worker_peer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def generation_worker_peer(tmp_path: Path, internal_token: str, monkeypatch: pytest.MonkeyPatch):
     """S5-A/B/D, L3/L6/L9/L10: Own every resource of a shared worker scenario.
 
     Takes music fetches from the peer land in its temp dir, which stays inside the test's folder.
     """
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    return partial(open_generation_worker_peer, tmp_path)
+    return partial(open_generation_worker_peer, tmp_path, internal_token)
