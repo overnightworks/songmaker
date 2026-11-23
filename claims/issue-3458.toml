@@ -1,0 +1,7 @@
+claim_id = "dbc7e013158f491f9539d6b73bf2211c"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "0932a8ae9f7602eeadfa650aa21464c5d6cd91f6"
+branch = "claude/issue-3458-security-proxy-trust-platform"
+scope = ["docs/security.md"]
+opened_commit = "0bf9a72fa46bc23dbfdbc34692e6ae99e9d780f9"
