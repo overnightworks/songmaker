@@ -202,9 +202,7 @@ beforeEach(() => {
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
 	startOnTopOfHistory('/');
-	vi.mocked(goto).mockClear();
-	vi.mocked(pushState).mockClear();
-	vi.mocked(replaceState).mockClear();
+	for (const navigate of [goto, pushState, replaceState]) vi.mocked(navigate).mockClear();
 	installHistoryController();
 	attachLandingHandler(() => undefined);
 });

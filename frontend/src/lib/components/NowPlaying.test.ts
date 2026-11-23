@@ -156,9 +156,7 @@ async function unmountSurface() {
 
 afterEach(async () => {
 	await unmountSurface();
-	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies — the module-level
-	// vi.fn() stubs from the takeActions mock factory above need an explicit
-	// clear or their call history leaks into the next test (see player.test.ts).
+	// restoreAllMocks rewinds only spies; the takeActions mock's vi.fn() stubs keep their calls.
 	vi.clearAllMocks();
 	vi.restoreAllMocks();
 	document.body.replaceChildren();

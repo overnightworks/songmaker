@@ -106,6 +106,7 @@ export function selectSong(songId: string): void {
 }
 
 const songGenerationLoads = new Map<string, Promise<void>>();
+export const forgetSongGenerationLoadsForTests = (): void => songGenerationLoads.clear();
 
 export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	const songs = get(songList);
@@ -119,19 +120,13 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	if (inflight !== undefined) return inflight;
 	const load = (async () => {
 		try {
-			const full = await fetchSong(songId);
-			upsertSongInList(full);
+			upsertSongInList(await fetchSong(songId));
 		} finally {
 			songGenerationLoads.delete(songId);
 		}
 	})();
 	songGenerationLoads.set(songId, load);
 	await load;
-}
-
-// A load a test left waiting must not answer the next test's request.
-export function forgetSongGenerationLoadsForTests(): void {
-	songGenerationLoads.clear();
 }
 
 export function clearGenerationSelection(): void {

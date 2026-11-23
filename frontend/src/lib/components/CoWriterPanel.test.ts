@@ -198,6 +198,7 @@ async function openMemoryFromMenu(target: HTMLElement): Promise<void> {
 
 const memorySection = (target: HTMLElement) =>
 	target.querySelector(`section[aria-label="${words['cowriter.memory']}"]`);
+const userMemory = (body: string) => ({ user: { scope: 'user' as const, target_id: 'u1', body } });
 function userMemoryField(target: HTMLElement): HTMLTextAreaElement | null {
 	return target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
 }
@@ -502,9 +503,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	});
 
 	it('keeps Memory in its ⋯ menu rather than a row above the chat, moves focus into the memory editor it opens, and returns focus to ⋯ on close', async () => {
-		vi.mocked(fetchMemory).mockResolvedValueOnce({
-			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
-		});
+		vi.mocked(fetchMemory).mockResolvedValueOnce(userMemory('Prefers short lines'));
 		const target = await render();
 		expect(
 			Array.from(target.querySelectorAll('button'), (button) => button.textContent?.trim())
@@ -525,9 +524,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	});
 
 	it('closes Memory on Escape from inside the editor without leaving the song', async () => {
-		vi.mocked(fetchMemory).mockResolvedValueOnce({
-			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
-		});
+		vi.mocked(fetchMemory).mockResolvedValueOnce(userMemory('Prefers short lines'));
 		const target = await render();
 		await openMemoryFromMenu(target);
 		await vi.waitFor(() => expect(userMemoryField(target)).not.toBeNull());
@@ -543,9 +540,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	});
 
 	async function renderWithOneWaitingProposal(): Promise<HTMLElement> {
-		vi.mocked(fetchMemory).mockResolvedValue({
-			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
-		});
+		vi.mocked(fetchMemory).mockResolvedValue(userMemory('Prefers short lines'));
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
 		fetchConversationMessages.mockResolvedValue(
 			conversation(
@@ -1765,9 +1760,7 @@ describeBackClosesOverlay({
 describeBackClosesOverlay({
 	name: 'the co-writer Memory editor',
 	render: () => {
-		vi.mocked(fetchMemory).mockResolvedValue({
-			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
-		});
+		vi.mocked(fetchMemory).mockResolvedValue(userMemory('Prefers short lines'));
 		return render();
 	},
 	open: async (target) => {

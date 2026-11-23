@@ -5,6 +5,7 @@ import {
 	restoreLibraryHistoryOnRouterStart,
 	libraryHistoryEntry,
 	openLibraryAddress,
+	resetLibraryContextForTests,
 	type LibraryHistoryState
 } from '#lib/stores/libraryContext.ts';
 import {
@@ -116,6 +117,23 @@ export interface BackWatch {
 export function watchBack(): BackWatch {
 	const back = vi.spyOn(history, 'back').mockImplementation(() => undefined);
 	return { presses: () => back.mock.calls.length, stop: () => back.mockRestore() };
+}
+
+// A layer a teardown closes steps back off its entry, and the test browser would land that
+// Back tasks later, in the next test; that test starts on a library entry with no library,
+// navigation or session state the teardown's test left.
+export async function tearDownOntoRestingHistory(teardown: () => Promise<void>): Promise<void> {
+	const back = watchBack();
+	try {
+		await teardown();
+		await historyComesToRest();
+	} finally {
+		back.stop();
+	}
+	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
+	sessionStorage.clear();
+	resetLibraryContextForTests();
+	resetNavigationForTests();
 }
 
 async function traverseHistory(step: () => void): Promise<void> {

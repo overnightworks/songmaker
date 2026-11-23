@@ -3,6 +3,7 @@ import {
 	pressBack,
 	replaceHistoryEntry,
 	standingHistoryEntry,
+	tearDownOntoRestingHistory,
 	watchBack
 } from '#lib/test-utils/library-history.ts';
 import {
@@ -18,7 +19,6 @@ import {
 	historyStandsStill,
 	loadHistoryPageForTests,
 	pushEntry,
-	historyComesToRest,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
 } from '#lib/history/historyController.ts';
@@ -159,19 +159,23 @@ const children = createRawSnippet(() => ({
 	render: () => `<main><button data-testid="workspace-focus">Workspace action</button></main>`
 }));
 
+function mediaQueryList(matches: boolean, media: string) {
+	return {
+		matches,
+		media,
+		onchange: null,
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+		addListener: vi.fn(),
+		removeListener: vi.fn(),
+		dispatchEvent: vi.fn()
+	};
+}
+
 function stubMatchMedia(matches: boolean): void {
 	vi.stubGlobal(
 		'matchMedia',
-		vi.fn(() => ({
-			matches,
-			media: COMPACT_LAYOUT_MEDIA,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			addListener: vi.fn(),
-			removeListener: vi.fn(),
-			dispatchEvent: vi.fn()
-		}))
+		vi.fn(() => mediaQueryList(matches, COMPACT_LAYOUT_MEDIA))
 	);
 }
 
@@ -246,21 +250,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	// A layer the unmount closes steps back off its entry, and the test browser
-	// would land that Back tasks later, in the next test.
-	const back = watchBack();
-	try {
-		await unmountCurrentLayout();
-		await historyComesToRest();
-	} finally {
-		back.stop();
-	}
-	// The test browser keeps the entry a test left, and the resets below read
-	// it as the entry the next page loads onto.
-	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
-	sessionStorage.clear();
-	resetLibraryContextForTests();
-	resetNavigationForTests();
+	await tearDownOntoRestingHistory(unmountCurrentLayout);
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	delete document.documentElement.dataset.transportBar;
@@ -270,7 +260,6 @@ afterEach(async () => {
 	nowPlayingSurface.set('closed');
 	nowPlayingDockable.set(false);
 	setDesktopNowPlayingSurface('docked');
-	localStorage.removeItem('nowPlayingDesktopSurface');
 	audioPlayer.current = null;
 	songList.set([]);
 	currentUser.set(null);
@@ -278,9 +267,8 @@ afterEach(async () => {
 	authCheckError.set(null);
 	phoneAppBar.set(null);
 	railCollapsed.set(false);
-	localStorage.removeItem('songmaker.rail-collapsed');
 	railWidth.set(264);
-	localStorage.removeItem('songmaker.rail-width');
+	localStorage.clear();
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
@@ -327,16 +315,7 @@ function stubMatchMediaAtWidth(width: number): void {
 		'matchMedia',
 		vi.fn((query: string) => {
 			const maxWidth = /max-width:\s*(\d+)px/.exec(query);
-			return {
-				matches: maxWidth !== null && width <= Number(maxWidth[1]),
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				dispatchEvent: vi.fn()
-			};
+			return mediaQueryList(maxWidth !== null && width <= Number(maxWidth[1]), query);
 		})
 	);
 }
