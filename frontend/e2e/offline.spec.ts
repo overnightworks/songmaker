@@ -346,7 +346,7 @@ test.describe(
 // transport keeps its spinner until the network's return resumes the take.
 // From the tap it shows the album header start's waiting transport, Pause
 // with its spinner (#1312), on the phone and the desktop alike.
-test.describe('tapping a take row Play while the network is gone', () => {
+test.describe('tapping a take row while the network is gone', () => {
 	test('waits with Pause and its spinner from the tap and no Retry, and plays the take by itself once the network is back (#1161 R2, #1312)', async ({
 		page,
 		context,
@@ -361,12 +361,12 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const retry = transport.getByRole('button', { name: words['transport.retry'], exact: true });
 		const spinner = transport.locator('.play-btn .spinner');
 		const waitingSpinner = pause.locator('.spinner');
-		const takeRowPlay = takeRowTarget(workspace(page).locator('.take-row'));
+		const tappedTakeRow = takeRowTarget(workspace(page).locator('.take-row'));
 
 		await openSong(page, library.songPhoneAlbumId, songTitle);
 		if (isMobile) await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
-		await expect(takeRowPlay).toBeVisible();
+		await expect(tappedTakeRow).toBeVisible();
 
 		await loseNetwork(page, context);
 		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
@@ -375,7 +375,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 			if (new URL(sent.url()).pathname.startsWith(TAKE_AUDIO_PATH_PREFIX))
 				offlineAudioRequests += 1;
 		});
-		await takeRowPlay.click();
+		await tappedTakeRow.click();
 		await expect(waitingSpinner).toBeVisible();
 		await expect.poll(() => offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(waitingSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });

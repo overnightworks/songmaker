@@ -442,7 +442,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	const takeControl = surface.locator('.take-row').filter({ hasText: library.takeLabel });
 	await expect(takeControl).toHaveCount(1);
 	// A tap on the row of the take that is already playing pauses it and opens
-	// no Now Playing (#3419); the row keeps its equalizer, standing still.
+	// no Now Playing; the row keeps its equalizer, standing still.
 	await expect(takeControl).toHaveClass(/playing/);
 	await takeControl.locator('.take-summary').click();
 	await expect(
