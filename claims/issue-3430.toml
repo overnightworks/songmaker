@@ -1,0 +1,7 @@
+claim_id = "c1009c42cc0140c4842bc8d007e9c587"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "7698efe01d743a9e8378eac2fdb8cfe99c52d233"
+branch = "claude/issue-3430-an-import-contract-keeps-songmaker-s-pur"
+scope = [".importlinter", "docs/architecture.md"]
+opened_commit = "7eea62fd5f6279355d9508a3775766154095d21e"
