@@ -24,7 +24,6 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from logline import configure, set_route
 from starlette.middleware import Middleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.ports import WallClock
 from webauth.web_auth import (
     IssuerCalls,
@@ -41,7 +40,6 @@ from songmaker_cli.agent.mcp import (
 )
 from songmaker_cli.app_context import (
     AppContext,
-    allowed_hosts,
     build_web_auth_config,
     parse_trusted_proxies,
 )
@@ -317,10 +315,7 @@ def build_web_auth(
             ),
             Middleware(CORSMiddleware, **_cors_middleware_kwargs(settings.cors_origin)),
         ),
-        inside=(
-            Middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings))),
-            Middleware(HttpMetricsMiddleware),
-        ),
+        inside=(Middleware(HttpMetricsMiddleware),),
         issuer_calls=issuer_calls,
     )
 

@@ -12,7 +12,6 @@ import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from support.web_app import issued_cookies, make_test_app
 from webauth.config import installed_web_auth_config
 
@@ -263,17 +262,17 @@ def test_created_app_places_its_own_layers_in_the_two_slots_of_the_composition_c
 
     Outermost first, because Starlette runs the last-added layer first: the gzip and CORS layers
     sit outside the stack, so they see every refusal with its headers and CORS answers a
-    preflight itself; the host check and the metrics sit inside it, so they see only admitted
-    requests. CORS is registered for every configuration (`CORS_ORIGIN` only picks its policy).
-    The stack's own order is webauth's, driven by the refusal tests below.
+    preflight itself; the metrics sit inside it, so they see only admitted requests. No layer
+    reads the Host. CORS is registered for every configuration (`CORS_ORIGIN` only picks its
+    policy). The stack's own order is webauth's, driven by the refusal tests below.
     """
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     layers = _middleware_classes(client)
     outside = [ResourceStreamDeadlineMiddleware, SelectiveGZipMiddleware, CORSMiddleware]
-    inside = [TrustedHostMiddleware, HttpMetricsMiddleware]
+    inside = [HttpMetricsMiddleware]
     assert [layer for layer in layers if layer in {*outside, *inside}] == [*outside, *inside]
-    assert layers.index(TrustedHostMiddleware) - layers.index(CORSMiddleware) > 1
+    assert layers.index(HttpMetricsMiddleware) - layers.index(CORSMiddleware) > 1
 
 
 _STREAM_ERROR = RuntimeError("stream failed")
@@ -527,11 +526,8 @@ def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
 def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
     tmp_path: Path, pg_factory, fresh_settings, monkeypatch, allowed, origin, expected,
 ):
-    """defect:#1590 -- host configuration feeds the library's parsed origin checks.
-
-    `localhost` stays listed, because the host check refuses a request whose own Host is not.
-    """
-    monkeypatch.setenv("ALLOWED_HOSTS", f"{allowed},localhost")
+    """defect:#1590 -- host configuration feeds the library's parsed origin checks."""
+    monkeypatch.setenv("ALLOWED_HOSTS", allowed)
     _, exchange = _security_exchange(tmp_path, pg_factory)
     status, _, _ = asyncio.run(
         exchange("/api/security-proof", headers=[(b"origin", origin.encode())]),

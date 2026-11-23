@@ -30,9 +30,11 @@ FORM = {"content-type": "application/x-www-form-urlencoded"}
 BACKCHANNEL_MAX_BODY_BYTES = 32 * 1024
 
 
-# Every Host TrustedHost admits, bare and with the port the realm and Compose post to.
-ADMITTED_HOSTS = [
-    f"{host}{port}" for host in allowed_hosts(get_settings()) for port in ("", ":8080")
+# The listed Hosts bare and with the port the realm and Compose post to, and a Host no list names:
+# the route's decision does not read the Host.
+POSTED_HOSTS = [
+    *(f"{host}{port}" for host in allowed_hosts(get_settings()) for port in ("", ":8080")),
+    "evil.example:8080",
 ]
 
 
@@ -61,7 +63,7 @@ def _sign_in_twice(world: World, subject: str = SUBJECT) -> None:
     other_browser.sign_in(_member(subject))
 
 
-@pytest.mark.parametrize("host", ADMITTED_HOSTS)
+@pytest.mark.parametrize("host", POSTED_HOSTS)
 def test_a_valid_logout_token_ends_every_session_of_its_subject(world: World, host: str) -> None:
     _sign_in_twice(world)
     _sign_in_twice(world, OTHER_SUBJECT)
@@ -151,11 +153,13 @@ def _forged(world: World) -> str:
 
 
 @pytest.mark.parametrize(
-    "make_token",
+    ("make_token", "headers"),
     [
-        pytest.param(_forged, id="forged-signature"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, aud="other"), id="wrong-aud"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, iss="https://evil"), id="wrong-iss"),
+        pytest.param(_forged, {}, id="forged-signature"),
+        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, aud="other"), {}, id="wrong-aud"),
+        pytest.param(
+            lambda w: w.issuer.logout_token(SUBJECT, iss="https://evil"), {}, id="wrong-iss",
+        ),
         pytest.param(
             lambda w: w.issuer.sign(
                 {"iss": w.issuer.issuer, "aud": w.issuer.client_id, "sub": SUBJECT,
@@ -163,18 +167,27 @@ def _forged(world: World) -> str:
                  "events": {"http://schemas.openid.net/event/backchannel-logout": {}}},
                 token_type="JWT",
             ),
+            {},
             id="wrong-typ",
         ),
-        pytest.param(lambda w: w.issuer.logout_token(None, sid="a-session"), id="sid-only"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, nonce="n"), id="nonce"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, events={}), id="no-event"),
-        pytest.param(lambda _world: "not-a-jwt", id="malformed"),
+        pytest.param(lambda w: w.issuer.logout_token(None, sid="a-session"), {}, id="sid-only"),
+        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, nonce="n"), {}, id="nonce"),
+        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, events={}), {}, id="no-event"),
+        pytest.param(lambda _world: "not-a-jwt", {}, id="malformed"),
+        pytest.param(
+            lambda _world: "not-a-jwt", {"host": POSTED_HOSTS[0]}, id="malformed-listed-host",
+        ),
+        pytest.param(
+            lambda _world: "not-a-jwt", {"host": POSTED_HOSTS[-1]}, id="malformed-foreign-host",
+        ),
     ],
 )
-def test_a_refused_logout_token_answers_400_and_ends_nothing(world: World, make_token) -> None:
+def test_a_refused_logout_token_answers_400_and_ends_nothing(
+    world: World, make_token, headers: dict[str, str],
+) -> None:
     _sign_in_twice(world)
 
-    response = _backchannel(world, make_token(world))
+    response = _backchannel(world, make_token(world), **headers)
 
     assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
@@ -196,15 +209,6 @@ def test_a_body_that_is_not_one_logout_token_form_answers_400(
     response = world.client.post(BACKCHANNEL_PATH, content=body, headers=headers)
 
     assert (response.status_code, response.content) == (400, b"")
-    assert world.session_count() == 2
-
-
-def test_an_unlisted_host_gets_the_trusted_host_400_and_ends_nothing(world: World) -> None:
-    _sign_in_twice(world)
-
-    response = _backchannel(world, world.issuer.logout_token(SUBJECT), host="evil.example:8080")
-
-    assert response.status_code == 400
     assert world.session_count() == 2
 
 

@@ -114,7 +114,6 @@ import {
 	chooseLibraryTakePool,
 	playStartNotice,
 	libraryQueueSkipped,
-	curateAlbum,
 	isPlaylistEntryCurrent,
 	playAlbum,
 	playAlbumSong,
@@ -136,12 +135,7 @@ import {
 	pendingStart,
 	windowEnded
 } from './player';
-import {
-	buildQueueViewModel,
-	curationActive,
-	libraryQueueSkippedComplete,
-	queueContext
-} from './queue';
+import { buildQueueViewModel, libraryQueueSkippedComplete, queueContext } from './queue';
 import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,
@@ -294,7 +288,6 @@ afterEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	queueContext.set({ type: 'library' });
-	curationActive.set(false);
 	selectedPlaylistDetail.set(null);
 	setShuffle(false);
 	setLibraryTakePool('mix');
@@ -2835,183 +2828,6 @@ describe('playAlbum start track', () => {
 			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
 			{ restart: true }
 		);
-	});
-});
-
-describe('curateAlbum', () => {
-	beforeEach(() => {
-		toasts.set([]);
-	});
-
-	it('starts at the first song without a pick, not track 1', async () => {
-		songList.set([
-			makeSong({
-				...queuedSongDefaults(),
-				generations: [makeGen({ ...genDefaults, is_picked: true })]
-			}),
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's2',
-				title: 'Two',
-				track_number: 2,
-				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a1/s2.mp3' })]
-			}),
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's3',
-				title: 'Three',
-				track_number: 3,
-				generations: [makeGen({ ...genDefaults, id: 'g3', song_id: 's3', mp3_path: 'a1/s3.mp3' })]
-			})
-		]);
-
-		await curateAlbum('a1');
-
-		expect(audioPlayer.load).toHaveBeenCalledWith(
-			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
-			{ restart: true }
-		);
-		const ctx = get(queueContext);
-		expect(ctx.type === 'album' && ctx.index).toBe(1);
-	});
-
-	it('starts at track 1 once every song already has a pick', async () => {
-		songList.set([
-			makeSong({
-				...queuedSongDefaults(),
-				generations: [makeGen({ ...genDefaults, is_picked: true })]
-			}),
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's2',
-				title: 'Two',
-				track_number: 2,
-				generations: [
-					makeGen({
-						...genDefaults,
-						id: 'g2',
-						song_id: 's2',
-						is_picked: true,
-						mp3_path: 'a1/s2.mp3'
-					})
-				]
-			})
-		]);
-
-		await curateAlbum('a1');
-
-		expect(audioPlayer.load).toHaveBeenCalledWith(
-			expect.objectContaining({ generation: expect.objectContaining({ id: 'g1' }) }),
-			{ restart: true }
-		);
-	});
-
-	it('skips a song with no generations, same as the album queue', async () => {
-		songList.set([
-			makeSong({ ...queuedSongDefaults(), generation_count: 0, generations: [] }),
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's2',
-				title: 'Two',
-				track_number: 2,
-				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a1/s2.mp3' })]
-			})
-		]);
-
-		await curateAlbum('a1');
-
-		const ctx = get(queueContext);
-		expect(ctx.type === 'album' && ctx.takes?.length).toBe(1);
-	});
-
-	it('reports nothing playable for an album with no takes, and never enters curation mode', async () => {
-		albumList.set([makeAlbum({ created_at: '', title: 'Nachtstrom' })]);
-		songList.set([makeSong({ ...queuedSongDefaults(), generation_count: 0, generations: [] })]);
-
-		await curateAlbum('a1');
-
-		expect(audioPlayer.load).not.toHaveBeenCalled();
-		expect(get(playStartNotice)).toBe('empty');
-		expect(get(curationActive)).toBe(false);
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({
-				message: words['player.nothingToPlay'],
-				type: 'error'
-			})
-		]);
-	});
-
-	it('turns on curation mode and opens Now Playing straight to the take panel', async () => {
-		songList.set([makeSong({ ...queuedSongDefaults(), generations: [makeGen(genDefaults)] })]);
-
-		await curateAlbum('a1');
-
-		expect(get(curationActive)).toBe(true);
-		expect(get(nowPlayingSurface)).not.toBe('closed');
-		expect(get(nowPlayingPanel)).toBe('take');
-	});
-
-	it('closing Now Playing exits curation mode', async () => {
-		songList.set([makeSong({ ...queuedSongDefaults(), generations: [makeGen(genDefaults)] })]);
-		await curateAlbum('a1');
-
-		closeNowPlaying();
-
-		expect(get(curationActive)).toBe(false);
-	});
-
-	it('playing a different album while curating ends curation mode', async () => {
-		songList.set([
-			makeSong({ ...queuedSongDefaults(), generations: [makeGen(genDefaults)] }),
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's2',
-				album_id: 'a2',
-				title: 'Two',
-				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a2/s2.mp3' })]
-			})
-		]);
-		await curateAlbum('a1');
-		expect(get(curationActive)).toBe(true);
-
-		await playAlbum('a2');
-
-		expect(get(curationActive)).toBe(false);
-	});
-
-	it('clicking a take row while curating ends curation mode', async () => {
-		// A take row starts a queue of its own, which ends curation.
-		const gen = makeGen(genDefaults);
-		const other = makeGen({ ...genDefaults, id: 'g-other', generation_number: 2 });
-		const song = makeSong({ ...queuedSongDefaults(), generations: [gen] });
-		songList.set([song]);
-		await curateAlbum('a1');
-		expect(get(curationActive)).toBe(true);
-
-		playTake(other, { ...song, generations: [gen, other] });
-
-		expect(get(curationActive)).toBe(false);
-	});
-
-	it('advancing within the curated queue keeps curation mode active', async () => {
-		songList.set([
-			makeSong({ ...queuedSongDefaults(), generations: [makeGen(genDefaults)] }),
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's2',
-				title: 'Two',
-				track_number: 2,
-				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a1/s2.mp3' })]
-			})
-		]);
-		await curateAlbum('a1');
-		expect(get(curationActive)).toBe(true);
-
-		playNextSong();
-
-		expect(get(curationActive)).toBe(true);
-		const ctx = get(queueContext);
-		expect(ctx.type === 'album' && ctx.index).toBe(1);
 	});
 });
 

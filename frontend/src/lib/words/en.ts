@@ -217,7 +217,6 @@ export type Words = {
     readonly "collectionMenu.editDetails": string;
     readonly "collectionMenu.cover": string;
     readonly "collectionMenu.coverHint": string;
-    readonly "collectionMenu.curate": string;
     readonly "collectionMenu.addTo": string;
     readonly "collectionMenu.archive": string;
     readonly "collectionMenu.albumShare": string;
@@ -1382,14 +1381,6 @@ export type Words = {
     readonly "nowPlaying.lyricsUnsynced": string;
     readonly "nowPlaying.noLyrics": string;
     readonly "nowPlaying.importedNoLyrics": string;
-    readonly "nowPlaying.curateGroup": string;
-    readonly "nowPlaying.curateProgress": (gaps: { readonly index: string; readonly total: string }) => string;
-    readonly "nowPlaying.pick": string;
-    readonly "nowPlaying.keep": string;
-    readonly "nowPlaying.unkeep": string;
-    readonly "nowPlaying.skip": string;
-    readonly "nowPlaying.skipName": string;
-    readonly "nowPlaying.done": string;
     readonly "nowPlaying.takePool": string;
     readonly "nowPlaying.poolPicks": string;
     readonly "nowPlaying.poolKeeps": string;
@@ -1672,7 +1663,6 @@ export const words: Words = {
     "collectionMenu.editDetails": "Edit details",
     "collectionMenu.cover": "Cover",
     "collectionMenu.coverHint": "upload · suggest",
-    "collectionMenu.curate": "Pick album takes",
     "collectionMenu.addTo": "Add to…",
     "collectionMenu.archive": "Archive",
     "collectionMenu.albumShare": "Share",
@@ -3082,14 +3072,6 @@ export const words: Words = {
     "nowPlaying.lyricsUnsynced": "Lyrics aren't synced for this take.",
     "nowPlaying.noLyrics": "No lyrics for this take",
     "nowPlaying.importedNoLyrics": "Imported take — no lyrics were saved with it.",
-    "nowPlaying.curateGroup": "Pick album takes",
-    "nowPlaying.curateProgress": (gaps: { readonly index: string; readonly total: string }) => "Pick album takes · Song " + gaps.index + " of " + gaps.total,
-    "nowPlaying.pick": "Pick",
-    "nowPlaying.keep": "Keep",
-    "nowPlaying.unkeep": "Unkeep",
-    "nowPlaying.skip": "Skip",
-    "nowPlaying.skipName": "Skip — Next song",
-    "nowPlaying.done": "Done",
     "nowPlaying.takePool": "Take pool",
     "nowPlaying.poolPicks": "Picks",
     "nowPlaying.poolKeeps": "+ Keeps",

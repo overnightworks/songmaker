@@ -71,7 +71,6 @@
 		// redacts `lyrics`, so the text comes from the share payload.
 		lyricsText = null,
 		rightPanel,
-		curationBar,
 		collectionHead,
 		songs
 	}: {
@@ -141,10 +140,6 @@
 		// The queue or take panel; a single shared song has none, so it shows
 		// neither the column nor the phone's sheet trigger.
 		rightPanel?: Snippet;
-		// Curation mode's Pick/Keep/Skip strip, rendered in the cover column,
-		// which stays visible in every layout — unlike the queue/take tabs,
-		// which mobile hides behind an extra sheet-opening tap.
-		curationBar?: Snippet;
 	} = $props();
 
 	const frequentHitbox = `min-width: ${HITBOX_FREQUENT_PX}px; min-height: ${HITBOX_FREQUENT_PX}px`;
@@ -437,7 +432,6 @@
 				<section class="np-cover-col">
 					{@render coverArt()}
 					{@render coverMeta()}
-					{#if curationBar}{@render curationBar()}{/if}
 					<!-- The docked panel has no transport of its own: the bar beside it
 						stays visible and keeps carrying seek, shuffle, prev/next and play. -->
 					{#if !isDocked}
