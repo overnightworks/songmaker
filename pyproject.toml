@@ -60,7 +60,7 @@ server = [
     # Cross-pod coordination in Redis (owner lease). A git pin by tag like the other two.
     "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.13.1",
     # Every process writes its lines through logline; tandem's range names it, so the host pins the tag.
-    "overnightworks-logline @ git+https://github.com/overnightworks/logline@v0.7.0",
+    "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.9.0",
 ]
 # Pillow normalizes a generated cover; a container installs it only when its entrypoint reaches it.
 image = [
@@ -78,7 +78,7 @@ acestep-worker = [
     # The GPU hold is a tandem lock; the worker writes its lines through logline. Git pins by tag
     # like the server extra's, from the same tags.
     "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.13.1",
-    "overnightworks-logline @ git+https://github.com/overnightworks/logline@v0.7.0",
+    "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.9.0",
     # logline imports it at start; the server extra pins the same range.
     "structlog>=24.0,<27",
     "huggingface_hub>=0.20,<3",
@@ -87,6 +87,7 @@ acestep-worker = [
 dev = [
     "pytest>=7.0,<10",
     "pytest-cov>=7.0,<8",
+    "pytest-randomly>=3.15,<5",
     "pytest-xdist>=3.8,<4",
     "packaging>=24.1",
     "ruff>=0.4,<1",
