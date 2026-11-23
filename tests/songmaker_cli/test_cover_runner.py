@@ -418,7 +418,7 @@ def test_a_running_cover_s_cancel_listener_subscribes_once_while_the_channel_is_
 ) -> None:
     quiet_for = 5  # several of the bounded client's 2 s socket timeouts
 
-    async def follow_while_quiet() -> int:
+    async def follow_while_quiet() -> tuple[int, bool]:
         reads_of_the_job = 0
 
         def counting_db():
@@ -433,11 +433,13 @@ def test_a_running_cover_s_cancel_listener_subscribes_once_while_the_channel_is_
             wake_redis=wake_redis, object_store=an_object_store(),
         )
         try:
-            await cover_runner.run_until_cancelled(ctx, "job", lambda: asyncio.sleep(quiet_for))
+            work = await cover_runner.run_until_cancelled(
+                ctx, "job", lambda: asyncio.sleep(quiet_for),
+            )
         finally:
             await ctx.async_redis.aclose()
             await wake_redis.aclose()
-        return reads_of_the_job
+        return reads_of_the_job, work.cancelled()
 
     # Each subscription's confirmation makes the listener read the job again; the first is one.
-    assert asyncio.run(follow_while_quiet()) == 1
+    assert asyncio.run(follow_while_quiet()) == (1, False)

@@ -510,25 +510,26 @@ def test_an_unpublished_cancel_does_not_write_the_job_id_into_the_log(world, mon
 
 
 @pytest.mark.parametrize(
-    "break_redis",
+    "break_redis, broken_channel",
     [
-        _redis_refuses_every_wake_publication,
-        _redis_does_not_confirm_the_subscription,
-        _redis_loses_the_channel_after_subscribing,
+        pytest.param(_redis_refuses_every_wake_publication, "wake_channel", id="publish_refused"),
+        pytest.param(
+            _redis_does_not_confirm_the_subscription, "following_wake_channel",
+            id="subscription_unconfirmed",
+        ),
+        pytest.param(
+            _redis_loses_the_channel_after_subscribing, "following_wake_channel",
+            id="channel_lost",
+        ),
     ],
-    ids=["publish_refused", "subscription_unconfirmed", "channel_lost"],
 )
 def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
-    world, monkeypatch, break_redis,
+    world, monkeypatch, break_redis, broken_channel,
 ):
     held = HeldGateway(picture(_image_bytes("PNG")))
     world.stack.uses(held)
     ctx = world.app.state.ctx
-    break_redis(
-        ctx.wake_channel if break_redis is _redis_refuses_every_wake_publication
-        else ctx.following_wake_channel,
-        monkeypatch,
-    )
+    break_redis(getattr(ctx, broken_channel), monkeypatch)
     job_id = world.queue()
 
     async def scenario() -> bool:
