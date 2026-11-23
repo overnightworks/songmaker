@@ -447,6 +447,7 @@ def test_the_picture_deadline_reads_unavailable(world):
 
 # 18: an explicit Cancel stops the picture, publishes nothing and the runner goes on.
 def test_cancel_during_the_picture_closes_the_request_and_the_next_job_runs(world, caplog):
+    caplog.set_level(logging.ERROR)
     held = HeldGateway()
     world.stack.uses(held)
     first = world.queue()
@@ -458,8 +459,7 @@ def test_cancel_during_the_picture_closes_the_request_and_the_next_job_runs(worl
         assert cancelled.status_code == 200
         assert await asyncio.wait_for(running, 10) is True
 
-    with caplog.at_level(logging.ERROR):
-        asyncio.run(scenario())
+    asyncio.run(scenario())
 
     assert held.closed.is_set()
     assert world.job(first).status == JobStatus.CANCELLED

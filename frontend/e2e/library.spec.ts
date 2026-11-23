@@ -388,13 +388,13 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	// One play language (#1003): the header's circle starts the album from its
 	// top, shuffle lives in the player alone (#1354 rule 24), and a song box
 	// carries no play glyph of its own -- tapping it plays the song, its ✎
-	// opens it.
+	// opens it, its menu carries the song's actions.
 	await expect(surface.getByRole('button', { name: /shuffle/i })).toHaveCount(0);
 	const pickedSongRow = surface.locator('.song-row').filter({ hasText: library.pickedSongTitle });
 	const openPickedSong = pickedSongRow.getByRole('button', {
 		name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
 	});
-	await expect(pickedSongRow.getByRole('button')).toHaveCount(2);
+	await expect(pickedSongRow.getByRole('button')).toHaveCount(3);
 	await playOpenAlbum(page);
 
 	const transport = page.getByRole('contentinfo');

@@ -344,7 +344,7 @@ describe('SongDetailView failure wording', () => {
 			action: 'saving a version',
 			fallback: words['songPage.saveFailed'],
 			fail: (error: Error) => vi.mocked(updateSong).mockRejectedValueOnce(error),
-			run: () => appBar().menu.onsave()
+			run: () => appBar().menu.onsave?.()
 		},
 		{
 			action: 'deleting a version from its Versions row',
