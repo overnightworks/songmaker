@@ -1,24 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { GenerationItem } from '#lib/api/types.ts';
-import { makeGeneration } from '#lib/test-utils/factories.ts';
+import { makeTakeOfVersion, makeTakesAcrossVersions } from '#lib/test-utils/factories.ts';
 import { groupTakes, takeGroupKey, takesInGroupOrder } from './takeGroups';
 
-function takeOf(id: string, versionNumber: number | null, overrides: Partial<GenerationItem> = {}) {
-	return makeGeneration({
-		id,
-		version_id: versionNumber === null ? null : `ver-${versionNumber}`,
-		version_number: versionNumber,
-		...overrides
-	});
-}
-
-const SONG_TAKES = [
-	takeOf('c1', 3),
-	takeOf('a1', 2, { is_picked: true }),
-	takeOf('a2', 2, { is_archived: true }),
-	takeOf('o1', 1, { is_archived: true }),
-	takeOf('i1', null)
-];
+const SONG_TAKES = makeTakesAcrossVersions();
 
 describe('groupTakes (rules 1, 2 and 5, cells 1/8/9)', () => {
 	it('puts the latest version first, the earlier ones newest first and Imported last', () => {
@@ -38,14 +22,14 @@ describe('groupTakes (rules 1, 2 and 5, cells 1/8/9)', () => {
 	});
 
 	it('keeps the current version with no takes, and none at all for a song with no saved version', () => {
-		expect(groupTakes([takeOf('a1', 2)], 3).current?.generations).toEqual([]);
-		expect(groupTakes([takeOf('a1', 2)], null).current).toBeNull();
+		expect(groupTakes([makeTakeOfVersion('a1', 2)], 3).current?.generations).toEqual([]);
+		expect(groupTakes([makeTakeOfVersion('a1', 2)], null).current).toBeNull();
 	});
 
 	it('names the group of a take by its version, and Imported when it has none', () => {
-		expect(takeGroupKey(takeOf('c1', 3))).toBe('v3');
-		expect(takeGroupKey(takeOf('i1', null))).toBe('imported');
-		expect(takeGroupKey(takeOf('i2', 3, { version_id: null }))).toBe('imported');
+		expect(takeGroupKey(makeTakeOfVersion('c1', 3))).toBe('v3');
+		expect(takeGroupKey(makeTakeOfVersion('i1', null))).toBe('imported');
+		expect(takeGroupKey(makeTakeOfVersion('i2', 3, { version_id: null }))).toBe('imported');
 	});
 });
 

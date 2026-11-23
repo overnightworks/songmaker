@@ -1,7 +1,6 @@
-import { makeGeneration } from '#lib/test-utils/factories.ts';
+import { makeTakeOfVersion, makeTakesAcrossVersions } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem } from '#lib/api/types.ts';
 import { selectedSongId } from './player';
 import {
 	isGroupOpen,
@@ -13,22 +12,7 @@ import {
 } from './takeFolds';
 import { groupTakes } from '#lib/utils/takeGroups.ts';
 
-function takeOf(id: string, versionNumber: number | null, overrides: Partial<GenerationItem> = {}) {
-	return makeGeneration({
-		id,
-		version_id: versionNumber === null ? null : `ver-${versionNumber}`,
-		version_number: versionNumber,
-		...overrides
-	});
-}
-
-const SONG_TAKES = [
-	takeOf('c1', 3),
-	takeOf('a1', 2, { is_picked: true }),
-	takeOf('a2', 2, { is_archived: true }),
-	takeOf('o1', 1, { is_archived: true }),
-	takeOf('i1', null)
-];
+const SONG_TAKES = makeTakesAcrossVersions();
 
 let songSequence = 0;
 
@@ -93,7 +77,7 @@ describe('revealTakeGroup (rule 10, cell 43)', () => {
 });
 
 describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
-	const importedOnly = [takeOf('i1', null)];
+	const importedOnly = [makeTakeOfVersion('i1', null)];
 
 	it('when no version of the song holds a take', () => {
 		const groups = groupTakes(importedOnly, 1);
@@ -112,7 +96,7 @@ describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
 	});
 
 	it('not when a version holds a take', () => {
-		const groups = groupTakes([...importedOnly, takeOf('c1', 1)], 1);
+		const groups = groupTakes([...importedOnly, makeTakeOfVersion('c1', 1)], 1);
 		settleTakeFolds(groups);
 
 		expect(isGroupOpen(get(takeFolds), groups, 'imported')).toBe(false);
@@ -120,7 +104,7 @@ describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
 
 	it('keeps the default through a take arriving on a version', () => {
 		settleTakeFolds(groupTakes(importedOnly, 1));
-		const later = groupTakes([...importedOnly, takeOf('c1', 1)], 1);
+		const later = groupTakes([...importedOnly, makeTakeOfVersion('c1', 1)], 1);
 		settleTakeFolds(later);
 
 		expect(isGroupOpen(get(takeFolds), later, 'imported')).toBe(true);

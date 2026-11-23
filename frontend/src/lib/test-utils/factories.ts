@@ -49,6 +49,31 @@ export function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	};
 }
 
+// A take of a numbered version; null makes it an Imported take.
+export function makeTakeOfVersion(
+	id: string,
+	versionNumber: number | null,
+	overrides: Partial<GenerationItem> = {}
+): GenerationItem {
+	return makeGeneration({
+		id,
+		version_id: versionNumber === null ? null : `ver-${versionNumber}`,
+		version_number: versionNumber,
+		...overrides
+	});
+}
+
+// Takes of versions 3, 2, 1 and Imported, the picked and archived ones among them.
+export function makeTakesAcrossVersions(): GenerationItem[] {
+	return [
+		makeTakeOfVersion('c1', 3),
+		makeTakeOfVersion('a1', 2, { is_picked: true }),
+		makeTakeOfVersion('a2', 2, { is_archived: true }),
+		makeTakeOfVersion('o1', 1, { is_archived: true }),
+		makeTakeOfVersion('i1', null)
+	];
+}
+
 export function makeGeneration(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
 		id: 'g1',
