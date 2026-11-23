@@ -97,6 +97,20 @@ export interface SavedPlayback {
 	position: number;
 }
 
+/**
+ * Drops the record a restore found naming a song, take or queue that is gone,
+ * so later page loads do not ask the server for it again. A record another
+ * tab has written for another take since is not this restore's to drop.
+ */
+export function forgetSavedPlayback(gone: SavedPlayback): void {
+	const userId = signedInUserId();
+	if (userId === null) return;
+	const stored = parseSavedPlayback(readStorage(storageKey(userId)));
+	if (stored?.songId === gone.songId && stored.generationId === gone.generationId) {
+		retireCurrentPlaybackResume(userId);
+	}
+}
+
 /** The signed-in user's saved take; null when none is saved or it cannot be read. */
 export function savedPlayback(): SavedPlayback | null {
 	const userId = signedInUserId();

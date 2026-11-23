@@ -6,6 +6,7 @@ import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factorie
 import {
 	followPlaybackForResume,
 	forgetPlaybackResume,
+	forgetSavedPlayback,
 	savedPlayback,
 	type ResumeQueueSource
 } from './playbackResume';
@@ -403,6 +404,32 @@ describe('playback resume record', () => {
 		localStorage.setItem(recordKey(LISTENER.id), stored);
 
 		expect(savedPlayback()).toBeNull();
+	});
+
+	it('a record the restore found gone is forgotten', () => {
+		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(WHOLE_RECORD));
+		const saved = savedPlayback();
+		if (saved === null) throw new Error('the record was not read');
+
+		forgetSavedPlayback(saved);
+
+		expect(localStorage.getItem(recordKey(LISTENER.id))).toBeNull();
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it('a record another tab has since written for another take is kept', () => {
+		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(WHOLE_RECORD));
+		const saved = savedPlayback();
+		if (saved === null) throw new Error('the record was not read');
+		const newerRecord = {
+			...WHOLE_RECORD,
+			generationId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d09'
+		};
+		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+
+		forgetSavedPlayback(saved);
+
+		expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
 	});
 
 	it('unreadable storage reads as nothing saved', () => {

@@ -4477,28 +4477,67 @@ describe('restoring the last playback after a reload', () => {
 	});
 
 	it.each([
-		{ take: 'a deleted song', answer: () => Promise.reject(new ApiError(404, 'gone', '/x')) },
-		{ take: 'a foreign song', answer: () => Promise.reject(new ApiError(403, 'no', '/x')) },
+		{
+			take: 'a deleted song',
+			answer: () => Promise.reject(new ApiError(404, 'gone', '/x')),
+			recordKept: false
+		},
+		{
+			take: 'a foreign song',
+			answer: () => Promise.reject(new ApiError(403, 'no', '/x')),
+			recordKept: true
+		},
 		{
 			take: 'a deleted take',
-			answer: () => Promise.resolve({ ...savedSong, generations: [] })
+			answer: () => Promise.resolve({ ...savedSong, generations: [] }),
+			recordKept: false
 		},
 		{
 			take: 'an archived take',
 			answer: () =>
-				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, is_archived: true }] })
+				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, is_archived: true }] }),
+			recordKept: false
+		},
+		{
+			take: 'a take without audio',
+			answer: () =>
+				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, mp3_path: '' }] }),
+			recordKept: false
+		},
+		{
+			take: 'a server error',
+			answer: () => Promise.reject(new ApiError(503, 'down', '/x')),
+			recordKept: true
 		},
 		{
 			take: 'an unreachable server',
-			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch')))
+			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch'))),
+			recordKept: true
 		}
-	])('a deleted, archived or foreign take restores nothing ($take)', async ({ answer }) => {
-		vi.mocked(fetchSong).mockImplementationOnce(answer);
+	])(
+		'a deleted, archived or foreign take restores nothing, and only a gone one is forgotten ($take)',
+		async ({ answer, recordKept }) => {
+			vi.mocked(fetchSong).mockImplementationOnce(answer);
 
+			await restoreLastPlayback();
+
+			expect(audioPlayer.current).toBeNull();
+			expect(get(toasts)).toEqual([]);
+			expect(storedRecord() !== null).toBe(recordKept);
+		}
+	);
+
+	it('a playlist deleted since the record was saved is forgotten, and a failing server is not', async () => {
+		saveRecord({ source: QUEUES.playlist.source });
+		vi.mocked(fetchSong).mockResolvedValue(savedSong);
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(503, 'down', '/x'));
+		await restoreLastPlayback();
+		expect(storedRecord()).not.toBeNull();
+
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(404, 'gone', '/x'));
 		await restoreLastPlayback();
 
-		expect(audioPlayer.current).toBeNull();
-		expect(get(toasts)).toEqual([]);
+		expect(storedRecord()).toBeNull();
 	});
 
 	it.each([

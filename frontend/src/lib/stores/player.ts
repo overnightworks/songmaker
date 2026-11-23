@@ -60,6 +60,7 @@ import {
 } from '#lib/stores/playlists.ts';
 import {
 	followPlaybackForResume,
+	forgetSavedPlayback,
 	savedPlayback,
 	type ResumeQueueSource,
 	type SavedPlayback
@@ -1704,7 +1705,7 @@ async function restoreSavedPlayback(saved: SavedPlayback, tenure: PlayerTenure):
 	} else if (source.type === 'library') {
 		await restoreLibraryTake(source, found.take, at);
 	} else {
-		await restorePlaylistQueue(source.playlistId, found.take, at, tenure);
+		await restorePlaylistQueue(saved, source.playlistId, found.take, at, tenure);
 	}
 }
 
@@ -1819,24 +1820,37 @@ function positionWithinTake(position: number, take: GenerationItem): number {
 // The server answers 404 for a song deleted or out of this user's reach, and
 // a take deleted or archived since is missing from its song or marked so;
 // none of them, nor a server out of reach, is restored, and none is reported.
+// A record naming one of those gone ones is forgotten; one that failed only
+// for want of the server stays for the next page load.
 async function playableSavedTake(
 	saved: SavedPlayback
 ): Promise<{ song: SongItem; take: GenerationItem } | null> {
-	const song = await quietly(() => fetchSong(saved.songId));
+	const song = await quietly(
+		() => fetchSong(saved.songId),
+		() => forgetSavedPlayback(saved)
+	);
 	if (song === null) return null;
 	const take = song.generations.find((gen) => gen.id === saved.generationId && isPlayableTake(gen));
-	return take === undefined ? null : { song, take };
+	if (take === undefined) {
+		forgetSavedPlayback(saved);
+		return null;
+	}
+	return { song, take };
 }
 
 // A playlist deleted, out of reach, or no longer holding the take restores
 // nothing, as a lost take does.
 async function restorePlaylistQueue(
+	saved: SavedPlayback,
 	playlistId: string,
 	take: GenerationItem,
 	at: number,
 	tenure: PlayerTenure
 ): Promise<void> {
-	const playlist = await quietly(() => fetchPlaylist(playlistId));
+	const playlist = await quietly(
+		() => fetchPlaylist(playlistId),
+		() => forgetSavedPlayback(saved)
+	);
 	if (playlist === null || !restoreMayLoad(tenure)) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
@@ -1846,10 +1860,11 @@ async function restorePlaylistQueue(
 	});
 }
 
-async function quietly<T>(request: () => Promise<T>): Promise<T | null> {
+async function quietly<T>(request: () => Promise<T>, onNotFound?: () => void): Promise<T | null> {
 	try {
 		return await request();
 	} catch (err) {
+		if (err instanceof ApiError && err.status === 404) onNotFound?.();
 		if (err instanceof ApiError || err instanceof NetworkError) return null;
 		throw err;
 	}
