@@ -9,12 +9,17 @@ import {
 	addGenerationToPlaylist as apiAddGen,
 	addSongToPlaylist as apiAddSong,
 	addAlbumToPlaylist as apiAddAlbum,
+	addPlaylistToPlaylist as apiAddPlaylist,
 	removeFromPlaylist as apiRemoveEntry,
 	reorderPlaylistEntry as apiReorder,
 	uploadPlaylistCover as apiUploadPlaylistCover,
 	deletePlaylistCover as apiDeletePlaylistCover
 } from '#lib/api/client.ts';
-import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
+import type {
+	AddEntriesToPlaylistResult,
+	PlaylistDetailItem,
+	PlaylistItem
+} from '#lib/api/types.ts';
 import { pageText } from '#lib/utils/page-words.ts';
 import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import { forgetListenedPlace } from '#lib/stores/libraryOrder.ts';
@@ -331,10 +336,41 @@ export async function addSongToPlaylist(playlistId: string, songId: string): Pro
 export async function addAlbumToPlaylist(
 	playlistId: string,
 	albumId: string
-): Promise<AddAlbumToPlaylistResult> {
+): Promise<AddEntriesToPlaylistResult> {
 	const result = await apiAddAlbum(playlistId, albumId);
 	await refreshPlaylist(playlistId);
 	return result;
+}
+
+export async function addPlaylistToPlaylist(
+	playlistId: string,
+	sourcePlaylistId: string
+): Promise<AddEntriesToPlaylistResult> {
+	const result = await apiAddPlaylist(playlistId, sourcePlaylistId);
+	await refreshPlaylist(playlistId);
+	return result;
+}
+
+/** Runs an add of an album's or a playlist's songs and tells with a toast what it did, counting the skipped entries, or why it failed. */
+export async function toastPlaylistAdd(
+	add: () => Promise<AddEntriesToPlaylistResult>
+): Promise<void> {
+	try {
+		const result = await add();
+		if (result.skipped.length > 0) {
+			addToast(
+				pageText('playlistPage.addedSkipped', {
+					added: String(result.added_count),
+					skipped: String(result.skipped.length)
+				}),
+				'info'
+			);
+		} else {
+			addToast(pageText('playlistPage.addedToPlaylist'), 'success');
+		}
+	} catch (error) {
+		addToast(describeFailure(error, pageText('playlistPage.addFailed')), 'error');
+	}
 }
 
 export async function removePlaylistEntry(playlistId: string, entryId: string): Promise<void> {

@@ -54,9 +54,9 @@ def resolve_database_url() -> URL:
 
 def _is_connection_level_failure(error: OperationalError) -> bool:
     # A message without a server-sent FATAL is a client or network error (refused,
-    # unresolved, timed out, reset) that a wait can outlast; psycopg2 sets no pgcode
-    # before authentication. Other server FATALs (password, database, pg_hba) are
-    # configuration a wait cannot fix.
+    # unresolved, timed out, reset) that a wait can outlast; psycopg 3 sets no
+    # sqlstate on a connect-time failure either. Other server FATALs (password,
+    # database, pg_hba) are configuration a wait cannot fix.
     message = str(error.orig).lower()
     if "fatal:" not in message:
         return True

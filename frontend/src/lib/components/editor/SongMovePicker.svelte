@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import type { AlbumItem } from '#lib/api/types.ts';
+	import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 	import {
 		closeSongMovePicker,
-		askToMoveOpenSongTo,
+		askToMoveSongTo,
 		openSongMovePicker,
 		retrySongMove,
 		songMoveFilter,
@@ -17,11 +17,13 @@
 	import MenuPickerHead from '../MenuPickerHead.svelte';
 
 	interface Props {
+		/** The song the picker moves. */
+		song: SongItem;
 		/** Closes the whole popover, as a move lands or before a shared album asks. */
 		onclose: () => void;
 	}
 
-	let { onclose }: Props = $props();
+	let { song, onclose }: Props = $props();
 
 	let filterInput: HTMLInputElement | undefined = $state();
 	let filterFocused = false;
@@ -39,7 +41,7 @@
 	async function choose(album: AlbumItem): Promise<void> {
 		// The ask is a dialog over the page: it opens only after the popover's history layer left.
 		if (album.is_shared) onclose();
-		await askToMoveOpenSongTo(album, onclose);
+		await askToMoveSongTo(song, album, onclose);
 	}
 
 	async function retry(): Promise<void> {
@@ -135,7 +137,7 @@
 	<div class="pk-error" role="alert">
 		<Icon name="circle-alert" size={16} />
 		<span>{$songMovePicker.message}</span>
-		<button type="button" class="pk-retry" onclick={() => void openSongMovePicker()}>
+		<button type="button" class="pk-retry" onclick={() => void openSongMovePicker(song)}>
 			{pageText('songMove.retry')}
 		</button>
 	</div>

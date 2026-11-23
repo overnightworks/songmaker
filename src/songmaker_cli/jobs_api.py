@@ -147,14 +147,13 @@ def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
 def _fetch_job_response(ctx: AppContext, job_id: str) -> JobResponse | None:
     """Synchronous DB read for one poll -- always run via asyncio.to_thread.
 
-    #331 Finding 2: this used to run directly on the event loop once per
-    second per open stream (psycopg2 is blocking), so N waiting generations
-    meant N blocking round trips per second on the loop, and an exhausted
-    connection pool could stall it for up to 30s. asyncio.to_thread() moves
-    the blocking call off the loop, matching resource_event_api.py's
-    _read_event_page/_read_event_page_before split. Opens and closes its
-    own session (never Depends(get_db_session) -- see api_stream_job), so
-    no connection is held between polls or across the sleep.
+    The psycopg connection blocks, so a poll on the event loop once per second per
+    open stream would cost N blocking round trips per second for N waiting
+    generations, and an exhausted connection pool could stall the loop for up to
+    30s. asyncio.to_thread() moves the blocking call off the loop, matching
+    resource_event_api.py's _read_event_page/_read_event_page_before split. Opens
+    and closes its own session (never Depends(get_db_session) -- see
+    api_stream_job), so no connection is held between polls or across the sleep.
     """
     with ctx.db() as db_session:
         job = get_job(db_session, job_id)
@@ -168,16 +167,14 @@ async def _fetch_job_response_before(
 ) -> JobResponse | None:
     """Bound one poll to the remaining stream lifetime.
 
-    #331 Finding 2 (review 2026-09-01): a bare `await
-    asyncio.to_thread(_fetch_job_response, ...)` can still block past the
-    stream's own deadline if it starts right before the wall and then waits
-    on an exhausted DB pool (up to `pool_timeout`, 30s) -- a 60s deadline
-    could become 90s. Wrapping it in `asyncio.wait_for(remaining)` bounds
-    it the same way resource_event_api.py's `_read_event_page_before` does;
-    a timeout here returns None and the generator closes the stream, same
-    as a job that has disappeared -- both cases want the connection closed
-    so the frontend's already-handled EventSource reconnect picks it back
-    up.
+    A bare `await asyncio.to_thread(_fetch_job_response, ...)` can still block
+    past the stream's own deadline if it starts right before the wall and then
+    waits on an exhausted DB pool (up to `pool_timeout`, 30s) -- a 60s deadline
+    could become 90s. Wrapping it in `asyncio.wait_for(remaining)` bounds it the
+    same way resource_event_api.py's `_read_event_page_before` does; a timeout
+    here returns None and the generator closes the stream, same as a job that
+    has disappeared -- both cases want the connection closed so the frontend's
+    already-handled EventSource reconnect picks it back up.
     """
     try:
         return await asyncio.wait_for(

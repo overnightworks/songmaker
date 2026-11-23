@@ -212,6 +212,7 @@
 {#snippet actions()}
 	<CollectionMenu
 		{kind}
+		{collectionId}
 		{title}
 		{isShared}
 		{shareSlug}

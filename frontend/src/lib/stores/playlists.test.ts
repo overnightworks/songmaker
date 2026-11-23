@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 import {
 	addAlbumToPlaylist,
 	addGenerationToPlaylist,
+	addPlaylistToPlaylist as addPlaylistApi,
 	addSongToPlaylist,
 	createPlaylist,
 	deletePlaylistApi,
@@ -22,7 +23,11 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
+import type {
+	AddEntriesToPlaylistResult,
+	PlaylistDetailItem,
+	PlaylistItem
+} from '#lib/api/types.ts';
 import { words } from '#lib/words/en.ts';
 import {
 	createNewPlaylist,
@@ -33,6 +38,7 @@ import {
 	addGenerationToPlaylist as addGeneration,
 	addSongToPlaylist as addSong,
 	addAlbumToPlaylist as addAlbum,
+	addPlaylistToPlaylist as addPlaylist,
 	loadPlaylistDetail,
 	loadPlaylists,
 	playlistDetailLoad,
@@ -43,6 +49,7 @@ import {
 	resetPlaylistsForTests,
 	selectedPlaylistDetail,
 	selectedPlaylistId,
+	toastPlaylistAdd,
 	uploadPlaylistCover
 } from './playlists';
 
@@ -56,12 +63,13 @@ vi.mock('#lib/api/client.ts', () => ({
 	addGenerationToPlaylist: vi.fn(),
 	addSongToPlaylist: vi.fn(),
 	addAlbumToPlaylist: vi.fn(),
+	addPlaylistToPlaylist: vi.fn(),
 	removeFromPlaylist: vi.fn(),
 	reorderPlaylistEntry: vi.fn(),
 	uploadPlaylistCover: vi.fn()
 }));
 
-const albumMutationResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
+const albumMutationResult: AddEntriesToPlaylistResult = { added_count: 2, skipped: [] };
 
 beforeEach(() => {
 	resetPlaylistsForTests();
@@ -549,6 +557,12 @@ describe('playlist mutations', () => {
 			expectedResult: albumMutationResult
 		},
 		{
+			description: 'adds a playlist',
+			mutate: () => addPlaylist('p1', 'p2'),
+			assertRequest: () => expect(addPlaylistApi).toHaveBeenCalledWith('p1', 'p2'),
+			expectedResult: albumMutationResult
+		},
+		{
 			description: 'removes an entry',
 			mutate: () => removePlaylistEntry('p1', 'entry-1'),
 			assertRequest: () => expect(removeFromPlaylist).toHaveBeenCalledWith('p1', 'entry-1')
@@ -570,6 +584,7 @@ describe('playlist mutations', () => {
 			});
 			vi.mocked(fetchPlaylists).mockResolvedValue([refreshed]);
 			vi.mocked(addAlbumToPlaylist).mockResolvedValue(albumMutationResult);
+			vi.mocked(addPlaylistApi).mockResolvedValue(albumMutationResult);
 
 			const result = await mutate();
 
@@ -596,5 +611,36 @@ describe('playlist mutations', () => {
 
 		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
 		expect(get(selectedPlaylistDetail)?.entry_count).toBe(2);
+	});
+});
+
+describe('toastPlaylistAdd', () => {
+	it.each([
+		{
+			description: 'confirms an add that skipped nothing',
+			add: () => Promise.resolve({ added_count: 2, skipped: [] }),
+			toast: { message: words['playlistPage.addedToPlaylist'], type: 'success' }
+		},
+		{
+			description: 'counts the skipped entries of an add that skipped some',
+			add: () =>
+				Promise.resolve({
+					added_count: 1,
+					skipped: [{ song_id: 's2', title: 'Gone', reason: 'missing_audio' }]
+				}),
+			toast: {
+				message: words['playlistPage.addedSkipped']({ added: '1', skipped: '1' }),
+				type: 'info'
+			}
+		},
+		{
+			description: 'names the refusal of an add that failed',
+			add: () => Promise.reject(new ApiError(404, 'Playlist not found', '/api/playlists/p1')),
+			toast: { message: 'Playlist not found', type: 'error' }
+		}
+	])('$description', async ({ add, toast }) => {
+		await toastPlaylistAdd(add);
+
+		expect(get(toasts)).toEqual([expect.objectContaining(toast)]);
 	});
 });

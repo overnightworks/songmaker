@@ -38,8 +38,6 @@
 		nextDisabled: boolean;
 		onselectprevious: () => void;
 		onselectnext: () => void;
-		isShared: boolean;
-		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		onaddto: (playlistId: string) => void;
@@ -73,8 +71,6 @@
 		nextDisabled,
 		onselectprevious,
 		onselectnext,
-		isShared,
-		shareSlug,
 		onshare,
 		onunshare,
 		onaddto,
@@ -135,14 +131,12 @@
 					/>
 				</h2>
 				<SongMenu
-					title={song.title}
+					{song}
 					{saveDisabled}
 					{onsave}
 					onrename={() => titleEditor?.startEdit()}
 					{onaddto}
 					ondelete={ondeletesong}
-					{isShared}
-					{shareSlug}
 					{onshare}
 					{onunshare}
 				/>

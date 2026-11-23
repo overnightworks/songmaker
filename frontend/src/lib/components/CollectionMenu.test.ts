@@ -34,6 +34,7 @@ function shareResult(overrides: Partial<ShareResult> = {}): ShareResult {
 function defaultProps() {
 	return {
 		kind: 'album' as 'album' | 'playlist',
+		collectionId: 'c-test',
 		title: 'Test Album',
 		isShared: false,
 		shareSlug: null,

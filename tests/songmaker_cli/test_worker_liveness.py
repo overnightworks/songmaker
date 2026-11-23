@@ -4,17 +4,20 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 from redis.exceptions import RedisError
+from tandem import Roster
 
 from songmaker_cli.acestep_state import worker_state_key
-from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY
+from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.job_timing import WORKER_RESTART_GRACE_SECONDS
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
     MUSIC_LAST_ALIVE_KEY,
+    SCORING_LAST_ALIVE_KEY,
     WorkerLiveness,
     acestep_worker_liveness,
     arq_worker_liveness,
+    music_worker_liveness,
     read_worker_liveness,
     worker_liveness_by_job_type,
 )
@@ -38,10 +41,13 @@ def test_worker_liveness_maps_each_job_type_to_its_real_execution_signal() -> No
     }
 
 
-def test_read_liveness_ignores_a_live_music_worker_for_web_covers(fake_redis) -> None:
-    fake_redis.set(ARQ_MUSIC_HEALTH_KEY, "alive")
+LIVE_ROSTER = Roster(holders=frozenset({"music-worker-1"}), settled=True)
+EMPTY_SETTLED_ROSTER = Roster(holders=frozenset(), settled=True)
+EMPTY_UNSETTLED_ROSTER = Roster(holders=frozenset(), settled=False)
 
-    liveness = read_worker_liveness(fake_redis, [])
+
+def test_read_liveness_ignores_a_live_music_worker_for_web_covers(fake_redis) -> None:
+    liveness = read_worker_liveness(fake_redis, [], music_roster=LIVE_ROSTER)
 
     assert liveness[JobType.COVER] is WorkerLiveness.UNKNOWN
 
@@ -118,36 +124,81 @@ def test_empty_acestep_registry_is_alive_when_recently_observed(fake_redis) -> N
     assert acestep_worker_liveness(fake_redis, [], now=now) is WorkerLiveness.ALIVE
 
 
-def test_missing_signal_becomes_dead_after_restart_grace(fake_redis) -> None:
+def test_a_live_music_roster_is_alive_and_persists_its_last_alive_observation(
+    fake_redis,
+) -> None:
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
 
-    assert arq_worker_liveness(
-        fake_redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-        signal=WorkerLivenessSignal.MUSIC, now=now,
-    ) is WorkerLiveness.UNKNOWN
+    assert music_worker_liveness(fake_redis, LIVE_ROSTER, now=now) is WorkerLiveness.ALIVE
+    assert fake_redis.get(MUSIC_LAST_ALIVE_KEY) == now.isoformat()
 
+
+def test_a_live_music_roster_stays_alive_when_persisting_the_observation_fails(caplog) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    redis = MagicMock()
+    redis.set.side_effect = RedisError("write failed")
+
+    assert music_worker_liveness(redis, LIVE_ROSTER, now=now) is WorkerLiveness.ALIVE
+    assert "Could not persist worker liveness" in caplog.text
+
+
+def test_a_music_roster_that_cannot_be_read_is_unknown(fake_redis) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    fake_redis.set(MUSIC_LAST_ALIVE_KEY, (now - timedelta(days=1)).isoformat())
+
+    assert music_worker_liveness(fake_redis, None, now=now) is WorkerLiveness.UNKNOWN
+
+
+def test_an_empty_unsettled_music_roster_is_unknown_even_after_a_recent_observation(
+    fake_redis,
+) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    fake_redis.set(MUSIC_LAST_ALIVE_KEY, now.isoformat())
+
+    assert (
+        music_worker_liveness(fake_redis, EMPTY_UNSETTLED_ROSTER, now=now)
+        is WorkerLiveness.UNKNOWN
+    )
+
+
+def test_an_empty_settled_music_roster_is_unknown_when_never_observed(fake_redis) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+
+    assert (
+        music_worker_liveness(fake_redis, EMPTY_SETTLED_ROSTER, now=now)
+        is WorkerLiveness.UNKNOWN
+    )
+
+
+def test_an_empty_settled_music_roster_is_alive_inside_the_restart_grace(fake_redis) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    fake_redis.set(
+        MUSIC_LAST_ALIVE_KEY,
+        (now - timedelta(seconds=WORKER_RESTART_GRACE_SECONDS)).isoformat(),
+    )
+
+    assert (
+        music_worker_liveness(fake_redis, EMPTY_SETTLED_ROSTER, now=now)
+        is WorkerLiveness.ALIVE
+    )
+
+
+def test_an_empty_settled_music_roster_is_dead_past_the_restart_grace(fake_redis) -> None:
+    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     fake_redis.set(
         MUSIC_LAST_ALIVE_KEY,
         (now - timedelta(seconds=WORKER_RESTART_GRACE_SECONDS + 1)).isoformat(),
     )
 
-    assert arq_worker_liveness(
-        fake_redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-        signal=WorkerLivenessSignal.MUSIC, now=now,
-    ) is WorkerLiveness.DEAD
+    assert (
+        music_worker_liveness(fake_redis, EMPTY_SETTLED_ROSTER, now=now)
+        is WorkerLiveness.DEAD
+    )
 
 
-def test_missing_signal_is_alive_during_restart_grace(fake_redis) -> None:
-    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    fake_redis.set(MUSIC_LAST_ALIVE_KEY, now.isoformat())
-
-    assert arq_worker_liveness(
-        fake_redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-        signal=WorkerLivenessSignal.MUSIC, now=now,
-    ) is WorkerLiveness.ALIVE
-
-
-def test_fresh_observer_does_not_declare_an_old_signal_dead(fake_redis, monkeypatch) -> None:
+def test_fresh_observer_does_not_declare_an_old_music_observation_dead(
+    fake_redis, monkeypatch,
+) -> None:
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     fake_redis.set(
         MUSIC_LAST_ALIVE_KEY,
@@ -155,21 +206,21 @@ def test_fresh_observer_does_not_declare_an_old_signal_dead(fake_redis, monkeypa
     )
     monkeypatch.setattr("songmaker_cli.worker_liveness._PROCESS_STARTED_AT", now)
 
-    assert arq_worker_liveness(
-        fake_redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-        signal=WorkerLivenessSignal.MUSIC, now=now,
-    ) is WorkerLiveness.ALIVE
+    assert (
+        music_worker_liveness(fake_redis, EMPTY_SETTLED_ROSTER, now=now)
+        is WorkerLiveness.ALIVE
+    )
 
 
 def test_live_arq_signal_persists_its_last_alive_observation(fake_redis) -> None:
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    fake_redis.set(ARQ_MUSIC_HEALTH_KEY, "alive")
+    fake_redis.set(ARQ_SCORING_HEALTH_KEY, "alive")
 
     assert arq_worker_liveness(
-        fake_redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-        signal=WorkerLivenessSignal.MUSIC, now=now,
+        fake_redis, health_key=ARQ_SCORING_HEALTH_KEY, last_alive_key=SCORING_LAST_ALIVE_KEY,
+        signal=WorkerLivenessSignal.SCORING, now=now,
     ) is WorkerLiveness.ALIVE
-    assert fake_redis.get(MUSIC_LAST_ALIVE_KEY) == now.isoformat()
+    assert fake_redis.get(SCORING_LAST_ALIVE_KEY) == now.isoformat()
 
 
 def test_acestep_signal_requires_an_online_worker_and_persists_observation(fake_redis) -> None:
@@ -181,19 +232,6 @@ def test_acestep_signal_requires_an_online_worker_and_persists_observation(fake_
 
     fake_redis.set(worker_state_key("ace-1"), '{"gpu_healthy": false}')
     assert acestep_worker_liveness(fake_redis, ["ace-1"], now=now) is WorkerLiveness.ALIVE
-
-
-def test_live_arq_signal_stays_alive_when_persisting_the_observation_fails(caplog) -> None:
-    now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    redis = MagicMock()
-    redis.exists.return_value = True
-    redis.set.side_effect = RedisError("write failed")
-
-    assert arq_worker_liveness(
-        redis, health_key=ARQ_MUSIC_HEALTH_KEY, last_alive_key=MUSIC_LAST_ALIVE_KEY,
-        signal=WorkerLivenessSignal.MUSIC, now=now,
-    ) is WorkerLiveness.ALIVE
-    assert "Could not persist worker liveness" in caplog.text
 
 
 def test_live_acestep_signal_stays_alive_when_persisting_the_observation_fails(caplog) -> None:

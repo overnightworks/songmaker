@@ -61,8 +61,6 @@ function defaultProps() {
 		nextDisabled: false,
 		onselectprevious: vi.fn(),
 		onselectnext: vi.fn(),
-		isShared: false,
-		shareSlug: null,
 		onshare: vi.fn(async () => ({
 			status: 'ok',
 			share_url: '',

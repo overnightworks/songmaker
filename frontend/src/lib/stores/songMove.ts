@@ -16,7 +16,7 @@ import {
 	libraryPlaceOrder
 } from '#lib/stores/libraryOrder.ts';
 import { reselectMovedSong } from '#lib/stores/navigation.ts';
-import { selectedSong, selectedSongId } from '#lib/stores/player.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 import { matchesRailQuery, normalizeRailQuery } from '#lib/stores/librarySearch.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import { addToast } from '#lib/stores/toast.ts';
@@ -29,6 +29,8 @@ type OwnAlbumsLoad =
 	| { status: 'ready'; albums: AlbumItem[] };
 
 const load = writable<OwnAlbumsLoad>({ status: 'closed' });
+// The song the open picker moves; the picker marks its album as the one it is in.
+const subject = writable<SongItem | null>(null);
 export const songMoveFilter = writable('');
 
 type SongMoveRun =
@@ -42,11 +44,17 @@ const NOT_FOUND = 404;
 /** The move in flight or the one that was refused, for the picker to show. */
 export const songMoveRun = writable<SongMoveRun>(IDLE);
 
-/** The run, only while its song is the open song; any other song's picker shows nothing of it. */
+/** The run, only while its song is the picker's song; any other song's picker shows nothing of it. */
 export const songMoveRunHere: Readable<SongMoveRun> = derived(
-	[songMoveRun, selectedSongId],
-	([$run, $openId]): SongMoveRun =>
-		$run.status !== 'idle' && $run.songId === $openId ? $run : IDLE
+	[songMoveRun, subject],
+	([$run, $song]): SongMoveRun =>
+		$run.status !== 'idle' && $run.songId === $song?.id ? $run : IDLE
+);
+
+/** The id of the song whose picker is open, so a menu shows its picker only for its own song. */
+export const songMoveSubject: Readable<string | null> = derived(
+	subject,
+	($song) => $song?.id ?? null
 );
 
 let generation = 0;
@@ -64,7 +72,7 @@ export type SongMovePicker =
 	  };
 
 export const songMovePicker: Readable<SongMovePicker> = derived(
-	[load, songMoveFilter, selectedSong, libraryPlaceOrder],
+	[load, songMoveFilter, subject, libraryPlaceOrder],
 	([$load, $filter, $song, $order]): SongMovePicker => {
 		if ($load.status !== 'ready') return $load;
 		const ordered = inLibraryOrder('album', $load.albums, $order);
@@ -98,8 +106,9 @@ async function loadOwnAlbums(quiet = false): Promise<void> {
 	}
 }
 
-/** Opens on a fresh list; a refused move keeps its red row across the reopen. */
-export async function openSongMovePicker(): Promise<void> {
+/** Opens `song`'s picker on a fresh list; a refused move keeps its red row across the reopen. */
+export async function openSongMovePicker(song: SongItem): Promise<void> {
+	subject.set(song);
 	songMoveFilter.set('');
 	await loadOwnAlbums();
 }
@@ -107,6 +116,7 @@ export async function openSongMovePicker(): Promise<void> {
 export function closeSongMovePicker(): void {
 	generation += 1;
 	load.set({ status: 'closed' });
+	subject.set(null);
 	// A move in flight outlives the picker, so a reopened picker still shows it and starts no second one.
 	if (get(songMoveRun).status !== 'busy') songMoveRun.set(IDLE);
 }
@@ -177,28 +187,24 @@ async function moveSongTo(
 	return true;
 }
 
-function moveOpenSongTo(album: AlbumItem, onlanded?: () => void): Promise<boolean> {
-	const song = get(selectedSong);
-	return song ? moveSongTo(song, album, onlanded) : Promise.resolve(false);
-}
+export const songMoveConfirm = writable<{ song: SongItem; album: AlbumItem } | null>(null);
 
-export const songMoveConfirm = writable<AlbumItem | null>(null);
-
-/** Moves at once, except into an album with a public page, which asks first. */
-export async function askToMoveOpenSongTo(
+/** Moves `song` at once, except into an album with a public page, which asks first. */
+export async function askToMoveSongTo(
+	song: SongItem,
 	album: AlbumItem,
 	onlanded?: () => void
 ): Promise<boolean> {
 	if (get(songMoveRun).status === 'busy') return false;
-	if (!album.is_shared) return moveOpenSongTo(album, onlanded);
-	songMoveConfirm.set(album);
+	if (!album.is_shared) return moveSongTo(song, album, onlanded);
+	songMoveConfirm.set({ song, album });
 	return false;
 }
 
 export async function confirmSongMove(): Promise<boolean> {
-	const album = get(songMoveConfirm);
+	const ask = get(songMoveConfirm);
 	songMoveConfirm.set(null);
-	return album ? moveOpenSongTo(album) : false;
+	return ask ? moveSongTo(ask.song, ask.album) : false;
 }
 
 /** Repeats the refused move of its own song, into the same album and without asking again. */

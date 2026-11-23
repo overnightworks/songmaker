@@ -61,7 +61,7 @@ def _post_for_take(client: TestClient, route_and_body: tuple[str, dict], take: s
     path = route.format(take=take)
     payload = {key: value.format(take=take) if isinstance(value, str) else value
                for key, value in body.items()} | extra
-    with worker_up():
+    with worker_up(client):
         return client.post(f"/api/{path}", json=payload)
 
 

@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Final
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from songmaker_cli.api_models.songs import (
     AlbumCoverUrls,
@@ -23,6 +23,7 @@ from songmaker_cli.whisper_cues import WhisperCue
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Album, Playlist, PlaylistEntry
+    from songmaker_cli.db.queries.playlists import PlaylistAddResult, PlaylistAddSkip
 
 log = logging.getLogger(__name__)
 
@@ -93,7 +94,8 @@ def _live_entries(playlist: Playlist) -> list[PlaylistEntry]:
     ]
 
 
-def _reached_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEntry]:
+def reached_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEntry]:
+    """The entries the caller sees: live ones in an album the caller may open, in order."""
     return [e for e in _live_entries(playlist) if reaches(e.generation.song.album)]
 
 
@@ -104,7 +106,7 @@ def uploaded_playlist_cover(playlist: Playlist) -> AlbumCoverUrls | None:
 
 def playlist_mosaic_covers(playlist: Playlist, *, reaches: AlbumReach) -> list[AlbumCoverUrls]:
     """The first distinct covers of the albums the caller reaches, in playlist order."""
-    return _mosaic_covers(_reached_entries(playlist, reaches))
+    return _mosaic_covers(reached_entries(playlist, reaches))
 
 
 def _mosaic_covers(entries: list[PlaylistEntry]) -> list[AlbumCoverUrls]:
@@ -175,7 +177,7 @@ class PlaylistResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, playlist: Playlist, *, reaches: AlbumReach) -> PlaylistResponse:
-        entries = _reached_entries(playlist, reaches)
+        entries = reached_entries(playlist, reaches)
         return cls(
             id=playlist.id,
             title=playlist.title,
@@ -197,7 +199,7 @@ class PlaylistDetailResponse(PlaylistResponse):
         base = PlaylistResponse.from_orm(playlist, reaches=reaches)
         entries = [
             PlaylistEntryResponse.from_orm(e)
-            for e in sorted(_reached_entries(playlist, reaches), key=lambda e: e.position)
+            for e in sorted(reached_entries(playlist, reaches), key=lambda e: e.position)
         ]
         return cls(
             **base.model_dump(),
@@ -225,15 +227,36 @@ class AddAlbumToPlaylistRequest(BaseModel):
     album_id: str
 
 
-class PlaylistAlbumSkipResponse(BaseModel):
+class AddPlaylistToPlaylistRequest(BaseModel):
+    source_playlist_id: str
+
+
+class PlaylistAddSkipResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     song_id: str
     title: str
     reason: str
 
+    @classmethod
+    def from_orm(cls, skip: PlaylistAddSkip) -> PlaylistAddSkipResponse:
+        return cls(song_id=skip.song_id, title=skip.title, reason=skip.reason)
 
-class AddAlbumToPlaylistResponse(BaseModel):
+
+class AddEntriesToPlaylistResponse(BaseModel):
+    """What an add of an album's or a playlist's songs did: how many entries, which were skipped."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     added_count: int
-    skipped: list[PlaylistAlbumSkipResponse]
+    skipped: list[PlaylistAddSkipResponse]
+
+    @classmethod
+    def from_orm(cls, result: PlaylistAddResult) -> AddEntriesToPlaylistResponse:
+        return cls(
+            added_count=len(result.entries),
+            skipped=[PlaylistAddSkipResponse.from_orm(skip) for skip in result.skipped],
+        )
 
 
 class ReorderPlaylistEntryRequest(BaseModel):
