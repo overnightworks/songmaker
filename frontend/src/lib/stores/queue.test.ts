@@ -15,7 +15,6 @@ import {
 	playlistQueue,
 	queuedSongDefaults
 } from '#lib/test-utils/queue-scenarios.ts';
-import { groupTakes } from '#lib/stores/takeFolds.ts';
 import {
 	adjacentQueueTake,
 	buildQueueViewModel,
@@ -53,7 +52,14 @@ describe('playbackSource', () => {
 		],
 		[
 			'a song queue names its song',
-			{ type: 'song' as const, songId: 's1', songTitle: 'Cold Harbour', takes: [], index: 0 },
+			{
+				type: 'song' as const,
+				songId: 's1',
+				songTitle: 'Cold Harbour',
+				takes: [],
+				inListOrder: [],
+				index: 0
+			},
 			{ kind: 'song', id: 's1', title: 'Cold Harbour' }
 		],
 		['a library queue names no source', { type: 'library' as const }, null],
@@ -232,15 +238,15 @@ describe('songTakeQueue', () => {
 
 	// Spec: REQ-LISTENING-08 -- the song's takes follow in the order the take list shows them.
 	it("holds the playable takes in the take list's order, the tapped one in play", () => {
-		const shown = groupTakes(song.generations, 3);
-		const listOrder = [shown.current, ...shown.earlier]
-			.flatMap((group) => group?.generations ?? [])
-			.filter((gen) => !gen.is_archived)
-			.map((gen) => gen.id);
-
 		const queue = songTakeQueue(song, 'g-v2');
 
-		expect(queue?.takes.map((queued) => queued.generation.id)).toEqual(listOrder);
+		expect(queue?.takes.map((queued) => queued.generation.id)).toEqual([
+			'g-v3a',
+			'g-v3b',
+			'g-v2',
+			'g-v1',
+			'g-imported'
+		]);
 		expect(queue && queue.takes[queue.index].generation.id).toBe('g-v2');
 	});
 
@@ -252,6 +258,14 @@ describe('songTakeQueue', () => {
 
 		expect(next.kind === 'take' && next.take.generation.id).toBe('g-v3a');
 		expect(buildQueueViewModel(queue, null).again).toBe(song.title);
+	});
+
+	it('names no start over for a queue with no other take to wrap to', () => {
+		const lone = makeSong({ ...song, generations: [song.generations[2]] });
+		const queue = songTakeQueue(lone, 'g-v3a');
+		if (!queue) throw new Error('Expected a queue');
+
+		expect(buildQueueViewModel(queue, null).again).toBeUndefined();
 	});
 
 	it.each(['g-archived', 'g-absent'])('is nothing for the unplayable or absent take %s', (id) => {

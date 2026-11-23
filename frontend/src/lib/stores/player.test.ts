@@ -1771,6 +1771,40 @@ describe('rebuilding a library queue from the playing take', () => {
 		);
 	});
 
+	it('a second rebuild aborts the in-flight membership GET and loads only the later one', async () => {
+		let firstSignal: AbortSignal | undefined;
+		vi.mocked(fetchLibraryPoolQueue).mockImplementationOnce((opts) => {
+			firstSignal = opts?.signal;
+			return new Promise((_resolve, reject) => {
+				opts?.signal?.addEventListener('abort', () => {
+					reject(new DOMException('Aborted', 'AbortError'));
+				});
+			});
+		});
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g1', song_title: 'Later' }),
+					makePoolTake({ generation_id: 'g-after', song_id: 's2' })
+				]
+			})
+		);
+		const gen = makeGen(genDefaults);
+		audioPlayer.current = makePlayback(gen, makeSong(queuedSongDefaults()));
+		queueContext.set({ type: 'library', takes: [audioPlayer.current], index: 0 });
+
+		const first = chooseLibraryTakePool('mix');
+		await chooseLibraryTakePool('all');
+		await first;
+
+		expect(firstSignal?.aborted).toBe(true);
+		expect(audioPlayer.load).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ songTitle: 'Later' }),
+			expect.anything()
+		);
+	});
+
 	it('next stays in Mix and does not fall through to All', async () => {
 		const mixKept = makePoolTake({
 			generation_id: 'g-keep',
@@ -3728,29 +3762,15 @@ describe('playTake', () => {
 		return ctx.type === 'song' ? ctx.takes.map((take) => take.generation.id) : [];
 	}
 
-	// Spec: REQ-LISTENING-08 -- a tap on a take row plays that take and the song's other playable takes follow in the take list's order.
-	it('a take row plays the tapped take and queues the song’s playable takes in the take list’s order', async () => {
+	// Spec: REQ-LISTENING-08 -- a tap on a take row plays that take and starts the song's queue on it.
+	it('a take row plays the tapped take in a queue of its song', async () => {
 		const song = versionedSong();
 
 		await playTake(song.generations[2], song);
 
 		expect(audioPlayer.current?.generation.id).toBe('g-v2b');
 		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'song', songId: song.id }));
-		expect(queuedGenerationIds()).toEqual(['g-v3', 'g-v2a', 'g-v2b', 'g-v1']);
 		expect(get(playbackSource)).toEqual({ kind: 'song', id: song.id, title: song.title });
-	});
-
-	// Spec: REQ-LISTENING-08 -- the queue wraps and names the song once, as one 'again' line.
-	it('the take after the last wraps to the first, and the queue names its song once', async () => {
-		const song = versionedSong();
-		await playTake(song.generations[0], song);
-
-		playPrevSong();
-		expect(audioPlayer.current?.generation.id).toBe('g-v2b');
-		playNextSong();
-
-		expect(audioPlayer.current?.generation.id).toBe('g-v1');
-		expect(buildQueueViewModel(get(queueContext), audioPlayer.current).again).toBe(song.title);
 	});
 
 	it('a take archived after the queue was built is skipped when its turn comes', async () => {
@@ -3769,6 +3789,64 @@ describe('playTake', () => {
 		playNextSong();
 
 		expect(audioPlayer.current?.generation.id).toBe('g-v1');
+	});
+
+	function withTakeArchived(song: SongItem, id: string): SongItem {
+		return {
+			...song,
+			generations: song.generations.map((gen) =>
+				gen.id === id ? { ...gen, is_archived: true } : gen
+			)
+		};
+	}
+
+	it('a take archived while it waits as the next one is put right at once', async () => {
+		const song = versionedSong();
+		songList.set([song]);
+		await playTake(song.generations[4], song);
+
+		songList.set([withTakeArchived(song, 'g-v2a')]);
+
+		expect(vi.mocked(audioPlayer.preload).mock.lastCall?.[0]?.generation.id).toBe('g-v2b');
+	});
+
+	it('a take archived while it waits as the only next one is taken back', async () => {
+		const song = versionedSong();
+		const pair = { ...song, generations: [song.generations[1], song.generations[2]] };
+		songList.set([pair]);
+		await playTake(pair.generations[0], pair);
+		const withdraw = vi.spyOn(audioPlayer, 'withdrawPreload').mockImplementation(() => {});
+
+		songList.set([withTakeArchived(pair, 'g-v2b')]);
+
+		expect(withdraw).toHaveBeenCalled();
+	});
+
+	it('a Queue row of a take archived since the queue was built plays nothing', async () => {
+		const song = versionedSong();
+		songList.set([song]);
+		await playTake(song.generations[4], song);
+		songList.set([withTakeArchived(song, 'g-v2b')]);
+		vi.mocked(audioPlayer.load).mockClear();
+
+		jumpToQueueIndex(2);
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('toggling shuffle reorders the whole song queue and back, though the song list holds only part of its takes', async () => {
+		const song = versionedSong();
+		songList.set([{ ...song, generations: [song.generations[4]] }]);
+		await playTake(song.generations[4], song);
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+
+		await toggleShuffle();
+		const shuffledIds = queuedGenerationIds();
+		await toggleShuffle();
+
+		expect(shuffledIds).not.toEqual(['g-v3', 'g-v2a', 'g-v2b', 'g-v1']);
+		expect([...shuffledIds].sort()).toEqual(['g-v1', 'g-v2a', 'g-v2b', 'g-v3']);
+		expect(queuedGenerationIds()).toEqual(['g-v3', 'g-v2a', 'g-v2b', 'g-v1']);
 	});
 
 	it('a tap says play from here, so a leftover shuffle does not reorder the queue', async () => {

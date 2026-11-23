@@ -399,6 +399,22 @@ class AudioPlayer {
 		el.load();
 	}
 
+	// Takes back what preload() readied once no take is to follow the playing
+	// one: the second deck's take is dropped, and the continuous deck gives up
+	// what it holds or waits to append after the playing take, which preload(null)
+	// leaves in place.
+	withdrawPreload(): void {
+		const session = this.deckSession;
+		if (!session) {
+			this.clearStandby();
+			return;
+		}
+		const playing = session.playing?.take ?? this.current;
+		if (session.tail === playing) return;
+		if (playing) session.tail = playing;
+		this.handToDeck(session, session.deck.dropAhead());
+	}
+
 	private loadFromUrl(info: PlaybackInfo, url: string, opts: LoadOptions): void {
 		if (this.continueCurrentTake(info, url, opts)) return;
 

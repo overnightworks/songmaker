@@ -81,6 +81,7 @@ import {
 	playlistEntryToPlaybackInfo,
 	queueContext,
 	setQueueContext,
+	songQueueTakeIsGone,
 	songTakeQueue,
 	toAlbumQueueEntry,
 	toPlaybackInfo,
@@ -140,6 +141,7 @@ export function clearGenerationSelection(): void {
 
 songList.subscribe((songs) => {
 	if (followPicksAheadInAlbumQueue(songs)) preloadNextTake();
+	refreshSongQueuePreload();
 });
 
 const SHUFFLE_STORAGE_KEY = 'queueShuffleEnabled';
@@ -484,6 +486,7 @@ function playNativeAlbumTakes(
 function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index: number): void {
 	const takes = ctx.takes;
 	if (!takes || index < 0 || index >= takes.length) return;
+	if (ctx.type === 'song' && songQueueTakeIsGone(ctx, takes[index])) return;
 	queueContext.set({ ...ctx, index });
 	loadNativeTake(takes[index]);
 }
@@ -844,9 +847,9 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 		return;
 	}
 	if (ctx.type === 'song') {
-		const song = get(songList).find((item) => item.id === ctx.songId);
-		const queue = song && songTakeQueue(song, current.generation.id);
-		if (queue) startSongQueue(queue, { resumeAtTrackTime: trackTime });
+		const index = ctx.inListOrder.findIndex((take) => take.generation.id === current.generation.id);
+		if (index < 0) return;
+		startSongQueue({ ...ctx, takes: ctx.inListOrder, index }, { resumeAtTrackTime: trackTime });
 		return;
 	}
 	startPlaylistQueue(ctx.playlist, ctx.entries, currentPlaylistIndex(ctx, current), {
@@ -1172,6 +1175,16 @@ function takeAfterTheEnd(): PlaybackInfo | null {
 
 function preloadNextTake(): void {
 	if (playsTheAppsTakes()) audioPlayer.preload(takeAfterCurrent());
+}
+
+// A take of a song queue can be archived, lose its audio or be deleted while it
+// waits as the next one, already loading: the take readied is put right, or
+// taken back where none is left to follow.
+function refreshSongQueuePreload(): void {
+	if (get(queueContext).type !== 'song' || !playsTheAppsTakes()) return;
+	const next = takeAfterCurrent();
+	if (next) audioPlayer.preload(next);
+	else audioPlayer.withdrawPreload();
 }
 
 // A step always lands on another place of the playlist, so that place starts

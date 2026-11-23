@@ -1,9 +1,10 @@
 import { derived, get, writable } from 'svelte/store';
 import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '#lib/api/types.ts';
 import { audioPlayer, type PlaybackInfo } from '#lib/services/audioPlayer.svelte.ts';
-import { takeVersion, type PlaybackSource } from '#lib/constants/now-playing.ts';
+import { type PlaybackSource } from '#lib/constants/now-playing.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { isPlayableTake, pickedTake, songTakesLoaded } from '#lib/utils/playable.ts';
+import { groupTakes, takesInGroupOrder } from '#lib/utils/takeGroups.ts';
 
 // A playlist queue names the playlist it was built from. The queue is the
 // only owner of that name: navigation may open, close, or replace the
@@ -31,6 +32,9 @@ export interface SongQueue {
 	songId: string;
 	songTitle: string;
 	takes: PlaybackInfo[];
+	// The same takes in the take list's order, which a shuffle toggle rebuilds
+	// the queue from, so that it never depends on what the song list holds.
+	inListOrder: PlaybackInfo[];
 	index: number;
 }
 
@@ -207,28 +211,22 @@ export function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInf
 	};
 }
 
-// The take list shows the latest version's takes first, then each earlier
-// version's, and Imported takes last; within a version the song's own order
-// stands.
-function takesInListOrder(generations: GenerationItem[]): GenerationItem[] {
-	const versionOf = (gen: GenerationItem) =>
-		takeVersion(gen.version_id, gen.version_number)?.versionNumber ?? -1;
-	return [...generations].sort((a, b) => versionOf(b) - versionOf(a));
-}
-
 // What a tap on one of a song's takes queues: the song's playable takes in the
 // take list's order, from the tapped one on. adjacentQueueTake wraps them, so
 // the take before the tapped one plays last. Null where the tapped take is not
-// playable.
+// playable. With no current version named, the groups hold every version
+// newest first, Imported last: the list's order with every fold open.
 export function songTakeQueue(song: SongItem, startGenerationId: string): SongQueue | null {
-	const takes = takesInListOrder(song.generations).filter(isPlayableTake);
+	const takes = takesInGroupOrder(groupTakes(song.generations, null)).filter(isPlayableTake);
 	const index = takes.findIndex((gen) => gen.id === startGenerationId);
 	if (index < 0) return null;
+	const queued = takes.map((gen) => toPlaybackInfo(gen, song));
 	return {
 		type: 'song',
 		songId: song.id,
 		songTitle: song.title,
-		takes: takes.map((gen) => toPlaybackInfo(gen, song)),
+		takes: queued,
+		inListOrder: queued,
 		index
 	};
 }
@@ -236,11 +234,17 @@ export function songTakeQueue(song: SongItem, startGenerationId: string): SongQu
 // A take of a song queue that was archived, lost its audio or was deleted since
 // the queue was built is skipped when its turn comes, never replaced
 // (REQ-LISTENING-06, REQ-LIBRARY-07).
-function songQueueTakeIsGone(ctx: SongQueue, take: PlaybackInfo): boolean {
+export function songQueueTakeIsGone(ctx: SongQueue, take: PlaybackInfo): boolean {
 	const song = get(songList).find((item) => item.id === ctx.songId);
 	if (!song || !songTakesLoaded(song)) return false;
 	const live = song.generations.find((gen) => gen.id === take.generation.id);
 	return live === undefined || !isPlayableTake(live);
+}
+
+// The line after the last row promises a start over, which only a take other
+// than the last one that can still play keeps.
+function songQueueWraps(ctx: SongQueue): boolean {
+	return ctx.takes.slice(0, -1).some((take) => queueTakeCanPlay(ctx, take));
 }
 
 export function albumQueueTake(song: SongItem, gen: GenerationItem): PlaybackInfo {
@@ -307,6 +311,10 @@ export function adjacentQueueTake(
 	);
 }
 
+function queueTakeCanPlay(ctx: QueueContext, take: PlaybackInfo): boolean {
+	return !ctx.skipped?.has(take) && !(ctx.type === 'song' && songQueueTakeIsGone(ctx, take));
+}
+
 interface QueuePlace {
 	index: number;
 	length: number;
@@ -324,8 +332,7 @@ function firstPlayableInDirection(
 		if (place.endsWithItsWindow && place.index + step === place.length) return windowEnd;
 		const index = (place.index + direction * step + place.length) % place.length;
 		const take = place.takeAt(index);
-		const gone = ctx.type === 'song' && songQueueTakeIsGone(ctx, take);
-		if (!ctx.skipped?.has(take) && !gone) return { kind: 'take', index, take };
+		if (queueTakeCanPlay(ctx, take)) return { kind: 'take', index, take };
 	}
 	return windowEnd;
 }
@@ -432,5 +439,5 @@ export function buildQueueViewModel(
 	const items = ctx.takes.map((take) => nativeQueueItem(take));
 	const currentIndex = nativeTakeIndex(ctx, current);
 	const queue = { items, currentIndex, upNext: upNextItem(items, ctx, current) };
-	return ctx.type === 'song' ? { ...queue, again: ctx.songTitle } : queue;
+	return ctx.type === 'song' && songQueueWraps(ctx) ? { ...queue, again: ctx.songTitle } : queue;
 }

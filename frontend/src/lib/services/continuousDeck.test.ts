@@ -940,6 +940,20 @@ describe('ContinuousDeck', () => {
 			}
 		);
 
+		it('gives up the take held ahead when none is to follow, so the playing take ends the stream', async () => {
+			const { deck, audio, buffer, network } = openDeck();
+			network.serve('/audio/first.mp3', MEGABYTE / 4);
+			network.serve('/audio/second.mp3', MEGABYTE / 4);
+			await deck.appendTake('first', '/audio/first.mp3');
+			await deck.appendTake('second', '/audio/second.mp3');
+			audio.playTo(5);
+
+			await deck.dropAhead();
+
+			expect(deck.manifest.map((entry) => entry.take)).toEqual(['first']);
+			expect(buffer.removals).toEqual([[firstEnd, Infinity]]);
+		});
+
 		it('gives up a take still waiting behind the playing one without asking for it', async () => {
 			const { deck, audio, buffer, network } = openDeck();
 			network.serve('/audio/first.mp3', 2 * MEGABYTE);
