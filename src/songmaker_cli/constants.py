@@ -211,9 +211,11 @@ ARQ_SCORING_HEALTH_KEY = f"{ARQ_SCORING_QUEUE_NAME}:health-check"
 ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
 SCORING_SERVICE_NAME: Final = "songmaker-scoring-worker"
 WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
-# The music worker writes it at its start, its readiness probe reads it: both run as the
-# image's user in one container, whose home starts without it.
-MUSIC_WORKER_READINESS_FILE: Final = Path.home() / ".music-worker-readiness"
+# The music worker writes it at its start, its readiness probe reads it: both run in one
+# container, whose /tmp starts empty; /tmp is the only writable path of its read-only root.
+MUSIC_WORKER_READINESS_FILE: Final = Path(
+    "/tmp/music-worker-readiness",  # noqa: S108 - a per-container file the probe reads  # NOSONAR(S5443) One fixed file, shared by the worker and its probe, on the pod's emptyDir.
+)
 
 # Score backfill (issue #222): catches up generations that predate
 # auto-scoring, or that an auto-score attempt could not reach (worker down,
