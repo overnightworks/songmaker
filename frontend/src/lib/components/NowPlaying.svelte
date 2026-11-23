@@ -40,7 +40,7 @@
 		queueContext
 	} from '#lib/stores/queue.ts';
 	import { libraryTakePool, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
-	import { setKeep, setPick } from '#lib/stores/takeActions.ts';
+	import { toggleKeep, togglePick } from '#lib/stores/takeActions.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
@@ -184,16 +184,16 @@
 		leaveFor(navigateToPlaying);
 	}
 
-	// P and K judge the playing take like the Take tab's Pick and Keep do, from
+	// P and K judge the playing take like the judging card's Pick and Keep do, from
 	// anywhere in the surface (docked or full, whichever tab is open) and never
-	// while a text field has focus (the rating notes textarea, an editable title
+	// while a text field has focus (the judging card's note, an editable title
 	// elsewhere on the page). isEditableElement is the same check the app's own
 	// global Escape handling uses (utils/escape-level-up), so it also yields to a
 	// contenteditable, not just input/textarea. They act on the resolved take,
 	// not info.generation, whose snapshot goes stale once a pick or keep lands.
 	const JUDGING_KEY_HANDLERS: Record<string, (songId: string, take: GenerationItem) => unknown> = {
-		p: (songId, take) => setPick(songId, take.id, !take.is_picked),
-		k: (songId, take) => setKeep(songId, take.id, !take.is_kept)
+		p: togglePick,
+		k: toggleKeep
 	};
 
 	function onJudgingKeydown(event: KeyboardEvent): void {

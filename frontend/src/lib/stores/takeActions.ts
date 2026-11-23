@@ -11,6 +11,7 @@ import {
 	unkeepGeneration,
 	unpickGeneration
 } from '#lib/api/client.ts';
+import type { GenerationItem } from '#lib/api/types.ts';
 import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
 import { upsertSongInList } from '#lib/stores/libraryData.ts';
 import { addToast } from '#lib/stores/toast.ts';
@@ -48,6 +49,16 @@ export async function setKeep(songId: string, genId: string, kept: boolean): Pro
 	}
 }
 
+// The pick and keep toggles every judging surface shares: the judging card and
+// Now Playing's P and K keys flip whatever the take shows now.
+export function togglePick(songId: string, take: GenerationItem): Promise<void> {
+	return setPick(songId, take.id, !take.is_picked);
+}
+
+export function toggleKeep(songId: string, take: GenerationItem): Promise<void> {
+	return setKeep(songId, take.id, !take.is_kept);
+}
+
 export async function restoreTake(songId: string, genId: string): Promise<void> {
 	try {
 		await unarchiveGeneration(genId);
@@ -66,7 +77,6 @@ export async function rate(
 	try {
 		await rateGeneration(genId, rating, notes);
 		await refreshSong(songId);
-		addToast(pageText('takeActions.ratingSaved'), 'success');
 	} catch (e) {
 		addToast(describeFailure(e, pageText('takeActions.ratingFailed')), 'error');
 	}
