@@ -941,7 +941,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		return takes;
 	}
 
-	function albumQueueIndex(): number | false {
+	function albumQueueIndex(): number | false | undefined {
 		const ctx = get(queueContext);
 		return ctx.type === 'album' && ctx.index;
 	}
