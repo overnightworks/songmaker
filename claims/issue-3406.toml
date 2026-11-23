@@ -1,0 +1,8 @@
+claim_id = "c6da176510a14ad191658b75accc3aa0"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "574c882ebed008ecd034ef4e9659eca83c644aed"
+branch = "claude/issue-3406-songmaker-pins-quality-v0-24-0"
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "pyproject.toml", "uv.lock"]
+opened_commit = "640a487324ee407c690d259df008a5a3eb21e043"
+whole_reason = "The v0.24.0 pins and the pytest-randomly adoption the release enforces must land together, or the quality gate is red."
