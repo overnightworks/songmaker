@@ -1,7 +1,0 @@
-claim_id = "f1e514756d71468690366c4833b39272"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "9ccf81cc1acdef0b73928288b129e6d90e211bbd"
-branch = "claude/issue-3446-coverage-report-throwaway-file"
-scope = [".github/workflows/coveragerc-ci.ini", "tests/scripts/test_repo_path_imports_own_checkout.py"]
-opened_commit = "8d155833598cf78ef0e00e6a3fb550fef7b3658f"
