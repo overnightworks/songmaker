@@ -191,6 +191,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await ctx.slot_releases.drain()
         await close_arq_pool()
         await ctx.async_redis.aclose()
+        if ctx.wake_redis is not None:
+            await ctx.wake_redis.aclose()
 
 
 def audio_path_rejected_handler(
@@ -437,6 +439,7 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
         async_redis=create_async_redis(settings.redis_url),
+        wake_redis=create_async_redis(settings.redis_url, follows_wakes=True),
         object_store=object_store,
     )
 
