@@ -9,7 +9,13 @@ from functools import partial
 from pathlib import Path
 
 from httpx import Response
-from support.postgres_lock_harness import CommitPause, StatementPause, race, wrote_to_tables
+from support.postgres_lock_harness import (
+    CommitPause,
+    StatementPause,
+    after_the_take_locks,
+    race,
+    wrote_to_tables,
+)
 from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, Version
@@ -92,10 +98,6 @@ _holding_a_generation_write = partial(
 )
 
 
-def _after_the_take_locks(statement: str) -> bool:
-    return "FROM generations" in statement and "FOR UPDATE" in statement
-
-
 def test_an_album_add_holding_its_take_locks_leaves_a_bulk_delete_of_them_waiting_not_deadlocked(
     pg_factory, tmp_path,
 ) -> None:
@@ -103,7 +105,7 @@ def test_an_album_add_holding_its_take_locks_leaves_a_bulk_delete_of_them_waitin
     answers = race(
         pg_factory, world.album_add(),
         world.bulk_delete(FIRST_TRACK_TAKE, SECOND_TRACK_TAKE),
-        StatementPause(_after_the_take_locks),
+        StatementPause(after_the_take_locks),
     )
     assert answers["first"].status_code == 200
     assert answers["first"].json()["added_count"] == 2
@@ -155,7 +157,7 @@ def test_an_album_add_holding_its_take_locks_leaves_a_pick_in_the_album_waiting(
     })
     answers = race(
         pg_factory, world.album_add(), world.pick("z-sibling"),
-        StatementPause(_after_the_take_locks),
+        StatementPause(after_the_take_locks),
     )
     assert answers["first"].status_code == 200
     assert answers["first"].json()["added_count"] == 2

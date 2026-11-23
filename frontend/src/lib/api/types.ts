@@ -41,13 +41,17 @@ export interface AddAlbumToPlaylistRequest {
 	album_id: string;
 }
 
-export interface AddAlbumToPlaylistResult {
+export interface AddEntriesToPlaylistResult {
 	added_count: number;
 	skipped: PlaylistAlbumSkipItem[];
 }
 
 export interface AddGenerationToPlaylistRequest {
 	generation_id: string;
+}
+
+export interface AddPlaylistToPlaylistRequest {
+	source_playlist_id: string;
 }
 
 export interface AddSongToPlaylistRequest {

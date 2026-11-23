@@ -35,6 +35,11 @@ def wrote_to_tables(session: Session, *table_names: str) -> bool:
     """), {"table_names": list(table_names)}).scalar_one()
 
 
+def after_the_take_locks(statement: str) -> bool:
+    """True for the statement that locks takes, so a paused writer holds every take lock."""
+    return "FROM generations" in statement and "FOR UPDATE" in statement
+
+
 def wrote_song_data(session: Session) -> bool:
     """True once the session's transaction inserted, updated or deleted a song or a version."""
     return wrote_to_tables(session, "songs", "versions")

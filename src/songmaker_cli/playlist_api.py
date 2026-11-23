@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -26,10 +27,10 @@ from songmaker_cli.api_helpers import (
 )
 from songmaker_cli.api_models import (
     AddAlbumToPlaylistRequest,
-    AddAlbumToPlaylistResponse,
+    AddEntriesToPlaylistResponse,
     AddGenerationToPlaylistRequest,
+    AddPlaylistToPlaylistRequest,
     AddSongToPlaylistRequest,
-    PlaylistAlbumSkipResponse,
     PlaylistCreateRequest,
     PlaylistDetailResponse,
     PlaylistEntryResponse,
@@ -64,6 +65,7 @@ from songmaker_cli.db.queries.generations import ArchivedTakeError
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
+    add_playlist_entries_to_playlist,
     add_song_to_playlist,
     create_playlist,
     delete_playlist,
@@ -76,7 +78,7 @@ from songmaker_cli.db.queries.playlists import (
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.db.queries.sharing import presented_take
+from songmaker_cli.db.queries.sharing import presented_playlist_entries, presented_take
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
@@ -86,6 +88,19 @@ router = APIRouter()
 
 def _albums_reached_by(user: AuthenticatedUser) -> AlbumReach:
     return lambda album: can_access_album(album, user)
+
+
+def _audio_reader(ctx: AppContext) -> Callable[[Generation], bool]:
+    """Whether a take's audio file resolves inside the audio root."""
+
+    def readable(generation: Generation) -> bool:
+        try:
+            resolve_audio_path(ctx.audio_dir, generation.mp3_path)
+        except (AudioPathRejectedError, OSError):
+            return False
+        return True
+
+    return readable
 
 
 _LIST_PLAYLISTS_DESCRIPTION = "List the person's own playlists."
@@ -354,33 +369,49 @@ def api_add_album_to_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
-) -> AddAlbumToPlaylistResponse:
+) -> AddEntriesToPlaylistResponse:
     check_playlist_access(session, playlist_id, user)
     check_album_access(get_album(session, req.album_id), user)
-
-    def _readable(generation: Generation) -> bool:
-        try:
-            resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-        except (AudioPathRejectedError, OSError):
-            return False
-        return True
-
     try:
         result = add_album_to_playlist(
-            session, playlist_id, req.album_id, is_readable=_readable
+            session, playlist_id, req.album_id, is_readable=_audio_reader(ctx),
         )
     except ValueError:
         raise Refusal(404, "albumRefusal.notFound")
     session.commit()
-    return AddAlbumToPlaylistResponse(
-        added_count=len(result.entries),
-        skipped=[
-            PlaylistAlbumSkipResponse(
-                song_id=item.song_id, title=item.title, reason=item.reason
-            )
-            for item in result.skipped
-        ],
+    return AddEntriesToPlaylistResponse.from_orm(result)
+
+
+_ADD_PLAYLIST_TO_PLAYLIST_DESCRIPTION = (
+    "Add the playable entries of one of the person's own playlists, in order, to another of "
+    "their playlists. A shared playlist shows them."
+)
+
+
+@router.post(
+    "/playlists/{playlist_id}/entries/playlist",
+    description=_ADD_PLAYLIST_TO_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="add_playlist_to_playlist", effect=ToolEffect.SIDE_EFFECTING),
+    responses={404: {"description": "Playlist or source playlist not found"}},
+)
+def api_add_playlist_to_playlist(
+    playlist_id: str,
+    req: AddPlaylistToPlaylistRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> AddEntriesToPlaylistResponse:
+    check_playlist_access(session, playlist_id, user)
+    source = check_playlist_access(session, req.source_playlist_id, user)
+    reached_entries = [
+        entry for entry in presented_playlist_entries(source)
+        if can_access_album(entry.generation.song.album, user)
+    ]
+    result = add_playlist_entries_to_playlist(
+        session, playlist_id, reached_entries, is_readable=_audio_reader(ctx),
     )
+    session.commit()
+    return AddEntriesToPlaylistResponse.from_orm(result)
 
 
 @router.delete(
