@@ -26,7 +26,7 @@ from songmaker_cli.constants import (
 if TYPE_CHECKING:
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
-    from tandem.slots import Slots
+    from tandem import Slots
 
 log = logging.getLogger(__name__)
 
