@@ -209,8 +209,9 @@ test, or a describe whose every test belongs to one shell, carries
 What a flow proves that a unit test cannot: the album pick really plays (the
 transport offers Pause, not Retry), Now Playing opens on the judged take, a
 take reaches a playlist and can be reordered and pruned there, a playlist row
-plays and judges its take the same way an editor take row does — docked beside
-the playlist on desktop, as a sheet on mobile — shuffle toggles, and a share
+plays and judges its take — docked beside the playlist on desktop, as a sheet
+on mobile — while a tap on an editor take row plays it, shows the equalizer and
+leaves Now Playing closed, shuffle toggles, and a share
 link serves the album to a logged-out visitor. A second `library.spec.ts` test
 proves the rail itself the same way (issue #326): a collapsed row's songs are
 provably invisible and an expanded row's provably not — `grid-template-rows:

@@ -354,6 +354,27 @@ describe('playback resume record', () => {
 	};
 
 	it.each([
+		{ queue: 'its song', source: { type: 'song' } },
+		{ queue: 'an album', source: { type: 'album', albumId: 'a-resume' } },
+		{
+			queue: 'a playlist',
+			source: { type: 'playlist', playlistId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d05' }
+		},
+		{ queue: 'the library', source: { type: 'library', pool: 'picks', shuffle: true } }
+	])('reads a record whose take played from $queue', ({ source }) => {
+		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify({ ...WHOLE_RECORD, source }));
+
+		expect(savedPlayback()).toEqual({ ...WHOLE_RECORD, source });
+	});
+
+	it("never hands one user's saved take to another", () => {
+		const songQueueRecord = { ...WHOLE_RECORD, source: { type: 'song' } };
+		localStorage.setItem(recordKey(OTHER_LISTENER.id), JSON.stringify(songQueueRecord));
+
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it.each([
 		{ record: 'a damaged record', stored: '{"generationId": 7' },
 		{
 			record: 'a record without a take',
@@ -362,6 +383,10 @@ describe('playback resume record', () => {
 		{
 			record: 'a record without its queue',
 			stored: JSON.stringify({ ...WHOLE_RECORD, source: undefined })
+		},
+		{
+			record: 'a record naming a queue kind the app does not know',
+			stored: JSON.stringify({ ...WHOLE_RECORD, source: { type: 'songs' } })
 		},
 		{
 			record: 'a record naming an unknown library pool',

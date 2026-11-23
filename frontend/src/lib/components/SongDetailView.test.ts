@@ -263,7 +263,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await tick();
 		expect(target.querySelector('.lyrics-area')).toBeNull();
 		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-		expect(target.querySelector('.take-row button.play-btn')).not.toBeNull();
+		expect(target.querySelector('.take-row .take-summary')).not.toBeNull();
 		tabs[0].click();
 		await tick();
 		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe(
@@ -536,7 +536,7 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		const row = target.querySelector('.take-row');
 		expect(row).not.toBeNull();
-		expect(row?.querySelectorAll('button')).toHaveLength(4);
+		expect(row?.querySelectorAll('button')).toHaveLength(3);
 		expect(row?.querySelector('[role="button"].take-summary')).not.toBeNull();
 		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 	});

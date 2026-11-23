@@ -21,7 +21,6 @@ import type {
 import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,
-	transportOffersPause,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
 	type PlayerTenure,
@@ -82,11 +81,14 @@ import {
 	playlistEntryToPlaybackInfo,
 	queueContext,
 	setQueueContext,
+	songTakeQueue,
 	toAlbumQueueEntry,
+	toPlaybackInfo,
 	type PlaylistQueueSource,
 	type QueueContext,
 	type QueueDirection,
-	type SkipNotice
+	type SkipNotice,
+	type SongQueue
 } from '#lib/stores/queue.ts';
 import { shuffled } from '#lib/utils/shuffle.ts';
 import { readStorage, writeStorage } from '#lib/utils/storage.ts';
@@ -164,7 +166,8 @@ export async function toggleShuffle(): Promise<void> {
 const SHUFFLE_LABEL_KEYS = {
 	library: { on: 'transport.unshuffleLibrary', off: 'transport.shuffleLibrary' },
 	album: { on: 'transport.unshuffleAlbum', off: 'transport.shuffleAlbum' },
-	playlist: { on: 'transport.unshufflePlaylist', off: 'transport.shufflePlaylist' }
+	playlist: { on: 'transport.unshufflePlaylist', off: 'transport.shufflePlaylist' },
+	song: { on: 'transport.unshuffleSong', off: 'transport.shuffleSong' }
 } as const satisfies Record<QueueContext['type'], Record<'on' | 'off', TextKey>>;
 
 // Every shuffle control (transport bar, Now Playing) names the same scope
@@ -241,17 +244,6 @@ function libraryStreamFailureToast(err: unknown): string {
 }
 
 // --- Playback dispatch ---
-
-function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
-	return {
-		generation: gen,
-		songId: song.id,
-		songTitle: song.title,
-		artist: song.artist,
-		albumTitle: song.album_title,
-		lyrics: gen.version_lyrics
-	};
-}
 
 function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
 	if (!get(shuffleEnabled) || items.length <= 1) return { items, startIndex };
@@ -498,7 +490,6 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 
 interface LibraryTakeStart extends QueueStart {
 	keepPlaying?: boolean;
-	tappedRowSong?: SongItem;
 	// A restore starts the queue at the saved position and reports nothing it
 	// cannot rebuild (#1187 P2), so the listener who reopens the page is never
 	// asked to retry a play they did not start. Whether it plays is decided
@@ -568,9 +559,6 @@ async function fetchLibraryTakeQueueOrReport(
 	}
 }
 
-// A take row never plays alone (#1187 P6): when the pool holds only the
-// tapped take, as it does before anything is picked, the row's song names the
-// album the queue continues through instead.
 async function playLibraryFromGeneration(
 	gen: GenerationItem,
 	opts: LibraryTakeStart = {}
@@ -607,10 +595,6 @@ async function playLibraryFromGeneration(
 			return;
 		}
 		const start = libraryQueueStart(opts, continuation);
-		if (takes.length === 1 && opts.tappedRowSong) {
-			await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
-			return;
-		}
 		libraryQueueSkipped.set(queue.skipped ?? []);
 		libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
 		playNativeLibraryTakes(takes, startIndex, start);
@@ -859,6 +843,12 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 		});
 		return;
 	}
+	if (ctx.type === 'song') {
+		const song = get(songList).find((item) => item.id === ctx.songId);
+		const queue = song && songTakeQueue(song, current.generation.id);
+		if (queue) startSongQueue(queue, { resumeAtTrackTime: trackTime });
+		return;
+	}
 	startPlaylistQueue(ctx.playlist, ctx.entries, currentPlaylistIndex(ctx, current), {
 		restart: true,
 		resumeAtTrackTime: trackTime
@@ -875,7 +865,7 @@ export function canPlayPrevSong(
 	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
 		return adjacentQueueTake(ctx, current, -1).kind === 'take';
 	}
-	if (ctx.type === 'library') return false;
+	if (ctx.type !== 'album') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter(songHasPlayableTake).length > 1;
 }
@@ -891,7 +881,7 @@ export function canPlayNextSong(
 	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
 		return adjacentQueueTake(ctx, current).kind === 'take';
 	}
-	if (ctx.type === 'library') return false;
+	if (ctx.type !== 'album') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.some((s) => s.id !== current.songId && songHasPlayableTake(s));
 }
@@ -1028,8 +1018,8 @@ function restoreNowPlayingTriggerFocus(closedFromFullSurface: boolean): void {
 }
 
 // The single open/close owner for Now Playing: every surface that opens or
-// closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
-// NowPlayingTake's Repaint/Cover action) routes through these two functions
+// closes it (PlayerBar's button, a rail playlist row via
+// playPlaylistEntryAndShowNowPlaying, NowPlayingTake's Repaint/Cover action) routes through these two functions
 // instead of poking `nowPlayingSurface`/`nowPlayingPanel` directly, so surface
 // selection and focus restoration happen the same way for every entry point.
 export function openNowPlaying(panel: NowPlayingPanel): void {
@@ -1075,58 +1065,47 @@ export function escapeNowPlaying(): void {
 	closeNowPlaying();
 }
 
-// The single playback entry point for a take row (TakesList):
-// toggles pause if the row's take is already playing, otherwise starts a
-// queue from it (its album, else the library pool), reporting any failure as
-// a toast instead of throwing into the caller.
-// A press on the row of the take that offers Pause, a waiting one included,
-// is that Pause, as the bar's is (#1330).
+// The single playback entry point for a take row (TakesList): a tap on the
+// row of the take the transport holds is that take's play or pause, any other
+// starts the song's takes as a queue, the tapped one first. A tap says "play
+// from here", so no leftover shuffle reorders the queue, as with a playlist
+// entry. The listener stays where they are; the bar and the playing row show
+// the result.
 export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
-	if (isTakeCurrent(gen) && transportOffersPause(audioPlayer.transport)) {
+	if (isTakeCurrent(gen)) {
 		audioPlayer.toggle();
 		return;
 	}
-	try {
-		const albumId = get(selectedAlbumId);
-		if (albumId) await playAlbumFromGeneration(albumId, song, gen);
-		else await playLibraryFromGeneration(gen, { tappedRowSong: song });
-	} catch (e) {
-		addToast(describeFailure(e, pageText('player.playTakeFailed')), 'error');
-	}
+	const queue = songTakeQueue(song, gen.id);
+	if (queue === null) return;
+	setShuffle(false);
+	startSongQueue(queue);
+}
+
+function startSongQueue(queue: SongQueue, start: QueueStart = {}): void {
+	beginPlayStart();
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
+	playStartNotice.set('idle');
+	const ordered = shuffledWithStart(queue.takes, queue.index);
+	setQueueContext({ ...queue, takes: ordered.items, index: ordered.startIndex });
+	loadNativeTake(ordered.items[ordered.startIndex], firstTakeLoad(start));
 }
 
 type TakeRow = { alreadyLoaded: boolean; start: () => void | Promise<void> };
 
-// A row body never stops the music. The take a row stands for is left
-// running, and a paused one picks up where it stands rather than starting
-// over. Pausing belongs to a take row's own ▶ and to the transport.
+// A row on a page that shows the playing row itself never stops the music.
+// The take a row stands for is left running, and a paused one picks up where
+// it stands rather than starting over. Pausing belongs to the transport.
 async function playRow(row: TakeRow): Promise<void> {
 	if (row.alreadyLoaded) audioPlayer.play();
 	else await row.start();
-}
-
-// What a click on a take row means where it has no page of its own to show
-// the result (the click rule of issue #140): play the take and surface Now
-// Playing straight on its judging panel. The editor's takes list and the
-// rail's playlist rows differ only in how playback starts, so both hand that
-// start to this one action; clicking the row already loaded only brings up
-// the panel.
-async function playTakeRow(row: TakeRow): Promise<void> {
-	await playRow(row);
-	openNowPlaying('take');
 }
 
 // Whether a take is the one the transport holds. The generation's id settles
 // it.
 function isTakeCurrent(gen: GenerationItem): boolean {
 	return audioPlayer.current?.generation.id === gen.id;
-}
-
-export async function playTakeAndShowNowPlaying(
-	gen: GenerationItem,
-	song: SongItem
-): Promise<void> {
-	await playTakeRow({ alreadyLoaded: isTakeCurrent(gen), start: () => playTake(gen, song) });
 }
 
 function playlistEntryRow(playlist: PlaylistDetailItem, index: number): TakeRow {
@@ -1137,11 +1116,15 @@ function playlistEntryRow(playlist: PlaylistDetailItem, index: number): TakeRow 
 	};
 }
 
+// What a click on a rail playlist row means where it has no page of its own to
+// show the result: play the entry and surface Now Playing straight on its
+// judging panel. Clicking the entry already loaded only brings up the panel.
 export async function playPlaylistEntryAndShowNowPlaying(
 	playlist: PlaylistDetailItem,
 	index: number
 ): Promise<void> {
-	await playTakeRow(playlistEntryRow(playlist, index));
+	await playPlaylistEntry(playlist, index);
+	openNowPlaying('take');
 }
 
 // A row on the playlist page (#1010): it plays from here and leaves the
@@ -1692,6 +1675,7 @@ function resumeQueueSource(): ResumeQueueSource | null {
 	const ctx = get(queueContext);
 	if (ctx.type === 'album') return { type: 'album', albumId: ctx.albumId };
 	if (ctx.type === 'playlist') return { type: 'playlist', playlistId: ctx.playlist.id };
+	if (ctx.type === 'song') return { type: 'song' };
 	if (!ctx.takes?.length) return null;
 	return { type: 'library', ...librarySnapshotOpts() };
 }
@@ -1729,6 +1713,8 @@ async function restoreSavedPlayback(saved: SavedPlayback, tenure: PlayerTenure):
 	const { source } = saved;
 	if (source.type === 'album') {
 		restoreAlbumTake(found.song, found.take, restoredStart(at));
+	} else if (source.type === 'song') {
+		restoreSongQueue(found.song, found.take, at);
 	} else if (source.type === 'library') {
 		await restoreLibraryTake(source, found.take, at);
 	} else {
@@ -1800,6 +1786,13 @@ async function restoreLibraryTake(
 	setLibraryTakePool(source.pool);
 	setShuffle(source.shuffle);
 	await playLibraryFromGeneration(take, { restoredAt: at });
+}
+
+// The saved take's song is in hand once the take is found, so its queue comes
+// back whole at once.
+function restoreSongQueue(song: SongItem, take: GenerationItem, at: number): void {
+	const queue = songTakeQueue(song, take.id);
+	if (queue !== null) startSongQueue(queue, restoredStart(at));
 }
 
 // Gathering an album's takes costs a request per song, so a restored album

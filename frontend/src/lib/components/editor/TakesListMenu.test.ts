@@ -32,15 +32,14 @@ vi.mock('#lib/stores/player.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/player.ts')>();
 	return {
 		...actual,
-		playTake: vi.fn(async () => undefined),
-		playTakeAndShowNowPlaying: vi.fn(async () => undefined)
+		playTake: vi.fn(async () => undefined)
 	};
 });
 
 import { addToast } from '#lib/stores/toast.ts';
 import type { GenerateState } from '#lib/stores/generateAction.ts';
 import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
-import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
+import { playTake } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
@@ -75,7 +74,6 @@ beforeEach(() => {
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
 	vi.mocked(playTake).mockClear();
-	vi.mocked(playTakeAndShowNowPlaying).mockClear();
 	activeJobs.set([]);
 	generationFailures.set({});
 	// The scoring job streams its progress over server-sent events jsdom does

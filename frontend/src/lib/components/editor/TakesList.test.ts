@@ -18,22 +18,6 @@ function enterSelectionMode(id = 'g1'): void {
 	toggleSelection(id);
 }
 
-function stubCoarsePointer(isCoarse: boolean): void {
-	vi.stubGlobal(
-		'matchMedia',
-		vi.fn((query: string) => ({
-			matches: isCoarse ? query.includes('coarse') : false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			addListener: vi.fn(),
-			removeListener: vi.fn(),
-			dispatchEvent: vi.fn()
-		}))
-	);
-}
-
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
@@ -62,8 +46,7 @@ vi.mock('#lib/stores/player.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/player.ts')>();
 	return {
 		...actual,
-		playTake: vi.fn(async () => undefined),
-		playTakeAndShowNowPlaying: vi.fn(async () => undefined)
+		playTake: vi.fn(async () => undefined)
 	};
 });
 
@@ -72,10 +55,9 @@ import { bulkDeleteGenerations } from '#lib/api/client.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import type { GenerateState } from '#lib/stores/generateAction.ts';
 import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
-import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
+import { playTake } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
-import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
 import {
 	IDLE,
 	addToPlaylist,
@@ -97,11 +79,7 @@ const emptyText = words['takesList.empty']({ generate: words['generate.button'] 
 const takeOne = words['takeRow.takeVersioned']({ version: '1', take: '1' });
 const repaintFromOne = words['takeRow.provenanceRepaint']({ take: takeOne });
 const takeTwo = words['takeRow.takeVersioned']({ version: '3', take: '2' });
-const takeThree = words['takeRow.takeVersioned']({ version: '3', take: '3' });
 const noVocals = `⚠ ${words['takeRow.flagNoVocals']}`;
-const playTakeLabel = words['takeRow.playTake']({ take: takeThree });
-const pauseTakeLabel = words['takeRow.pauseTake']({ take: takeThree });
-const retryTakeLabel = words['takeRow.retryTake']({ take: takeThree });
 // defect:#1568 — these fixtures retain determinate progress and no elapsed phase.
 const RUNNING: GenerateState = {
 	kind: 'generating',
@@ -173,7 +151,6 @@ beforeEach(() => {
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
 	vi.mocked(playTake).mockClear();
-	vi.mocked(playTakeAndShowNowPlaying).mockClear();
 	activeJobs.set([]);
 	generationFailures.set({});
 	// The scoring job streams its progress over server-sent events jsdom does
@@ -220,7 +197,7 @@ describe('TakesList', () => {
 		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
 			words['takeRow.voiceDeleted']({ name: 'Folk Alto' })
 		);
-		target.querySelector<HTMLElement>('.play-btn')?.click();
+		target.querySelector<HTMLElement>('.take-summary')?.click();
 		expect(playTake).toHaveBeenCalledWith(deletedVoiceTake, songWithDeletedVoice);
 	});
 
@@ -598,14 +575,14 @@ describe('TakesList', () => {
 	);
 
 	it.each(['fine', 'coarse'] as const)(
-		'has four symbol actions (▶ ★ ♥ ⋯) and one labelled row body on a %s pointer',
+		'has three symbol actions (★ ♥ ⋯) and one row body that plays on a %s pointer',
 		async (pointer) => {
 			setPointer(pointer);
 			const { target } = await render();
 			const row = target.querySelector('.take-row');
 			if (!row) throw new Error('Expected a take row');
 			const buttons = Array.from(row.querySelectorAll('button'));
-			expect(buttons).toHaveLength(4);
+			expect(buttons).toHaveLength(3);
 			for (const button of buttons) {
 				expect(button.textContent?.trim()).toBe('');
 				expect(button.getAttribute('aria-label')).toBeTruthy();
@@ -620,26 +597,19 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('opens Now Playing on This take when the row body is tapped', async () => {
+	it('plays the take when the row body is tapped', async () => {
 		const { target, props } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
 		row?.querySelector<HTMLElement>('.take-summary')?.click();
-		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'g1' }),
-			props.song
-		);
-		expect(playTake).not.toHaveBeenCalled();
+		expect(playTake).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }), props.song);
 	});
 
-	it('opens Now Playing on This take when the row body is activated by keyboard', async () => {
+	it('plays the take when the row body is activated by keyboard', async () => {
 		const { target, props } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
 		const body = row?.querySelector<HTMLElement>('.take-summary');
 		body?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'g1' }),
-			props.song
-		);
+		expect(playTake).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }), props.song);
 	});
 
 	it('names the row body by its visible content, not an overriding label', async () => {
@@ -650,17 +620,6 @@ describe('TakesList', () => {
 		expect(body?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
 			`Take 3 ${duration}`.replace(/\s+/g, ' ').trim()
 		);
-	});
-
-	it("still only toggles play on the row's play target, never opening Now Playing itself", async () => {
-		const { target } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.querySelector<HTMLElement>('.play-btn')?.click();
-		expect(playTake).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'g1' }),
-			expect.objectContaining({ id: 's1' })
-		);
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -731,16 +690,6 @@ describe('TakesList', () => {
 		provenance?.click();
 		await tick();
 		expect(get(selectedIds).has('result')).toBe(true);
-	});
-
-	it('plays the take and opens Now Playing on its play target click', async () => {
-		const { target } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.querySelector<HTMLElement>('.play-btn')?.click();
-		expect(playTake).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'g1' }),
-			expect.objectContaining({ id: 's1' })
-		);
 	});
 
 	const failingActions = [
@@ -821,32 +770,9 @@ describe('TakesList', () => {
 		expect(row?.querySelector('.rescoring-badge')).toBeNull();
 	});
 
-	it('plays only from its named play control, independently of the pick and menu', async () => {
-		const { target } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		const play = row?.querySelector<HTMLButtonElement>(`[aria-label="${playTakeLabel}"]`);
-		expect(play).not.toBeNull();
-		expect(play?.contains(row?.querySelector('.pick-btn') ?? null)).toBe(false);
-		expect(play?.contains(row?.querySelector('.keep-btn') ?? null)).toBe(false);
-		expect(play?.contains(row?.querySelector('.menu-trigger') ?? null)).toBe(false);
-		play?.click();
-		await tick();
-		expect(pick).not.toHaveBeenCalled();
-		expect(keep).not.toHaveBeenCalled();
-		expect(playTake).toHaveBeenCalledWith(
-			expect.objectContaining({ id: 'g1' }),
-			expect.objectContaining({ id: 's1' })
-		);
-	});
-
-	it.each([
-		{ status: 'playing', label: pauseTakeLabel, busy: 'false', face: 'pause' },
-		{ status: 'paused', label: playTakeLabel, busy: 'false', face: 'play' },
-		{ status: 'buffering', label: pauseTakeLabel, busy: 'true', face: 'spinner' },
-		{ status: 'error', label: retryTakeLabel, busy: 'false', face: 'refresh-cw' }
-	] as const)(
-		'names the transport action for a $status take and shows the face the bar shows (#1330)',
-		async ({ status, label, busy, face }) => {
+	it.each(['playing', 'paused', 'idle'] as const)(
+		'shows the equalizer on the row of a %s take only when it holds the sound',
+		async (status) => {
 			const currentSong = song(versionedSongDefaults());
 			audioPlayer.current = {
 				generation: currentSong.generations[0],
@@ -858,38 +784,31 @@ describe('TakesList', () => {
 			};
 			audioPlayer.status = status;
 			const { target } = await render({ song: currentSong });
-			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
-			expect({ busy: button?.getAttribute('aria-busy'), face: shownTransportFace(button) }).toEqual(
-				{
-					busy,
-					face
-				}
-			);
-			button?.click();
-			expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
+			const equalizer = target.querySelector(`[aria-label="${words['playingMark.playing']}"]`);
+			expect(equalizer !== null).toBe(status !== 'idle');
 		}
 	);
 
 	it.each(['ctrlKey', 'metaKey'])(
-		'selects through the play control with %s without playback',
+		'selects on a click on the row body with %s without playback',
 		async (modifier) => {
 			const { target } = await render();
 			target
-				.querySelector('.play-btn')
+				.querySelector('.take-summary')
 				?.dispatchEvent(new MouseEvent('click', { bubbles: true, [modifier]: true }));
 			await tick();
 			expect(get(selectedIds).has('g1')).toBe(true);
 			expect(playTake).not.toHaveBeenCalled();
-			expect(target.querySelector('.play-btn')?.getAttribute('aria-pressed')).toBe('true');
+			expect(target.querySelector('.select-btn')?.getAttribute('aria-pressed')).toBe('true');
 		}
 	);
 
 	it.each(['fine', 'coarse'] as const)(
-		'gives play, pick, keep and menu 44 px targets on a %s pointer',
+		'gives pick, keep and menu 44 px targets on a %s pointer',
 		async (pointer) => {
 			setPointer(pointer);
 			const { target } = await render();
-			for (const selector of ['.play-btn', '.pick-btn', '.keep-btn', '.menu-trigger']) {
+			for (const selector of ['.pick-btn', '.keep-btn', '.menu-trigger']) {
 				const button = target.querySelector<HTMLButtonElement>(selector);
 				if (!button) throw new Error(`Expected ${selector}`);
 				expect(minSquarePx(button, selector)).toEqual({
@@ -932,7 +851,7 @@ describe('TakesList archived takes', () => {
 		expect(archivedRow.classList.contains('archived')).toBe(true);
 		expect(archivedRow.getAttribute('title')).toBe(words['takeRow.archivedTitle']);
 		expect(archivedRow.querySelector('.take-label')?.previousElementSibling).toBeNull();
-		expect(archivedRow.querySelector('.play-btn')).toBeNull();
+		expect(archivedRow.querySelector('.select-btn')).toBeNull();
 
 		archivedRow.click();
 		await tick();
@@ -959,27 +878,20 @@ describe('TakesList archived takes', () => {
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
-	it('stops announcing itself as a button while it cannot act', async () => {
-		const { target } = await renderWithArchived();
-		const [playable, archived] = Array.from(target.querySelectorAll<HTMLElement>('.take-row'));
-		expect(playable.querySelector('button.play-btn')).not.toBeNull();
-		expect(archived.querySelector('button.play-btn')).toBeNull();
-	});
-
 	it('is a button again in selection mode, where ticking it still does something', async () => {
 		const { target } = await renderWithArchived();
 		enterSelectionMode();
 		await tick();
 		const archived = target.querySelectorAll<HTMLElement>('.take-row')[1];
 		expect(archived.querySelector('button[aria-label="Select v3 · take 2"]')).not.toBeNull();
-		archived.querySelector<HTMLElement>('.play-btn')?.click();
+		archived.querySelector<HTMLElement>('.select-btn')?.click();
 		await tick();
 		expect(get(selectedIds).has('g-arch')).toBe(true);
 	});
 
 	it('still plays a take that is not archived', async () => {
 		const { target } = await renderWithArchived();
-		target.querySelector<HTMLElement>('.take-row .play-btn')?.click();
+		target.querySelector<HTMLElement>('.take-row .take-summary')?.click();
 		await tick();
 		expect(playTake).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'g1' }),
@@ -996,7 +908,7 @@ describe('TakesList archived takes', () => {
 		expect(body?.getAttribute('tabindex')).toBe('-1');
 		body?.click();
 		await tick();
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 	});
 
 	it('selects an archived take from its row body in selection mode', async () => {
@@ -1011,7 +923,7 @@ describe('TakesList archived takes', () => {
 		body?.click();
 		await tick();
 		expect(get(selectedIds).has('g-arch')).toBe(true);
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 	});
 });
 
@@ -1140,28 +1052,5 @@ describe('TakesList load states', () => {
 		expect(retry?.getAttribute('aria-label')).toBe(words['takesList.retry']);
 		retry?.click();
 		expect(onretry).toHaveBeenCalledOnce();
-	});
-
-	it('does not offer the tap-play hint on Takes while the first generation has zero takes yet', async () => {
-		stubCoarsePointer(true);
-		generateState.set(RUNNING);
-		const { target } = await render({ song: song({}) });
-		expect(target.querySelector('.status-slot')).not.toBeNull();
-		expect(target.querySelector('[role="tooltip"]')).toBeNull();
-		vi.unstubAllGlobals();
-	});
-});
-
-describe('TakesList touch hint', () => {
-	it('offers the tap hint behind an info tip on a coarse pointer and not on a mouse', async () => {
-		stubCoarsePointer(true);
-		const tip = (await render()).target.querySelector('.version-head [role="tooltip"]');
-		expect(tip?.textContent).toBe(words['takesList.mobileHint']);
-		const unsaved = song({ version_count: 0, generations: [generation({})] });
-		const imported = (await render({ song: unsaved })).target;
-		expect(imported.querySelector('.version-header-row [role="tooltip"]')).not.toBeNull();
-		stubCoarsePointer(false);
-		expect((await render()).target.querySelector('[role="tooltip"]')).toBeNull();
-		vi.unstubAllGlobals();
 	});
 });

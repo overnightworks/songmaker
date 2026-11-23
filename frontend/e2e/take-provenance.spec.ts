@@ -269,7 +269,7 @@ test.describe(
 		}) => {
 			const song = await seedJumpSong(page, 'phone');
 			await openTakes(page, song);
-			await takeRow(page, song.repaint).locator('.play-btn').click();
+			await takeRow(page, song.repaint).locator('.take-summary').click();
 			await startDirtyDraft(page);
 			await provenanceLink(page, song).click();
 			await expect(takeRow(page, song.source)).toBeInViewport();

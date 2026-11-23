@@ -614,13 +614,18 @@ library window's last take is followed by the window's end and a one-take
 queue by nothing, so both preload nothing and Up next shows nothing. An album
 queue plays each song's pick: picking another take of a song still ahead in
 it puts that take in the song's place and re-aims the preload; songs already
-played keep their take. A take row never plays alone: when the library pool
-holds only the tapped take (nothing picked yet), the queue continues through
-that take's album instead.
+played keep their take. A tap on an editor take row starts a song queue: `songTakeQueue`
+builds it from the song's playable takes in the take list's order (latest
+version first, Imported last), the tapped one in play, and `adjacentQueueTake`
+wraps it, so Now Playing shows the song once more as one quiet "again" line
+after the last row. `playbackSource` names the song, so the Queue head reads
+"from ‹song›". A tap says play from here: it clears shuffle, as a playlist
+entry does, and a take archived or deleted since is skipped when its turn
+comes. The take row has no queue of the library pool or album of its own.
 
 **What was playing survives a killed page (#1187 P2).** `stores/playbackResume.ts`
 owns one record per user on this device, `localStorage["playbackResume:<userId>"]`:
-the queue the take plays from (album, playlist, or library pool and shuffle),
+the queue the take plays from (song, album, playlist, or library pool and shuffle),
 the song and take ids, the position in seconds and when it was saved. It is
 written on a take change, on pause, when the page hides, and about every 5 s
 of playback in between; the last save is kept in memory, so that rhythm reads
@@ -647,7 +652,8 @@ it with autoplay off at the saved position: `playLibraryFromGeneration`, after
 the device's library pool and shuffle settings take on the ones the record
 names, since those settings build and save every library queue (they keep
 them even when that restore then fails; the record came from this device), or
-`startPlaylistQueue` on the fetched playlist, the same starts a tap uses; an
+`startPlaylistQueue` on the fetched playlist, the same starts a tap uses; a song
+queue is rebuilt from the fetched song with no further request; an
 album take loads as a one-take queue of the song's album and gathers the
 album's other takes (`gatherAlbumQueueAround`, a request per song) only once
 it starts playing, so a reload costs one song fetch. The queue context is set
@@ -790,21 +796,18 @@ A selected song stays on `SongDetailView`, which composes the `components/editor
 **One click rule for rows (issues #140, #1010).** A row click does what the
 row stands for; neither an album nor a playlist row carries a ▶ of its own. A
 song row opens the editor — in the album interior (the album is the workbench)
-as in the rail. A take row where it has no page of its own to show the
-result — the editor's takes list, the rail's playlist rows — plays the take *and* shows Now Playing on This take,
-because judging a take is what such a row is for. `stores/player.ts` holds that
-as one action, `playTakeRow`, which each of those rows reaches through its own
-start of playback (`playTakeAndShowNowPlaying` for a generation in the editor,
-`playPlaylistEntryAndShowNowPlaying` for an entry of the rail's open playlist).
-A row on the playlist page plays in place instead: `playPlaylistEntry` plays from that entry,
-with the rest of the playlist queued behind it, and leaves the listener on the
-page, whose playing row and mini-player show the result. **A row body never
-stops the music**: the take a row stands for is left running and a paused one
-resumes where it stands, so clicking the row that is already loaded only brings
-up the panel, or on the playlist page resumes it. Pausing belongs to the
-transport and to the play face a take keeps of its own (#914 L8) — on an editor
-take row, `playTake`, which plays
-or pauses that take without ever opening Now Playing.
+as in the rail. A take row in the rail's open playlist, where it has no page of its
+own to show the result, plays the entry *and* shows Now Playing on This take,
+because judging a take is what such a row is for:
+`playPlaylistEntryAndShowNowPlaying` in `stores/player.ts`. A row on the playlist
+page plays in place instead: `playPlaylistEntry` plays from that entry, with the
+rest of the playlist queued behind it, and leaves the listener on the page, whose
+playing row and mini-player show the result. A row body never stops the music
+there: the take a row stands for is left running and a paused one resumes where it
+stands. An editor take row has no ▶ and opens no Now Playing: `playTake` plays
+the tapped take and queues the song's others, a tap on the playing row pauses
+it, the playing row shows the equalizer, and Ctrl or Cmd with the click ticks
+the take for selection instead.
 The docked panel is what makes the rule affordable on desktop — the take is
 judged beside the playlist rather than over it; below the dock threshold Now
 Playing takes the screen as before. Share pages stay play-only: a public listener has no editor and no

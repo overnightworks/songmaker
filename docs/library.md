@@ -30,6 +30,8 @@ For anyone building or reviewing library playback pools, shuffle and the player:
 
 ### REQ-LISTENING-07: At the end of a deliberately bounded library snapshot, playback stops after the last loaded take and reports that further takes were not loaded.
 
+### REQ-LISTENING-08: A tap on a take of the song editor plays that take and keeps the listener on the editor; a tap on the playing take pauses it, and the song's other playable takes follow in the take list's order and wrap around to the first.
+
 ### REQ-PLAYER-01: While a take is playing, the signed-in player identifies the current song and gives access to its single Now Playing surface.
 
 ### REQ-PLAYER-02: On every player surface, while audio is loading, a first Play request queues playback and a second Play request cancels it.

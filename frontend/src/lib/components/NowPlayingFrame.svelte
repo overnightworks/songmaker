@@ -17,6 +17,7 @@
 		NOW_PLAYING_Z_INDEX,
 		nowPlayingFromLabel,
 		nowPlayingTakeLabel,
+		SOURCE_OPEN_LABEL_KEYS,
 		type NowPlayingSource,
 		type NowPlayingSurfaceKind
 	} from '#lib/constants/now-playing.ts';
@@ -243,10 +244,7 @@
 				class="from-link"
 				data-hitbox="text"
 				onclick={source.open}
-				aria-label={pageText(
-					source.kind === 'album' ? 'nowPlaying.openAlbumSource' : 'nowPlaying.openPlaylistSource',
-					{ title: source.title }
-				)}
+				aria-label={pageText(SOURCE_OPEN_LABEL_KEYS[source.kind], { title: source.title })}
 			>
 				{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
 			</button>

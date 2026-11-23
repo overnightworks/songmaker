@@ -1,5 +1,5 @@
 import { formatTime } from '#lib/utils/format.ts';
-import { pageText } from '#lib/utils/page-words.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 // Now Playing layout constants and the take descriptions its surfaces share.
 
@@ -69,10 +69,16 @@ export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 	return written.filter((part): part is string => Boolean(part)).join(META_SEPARATOR);
 }
 
-// Where the playing queue comes from — the album or playlist it was built
-// from. A library queue has no source. The queue store owns the answer
+// Where the playing queue comes from — the album, playlist or song it was
+// built from. A library queue has no source. The queue store owns the answer
 // (playbackSource); Now Playing adds how to go back there.
-type PlaybackSourceKind = 'album' | 'playlist';
+type PlaybackSourceKind = 'album' | 'playlist' | 'song';
+
+export const SOURCE_OPEN_LABEL_KEYS = {
+	album: 'nowPlaying.openAlbumSource',
+	playlist: 'nowPlaying.openPlaylistSource',
+	song: 'nowPlaying.openSongSource'
+} as const satisfies Record<PlaybackSourceKind, TextKey>;
 
 export interface PlaybackSource {
 	kind: PlaybackSourceKind;

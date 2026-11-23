@@ -2504,14 +2504,6 @@ msgctxt "takesList.retry"
 msgid "Try again"
 msgstr "Noch einmal"
 
-msgctxt "takesList.aboutTakes"
-msgid "About takes"
-msgstr "Über Takes"
-
-msgctxt "takesList.mobileHint"
-msgid "Tap play → details in Now Playing"
-msgstr "Tipp auf Abspielen → Details unter „Läuft gerade“"
-
 msgctxt "takesList.empty"
 msgid "No takes yet · {generate} makes the first"
 msgstr "Noch keine Takes · {generate} erzeugt den ersten"
@@ -2663,18 +2655,6 @@ msgstr "Archivierter Take"
 msgctxt "takeRow.selectTake"
 msgid "Select {take}"
 msgstr "{take} auswählen"
-
-msgctxt "takeRow.playTake"
-msgid "Play {take}"
-msgstr "{take} abspielen"
-
-msgctxt "takeRow.pauseTake"
-msgid "Pause {take}"
-msgstr "{take} pausieren"
-
-msgctxt "takeRow.retryTake"
-msgid "Retry {take}"
-msgstr "{take} erneut versuchen"
 
 msgctxt "takeRow.pickTake"
 msgid "Pick {take}"
@@ -5634,6 +5614,10 @@ msgctxt "transport.shufflePlaylist"
 msgid "Shuffle this playlist"
 msgstr "Diese Playlist zufällig abspielen"
 
+msgctxt "transport.shuffleSong"
+msgid "Shuffle this song"
+msgstr "Diesen Song zufällig abspielen"
+
 msgctxt "transport.unshuffleLibrary"
 msgid "Disable shuffle (all albums)"
 msgstr "Zufallswiedergabe aus (alle Alben)"
@@ -5645,6 +5629,10 @@ msgstr "Zufallswiedergabe aus (dieses Album)"
 msgctxt "transport.unshufflePlaylist"
 msgid "Disable shuffle (this playlist)"
 msgstr "Zufallswiedergabe aus (diese Playlist)"
+
+msgctxt "transport.unshuffleSong"
+msgid "Disable shuffle (this song)"
+msgstr "Zufallswiedergabe aus (dieser Song)"
 
 msgctxt "player.openNowPlaying"
 msgid "{title} — open Now Playing"
@@ -5695,10 +5683,6 @@ msgstr ""
 msgctxt "player.takeNotInQueue"
 msgid "This take is not in the queue"
 msgstr "Dieser Take ist nicht in der Warteschlange"
-
-msgctxt "player.playTakeFailed"
-msgid "Playback failed"
-msgstr "Wiedergabe fehlgeschlagen"
 
 msgctxt "player.takeSkipped"
 msgid "{title} couldn't be loaded, skipped."
@@ -5812,6 +5796,10 @@ msgctxt "nowPlaying.fromSource"
 msgid "from {title}"
 msgstr "aus {title}"
 
+msgctxt "nowPlaying.queueAgain"
+msgid "{title} again"
+msgstr "{title} noch einmal"
+
 msgctxt "nowPlaying.openAlbumSource"
 msgid "from {title} — open album"
 msgstr "aus {title} – Album öffnen"
@@ -5819,6 +5807,10 @@ msgstr "aus {title} – Album öffnen"
 msgctxt "nowPlaying.openPlaylistSource"
 msgid "from {title} — open playlist"
 msgstr "aus {title} – Playlist öffnen"
+
+msgctxt "nowPlaying.openSongSource"
+msgid "from {title} — open song"
+msgstr "aus {title} – Song öffnen"
 
 msgctxt "nowPlaying.takeVersioned"
 msgid "v{version} · take {take}"

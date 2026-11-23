@@ -3,15 +3,9 @@
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
-	import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
+	import { playTake } from '#lib/stores/player.ts';
 	import { rescoringTakeIds, restoreTake } from '#lib/stores/takeActions.ts';
-	import {
-		audioPlayer,
-		transportButtonFace,
-		transportAction,
-		type TransportAction,
-		transportIsBusy
-	} from '#lib/services/audioPlayer.svelte.ts';
+	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		formatScore,
 		qualityFlag,
@@ -30,14 +24,8 @@
 	import { formatTime } from '#lib/utils/format.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
-	import TransportButtonIcon from '../TransportButtonIcon.svelte';
+	import PlayingMark from '../PlayingMark.svelte';
 	import TakeMenu from './TakeMenu.svelte';
-
-	const PLAY_LABEL_KEYS = {
-		play: 'takeRow.playTake',
-		pause: 'takeRow.pauseTake',
-		retry: 'takeRow.retryTake'
-	} as const satisfies Record<TransportAction, TextKey>;
 
 	interface Props {
 		gen: GenerationItem;
@@ -117,31 +105,17 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
-	function handlePlayClick(gen: GenerationItem, e: MouseEvent): void {
-		e.stopPropagation();
-		if (e.ctrlKey || e.metaKey) {
-			toggleSelection(gen.id);
-			return;
-		}
-		if ($selectionMode) {
+	// The row's click rule: a tap on the row body (everything except the ★ and ♥
+	// toggles and the menu) plays the take and leaves the listener where they
+	// are, a tap on the playing row pauses it, and Ctrl or Cmd with the click
+	// ticks the take instead. Selection mode makes every tap a tick.
+	function handleRowBodyClick(gen: GenerationItem, event: MouseEvent | KeyboardEvent): void {
+		if ($selectionMode || event.ctrlKey || event.metaKey) {
 			toggleSelection(gen.id);
 			return;
 		}
 		if (gen.is_archived) return;
 		void playTake(gen, song);
-	}
-
-	// The row's click rule (#140): a tap on the row body — its name, duration
-	// and score, everything except the ▶ symbol, the ★ and ♥ toggles and the
-	// menu — plays the take and opens Now Playing on it. Selection mode
-	// re-purposes it to a select tap instead, same as every other row control.
-	function handleRowBodyClick(gen: GenerationItem): void {
-		if ($selectionMode) {
-			toggleSelection(gen.id);
-			return;
-		}
-		if (gen.is_archived) return;
-		void playTakeAndShowNowPlaying(gen, song);
 	}
 
 	// An archived take has nothing for a row activation to do, so the row
@@ -154,7 +128,7 @@
 	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
 		if (e.key !== 'Enter' && e.key !== ' ') return;
 		e.preventDefault();
-		handleRowBodyClick(gen);
+		handleRowBodyClick(gen, e);
 	}
 
 	interface TakeProvenance {
@@ -204,7 +178,6 @@
 	// An archived take is only a name in a list that cleanup will empty, so it
 	// carries no control or detail that promises it will stay.
 	const compact = $derived(gen.is_archived);
-	const transport = $derived(isGenPlaying(gen) ? audioPlayer.transport : 'idle');
 	const duration = $derived(formatDuration(gen));
 	const provenance = $derived(compact ? null : takeProvenance(gen));
 	const headline = $derived(compact ? null : headlineScore(gen));
@@ -239,24 +212,17 @@
 >
 	<span class="take-main">
 		<span class="take-headline">
-			{#if $selectionMode || !gen.is_archived}
+			{#if $selectionMode}
 				<button
 					type="button"
-					class="play-btn"
+					class="select-btn"
 					data-hitbox="frequent"
 					data-hitbox-face
-					onclick={(event) => handlePlayClick(gen, event)}
-					aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
-					aria-busy={$selectionMode ? undefined : transportIsBusy(transport)}
-					aria-label={$selectionMode
-						? pageText('takeRow.selectTake', { take: name })
-						: pageText(PLAY_LABEL_KEYS[transportAction(transport)], { take: name })}
+					onclick={() => toggleSelection(gen.id)}
+					aria-pressed={$selectedIds.has(gen.id)}
+					aria-label={pageText('takeRow.selectTake', { take: name })}
 				>
-					{#if $selectionMode}
-						<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
-					{:else}
-						<TransportButtonIcon face={transportButtonFace(transport)} size={16} />
-					{/if}
+					<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
 				</button>
 			{/if}
 
@@ -266,9 +232,10 @@
 				tabindex={rowIsActionable(gen) ? 0 : -1}
 				aria-disabled={rowIsActionable(gen) ? undefined : true}
 				data-hitbox="text"
-				onclick={() => handleRowBodyClick(gen)}
+				onclick={(event) => handleRowBodyClick(gen, event)}
 				onkeydown={(e) => handleRowKeydown(gen, e)}
 			>
+				<PlayingMark current={isGenPlaying(gen)} />
 				<span class="take-label">
 					{pageText('takeRow.takeLabel', { number: String(gen.generation_number) })}
 				</span>
@@ -652,7 +619,7 @@
 
 	.pick-btn,
 	.keep-btn,
-	.play-btn {
+	.select-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -665,8 +632,8 @@
 
 	.pick-btn:hover,
 	.pick-btn.picked,
-	.play-btn:hover,
-	.take-row.selected .play-btn {
+	.select-btn:hover,
+	.take-row.selected .select-btn {
 		color: var(--accent);
 	}
 

@@ -11,6 +11,8 @@ import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts'
 // P2). Only the app's own takes are followed, never a share route's.
 
 export type ResumeQueueSource =
+	// The song of the saved take: a song queue holds no other song's takes.
+	| { type: 'song' }
 	| { type: 'album'; albumId: string }
 	| { type: 'playlist'; playlistId: string }
 	| { type: 'library'; pool: LibraryTakePool; shuffle: boolean };
@@ -286,6 +288,7 @@ function isUuid(value: unknown): value is string {
 
 function isResumeQueueSource(value: unknown): value is ResumeQueueSource {
 	if (!isRecord(value)) return false;
+	if (value.type === 'song') return true;
 	if (value.type === 'album') return typeof value.albumId === 'string';
 	if (value.type === 'playlist') return isUuid(value.playlistId);
 	return (
