@@ -6,9 +6,9 @@ Initialized eagerly during app lifespan via ``init_arq_pool``.
 from __future__ import annotations
 
 import threading
+from typing import TYPE_CHECKING
 
-from arq import create_pool
-from arq.connections import ArqRedis
+from redis.asyncio import Redis
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
@@ -16,11 +16,16 @@ from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import MUSIC_WORKER_KIND, worker_kind_leases
 
+if TYPE_CHECKING:
+    from arq.connections import ArqRedis
+
 _pool: ArqRedis | None = None
 _pool_lock = threading.Lock()
 
 
 async def init_arq_pool() -> ArqRedis:
+    from arq import create_pool
+
     global _pool
     pool = await create_pool(
         build_arq_redis_settings(get_settings().redis_url),
@@ -61,7 +66,7 @@ async def is_music_worker_healthy() -> bool:
     return bool(roster.holders)
 
 
-async def is_scoring_worker_healthy(pool: ArqRedis | None = None) -> bool:
+async def is_scoring_worker_healthy(pool: Redis | None = None) -> bool:
     """Check the scoring worker's heartbeat key.
 
     ``pool`` defaults to this process's own singleton (the web process,
