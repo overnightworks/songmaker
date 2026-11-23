@@ -1,5 +1,5 @@
 // A tap on an editor take row plays that take and the listener stays on the
-// song (#3419): the row has no ▶, the playing row shows the equalizer, a tap on
+// song: the row has no ▶, the playing row shows the equalizer, a tap on
 // it pauses, Now Playing stays closed, and Ctrl or ⌘ with the click ticks the
 // take instead of playing it. Both shells: the row is the same on the phone's
 // Takes tab and in the desktop workspace.
