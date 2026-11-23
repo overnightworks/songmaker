@@ -4,7 +4,7 @@
 
 import { expect, test, type Page, type TestInfo } from './coverage-test';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
-import { openNowPlayingFromBar, openThisTakeFromBar } from './play-album';
+import { openNowPlayingFromBar } from './play-album';
 import { readSeededLibrary, seedPlaylist } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -135,8 +135,8 @@ test('the album menu lists six rows and none picks album takes', async ({ page }
 
 test.describe('the P and K keys judge the playing take', () => {
 	const judgements = [
-		{ key: 'p', on: 'nowPlayingTake.unpick', off: 'nowPlayingTake.pick' },
-		{ key: 'k', on: 'nowPlayingTake.unkeep', off: 'nowPlayingTake.keep' }
+		{ key: 'p', on: 'nowPlayingJudging.unpick', off: 'nowPlayingJudging.pick' },
+		{ key: 'k', on: 'nowPlayingJudging.unkeep', off: 'nowPlayingJudging.keep' }
 	] as const;
 
 	for (const { key, on, off } of judgements) {
@@ -144,7 +144,7 @@ test.describe('the P and K keys judge the playing take', () => {
 			const library = readSeededLibrary();
 			await page.goto(`/album/${library.albumId}`);
 			await playCollection(page, 'album');
-			await openThisTakeFromBar(page, shellOf(testInfo), library.albumTracks[0].songTitle);
+			await openNowPlayingFromBar(page, shellOf(testInfo), library.albumTracks[0].songTitle);
 			const badge = page.getByRole('button', {
 				name: new RegExp(`^(${words[on]}|${words[off]})$`)
 			});

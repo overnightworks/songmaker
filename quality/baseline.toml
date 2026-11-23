@@ -20,7 +20,7 @@
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1800
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
 "frontend/src/lib/components/LoraDetail.svelte" = 952
-"frontend/src/lib/components/NowPlaying.test.ts" = 1011
+"frontend/src/lib/components/NowPlaying.test.ts" = 1010
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1087
 "frontend/src/lib/components/PlayerBar.test.ts" = 1615
 "frontend/src/lib/components/SongDetailView.svelte" = 936
