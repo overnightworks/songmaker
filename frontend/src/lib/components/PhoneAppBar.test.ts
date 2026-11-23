@@ -17,6 +17,7 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import type { ResolvedPathname } from '$app/types';
 import {
+	historyComesToRest,
 	historyStandsStill,
 	installHistoryController,
 	loadHistoryPageForTests,
@@ -180,6 +181,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	phoneAppBar.set(null);
 	libraryAddressOverlayActive.set(false);
+	await historyComesToRest();
 	resetHistoryControllerForTests();
 	resetLayersForTests();
 	resetRailSearchForTests();
