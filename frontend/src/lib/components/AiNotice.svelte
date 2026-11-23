@@ -12,11 +12,11 @@
 {#if look === 'badge'}
 	<span class="row">
 		{#if lead}<span class="lead">{lead}</span>{/if}
-		<span class="ai-notice badge" lang="de"
-			><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{pageText(
+		<span class="ai-notice badge" lang="de">
+			<span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{pageText(
 				'aiNotice.generated'
-			)}</span
-		>
+			)}
+		</span>
 	</span>
 {:else}
 	<p class="ai-notice line" lang="de">

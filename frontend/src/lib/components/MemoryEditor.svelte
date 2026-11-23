@@ -148,12 +148,12 @@
 							</p>
 							<pre class="proposal-body">{proposal.proposedBody}</pre>
 							<div class="proposal-actions">
-								<button class="accept" onclick={() => answerProposal(() => onAccept(proposal))}
-									>{pageText('memory.accept')}</button
-								>
-								<button class="reject" onclick={() => answerProposal(() => onReject(proposal))}
-									>{pageText('memory.reject')}</button
-								>
+								<button class="accept" onclick={() => answerProposal(() => onAccept(proposal))}>
+									{pageText('memory.accept')}
+								</button>
+								<button class="reject" onclick={() => answerProposal(() => onReject(proposal))}>
+									{pageText('memory.reject')}
+								</button>
 							</div>
 						</div>
 					{/each}

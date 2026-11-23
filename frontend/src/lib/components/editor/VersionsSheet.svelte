@@ -203,11 +203,11 @@
 							{@const isCurrent = row.version.id === latest.id}
 							<li class="version-item" class:current={isCurrent}>
 								<button type="button" class="version-row" onclick={() => void choose(row.version)}>
-									<span class="version-number"
-										>{pageText('versions.name', {
+									<span class="version-number">
+										{pageText('versions.name', {
 											number: String(row.version.version_number)
-										})}</span
-									>
+										})}
+									</span>
 									<span class="version-lines">
 										<span class="version-takes">
 											{row.takes.count === 0
@@ -216,9 +216,9 @@
 											{#if row.takes.holdsPick}
 												· ★ {pageText('versions.picked')}
 											{/if}
-											{#if isCurrent}<span class="version-current"
-													>{pageText('versions.current')}</span
-												>{/if}
+											{#if isCurrent}<span class="version-current">
+													{pageText('versions.current')}
+												</span>{/if}
 										</span>
 										<span class="version-meta">
 											{row.when} · {row.firstLine}

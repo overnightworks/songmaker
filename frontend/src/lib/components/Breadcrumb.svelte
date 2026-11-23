@@ -16,13 +16,13 @@
 <nav class="breadcrumb" aria-label={pageText('breadcrumb.label')}>
 	{#each items as item, index (index)}
 		{#if index === items.length - 1}
-			<span class="crumb crumb-current" aria-current="page"
-				><span class="crumb-label">{item.label}</span></span
-			>
+			<span class="crumb crumb-current" aria-current="page">
+				<span class="crumb-label">{item.label}</span>
+			</span>
 		{:else if item.onclick}
-			<button type="button" class="crumb crumb-link" data-hitbox="frequent" onclick={item.onclick}
-				><span class="crumb-label">{item.label}</span></button
-			>
+			<button type="button" class="crumb crumb-link" data-hitbox="frequent" onclick={item.onclick}>
+				<span class="crumb-label">{item.label}</span>
+			</button>
 		{:else}
 			<span class="crumb"><span class="crumb-label">{item.label}</span></span>
 		{/if}

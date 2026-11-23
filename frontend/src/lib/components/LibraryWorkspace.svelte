@@ -83,9 +83,9 @@
 		{#if sync.status === 'error' && sync.error}
 			<div class="sync-status" role="alert">
 				<p>{sync.error}</p>
-				<button class="retry-btn" onclick={() => void retryLoad()}
-					>{pageText('libraryWorkspace.retry')}</button
-				>
+				<button class="retry-btn" onclick={() => void retryLoad()}>
+					{pageText('libraryWorkspace.retry')}
+				</button>
 			</div>
 		{/if}
 		<main class="main">

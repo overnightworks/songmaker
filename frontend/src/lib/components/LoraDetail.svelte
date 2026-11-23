@@ -287,12 +287,12 @@
 	<section class="samples-section">
 		<header class="section-head">
 			<h3>{pageText('voiceDetail.samples')}</h3>
-			<span class="count"
-				>{pageText('voiceDetail.sampleCapacity', {
+			<span class="count">
+				{pageText('voiceDetail.sampleCapacity', {
 					used: formatDecimal(samples.length, 0),
 					max: formatDecimal(LORA_MAX_SAMPLES, 0)
-				})}</span
-			>
+				})}
+			</span>
 		</header>
 
 		{#if samples.length === 0}
@@ -434,9 +434,9 @@
 	{#if displayedTrainingJob}
 		<section class="training-progress" aria-live="polite">
 			<div class="training-progress-head">
-				<strong
-					>{pageText(waitingForWorker ? 'voiceDetail.waiting' : 'voiceDetail.training')}</strong
-				>
+				<strong>
+					{pageText(waitingForWorker ? 'voiceDetail.waiting' : 'voiceDetail.training')}
+				</strong>
 				{#if trainingJob}
 					<button
 						class="cancel-training-btn"

@@ -68,10 +68,10 @@
 <div class="task" bind:this={taskElement}>
 	<div class="task-head">
 		<span class="what">{verbLabel}</span>
-		<span class="from"
-			>{pageText('takeTask.fromTake', { number: String(gen.generation_number) })}
-			<small>{takeDetail}</small></span
-		>
+		<span class="from">
+			{pageText('takeTask.fromTake', { number: String(gen.generation_number) })}
+			<small>{takeDetail}</small>
+		</span>
 		<button
 			type="button"
 			class="close"
@@ -105,68 +105,74 @@
 						type="button"
 						data-hitbox="frequent"
 						aria-pressed={$repaintMode === mode.value}
-						onclick={() => repaintMode.set(mode.value)}>{pageText(mode.key)}</button
+						onclick={() => repaintMode.set(mode.value)}
 					>
+						{pageText(mode.key)}
+					</button>
 				{/each}
 			</div>
 			{#if $repaintMode === 'balanced'}
-				<label class="slider"
-					><span class="field-label">{pageText('takeTask.repaintStrength')}</span><input
+				<label class="slider">
+					<span class="field-label">{pageText('takeTask.repaintStrength')}</span><input
 						type="range"
 						min="0"
 						max="1"
 						step="0.01"
 						bind:value={$repaintStrength}
-					/><output
-						>{pageText('takeTask.strengthValue', {
+					/><output>
+						{pageText('takeTask.strengthValue', {
 							count: Math.round($repaintStrength * 100)
-						})}</output
-					></label
-				>
+						})}
+					</output>
+				</label>
 			{/if}
 		{:else}
-			<label class="slider"
-				><span class="field-label"
-					>{pageText('takeTask.coverCloseness', { number: String(gen.generation_number) })}</span
-				><span class="end">{pageText('takeTask.coverFree')}</span><input
+			<label class="slider">
+				<span class="field-label">
+					{pageText('takeTask.coverCloseness', { number: String(gen.generation_number) })}
+				</span><span class="end">{pageText('takeTask.coverFree')}</span><input
 					type="range"
 					aria-label={pageText('takeTask.coverStrength')}
 					min="0"
 					max="1"
 					step="0.01"
 					bind:value={$coverStrength}
-				/><span class="end">{pageText('takeTask.coverStrict')}</span></label
-			>
-			<label class="slider"
-				><span class="field-label"
-					>{pageText('takeTask.noise')} <small>{pageText('takeTask.noiseCaption')}</small></span
-				><span class="end">{pageText('takeTask.noiseBound', { count: NOISE_MIN })}</span><input
+				/><span class="end">{pageText('takeTask.coverStrict')}</span>
+			</label>
+			<label class="slider">
+				<span class="field-label">
+					{pageText('takeTask.noise')} <small>{pageText('takeTask.noiseCaption')}</small>
+				</span><span class="end">
+					{pageText('takeTask.noiseBound', { count: NOISE_MIN })}
+				</span><input
 					type="range"
 					min={NOISE_MIN}
 					max={NOISE_MAX}
 					step="0.01"
 					bind:value={$coverNoiseStrength}
-				/><span class="end">{pageText('takeTask.noiseBound', { count: NOISE_MAX })}</span></label
-			>
+				/><span class="end">{pageText('takeTask.noiseBound', { count: NOISE_MAX })}</span>
+			</label>
 		{/if}
 		<p class="hint">{pageText('takeTask.promptHint')}</p>
 		{#if $seedFromTake}<p class="hint seed-line">
 				{pageText('takeTask.seedLine', { number: String($seedFromTake.takeNumber) })}
 			</p>{/if}
 		<div class="task-foot">
-			<span class="foot-note"
-				><span class="hint"
-					>{pageText('takeTask.landing', { number: String(landingVersionNumber) })}</span
-				>
-				<span class="hint">{pageText('takeTask.headerNote')}</span></span
-			>
+			<span class="foot-note">
+				<span class="hint">
+					{pageText('takeTask.landing', { number: String(landingVersionNumber) })}
+				</span>
+				<span class="hint">{pageText('takeTask.headerNote')}</span>
+			</span>
 			<button
 				type="button"
 				class="press"
 				data-hitbox="frequent"
 				disabled={unavailable}
-				onclick={() => void runSourceTask()}>{pressLabel}</button
+				onclick={() => void runSourceTask()}
 			>
+				{pressLabel}
+			</button>
 		</div>
 	</div>
 </div>

@@ -333,9 +333,9 @@
 					tabindex="-1"
 					aria-hidden="true"
 				>
-					{#if playbackFailure}<span class="phone-failure" id={phoneNoticeId}
-							>{playbackFailure}</span
-						>{/if}
+					{#if playbackFailure}<span class="phone-failure" id={phoneNoticeId}>
+							{playbackFailure}
+						</span>{/if}
 				</button>
 			{/if}
 		{:else}

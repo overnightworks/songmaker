@@ -198,9 +198,9 @@
 						{#if lora.status === 'ready'}
 							<span class="model-mode">{lora.model_mode}</span>
 						{/if}
-						<span class="sample-count"
-							>{pageText('voicesPage.sampleCount', lora.samples.length)}</span
-						>
+						<span class="sample-count">
+							{pageText('voicesPage.sampleCount', lora.samples.length)}
+						</span>
 						<span class="arrow" class:open={expandedId === lora.id}>▸</span>
 					</button>
 					<div class="row-actions">

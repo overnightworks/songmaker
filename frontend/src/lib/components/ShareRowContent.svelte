@@ -18,10 +18,11 @@
 		size={14}
 	/>{/if}
 {label}
-<span class="menu-item-hint" aria-hidden="true"
-	>{#if isShared && !busy}<span class="shared-check"><Icon name="check" size={12} /></span
-		>{/if}{hint}</span
->
+<span class="menu-item-hint" aria-hidden="true">
+	{#if isShared && !busy}<span class="shared-check">
+			<Icon name="check" size={12} />
+		</span>{/if}{hint}
+</span>
 
 <style>
 	.share-ring {

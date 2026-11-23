@@ -261,8 +261,10 @@
 										onclick={() => toggleMark(index, wordIndex)}
 										onpointerenter={(event) =>
 											event.pointerType === 'mouse' && hoverMark({ line: index, word: wordIndex })}
-										onpointerleave={() => hoverMark(null)}>{word}</button
+										onpointerleave={() => hoverMark(null)}
 									>
+										{word}
+									</button>
 								{:else}
 									{word}
 								{/if}{WORD_SEPARATOR}
@@ -294,8 +296,10 @@
 				class="lyrics-follow"
 				data-hitbox="text"
 				onclick={() => (following = true)}
-				><span aria-hidden="true">↓</span> {pageText('nowPlaying.lyricsFollow')}</button
 			>
+				<span aria-hidden="true">↓</span>
+				{pageText('nowPlaying.lyricsFollow')}
+			</button>
 		{/if}
 		{#if showUnsyncedNote}
 			<p class="lyrics-unsynced">{pageText('nowPlaying.lyricsUnsynced')}</p>

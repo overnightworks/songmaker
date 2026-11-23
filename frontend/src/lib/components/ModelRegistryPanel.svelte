@@ -125,8 +125,9 @@
 				{#each models as model (model.mode)}
 					{@const dlJob = downloadingByMode.get(model.mode)}
 					<tr>
-						<td class="mode-cell" data-label={pageText('modelRegistry.columnMode')}>{model.mode}</td
-						>
+						<td class="mode-cell" data-label={pageText('modelRegistry.columnMode')}>
+							{model.mode}
+						</td>
 						<td data-label={pageText('modelRegistry.columnStatus')}>
 							{#if model.availability === 'downloaded'}
 								<span class="badge ok">{pageText('modelRegistry.downloaded')}</span>
@@ -136,9 +137,9 @@
 								<span class="badge missing">{pageText('modelRegistry.notDownloaded')}</span>
 							{/if}
 						</td>
-						<td class="count-cell" data-label={pageText('modelRegistry.columnLoaded')}
-							>×{model.loaded_on.length}</td
-						>
+						<td class="count-cell" data-label={pageText('modelRegistry.columnLoaded')}>
+							×{model.loaded_on.length}
+						</td>
 						<td class="count-cell" data-label={pageText('modelRegistry.columnLoading')}>
 							{#if model.loading_on.length > 0}
 								×{model.loading_on.length}

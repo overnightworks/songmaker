@@ -31,13 +31,15 @@
 		<div class="status-head">
 			<span class="status-title">
 				{pageText('generate.versionLabel', { version: String(latestVersionNumber) })} ·
-				<b
-					>{presentation.kind === 'queued'
+				<b>
+					{presentation.kind === 'queued'
 						? presentation.label
 						: presentation.phase}{#if presentation.kind === 'generating' && presentation.elapsedLabel}<span
-							class="elapsed">{presentation.elapsedLabel}</span
-						>{/if}</b
-				>
+							class="elapsed"
+						>
+							{presentation.elapsedLabel}
+						</span>{/if}
+				</b>
 			</span>
 			{#if offersCancel(presentation)}
 				<button

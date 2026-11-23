@@ -42,15 +42,15 @@
 		</summary>
 		<div class="feedback-details">
 			{#if skipped.length > 0}
-				{#if grouped.missing_path > 0}<span
-						>{pageText('nowPlaying.streamMissingPath', { count: grouped.missing_path })}</span
-					>{/if}
-				{#if grouped.missing_file > 0}<span
-						>{pageText('nowPlaying.streamMissingFile', { count: grouped.missing_file })}</span
-					>{/if}
-				{#if grouped.unreadable_file > 0}<span
-						>{pageText('nowPlaying.streamUnreadable', { count: grouped.unreadable_file })}</span
-					>{/if}
+				{#if grouped.missing_path > 0}<span>
+						{pageText('nowPlaying.streamMissingPath', { count: grouped.missing_path })}
+					</span>{/if}
+				{#if grouped.missing_file > 0}<span>
+						{pageText('nowPlaying.streamMissingFile', { count: grouped.missing_file })}
+					</span>{/if}
+				{#if grouped.unreadable_file > 0}<span>
+						{pageText('nowPlaying.streamUnreadable', { count: grouped.unreadable_file })}
+					</span>{/if}
 			{/if}
 			{#if !skippedComplete}<span>{pageText('nowPlaying.streamMoreNotChecked')}</span>{/if}
 			{#if windowEnded}<span>{pageText('nowPlaying.streamMoreNotLoaded')}</span>{/if}
