@@ -99,14 +99,19 @@ def reached_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEnt
     return [e for e in _live_entries(playlist) if reaches(e.generation.song.album)]
 
 
-def copyable_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEntry]:
+def copyable_entries(
+    playlist: Playlist, reaches: AlbumReach, deleted_song_album: Callable[[str], Album | None],
+) -> list[PlaylistEntry]:
     """The entries a copy of the playlist takes up, in order: the ones the caller sees, and
-    the ones whose song was deleted, which the copy reports as skipped. Entries in an album
-    the caller may not open stay out."""
+    the ones whose song was deleted in an album the caller may open, which the copy reports
+    as skipped. Entries in an album the caller may not open stay out."""
     seen = {e.id for e in reached_entries(playlist, reaches)}
     return [
         e for e in _playlist_entries(playlist)
-        if e.id in seen or (e.generation is not None and e.generation.song is None)
+        if e.id in seen or (
+            e.generation is not None and e.generation.song is None
+            and reaches(deleted_song_album(e.generation.song_id))
+        )
     ]
 
 

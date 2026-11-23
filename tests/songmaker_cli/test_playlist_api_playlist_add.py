@@ -169,6 +169,17 @@ def test_a_playlist_add_reports_an_entry_whose_song_was_deleted_as_skipped_witho
     assert world.takes_of(TARGET) == ["take-a", "take-b", "take-b"]
 
 
+def test_a_playlist_add_leaves_a_deleted_song_in_an_album_the_person_cannot_open_unreported(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    world.delete_song("song-take-foreign")
+
+    body = world.copy()().json()
+
+    assert "song-take-foreign" not in [item["song_id"] for item in body["skipped"]]
+
+
 def test_a_playlist_add_to_itself_doubles_its_playable_entries(pg_factory, tmp_path) -> None:
     world = _World(pg_factory, tmp_path)
 

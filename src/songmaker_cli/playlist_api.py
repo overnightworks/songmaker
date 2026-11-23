@@ -80,6 +80,7 @@ from songmaker_cli.db.queries.playlists import (
     update_playlist,
 )
 from songmaker_cli.db.queries.sharing import presented_take
+from songmaker_cli.db.queries.songs import get_album_of_song
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
@@ -404,7 +405,9 @@ def api_add_playlist_to_playlist(
 ) -> AddEntriesToPlaylistResponse:
     check_own_playlist_access(session, playlist_id, user)
     source = check_own_playlist_access(session, req.source_playlist_id, user)
-    entries = copyable_entries(source, _albums_reached_by(user))
+    entries = copyable_entries(
+        source, _albums_reached_by(user), lambda song_id: get_album_of_song(session, song_id),
+    )
     result = add_playlist_entries_to_playlist(
         session, playlist_id, entries, is_readable=_audio_reader(ctx),
     )
