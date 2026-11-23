@@ -1,8 +1,0 @@
-claim_id = "657118cdd6b64e91a9e9993c88edcb9f"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "574c882ebed008ecd034ef4e9659eca83c644aed"
-branch = "claude/issue-3435-songmaker-runs-on-psycopg-3"
-scope = ["docs/security.md", "pyproject.toml", "src/songmaker_cli/db/database_url.py", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/jobs_api.py", "tests/conftest.py", "tests/scripts/test_repo_path_imports_own_checkout.py", "tests/songmaker_cli/db/test_database_url.py", "tests/songmaker_cli/db/test_migrations_reference_keep.py", "tests/songmaker_cli/db/test_migrations_secret_password.py", "tests/songmaker_cli/test_auth_stores_write_lock_postgres.py", "tests/songmaker_cli/test_db_postgresql.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_server_store_startup_wait.py", "tests/songmaker_cli/test_settings.py", "tests/support/postgresql.py", "uv.lock"]
-opened_commit = "17d1a39757d7737af743b8142290c4a6bab78fba"
-whole_reason = "The driver, its URL default, the startup wait's classifier and every test that names the driver must switch together, or songmaker runs two drivers or none."
