@@ -1,8 +1,0 @@
-claim_id = "f1f01b8ed3c3488ebe723d4cbb2616d3"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "c90c27a282355df7c31b3a286a292e0bb89fcaa5"
-branch = "claude/issue-3463-tandem-v0-16-0"
-scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/lifecycle.py", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/songmaker_cli/test_lifecycle_owner_loops.py", "uv.lock"]
-opened_commit = "5440898d9f6061e7f2c34c74cf9ec795edcc5d36"
-whole_reason = "A release pin and the one host path its breaking change makes dead land together, or the pin leaves a branch nothing can reach."
