@@ -3,11 +3,6 @@
 	import { onMount, tick, type ComponentProps } from 'svelte';
 	import {
 		fetchSong,
-		renameSong,
-		deleteSong,
-		restoreSong,
-		shareSong,
-		unshareSong,
 		shareGeneration,
 		unshareGeneration,
 		deleteGeneration,
@@ -24,8 +19,6 @@
 		updateSongInList,
 		updateGenerationInList,
 		removeGenerationFromSong,
-		removeSongFromList,
-		addSongsToList,
 		addAlbumToList
 	} from '#lib/stores/libraryData.ts';
 	import {
@@ -49,6 +42,13 @@
 	} from '#lib/stores/navigation.ts';
 	import { openCollection } from '#lib/stores/collection.ts';
 	import {
+		addSongToPlaylistWithToast,
+		deleteSongWithUndo,
+		disableSongSharing,
+		enableSongSharing,
+		renameSongTo
+	} from '#lib/stores/songActions.ts';
+	import {
 		isDirty,
 		draftHasUnversionedChanges,
 		versions,
@@ -66,7 +66,7 @@
 	import { activeModels, loadActiveModels } from '#lib/stores/presets.ts';
 	import { loras, loadLoras } from '#lib/stores/loras.ts';
 	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
-	import { addGenerationToPlaylist, addSongToPlaylist } from '#lib/stores/playlists.ts';
+	import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
 	import {
 		applyTakeUse,
 		pendingTakeUse,
@@ -75,7 +75,7 @@
 		setSourceFromGeneration
 	} from '#lib/stores/recipe.ts';
 	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
-	import type { SongItem, VersionItem } from '#lib/api/types.ts';
+	import type { ShareResult, SongItem, VersionItem } from '#lib/api/types.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
@@ -92,6 +92,7 @@
 	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
+	import SongDeleteDialog from './SongDeleteDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
 	import { songTakesLoaded } from '#lib/utils/playable.ts';
 
@@ -474,60 +475,14 @@
 		return 'loaded';
 	}
 
-	async function onRenameSong(newTitle: string): Promise<void> {
-		if (!song) return;
-		const songId = song.id;
-		try {
-			const updated = await renameSong(songId, newTitle);
-			updateSongInList(songId, () => updated);
-			addToast(pageText('songPage.renamed'), 'success');
-		} catch (e) {
-			addToast(describeFailure(e, pageText('songPage.renameFailed')), 'error');
-			throw e;
-		}
-	}
-
-	async function onSongShareEnable() {
+	function songIdOrThrow(): string {
 		if (!song) throw new Error('No song');
-		const songId = song.id;
-		const result = await shareSong(songId);
-		const { share_slug, share_url } = result;
-		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug, share_url }));
-		return result;
+		return song.id;
 	}
 
-	const SONG_UNSHARED = { is_shared: false, share_slug: null, share_url: null };
-
-	async function onSongShareDisable() {
-		if (!song) return;
-		const songId = song.id;
-		await unshareSong(songId);
-		updateSongInList(songId, (s) => ({ ...s, ...SONG_UNSHARED }));
-	}
-
-	async function onDeleteSong(): Promise<void> {
-		if (!song) return;
-		const songId = song.id;
-		try {
-			await deleteSong(songId);
-			removeSongFromList(songId);
-			backToCollection();
-			addUndoToast(pageText('songPage.deleted'), {
-				label: pageText('songPage.undo'),
-				handler: async () => {
-					try {
-						const restored = await restoreSong(songId);
-						addSongsToList([restored]);
-						addToast(pageText('songPage.restored'), 'success');
-					} catch (e) {
-						addToast(describeFailure(e, pageText('songPage.restoreFailed')), 'error');
-					}
-				}
-			});
-		} catch (e) {
-			addToast(describeFailure(e, pageText('songPage.deleteFailed')), 'error');
-		}
-	}
+	const onRenameSong = (title: string): Promise<void> => renameSongTo(songIdOrThrow(), title);
+	const onSongShareEnable = (): Promise<ShareResult> => enableSongSharing(songIdOrThrow());
+	const onSongShareDisable = (): Promise<void> => disableSongSharing(songIdOrThrow());
 
 	async function onGenShareEnable(genId: string) {
 		const result = await shareGeneration(genId);
@@ -560,16 +515,6 @@
 		}
 	}
 
-	async function onAddSongToPlaylist(playlistId: string): Promise<void> {
-		if (!song) return;
-		try {
-			await addSongToPlaylist(playlistId, song.id);
-			addToast(pageText('songPage.addedToPlaylist'), 'success');
-		} catch (e) {
-			addToast(describeFailure(e, pageText('songPage.addToPlaylistFailed')), 'error');
-		}
-	}
-
 	async function onSaveVersion(): Promise<void> {
 		if (!song) return;
 		try {
@@ -594,12 +539,11 @@
 			title: song.title,
 			onrename: onRenameSong,
 			menu: {
+				song,
 				saveDisabled: !dirty,
 				onsave: () => void onSaveVersion(),
-				onaddto: (playlistId) => void onAddSongToPlaylist(playlistId),
+				onaddto: (playlistId) => void addSongToPlaylistWithToast(songIdOrThrow(), playlistId),
 				ondelete: () => (showDeleteConfirm = true),
-				isShared: song.is_shared,
-				shareSlug: song.share_slug,
 				onshare: onSongShareEnable,
 				onunshare: onSongShareDisable
 			}
@@ -697,11 +641,9 @@
 			nextDisabled={!neighbors.next}
 			onselectprevious={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
 			onselectnext={() => neighbors.next && selectNeighborSong(neighbors.next)}
-			isShared={song.is_shared}
-			shareSlug={song.share_slug}
 			onshare={onSongShareEnable}
 			onunshare={onSongShareDisable}
-			onaddto={(playlistId) => void onAddSongToPlaylist(playlistId)}
+			onaddto={(playlistId) => void addSongToPlaylistWithToast(songIdOrThrow(), playlistId)}
 			ondeletesong={() => (showDeleteConfirm = true)}
 			saveDisabled={!dirty}
 			onsave={() => void onSaveVersion()}
@@ -819,17 +761,11 @@
 {/if}
 
 {#if showDeleteConfirm && song}
-	<ConfirmDeleteDialog
-		title={pageText('songPage.deleteTitle', { title: song.title })}
-		items={[
-			pageText('songPage.deleteTakes', song.generation_count),
-			pageText('songPage.deleteVersions', song.version_count),
-			pageText('songPage.deleteHistory')
-		]}
-		confirmLabel={pageText('songPage.deleteConfirm')}
+	<SongDeleteDialog
+		{song}
 		onconfirm={() => {
 			showDeleteConfirm = false;
-			onDeleteSong();
+			void deleteSongWithUndo(song.id, backToCollection);
 		}}
 		oncancel={() => (showDeleteConfirm = false)}
 	/>

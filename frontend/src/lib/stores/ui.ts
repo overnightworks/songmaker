@@ -14,7 +14,7 @@ interface PhoneAppBarState {
 	kind: 'song';
 	title: string;
 	onrename: (title: string) => Promise<void>;
-	menu: Omit<ComponentProps<typeof SongMenu>, 'title' | 'onrename'>;
+	menu: Omit<ComponentProps<typeof SongMenu>, 'onrename'>;
 }
 
 export const phoneAppBar = writable<PhoneAppBarState | null>(null);

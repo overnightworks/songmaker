@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { pageText } from '#lib/utils/page-words.ts';
+	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
 	import PlayingMark from './PlayingMark.svelte';
 
@@ -20,6 +21,8 @@
 		onclick: () => void;
 		/** Gives the box its ✎, which opens the song editor; a surface without the editor passes none. */
 		onedit?: () => void;
+		/** While set, the title is the inline field that saves through `onsave`, and a tap on the box does nothing. */
+		renaming?: { onsave: (title: string) => Promise<void>; onend: () => void };
 		/** The surface's own ⋯ after the ✎, sized to the frequent hitbox like it. */
 		menu?: Snippet;
 	}
@@ -33,30 +36,57 @@
 		current,
 		onclick,
 		onedit,
+		renaming,
 		menu
 	}: Props = $props();
+
+	let titleField: EditableTitle | undefined = $state();
+
+	$effect(() => {
+		if (renaming) titleField?.startEdit();
+	});
 
 	const controlCount = $derived(Number(Boolean(onedit)) + Number(Boolean(menu)));
 </script>
 
+{#snippet face()}
+	<PlayingMark {current} />
+	<span class="song-row-text">
+		<span class="song-row-heading">
+			<span class="song-row-title">
+				{#if picked}<span class="picked-star">★</span>{/if}
+				{#if renaming}
+					<EditableTitle
+						bind:this={titleField}
+						value={title}
+						onsave={renaming.onsave}
+						onend={renaming.onend}
+						labelKey="songHeader.title"
+						editLabelKey="songHeader.editTitle"
+					/>
+				{:else}
+					{title}
+				{/if}
+			</span>
+			{#if noPick}<span class="no-pick-badge">{pageText('songRow.noPick')}</span>{/if}
+		</span>
+		{#if detail}<span class="song-row-detail">{detail}</span>{/if}
+	</span>
+	{#if meta}<span class="song-row-meta">{meta}</span>{/if}
+{/snippet}
+
 <!-- The box and its controls share the box's one grid cell (#1053): the box's
      target fills the whole card, and the later-painted controls stay their own
-     targets above it, with the box's text kept clear of them. -->
+     targets above it, with the box's text kept clear of them. A box whose title is
+     being renamed is no button, since the field inside it is its own control. -->
 <div class="song-row song-row-frame" class:current style:--song-row-controls={controlCount}>
-	<button type="button" class="song-row-body" data-hitbox="text" {onclick}>
-		<PlayingMark {current} />
-		<span class="song-row-text">
-			<span class="song-row-heading">
-				<span class="song-row-title">
-					{#if picked}<span class="picked-star">★</span>{/if}
-					{title}
-				</span>
-				{#if noPick}<span class="no-pick-badge">{pageText('songRow.noPick')}</span>{/if}
-			</span>
-			{#if detail}<span class="song-row-detail">{detail}</span>{/if}
-		</span>
-		{#if meta}<span class="song-row-meta">{meta}</span>{/if}
-	</button>
+	{#if renaming}
+		<div class="song-row-body">{@render face()}</div>
+	{:else}
+		<button type="button" class="song-row-body" data-hitbox="text" {onclick}>
+			{@render face()}
+		</button>
+	{/if}
 	{#if controlCount > 0}
 		<div class="song-row-controls">
 			{#if onedit}

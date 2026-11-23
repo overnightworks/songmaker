@@ -124,7 +124,6 @@
 		<div class="song-control" {@attach inertWhileAddressOverlay}>
 			<SongMenu
 				{...$phoneAppBar.menu}
-				title={$phoneAppBar.title}
 				onrename={() => titleEditor?.startEdit()}
 			/>
 		</div>

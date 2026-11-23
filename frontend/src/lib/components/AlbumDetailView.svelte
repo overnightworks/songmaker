@@ -39,6 +39,13 @@
 	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
 	import { addAlbumToPlaylist } from '#lib/stores/playlists.ts';
 	import {
+		addSongToPlaylistWithToast,
+		deleteSongWithUndo,
+		disableSongSharing,
+		enableSongSharing,
+		renameSongTo
+	} from '#lib/stores/songActions.ts';
+	import {
 		coverStanding,
 		discardCoverSuggestions,
 		knownAfterSave,
@@ -66,6 +73,8 @@
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import SongRow from './SongRow.svelte';
+	import SongDeleteDialog from './SongDeleteDialog.svelte';
+	import SongMenu from './editor/SongMenu.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
 	import NewSongCard from './NewSongCard.svelte';
@@ -77,6 +86,8 @@
 	let { albumId }: Props = $props();
 
 	let showDeleteConfirm = $state(false);
+	let renamingSongId = $state<string | null>(null);
+	let songToDelete = $state<SongItem | null>(null);
 
 	const albums = $derived($albumList);
 	const allSongs = $derived($songList);
@@ -431,7 +442,24 @@
 						current={isSongCurrent(s.id)}
 						onclick={() => onSongTap(s)}
 						onedit={() => selectSong(s.id)}
-					/>
+						renaming={renamingSongId === s.id
+							? {
+									onsave: (title) => renameSongTo(s.id, title),
+									onend: () => (renamingSongId = null)
+								}
+							: undefined}
+					>
+						{#snippet menu()}
+							<SongMenu
+								song={s}
+								onrename={() => (renamingSongId = s.id)}
+								onaddto={(playlistId) => void addSongToPlaylistWithToast(s.id, playlistId)}
+								ondelete={() => (songToDelete = s)}
+								onshare={() => enableSongSharing(s.id)}
+								onunshare={() => disableSongSharing(s.id)}
+							/>
+						{/snippet}
+					</SongRow>
 				{/each}
 				{#if newSongOpen}
 					<NewSongCard album={selectedAlbum} oncancel={cancelNewSong} oncreated={foldCreatedSong} />
@@ -451,6 +479,18 @@
 			{/if}
 		</div>
 	</div>
+{/if}
+
+{#if songToDelete}
+	<SongDeleteDialog
+		song={songToDelete}
+		onconfirm={() => {
+			const { id } = songToDelete!;
+			songToDelete = null;
+			void deleteSongWithUndo(id);
+		}}
+		oncancel={() => (songToDelete = null)}
+	/>
 {/if}
 
 {#if showDeleteConfirm && selectedAlbum}
