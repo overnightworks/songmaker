@@ -17,6 +17,7 @@ import {
 	closeNowPlaying,
 	expandNowPlaying,
 	ensureGenerationsLoaded,
+	forgetSongGenerationLoadsForTests,
 	libraryQueueSkipped,
 	nowPlayingDockable,
 	nowPlayingOpen,
@@ -176,6 +177,7 @@ afterEach(async () => {
 	// Going to the playing song loads its album's songs; a swallowed load arms
 	// the library's own reload, which would fire inside a later test.
 	resetLibraryDataForTests();
+	forgetSongGenerationLoadsForTests();
 	toasts.set([]);
 	queueContext.set({ type: 'library' });
 	curationActive.set(false);

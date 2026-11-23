@@ -130,6 +130,11 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	await load;
 }
 
+// A load a test left waiting must not answer the next test's request.
+export function forgetSongGenerationLoadsForTests(): void {
+	songGenerationLoads.clear();
+}
+
 export function clearGenerationSelection(): void {
 	selectedGenerationId.set(null);
 }
