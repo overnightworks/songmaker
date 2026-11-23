@@ -1751,7 +1751,8 @@ process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then
 removes the suggestion and staging directory of the covers it ended. The `owner_lapses` loop
 (`Leases.serve_lapses`) runs the same pass as soon as a lease has ended or expired, on the one
-web process that claims the lapse. No lock orders the processes: the failing update is
+web process that claims the lapse; tandem rides out a refusal of Redis like an outage, so a refusal
+ends no loop and shows as tandem's `lapse_round.ended` warning, never in `owner_lapses`. No lock orders the processes: the failing update is
 conditional on the row it read. Only a web
 process reads leases, so a worker's jobs end while a web process runs. A start of
 either kind leaves a live sibling's jobs alone; a clean stop ends the stopped
@@ -1770,8 +1771,8 @@ like any other's, so a job of a generation its lease lost fails although the pro
 empty restart, a live owner's stamped jobs of the lost generation fail on the first pass after its
 renewal, while rows without a generation follow their owner. A renewal that fails is retried every interval and logged by tandem; the
 `owner_gone_reaper` tick reads this process's own lease, and the `owner_lease`
-loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
-pass apart). A pod that lost its lease while alive (a Redis outage longer than the
+loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the failure of the lapse
+pass only, not a refusal of Redis). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
 for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
 generation of tandem's `Hold`, logs it as a start and, in a web process, removes what every
