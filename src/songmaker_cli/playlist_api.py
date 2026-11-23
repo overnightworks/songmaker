@@ -16,6 +16,7 @@ from songmaker_cli.api_helpers import (
     can_access_album,
     check_album_access,
     check_generation_access,
+    check_own_playlist_access,
     check_playlist_access,
     check_song_access,
     cover_file_response,
@@ -40,7 +41,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.playlists import AlbumReach
+from songmaker_cli.api_models.playlists import AlbumReach, copyable_entries
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
@@ -78,7 +79,7 @@ from songmaker_cli.db.queries.playlists import (
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.db.queries.sharing import presented_playlist_entries, presented_take
+from songmaker_cli.db.queries.sharing import presented_take
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
@@ -401,15 +402,11 @@ def api_add_playlist_to_playlist(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> AddEntriesToPlaylistResponse:
-    check_playlist_access(session, playlist_id, user)
-    source = check_playlist_access(session, req.source_playlist_id, user)
-    reaches = _albums_reached_by(user)
-    reached_entries = [
-        entry for entry in presented_playlist_entries(source)
-        if reaches(entry.generation.song.album)
-    ]
+    check_own_playlist_access(session, playlist_id, user)
+    source = check_own_playlist_access(session, req.source_playlist_id, user)
+    entries = copyable_entries(source, _albums_reached_by(user))
     result = add_playlist_entries_to_playlist(
-        session, playlist_id, reached_entries, is_readable=_audio_reader(ctx),
+        session, playlist_id, entries, is_readable=_audio_reader(ctx),
     )
     session.commit()
     return AddEntriesToPlaylistResponse.from_orm(result)

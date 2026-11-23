@@ -94,8 +94,20 @@ def _live_entries(playlist: Playlist) -> list[PlaylistEntry]:
     ]
 
 
-def _reached_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEntry]:
+def reached_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEntry]:
+    """The entries the caller sees: live ones in an album the caller may open, in order."""
     return [e for e in _live_entries(playlist) if reaches(e.generation.song.album)]
+
+
+def copyable_entries(playlist: Playlist, reaches: AlbumReach) -> list[PlaylistEntry]:
+    """The entries a copy of the playlist takes up, in order: the ones the caller sees, and
+    the ones whose song was deleted, which the copy reports as skipped. Entries in an album
+    the caller may not open stay out."""
+    seen = {e.id for e in reached_entries(playlist, reaches)}
+    return [
+        e for e in _playlist_entries(playlist)
+        if e.id in seen or (e.generation is not None and e.generation.song is None)
+    ]
 
 
 def uploaded_playlist_cover(playlist: Playlist) -> AlbumCoverUrls | None:
@@ -105,7 +117,7 @@ def uploaded_playlist_cover(playlist: Playlist) -> AlbumCoverUrls | None:
 
 def playlist_mosaic_covers(playlist: Playlist, *, reaches: AlbumReach) -> list[AlbumCoverUrls]:
     """The first distinct covers of the albums the caller reaches, in playlist order."""
-    return _mosaic_covers(_reached_entries(playlist, reaches))
+    return _mosaic_covers(reached_entries(playlist, reaches))
 
 
 def _mosaic_covers(entries: list[PlaylistEntry]) -> list[AlbumCoverUrls]:
@@ -176,7 +188,7 @@ class PlaylistResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, playlist: Playlist, *, reaches: AlbumReach) -> PlaylistResponse:
-        entries = _reached_entries(playlist, reaches)
+        entries = reached_entries(playlist, reaches)
         return cls(
             id=playlist.id,
             title=playlist.title,
@@ -198,7 +210,7 @@ class PlaylistDetailResponse(PlaylistResponse):
         base = PlaylistResponse.from_orm(playlist, reaches=reaches)
         entries = [
             PlaylistEntryResponse.from_orm(e)
-            for e in sorted(_reached_entries(playlist, reaches), key=lambda e: e.position)
+            for e in sorted(reached_entries(playlist, reaches), key=lambda e: e.position)
         ]
         return cls(
             **base.model_dump(),

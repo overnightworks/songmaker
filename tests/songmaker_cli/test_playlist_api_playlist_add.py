@@ -29,14 +29,17 @@ from songmaker_cli.db.queries.playlists import (
     PLAYLIST_SKIP_MISSING_AUDIO,
     PLAYLIST_SKIP_NO_PLAYABLE,
 )
+from songmaker_cli.db.queries.songs import soft_delete_song
 
 OWNER = "owner-1"
 OTHER = "other-1"
 SOURCE = "source"
 TARGET = "target"
 FOREIGN = "foreign"
-# The source holds its takes out of id order and one of them twice.
-SOURCE_ORDER = ("take-b", "take-a", "take-archived", "take-gone", "take-b")
+ADMIN_PLAYLIST = "admin-playlist"
+ADMIN = "admin-1"
+# The source holds its takes out of id order, one of them twice, and one in another person's album.
+SOURCE_ORDER = ("take-b", "take-foreign", "take-a", "take-archived", "take-gone", "take-b")
 PLAYABLE_IN_ORDER = ["take-b", "take-a", "take-b"]
 
 
@@ -45,8 +48,8 @@ def _into(playlist_id: str) -> str:
 
 
 class _World:
-    """The real routes on PostgreSQL: a source of five entries, a target holding one, and a
-    playlist of another person."""
+    """The real routes on PostgreSQL: a source of six entries, a target holding one, and a
+    playlist of another person and of an administrator."""
 
     def __init__(self, pg_factory, tmp_path: Path) -> None:
         self.pg_factory = pg_factory
@@ -54,6 +57,7 @@ class _World:
         def seed(session) -> None:
             seed_user(session, "owner", user_id=OWNER)
             seed_user(session, "other", user_id=OTHER)
+            seed_user(session, "admin", "admin", user_id=ADMIN)
             session.flush()
             session.add(Album(id="album-1", title="A", artist="A", created_by=OWNER))
             session.add(Album(id="album-other", title="B", artist="B", created_by=OTHER))
@@ -79,6 +83,7 @@ class _World:
                 Playlist(id=SOURCE, title="Source", slug="source", created_by=OWNER),
                 Playlist(id=TARGET, title="Target", slug="target", created_by=OWNER),
                 Playlist(id=FOREIGN, title="Foreign", slug="foreign", created_by=OTHER),
+                Playlist(id=ADMIN_PLAYLIST, title="Admin", slug="admin", created_by=ADMIN),
             ])
             session.flush()
             for playlist, takes_held in (
@@ -105,6 +110,11 @@ class _World:
             "/api/generations/bulk-delete", json={"generation_ids": list(takes)},
         )
 
+    def delete_song(self, song_id: str) -> None:
+        with self.pg_factory() as session:
+            soft_delete_song(session, song_id)
+            session.commit()
+
     def takes_of(self, playlist_id: str) -> list[str]:
         with self.pg_factory() as session:
             return [
@@ -130,6 +140,33 @@ def test_a_playlist_add_appends_the_source_playable_entries_in_order_and_reports
     ]
     assert world.takes_of(TARGET) == ["take-a", *PLAYABLE_IN_ORDER]
     assert world.takes_of(SOURCE) == list(SOURCE_ORDER)
+
+
+def test_a_playlist_add_leaves_out_entries_in_an_album_the_person_cannot_open(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+
+    body = world.copy()().json()
+
+    assert "take-foreign" not in world.takes_of(TARGET)
+    assert body["added_count"] == len(PLAYABLE_IN_ORDER)
+    assert "song-take-foreign" not in [item["song_id"] for item in body["skipped"]]
+
+
+def test_a_playlist_add_reports_an_entry_whose_song_was_deleted_as_skipped_without_its_title(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    world.delete_song("song-take-a")
+
+    body = world.copy()().json()
+
+    assert body["added_count"] == len(PLAYABLE_IN_ORDER) - 1
+    assert ("song-take-a", "", PLAYLIST_SKIP_NO_PLAYABLE) in [
+        (item["song_id"], item["title"], item["reason"]) for item in body["skipped"]
+    ]
+    assert world.takes_of(TARGET) == ["take-a", "take-b", "take-b"]
 
 
 def test_a_playlist_add_to_itself_doubles_its_playable_entries(pg_factory, tmp_path) -> None:
@@ -161,6 +198,26 @@ def test_a_playlist_add_hides_playlists_the_person_does_not_own_and_writes_nothi
     assert response.json()["detail"] == "Playlist not found"
     assert world.takes_of(TARGET) == ["take-a"]
     assert world.takes_of(FOREIGN) == ["take-foreign"]
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        pytest.param(SOURCE, ADMIN_PLAYLIST, id="source-of-another-person"),
+        pytest.param(ADMIN_PLAYLIST, TARGET, id="target-of-another-person"),
+    ],
+)
+def test_a_playlist_add_does_not_let_an_administrator_copy_from_or_into_another_persons_playlist(
+    pg_factory, tmp_path, source: str, target: str,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    seed_session(world.client, "admin")
+
+    response = world.copy(source=source, target=target)()
+
+    assert response.status_code == 404
+    assert world.takes_of(TARGET) == ["take-a"]
+    assert world.takes_of(ADMIN_PLAYLIST) == []
 
 
 _holding_a_generation_write = partial(

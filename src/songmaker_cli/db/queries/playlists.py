@@ -243,15 +243,23 @@ def add_playlist_entries_to_playlist(
     source_entries: Sequence[PlaylistEntry],
     is_readable: Callable[[Generation], bool],
 ) -> PlaylistAlbumAddResult:
-    """Append the playable takes of the source entries, in their order, to the playlist."""
+    """Append the playable takes of the source entries, in their order, to the playlist.
+
+    An entry whose song was deleted is skipped by its song id alone, so a deleted title
+    stays unread.
+    """
     return _append_candidates(session, playlist_id, [
-        _candidate(
-            entry.generation.song,
-            entry.generation if is_playable_take(entry.generation) else None,
-            is_readable,
-        )
-        for entry in source_entries
+        _entry_candidate(entry, is_readable) for entry in source_entries
     ])
+
+
+def _entry_candidate(
+    entry: PlaylistEntry, is_readable: Callable[[Generation], bool],
+) -> _Candidate:
+    take = entry.generation
+    if take.song is None:
+        return _Candidate(take.song_id, "", None, PLAYLIST_SKIP_NO_PLAYABLE)
+    return _candidate(take.song, take if is_playable_take(take) else None, is_readable)
 
 
 def _candidate(
