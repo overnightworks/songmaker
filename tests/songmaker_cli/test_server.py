@@ -717,6 +717,52 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
     asyncio.run(_run())
 
 
+def test_default_context_follows_wakes_on_a_client_without_socket_timeout(tmp_path: Path) -> None:
+    from songmaker_cli.server import _create_default_context
+
+    with (
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.redis_client.wait_for_redis"),
+        patch("songmaker_cli.object_store.object_store_of"),
+    ):
+        ctx = _create_default_context(tmp_path / "audio", tmp_path / "data")
+
+    def socket_timeout(client) -> float | None:
+        return client.connection_pool.connection_kwargs["socket_timeout"]
+
+    assert socket_timeout(ctx.wake_redis) is None
+    assert socket_timeout(ctx.async_redis) is not None
+    assert ctx.following_wake_channel is not ctx.wake_channel
+
+
+def test_lifespan_closes_the_client_that_follows_wakes(tmp_path: Path, pg_factory) -> None:
+    from songmaker_cli.server import _lifespan
+
+    wake_redis = make_fake_async_redis()
+    wake_redis.aclose = AsyncMock()
+    mock_app = MagicMock(**{"state.mcp_front": None})
+    mock_app.state.ctx = AppContext(
+        object_store=an_object_store(), db=pg_factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        signing_key=TEST_SECRET,
+        redis=make_fake_redis(), async_redis=make_fake_async_redis(), wake_redis=wake_redis,
+    )
+
+    async def _run():
+        with (
+            patch("songmaker_cli.arq_pool.init_arq_pool", new_callable=AsyncMock),
+            patch("songmaker_cli.arq_pool.close_arq_pool", new_callable=AsyncMock),
+            patch("songmaker_cli.server._start_background_loops", return_value=[]),
+        ):
+            async with _lifespan(mock_app):
+                wake_redis.aclose.assert_not_awaited()
+
+    asyncio.run(_run())
+
+    wake_redis.aclose.assert_awaited_once()
+
+
 def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     """The chat/lora_training reaper (#371) must actually be scheduled by the
