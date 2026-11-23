@@ -1426,8 +1426,8 @@ wheels = [
 
 [[package]]
 name = "overnightworks-agents"
-version = "0.59.0"
-source = { git = "https://github.com/overnightworks/agents?rev=v0.59.0#69adc89643d4f68e0c9b8fd41e1fd446dc9acec9" }
+version = "0.70.0"
+source = { git = "https://github.com/overnightworks/agents?rev=v0.70.0#99f410c8f3a8b36cb7c674f2bc081fc996d2bf2d" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
@@ -2334,8 +2334,8 @@ requires-dist = [
     { name = "numba", marker = "extra == 'whisper'" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
-    { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.59.0" },
-    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.59.0" },
+    { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
+    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", git = "https://github.com/overnightworks/design?rev=v0.33.1" },
     { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
     { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },

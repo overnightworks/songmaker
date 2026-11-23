@@ -56,7 +56,7 @@ server = [
     "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.44.0",
     # Bare: Settings imports the client's AgentConfig in every process, and both worker images
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
-    "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.59.0",
+    "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.70.0",
     # Cross-pod coordination in Redis (owner lease). A git pin by tag like the other two.
     "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.13.1",
     # Every process writes its lines through logline; tandem's range names it, so the host pins the tag.
@@ -69,7 +69,7 @@ image = [
 # The co-writer's gateway backend (GatewayBackend) and the MCP front of a person's own agent:
 # the web image installs them. A git pin by tag, like the other first-party libraries.
 agent = [
-    "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.59.0",
+    "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.70.0",
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",
