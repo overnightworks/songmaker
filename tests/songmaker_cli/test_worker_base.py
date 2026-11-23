@@ -245,10 +245,13 @@ def test_a_serving_that_fails_ends_the_others_and_run_with_its_error_and_release
 
     worker = _serving_worker_on(redis_url, serves_until_cut, fails_once_the_other_serves)
 
+    async def run_within_the_stop_bound() -> None:
+        async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
+            await worker.run()
+
     async def run_until_it_fails() -> tuple[BaseExceptionGroup, set[str]]:
         with pytest.raises(ExceptionGroup) as raised:
-            async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
-                await worker.run()
+            await run_within_the_stop_bound()
         return raised.value, await _held_leases(redis_url)
 
     failure, held = _run(run_until_it_fails())
