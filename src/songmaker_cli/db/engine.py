@@ -37,6 +37,7 @@ _RETRIED_SERVER_FATALS = (
     "the database system is starting up",
     "the database system is shutting down",
     "the database system is in recovery mode",
+    "the database system is not yet accepting connections",
 )
 
 
