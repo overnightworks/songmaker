@@ -840,7 +840,7 @@ export function canPlayPrevSong(
 	if (audioPlayer.mode === 'stream') return audioPlayer.canPrevStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
-		return adjacentQueueTake(ctx, current, -1).kind === 'take';
+		return adjacentQueueTake(ctx, songs, current, -1).kind === 'take';
 	}
 	if (ctx.type !== 'album') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
@@ -856,7 +856,7 @@ export function canPlayNextSong(
 	if (audioPlayer.mode === 'stream') return audioPlayer.canNextStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
-		return adjacentQueueTake(ctx, current).kind === 'take';
+		return adjacentQueueTake(ctx, songs, current).kind === 'take';
 	}
 	if (ctx.type !== 'album') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
@@ -1134,7 +1134,7 @@ function takeAfterCurrent(): PlaybackInfo | null {
 }
 
 function takeAfter(take: PlaybackInfo | null): PlaybackInfo | null {
-	const next = adjacentQueueTake(get(queueContext), take);
+	const next = adjacentQueueTake(get(queueContext), get(songList), take);
 	return next.kind === 'take' ? next.take : null;
 }
 
@@ -1142,7 +1142,7 @@ function takeAfter(take: PlaybackInfo | null): PlaybackInfo | null {
 // queue plays next, or, where the library window ends, the ended take itself,
 // since a restored library queue builds its next window from there (#1236).
 function takeAfterTheEnd(): PlaybackInfo | null {
-	const next = adjacentQueueTake(get(queueContext), audioPlayer.current);
+	const next = adjacentQueueTake(get(queueContext), get(songList), audioPlayer.current);
 	if (next.kind === 'window-end') return audioPlayer.current;
 	return next.kind === 'take' ? next.take : null;
 }
@@ -1163,7 +1163,7 @@ function playPlaylistInDirection(
 	ctx: Extract<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
-	const next = adjacentQueueTake(ctx, audioPlayer.current, direction);
+	const next = adjacentQueueTake(ctx, get(songList), audioPlayer.current, direction);
 	if (next.kind === 'take') playPlaylistIndex(ctx, next.index, { restart: true });
 }
 
@@ -1171,7 +1171,7 @@ function playNativeTakesInDirection(
 	ctx: Exclude<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
-	const next = adjacentQueueTake(ctx, audioPlayer.current, direction);
+	const next = adjacentQueueTake(ctx, get(songList), audioPlayer.current, direction);
 	if (next.kind === 'window-end') windowEnded.set(true);
 	if (next.kind === 'take') playNativeIndex(ctx, next.index);
 }
@@ -1562,7 +1562,7 @@ function skipReachedOrClosed(ctx: QueueContext, take: PlaybackInfo, notice: Skip
 	const follower =
 		atPlace !== take && !ctx.skipped?.has(atPlace)
 			? { kind: 'take', index: notice.index }
-			: adjacentQueueTake(ctx, atPlace);
+			: adjacentQueueTake(ctx, get(songList), atPlace);
 	return follower.kind !== 'take' || follower.index === queuePlaceOf(ctx, audioPlayer.current);
 }
 

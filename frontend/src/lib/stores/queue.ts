@@ -2,7 +2,7 @@ import { derived, get, writable } from 'svelte/store';
 import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '#lib/api/types.ts';
 import { audioPlayer, type PlaybackInfo } from '#lib/services/audioPlayer.svelte.ts';
 import { type PlaybackSource } from '#lib/constants/now-playing.ts';
-import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { albumList } from '#lib/stores/libraryData.ts';
 import { isPlayableTake, pickedTake, songTakesLoaded } from '#lib/utils/playable.ts';
 import { groupTakes, takesInGroupOrder } from '#lib/utils/takeGroups.ts';
 
@@ -285,12 +285,14 @@ const NO_NEXT_TAKE: NextQueueTake = { kind: 'none' };
 
 export function adjacentQueueTake(
 	ctx: QueueContext,
+	songs: SongItem[],
 	current: PlaybackInfo | null,
 	direction: QueueDirection = 1
 ): NextQueueTake {
 	if (ctx.type === 'playlist') {
 		return firstPlayableInDirection(
 			ctx,
+			songs,
 			{
 				index: currentPlaylistIndex(ctx, current),
 				length: ctx.entries.length,
@@ -305,6 +307,7 @@ export function adjacentQueueTake(
 	if (index < 0 || takes === undefined) return NO_NEXT_TAKE;
 	return firstPlayableInDirection(
 		ctx,
+		songs,
 		{
 			index,
 			length: takes.length,
@@ -329,11 +332,11 @@ interface QueuePlace {
 
 function firstPlayableInDirection(
 	ctx: QueueContext,
+	songs: SongItem[],
 	place: QueuePlace,
 	direction: QueueDirection
 ): NextQueueTake {
 	const windowEnd: NextQueueTake = place.endsWithItsWindow ? { kind: 'window-end' } : NO_NEXT_TAKE;
-	const songs = get(songList);
 	for (let step = 1; step < place.length; step++) {
 		if (place.endsWithItsWindow && place.index + step === place.length) return windowEnd;
 		const index = (place.index + direction * step + place.length) % place.length;
@@ -392,9 +395,10 @@ export interface QueueViewModel {
 function upNextItem(
 	items: QueueRowItem[],
 	ctx: QueueContext,
+	songs: SongItem[],
 	current: PlaybackInfo | null
 ): QueueRowItem | null {
-	const next = adjacentQueueTake(ctx, current);
+	const next = adjacentQueueTake(ctx, songs, current);
 	return next.kind === 'take' ? (items[next.index] ?? null) : null;
 }
 
@@ -438,14 +442,14 @@ export function buildQueueViewModel(
 	if (ctx.type === 'playlist') {
 		const items = ctx.entries.map((entry) => playlistQueueItem(entry));
 		const currentIndex = currentPlaylistIndex(ctx, current);
-		return { items, currentIndex, upNext: upNextItem(items, ctx, current) };
+		return { items, currentIndex, upNext: upNextItem(items, ctx, songs, current) };
 	}
 	if (!ctx.takes || ctx.takes.length === 0) {
 		return { items: [], currentIndex: -1, upNext: null };
 	}
 	const items = ctx.takes.map((take) => nativeQueueItem(take));
 	const currentIndex = nativeTakeIndex(ctx, current);
-	const queue = { items, currentIndex, upNext: upNextItem(items, ctx, current) };
+	const queue = { items, currentIndex, upNext: upNextItem(items, ctx, songs, current) };
 	return ctx.type === 'song' && songQueueWraps(ctx, songs)
 		? { ...queue, again: ctx.songTitle }
 		: queue;

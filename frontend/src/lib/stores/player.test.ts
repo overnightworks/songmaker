@@ -1844,6 +1844,9 @@ describe('rebuilding a library queue from the playing take', () => {
 	});
 });
 
+const visibleQueue = () =>
+	buildQueueViewModel(get(queueContext), audioPlayer.current, get(songList));
+
 describe('starting album playback', () => {
 	beforeEach(() => {
 		toasts.set([]);
@@ -1865,7 +1868,7 @@ describe('starting album playback', () => {
 
 		await playAlbum('a1');
 
-		const vm = buildQueueViewModel(get(queueContext), audioPlayer.current, []);
+		const vm = visibleQueue();
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 	});
 
@@ -1951,7 +1954,7 @@ describe('the queue names its next take', () => {
 	function currentRowAndTake(): { row: number; queueIndex: number; take: string | undefined } {
 		const ctx = get(queueContext);
 		return {
-			row: buildQueueViewModel(ctx, audioPlayer.current, []).currentIndex,
+			row: visibleQueue().currentIndex,
 			queueIndex: ctx.index ?? -1,
 			take: audioPlayer.current?.generation.id
 		};
@@ -2083,7 +2086,7 @@ describe('the queue names its next take', () => {
 		await start();
 		const ctx = get(queueContext);
 		const current = audioPlayer.current;
-		const { upNext } = buildQueueViewModel(ctx, current, []);
+		const { upNext } = visibleQueue();
 		expect(upNext?.generationId ?? null).toBe(nextGenerationId);
 		expect(canPlayNextSong(current, get(songList), ctx)).toBe(nextGenerationId !== null);
 	});
@@ -2105,10 +2108,8 @@ describe('the queue names its next take', () => {
 			generations: [{ ...song2.generations[0], is_picked: false }, repicked]
 		});
 
-		const ctx = get(queueContext);
-		expect(
-			buildQueueViewModel(ctx, audioPlayer.current, []).items.map((row) => row.generationId)
-		).toEqual(['g1', 'g2-repicked', 'g3']);
+		const rows = visibleQueue().items.map((row) => row.generationId);
+		expect(rows).toEqual(['g1', 'g2-repicked', 'g3']);
 		expect(preloadedGenerationId()).toBe('g2-repicked');
 		playNextSong();
 		expect(audioPlayer.current?.generation.id).toBe('g2-repicked');
@@ -2133,9 +2134,7 @@ describe('the queue names its next take', () => {
 				moveOnByItselfTo(preloadedTake());
 
 				expect(preloadedGenerationId()).toBe('g3');
-				expect(
-					buildQueueViewModel(get(queueContext), audioPlayer.current, []).upNext?.generationId
-				).toBe('g3');
+				expect(visibleQueue().upNext?.generationId).toBe('g3');
 				expect(mediaSession.metadata).toEqual(expect.objectContaining({ title: 'Song 2' }));
 			}
 		);
@@ -2250,7 +2249,7 @@ describe('the queue names its next take', () => {
 		}
 
 		function upNextGenerationId(): string | undefined {
-			return buildQueueViewModel(get(queueContext), audioPlayer.current, []).upNext?.generationId;
+			return visibleQueue().upNext?.generationId;
 		}
 
 		function takeAfterCurrentGenerationId(): string | undefined {

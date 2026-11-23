@@ -260,7 +260,7 @@ describe('songTakeQueue', () => {
 		const queue = songTakeQueue(song, 'g-imported');
 		if (!queue) throw new Error('Expected a queue');
 
-		const next = adjacentQueueTake(queue, queue.takes[queue.index]);
+		const next = adjacentQueueTake(queue, get(songList), queue.takes[queue.index]);
 
 		expect(next.kind === 'take' && next.take.generation.id).toBe('g-v3a');
 		expect(buildQueueViewModel(queue, null, get(songList)).again).toBe(song.title);
