@@ -152,7 +152,7 @@ def test_scoring_worker_settings_queue_name() -> None:
 
 def test_scoring_worker_has_no_periodic_job_reaper() -> None:
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
-    assert ScoringWorkerSettings.cron_jobs == []
+    assert not getattr(ScoringWorkerSettings, "cron_jobs", [])
 
 
 def test_scoring_worker_settings_functions() -> None:
