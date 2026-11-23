@@ -154,7 +154,7 @@ def test_a_playlist_add_leaves_out_entries_in_an_album_the_person_cannot_open(
     assert "song-take-foreign" not in [item["song_id"] for item in body["skipped"]]
 
 
-def test_a_playlist_add_reports_an_entry_whose_song_was_deleted_as_skipped_without_its_title(
+def test_a_playlist_add_neither_adds_nor_reports_an_entry_whose_song_was_deleted(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path)
@@ -163,9 +163,7 @@ def test_a_playlist_add_reports_an_entry_whose_song_was_deleted_as_skipped_witho
     body = world.copy()().json()
 
     assert body["added_count"] == len(PLAYABLE_IN_ORDER) - 1
-    assert ("song-take-a", "", PLAYLIST_SKIP_NO_PLAYABLE) in [
-        (item["song_id"], item["title"], item["reason"]) for item in body["skipped"]
-    ]
+    assert "song-take-a" not in [item["song_id"] for item in body["skipped"]]
     assert world.takes_of(TARGET) == ["take-a", "take-b", "take-b"]
 
 

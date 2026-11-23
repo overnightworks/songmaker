@@ -245,8 +245,8 @@ def add_playlist_entries_to_playlist(
 ) -> PlaylistAlbumAddResult:
     """Append the playable takes of the source entries, in their order, to the playlist.
 
-    An entry whose song was deleted is skipped by its song id alone, so a deleted title
-    stays unread.
+    The caller passes the entries its source view shows; an entry the view hides is neither
+    added nor reported.
     """
     return _append_candidates(session, playlist_id, [
         _entry_candidate(entry, is_readable) for entry in source_entries
@@ -257,8 +257,6 @@ def _entry_candidate(
     entry: PlaylistEntry, is_readable: Callable[[Generation], bool],
 ) -> _Candidate:
     take = entry.generation
-    if take.song is None:
-        return _Candidate(take.song_id, "", None, PLAYLIST_SKIP_NO_PLAYABLE)
     return _candidate(take.song, take if is_playable_take(take) else None, is_readable)
 
 

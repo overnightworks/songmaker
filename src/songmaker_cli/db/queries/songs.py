@@ -281,17 +281,6 @@ def list_song_ids_for_albums(session: Session, album_ids: list[str]) -> list[str
 
 
 
-def get_album_of_song(session: Session, song_id: str) -> Album | None:
-    """The album a song sits in, whether the song or the album is deleted."""
-    return (
-        session.query(Album)
-        .join(Song, Song.album_id == Album.id)
-        .filter(Song.id == song_id)
-        .execution_options(include_deleted=True)
-        .first()
-    )
-
-
 def next_track_number(session: Session, album_id: str) -> int:
     """The track after the album's highest one, trashed songs included."""
     track_query = (

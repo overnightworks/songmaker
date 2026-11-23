@@ -41,7 +41,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.playlists import AlbumReach, copyable_entries
+from songmaker_cli.api_models.playlists import AlbumReach, reached_entries
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
@@ -80,7 +80,6 @@ from songmaker_cli.db.queries.playlists import (
     update_playlist,
 )
 from songmaker_cli.db.queries.sharing import presented_take
-from songmaker_cli.db.queries.songs import get_album_of_song
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.words import SOURCE_LANGUAGE, text
 
@@ -405,9 +404,7 @@ def api_add_playlist_to_playlist(
 ) -> AddEntriesToPlaylistResponse:
     check_own_playlist_access(session, playlist_id, user)
     source = check_own_playlist_access(session, req.source_playlist_id, user)
-    entries = copyable_entries(
-        source, _albums_reached_by(user), lambda song_id: get_album_of_song(session, song_id),
-    )
+    entries = reached_entries(source, _albums_reached_by(user))
     result = add_playlist_entries_to_playlist(
         session, playlist_id, entries, is_readable=_audio_reader(ctx),
     )
