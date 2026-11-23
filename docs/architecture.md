@@ -1780,7 +1780,7 @@ roster first and pass it in. The `owner_lapses` loop serves the lapses of this f
 owner family's, so the holders and lapses of ended or expired leases leave Redis. The readiness
 probe `scripts/arq_healthcheck.py music` is ready only when this container start's own owner
 lease is live: the worker writes its owner id and PID 1's start ticks (field 22 of `/proc/1/stat`)
-to `MUSIC_WORKER_READINESS_FILE` as the first step of its start, and the probe requires the
+to `MUSIC_WORKER_READINESS_FILE` (a file in the container user's home) as the first step of its start, and the probe requires the
 ticks to equal the current ones and `owner_leases(...).state({owner_id})` to read `alive`. A file
 left by an earlier start of the container carries other ticks, so the lease of a stopped worker,
 which lives on for its lifespan, never makes a restarting container ready. The scoring probe
