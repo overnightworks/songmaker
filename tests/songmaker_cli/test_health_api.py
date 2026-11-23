@@ -253,7 +253,7 @@ def test_health_answers_unavailable_while_the_database_refuses_connections(
         opened.append(psycopg.connect(url.render_as_string(hide_password=False)))
         return opened[-1]
 
-    engine = create_engine("postgresql+psycopg://", creator=connect)
+    engine = create_engine("postgresql://", creator=connect)
     client, _ = make_test_app(tmp_path, factory=sessionmaker(bind=engine))
     with client:
         database_lost = True
