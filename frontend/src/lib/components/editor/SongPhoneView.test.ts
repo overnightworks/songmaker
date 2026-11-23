@@ -116,7 +116,6 @@ describe('SongPhoneView', () => {
 		expect(target.querySelector('header')).toBeNull();
 		expect(target.textContent).toContain('Expiry digest');
 		expect(target.querySelectorAll('.take-row')).toHaveLength(2);
-		expect(target.querySelectorAll('.take-row .play-btn')).toHaveLength(2);
 		showTab(target, 'edit');
 		await tick();
 		expect(target.querySelector('textarea')?.value).toBe('Draft');

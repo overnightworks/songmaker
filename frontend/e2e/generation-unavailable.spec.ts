@@ -118,10 +118,7 @@ for (const width of WIDTHS) {
 						await expect(page.getByRole('heading', { name: title })).toBeVisible();
 						if (width === 390)
 							await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
-						await page
-							.getByRole('button', { name: new RegExp(`^${words['transport.play']} v`) })
-							.first()
-							.click();
+						await page.locator('.take-summary').first().click();
 						if (width === 390)
 							await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 						await expect(page.locator('.generate-action:visible [role="status"]')).toBeVisible();

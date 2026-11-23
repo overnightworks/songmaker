@@ -31,6 +31,8 @@ People sign in through the operator's Keycloak realm (OpenID Connect, authorizat
 - **Session cookies of the old login**: the 0.14 library's cookies are refused (`401`); the migration also deletes every session row.
 - **Frontend auth-check classification**: A non-public 401 navigates the whole page to `/login/oidc?next=…`; the public paths (`/shared/*`, `/share/*`) never redirect. A 429, a 5xx or a network error on the SPA's startup `GET /api/auth/me` is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a sign-out.
 
+**Platform's live check.** After each release platform's live check signs in a test person, `live-check`, with the realm's `/apps/songmaker` group only: no admin group and no MCP group, and the account is disabled in Keycloak between runs. It drives four routes: `GET /login/oidc` and `GET /auth/callback` sign the person in, `GET /api/auth/me` answers 200, `POST /auth/logout` with an allowed `Origin` signs the person out, and `GET /api/auth/me` then answers 401. A first sign-in leaves that person's account row, its resource-event cursor and one audit row (the account creation); they stay as the person's own data, and the session row goes with the logout. Moving or renaming any of the four routes is agreed with platform's head before it lands. Their paths have one owner each, `OIDC_START_PATH`, `OIDC_CALLBACK_PATH` and `LOGOUT_PATH` in `constants.py` and the `/me` route in `auth_api.py`.
+
 ### Keycloak outage
 
 Signed-in requests never call Keycloak: the session is songmaker's own, so the app, generation, scoring and the co-writer keep working while the realm is down. Web boots without reaching the issuer. During an outage a new sign-in fails at the browser (the redirect to Keycloak does not load) or, when the failure happens while songmaker exchanges the code, ends in the "Login failed" page; sign-out ends the songmaker session and the form POST to Keycloak then fails in the browser. Existing sessions are not affected.
@@ -74,12 +76,14 @@ most 60 seconds so session expiry or revocation is enforced on reconnect.
 ## Proxy trust
 
 `TRUSTED_PROXIES` is a comma-separated list of IP addresses and CIDR networks
-(default: empty — no peer is trusted; the Docker deployment sets
-`172.16.0.0/12`, the bridge-network range the tunnel's container gateway sits
-in). `app_context.parse_trusted_proxies()` turns each entry into an
+(default: empty — no peer is trusted). The platform's web Deployment sets
+`10.42.0.0/16`, the pod network (platform `apps/songmaker/web.yaml`, env
+`TRUSTED_PROXIES`); the test stack sets its own (see "Production Deployment").
+`app_context.parse_trusted_proxies()` turns each entry into an
 `ip_network` at startup and hands the result to the composition call's `front=`, which hands it to webauth's
 client-address writer, and a peer is trusted when its address falls inside one of them — so
-`172.16.0.0/12` covers the gateway address `172.18.0.1`, and a bare
+`10.42.0.0/16` covers every address of the pod network the platform names (its
+extent is unverified, see "Who reaches the web"), and a bare
 `10.0.0.1` covers only itself. An entry that is not a valid address or
 network (including one with host bits set, like `10.0.0.1/24`) raises at
 startup rather than being carried along as a rule that can never match. An
@@ -132,12 +136,16 @@ become an identity:
   identity — nothing they skip could have parsed as an address.
 - Both fallbacks to the peer are logged at `WARNING`. They pool unrelated
   visitors into one budget, so they are a proxy misconfiguration to see rather
-  than a silent default. The public client cannot trigger either one: behind
-  Cloudflare → cloudflared → Docker the rightmost entry is always the one our
-  own tunnel appended. A caller on the host itself can, because it reaches the
-  server through the bridge gateway, which is a trusted pass-through hop and
-  forwards the caller's own chain unchanged — so a line there means either a
-  misconfigured proxy or a local caller, not a visitor from the internet.
+  than a silent default. The public client cannot trigger either one: the chain
+  is Cloudflare → cloudflared (a pod) → Traefik (a pod) → the web. Cloudflare's
+  edge writes the visitor's address at the left of the chain (unverified: no
+  platform file holds it). Traefik's
+  `web` entrypoint trusts forwarded headers from `10.42.0.0/16`
+  (platform `infrastructure/traefik/values.yaml`, `ports.web.forwardedHeaders.trustedIPs`),
+  so it keeps the chain cloudflared sent and appends cloudflared's pod address,
+  and the web steps over that pod hop as a trusted peer. Only the pods that can
+  reach the web (below) can trigger a fallback, so a line there means a
+  misconfigured proxy or a pod of the cluster, not a visitor from the internet.
 - Addresses are canonicalized: `::ffff:203.0.113.9` and `203.0.113.9` are one
   identity, so nobody multiplies a budget by switching notation. An address
   carrying an interface zone is treated as no address at all.
@@ -150,13 +158,26 @@ forwarded-header handling would rewrite the peer address and the scheme before
 any application code runs, from any peer unless its separate
 `forwarded_allow_ips` is kept in sync with `TRUSTED_PROXIES` — two sources of
 truth for one decision. `TrustedProxies` is the only owner. Uvicorn's default
-`forwarded_allow_ips` is `127.0.0.1`, so this changes nothing for the Docker
-deployment (the peer is the bridge gateway, `172.18.0.1`); a proxy that ever
+`forwarded_allow_ips` is `127.0.0.1`, so this changes nothing for the platform
+(the peer is Traefik's pod, inside `TRUSTED_PROXIES`); a proxy that ever
 reaches the server over loopback must be named in `TRUSTED_PROXIES` instead.
+
+**Who reaches the web.** Two NetworkPolicies in platform's
+`apps/songmaker/web.yaml` select the web pods. `web` admits the port `http`
+from every pod of the `songmaker` namespace and from the namespaces `traefik`
+and `prometheus`; `backchannel-from-keycloak` admits the same port from pods
+labelled `app.kubernetes.io/name: keycloak` in the namespace `keycloak`. The
+kubelet's probe comes from the node, which a NetworkPolicy does not block. In
+front of Traefik, platform's `infrastructure/traefik/network-policy.yaml`
+admits only the namespaces `cloudflared` and `gatus` to its web port. Every one
+of these peers lies inside `10.42.0.0/16`, so each can send an
+`X-Forwarded-For` the web trusts. Unverified: whether the cluster's pod network
+is the k3s default `10.42.0.0/16` (the Traefik values file says
+`host/k3s/config.yaml` keeps it; that file names no CIDR).
 
 One consequence (#339): with proxy header rewriting off, `scope["scheme"]` —
 and therefore Starlette's `request.base_url` — stays `http` for the whole
-life of the Docker deployment, because the literal connection into the
+life of a deployment, because the literal connection into the
 container is never TLS; only `auth.request_is_https()` resolves the real
 (proxy-forwarded) scheme, by reading the same trusted, verified
 `X-Forwarded-Proto` this section describes. The four share endpoints
@@ -467,7 +488,7 @@ own sizing docs (see "Job streams" above) depend on the endpoint having none.
 
 **The network.** Any direct peer of `songmaker-web:8080` can open it on any path with `Host: songmaker-web`. The test stack joins `songmaker-web` to no edge network; on the platform, the NetworkPolicies in `apps/songmaker/web.yaml` of the platform repository decide which pods are peers. Such a peer meets today's protections: no session means 401 on `/api/`, a mutation that names neither a same-origin fetch nor an allowed origin means 403, the internal worker routes need `X-Internal-Token`. `GET /health` answers them with the status `ok` or `degraded` and nothing else; that is the intended exposure. `GET /metrics` and `GET /health/details` answer only a request carrying the monitoring token.
 
-**Named gap: the forwarded address.** With `TRUSTED_PROXIES` at `172.16.0.0/12`, a direct peer can send `X-Forwarded-For` and the per-IP budgets and the request line use the forged address. Sessions, the origin check and the internal token do not depend on the address. Narrowing the range needs the subnet of the network the peers share pinned; the live edge network that a pin would recreate is gone with the Compose file. Trigger: a new peer that reaches `songmaker-web` or an observed budget evasion.
+**Named gap: the forwarded address.** With `TRUSTED_PROXIES` at the pod network `10.42.0.0/16`, a direct peer inside it can send `X-Forwarded-For` and the per-IP budgets and the request line use the forged address. The peers that can are the pods of the `songmaker` namespace, Traefik's, Prometheus's and Keycloak's (the web's NetworkPolicies) and, through Traefik, which trusts the same network, the pods of the `cloudflared` and `gatus` namespaces (see "Proxy trust"). Sessions, the origin check and the internal token do not depend on the address. Narrowing the range is the platform's decision. Trigger: a new peer that reaches `songmaker-web` or an observed budget evasion.
 
 **Retention outside songmaker.** The gateway receives the turn's system prompt, messages, tool calls and results and forwards them to the model provider over the provider's API. Songmaker keeps the conversation in `chat_messages` only.
 
@@ -666,11 +687,11 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 | HTTPS termination | Songmaker does not terminate TLS. Leave `COOKIE_SECURE` at its default `true` so the session cookie carries `Secure` and the `__Host-` prefix, and responses carry HSTS; set `COOKIE_SECURE=false` only for local plain-http development (CI and the e2e Compose overrides do this). No terminator configuration is shipped here. |
 | Session secret | Put it in the `session-secret` file of the secrets directory (min 32 chars). Required — startup fails with `ValidationError` if missing or empty. Stable across restarts. hal makes the file, see "Secrets". |
 | CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Cross-site browser mutations to `/api/` remain rejected by `Sec-Fetch-Site`, even with this permission. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
-| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting, so everyone behind the proxy shares one API and one sign-in budget — see "Proxy trust". Cookie `Secure`/HSTS are unaffected either way; they follow `COOKIE_SECURE` alone. |
+| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,10.42.0.0/16` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting, so everyone behind the proxy shares one API and one sign-in budget — see "Proxy trust". The platform sets `10.42.0.0/16`; the test stack's `docker/docker-compose.test.yml` defaults it to the Compose bridge range `172.16.0.0/12`, a test setting, not the deployment's. Cookie `Secure`/HSTS are unaffected either way; they follow `COOKIE_SECURE` alone. |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside": the `Settings.public_base_url` validator parses it once at startup and stores the bare origin (a query or fragment is dropped, a path is refused). The one builder of an absolute share address (album/song/generation/playlist — issue #339) is `public_share_url()` in `api_models/songs.py`; the song summary's `share_url` carries it to the song page's link chip. The sign-in redirect addresses (`oidc_client.py`) read the same validated setting. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. A missing or malformed value stops the web app at startup rather than building a link with a guessed scheme. |
-| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated exact host names; an entry containing `*` stops startup). Used by CSRF origin verification and, through songmaker's own `TrustedHostMiddleware`, as the Host allowlist: a request for another Host is answered 400 (the library's host lists are Origin allowlists only). Compose always adds `localhost`, `127.0.0.1` and `songmaker-web`. |
-| Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the Compose network needs it. |
-| Published ports | `docker/docker-compose.test.yml` publishes `songmaker-web` as `127.0.0.1:${WEB_PORT:-8080}:8080`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. The tunnel (`cloudflared`), the Vite dev proxy, and the CLI all run host-local; in-cluster callers use `songmaker-web:8080` on the compose network. |
+| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated exact host names; an entry containing `*` stops startup). Used by CSRF origin verification and, through songmaker's own `TrustedHostMiddleware`, as the Host allowlist: a request for another Host is answered 400 (the library's host lists are Origin allowlists only). The platform sets `songmaker.hallucinai.de,web,web.songmaker.svc,localhost` (platform `apps/songmaker/web.yaml`); the test stack's `docker/docker-compose.test.yml` sets `localhost,127.0.0.1,songmaker-web`. |
+| Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The platform and the test stack set `HOST=0.0.0.0` (platform `apps/songmaker/web.yaml`; `docker/docker-compose.test.yml`) — that binding is inside the container, where the network policy or the Compose network keeps the service private. |
+| Published ports | `docker/docker-compose.test.yml` publishes `songmaker-web` as `127.0.0.1:${WEB_PORT:-8080}:8080`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. In the test stack the Vite dev proxy and the CLI run host-local, and callers on the Compose network use `songmaker-web:8080`. |
 | Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported database. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). If an operator provides an upstream proxy, align its path-specific limits for defense in depth; this repository provides no such proxy configuration. |
 | IP rate limit | `IP_RATE_LIMIT` (API class, default 120/min), `MEDIA_RATE_LIMIT` (`/audio/*`, default 600/min), `STREAM_RATE_LIMIT` (SSE opens, default 45/min). Adjust based on expected traffic — see "Per-IP (global middleware)" above. The sign-in budget (40 per 10 min on start, callback and logout) is webauth's; leave `SIGN_IN_RATE_LIMIT` unset in production. |

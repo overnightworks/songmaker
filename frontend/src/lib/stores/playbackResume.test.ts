@@ -1,14 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
+import { fetchPlaylist, fetchSong } from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { GenerationItem } from '#lib/api/types.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { currentUser } from '#lib/stores/auth.ts';
-import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import {
+	makeAuthUser,
+	makeGeneration,
+	makePlaylistDetail,
+	makePlaylistEntry,
+	makeSong
+} from '#lib/test-utils/factories.ts';
 import {
 	followPlaybackForResume,
 	forgetPlaybackResume,
+	loadSavedPlaylist,
+	loadSavedTake,
 	savedPlayback,
-	type ResumeQueueSource
+	type ResumeQueueSource,
+	type SavedPlayback
 } from './playbackResume';
+
+vi.mock('#lib/api/client.ts', () => ({ fetchPlaylist: vi.fn(), fetchSong: vi.fn() }));
 
 const LISTENER = makeAuthUser({ id: 'u-listener', username: 'listener', role: 'user' });
 const OTHER_LISTENER = makeAuthUser({ id: 'u-other', username: 'other', role: 'user' });
@@ -354,6 +368,27 @@ describe('playback resume record', () => {
 	};
 
 	it.each([
+		{ queue: 'its song', source: { type: 'song' } },
+		{ queue: 'an album', source: { type: 'album', albumId: 'a-resume' } },
+		{
+			queue: 'a playlist',
+			source: { type: 'playlist', playlistId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d05' }
+		},
+		{ queue: 'the library', source: { type: 'library', pool: 'picks', shuffle: true } }
+	])('reads a record whose take played from $queue', ({ source }) => {
+		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify({ ...WHOLE_RECORD, source }));
+
+		expect(savedPlayback()).toEqual({ ...WHOLE_RECORD, source });
+	});
+
+	it("never hands one user's saved take to another", () => {
+		const songQueueRecord = { ...WHOLE_RECORD, source: { type: 'song' } };
+		localStorage.setItem(recordKey(OTHER_LISTENER.id), JSON.stringify(songQueueRecord));
+
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it.each([
 		{ record: 'a damaged record', stored: '{"generationId": 7' },
 		{
 			record: 'a record without a take',
@@ -362,6 +397,10 @@ describe('playback resume record', () => {
 		{
 			record: 'a record without its queue',
 			stored: JSON.stringify({ ...WHOLE_RECORD, source: undefined })
+		},
+		{
+			record: 'a record naming a queue kind the app does not know',
+			stored: JSON.stringify({ ...WHOLE_RECORD, source: { type: 'songs' } })
 		},
 		{
 			record: 'a record naming an unknown library pool',
@@ -378,6 +417,164 @@ describe('playback resume record', () => {
 		localStorage.setItem(recordKey(LISTENER.id), stored);
 
 		expect(savedPlayback()).toBeNull();
+	});
+
+	describe('loading the saved take for a restore', () => {
+		const PLAYLIST_RECORD = {
+			...WHOLE_RECORD,
+			source: { type: 'playlist', playlistId: 'b3a4c5d6-1e2f-4a3b-8c4d-5e6f7a8b9c0d' },
+			savedAt: 1000
+		} as const;
+		const OTHER_PLAYLIST = 'c4b5d6e7-2f30-4b4c-9d5e-6f708192a3b4';
+
+		function saveWholeRecord(record: object = WHOLE_RECORD): SavedPlayback {
+			localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(record));
+			const saved = savedPlayback();
+			if (saved === null) throw new Error('the record was not read');
+			return saved;
+		}
+
+		const savedTake = makeGeneration({ id: WHOLE_RECORD.generationId });
+		const songOf = (generations: GenerationItem[]) =>
+			makeSong({ id: WHOLE_RECORD.songId, generations });
+
+		it('finds a take that can still play, and keeps its record', async () => {
+			const saved = saveWholeRecord();
+			const song = songOf([savedTake]);
+			vi.mocked(fetchSong).mockResolvedValueOnce(song);
+
+			await expect(loadSavedTake(saved)).resolves.toEqual({ song, take: savedTake });
+
+			expect(storedRecord(LISTENER.id)).not.toBeNull();
+		});
+
+		it.each([
+			{ gone: 'a deleted song', answer: () => Promise.reject(new ApiError(404, 'gone', '/x')) },
+			{ gone: 'a deleted take', answer: () => Promise.resolve(songOf([])) },
+			{
+				gone: 'an archived take',
+				answer: () => Promise.resolve(songOf([{ ...savedTake, is_archived: true }]))
+			},
+			{
+				gone: 'a take without audio',
+				answer: () => Promise.resolve(songOf([{ ...savedTake, mp3_path: '' }]))
+			}
+		])('finds nothing and forgets the record naming $gone', async ({ answer }) => {
+			const saved = saveWholeRecord();
+			vi.mocked(fetchSong).mockImplementationOnce(answer);
+
+			await expect(loadSavedTake(saved)).resolves.toBeNull();
+
+			expect(storedRecord(LISTENER.id)).toBeNull();
+		});
+
+		it.each([
+			{ failure: 'a song out of reach', error: new ApiError(403, 'no', '/x') },
+			{ failure: 'a server error', error: new ApiError(503, 'down', '/x') },
+			{
+				failure: 'an unreachable server',
+				error: new NetworkError('/x', new TypeError('Failed to fetch'))
+			}
+		])('finds nothing but keeps the record when the server answers $failure', async ({ error }) => {
+			const saved = saveWholeRecord();
+			vi.mocked(fetchSong).mockRejectedValueOnce(error);
+
+			await expect(loadSavedTake(saved)).resolves.toBeNull();
+
+			expect(storedRecord(LISTENER.id)).not.toBeNull();
+		});
+
+		it('forgets the record of a playlist the server no longer has, and keeps it on a server error', async () => {
+			const saved = saveWholeRecord();
+			vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(503, 'down', '/x'));
+			await expect(loadSavedPlaylist(saved, 'p-saved')).resolves.toBeNull();
+			expect(storedRecord(LISTENER.id)).not.toBeNull();
+
+			vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(404, 'gone', '/x'));
+			await expect(loadSavedPlaylist(saved, 'p-saved')).resolves.toBeNull();
+
+			expect(storedRecord(LISTENER.id)).toBeNull();
+		});
+
+		it.each([
+			{
+				holds: 'the take',
+				entries: [makePlaylistEntry({ generation_id: WHOLE_RECORD.generationId })],
+				found: true,
+				recordKept: true
+			},
+			{
+				holds: 'other takes only',
+				entries: [makePlaylistEntry({ generation_id: 'another-take' })],
+				found: false,
+				recordKept: false
+			}
+		])(
+			'finds a playlist that holds $holds, and keeps its record only when it holds the take',
+			async ({ entries, found, recordKept }) => {
+				const saved = saveWholeRecord(PLAYLIST_RECORD);
+				vi.mocked(fetchPlaylist).mockResolvedValueOnce(makePlaylistDetail({ entries }));
+
+				const loaded = await loadSavedPlaylist(saved, PLAYLIST_RECORD.source.playlistId);
+
+				expect({ found: loaded !== null, recordKept: storedRecord(LISTENER.id) !== null }).toEqual({
+					found,
+					recordKept
+				});
+			}
+		);
+
+		it.each([
+			{ rewritten: 'from the song queue', record: { source: { type: 'song' } } },
+			{ rewritten: 'at a later position', record: { position: PLAYLIST_RECORD.position + 20 } },
+			{ rewritten: 'at a later time', record: { savedAt: PLAYLIST_RECORD.savedAt + 1 } },
+			{
+				rewritten: 'from another playlist',
+				record: { source: { type: 'playlist', playlistId: OTHER_PLAYLIST } }
+			}
+		])(
+			"keeps a record another tab rewrote for the same take $rewritten while its playlist's 404 was in flight",
+			async ({ record }) => {
+				const saved = saveWholeRecord(PLAYLIST_RECORD);
+				const newerRecord = { ...PLAYLIST_RECORD, ...record };
+				vi.mocked(fetchPlaylist).mockImplementationOnce(() => {
+					localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+					return Promise.reject(new ApiError(404, 'gone', '/x'));
+				});
+
+				await loadSavedPlaylist(saved, PLAYLIST_RECORD.source.playlistId);
+
+				expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
+			}
+		);
+
+		it("keeps the record of a user whose tab another user took over while the playlist's 404 was in flight", async () => {
+			const saved = saveWholeRecord(PLAYLIST_RECORD);
+			vi.mocked(fetchPlaylist).mockImplementationOnce(() => {
+				currentUser.set(OTHER_LISTENER);
+				localStorage.setItem(recordKey(OTHER_LISTENER.id), JSON.stringify(PLAYLIST_RECORD));
+				return Promise.reject(new ApiError(404, 'gone', '/x'));
+			});
+
+			await loadSavedPlaylist(saved, PLAYLIST_RECORD.source.playlistId);
+
+			expect(storedRecord(OTHER_LISTENER.id)).toEqual(PLAYLIST_RECORD);
+			expect(storedRecord(LISTENER.id)).toEqual(PLAYLIST_RECORD);
+		});
+
+		it("keeps a record that names another take than the one found gone, as another tab's save", async () => {
+			const saved = saveWholeRecord();
+			const newerRecord = {
+				...WHOLE_RECORD,
+				generationId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d09'
+			};
+			localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+			vi.mocked(fetchSong).mockRejectedValueOnce(new ApiError(404, 'gone', '/x'));
+
+			await loadSavedTake(saved);
+
+			expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
+		});
 	});
 
 	it('unreadable storage reads as nothing saved', () => {

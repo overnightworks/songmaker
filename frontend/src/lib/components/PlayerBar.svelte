@@ -169,7 +169,7 @@
 	}
 
 	function queueOpensOnThisTake(): boolean {
-		const queued = buildQueueViewModel(ctx, current).items.length;
+		const queued = buildQueueViewModel(ctx, current, songs).items.length;
 		if (ctx.type !== 'album') return queueHoldsOneTake(queued, null);
 		const albumId = ctx.albumId;
 		return queueHoldsOneTake(queued, {

@@ -193,6 +193,15 @@ describe('NowPlayingQueue', () => {
 		expect(onJump).toHaveBeenCalledWith(1);
 	});
 
+	// Spec: REQ-LISTENING-08 -- a queue that wraps ends with one quiet line naming its song.
+	it('ends a wrapping song queue with one line naming the song again', async () => {
+		await render({ queue: { items: [item()], currentIndex: 0, upNext: null, again: 'Tide' } });
+		expect(target.querySelectorAll('.queue-again')).toHaveLength(1);
+		expect(target.querySelector('.queue-again')?.textContent).toBe(
+			words['nowPlaying.queueAgain']({ title: 'Tide' })
+		);
+	});
+
 	it('renders current-only, no up next, when the classic queue has not built takes yet', async () => {
 		const queue: QueueViewModel = { items: [], currentIndex: -1, upNext: null };
 		await render({ queue, currentSongTitle: 'Tide' });

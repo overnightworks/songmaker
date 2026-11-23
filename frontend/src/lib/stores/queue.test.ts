@@ -7,7 +7,7 @@ import {
 	makeSong
 } from '#lib/test-utils/factories.ts';
 import { openCollection } from '#lib/stores/collection.ts';
-import { albumList } from '#lib/stores/libraryData.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
 	genDefaults,
 	makePlayback,
@@ -15,10 +15,17 @@ import {
 	playlistQueue,
 	queuedSongDefaults
 } from '#lib/test-utils/queue-scenarios.ts';
-import { buildQueueViewModel, playbackSource, queueContext } from '#lib/stores/queue.ts';
+import {
+	adjacentQueueTake,
+	buildQueueViewModel,
+	playbackSource,
+	queueContext,
+	songTakeQueue
+} from '#lib/stores/queue.ts';
 
 afterEach(() => {
 	albumList.set([]);
+	songList.set([]);
 	queueContext.set({ type: 'library' });
 });
 
@@ -44,6 +51,18 @@ describe('playbackSource', () => {
 			},
 			{ kind: 'playlist', id: 'p1', title: 'Late Drives' }
 		],
+		[
+			'a song queue names its song',
+			{
+				type: 'song' as const,
+				songId: 's1',
+				songTitle: 'Cold Harbour',
+				takes: [],
+				inListOrder: [],
+				index: 0
+			},
+			{ kind: 'song', id: 's1', title: 'Cold Harbour' }
+		],
 		['a library queue names no source', { type: 'library' as const }, null],
 		[
 			'an album queue whose album is not loaded names no source',
@@ -64,7 +83,11 @@ describe('buildQueueViewModel', () => {
 			makeSong({ ...queuedSongDefaults(), id: 's2' })
 		);
 
-		const vm = buildQueueViewModel({ type: 'library', takes: [first, second], index: 1 }, null);
+		const vm = buildQueueViewModel(
+			{ type: 'library', takes: [first, second], index: 1 },
+			null,
+			get(songList)
+		);
 
 		expect(vm.currentIndex).toBe(1);
 		expect(vm.upNext?.generationId).toBe('g1');
@@ -73,7 +96,8 @@ describe('buildQueueViewModel', () => {
 	it('classic-mode contexts without takes render current only, with no up next', () => {
 		const vm = buildQueueViewModel(
 			{ type: 'library' },
-			makePlayback(makeGen(genDefaults), makeSong(queuedSongDefaults()))
+			makePlayback(makeGen(genDefaults), makeSong(queuedSongDefaults())),
+			get(songList)
 		);
 		expect(vm.items).toEqual([]);
 		expect(vm.currentIndex).toBe(-1);
@@ -89,7 +113,7 @@ describe('buildQueueViewModel', () => {
 		const next = makePlayback(makeGen({ ...genDefaults, id: 'g2' }), songs[1]);
 		const ctx = { type: 'library' as const, takes: [current, next], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, current);
+		const vm = buildQueueViewModel(ctx, current, get(songList));
 
 		expect(vm.items.map((item) => item.generationId)).toEqual(['g1', 'g2']);
 		expect(vm.items[0]?.durationSec).toBe(200);
@@ -106,7 +130,7 @@ describe('buildQueueViewModel', () => {
 		const unmeasured = makePlayback(makeGen({ ...genDefaults, id: 'g2' }), song);
 		const ctx = { type: 'library' as const, takes: [ownDuration, unmeasured], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, ownDuration);
+		const vm = buildQueueViewModel(ctx, ownDuration, get(songList));
 
 		expect(vm.items.map((item) => item.durationSec)).toEqual([141, null]);
 	});
@@ -123,7 +147,7 @@ describe('buildQueueViewModel', () => {
 		);
 		const ctx = { type: 'library' as const, takes: [requestedAuto], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, requestedAuto);
+		const vm = buildQueueViewModel(ctx, requestedAuto, get(songList));
 
 		expect(vm.items.map((item) => item.durationSec)).toEqual([188]);
 	});
@@ -140,7 +164,7 @@ describe('buildQueueViewModel', () => {
 		];
 		const ctx = playlistQueue(entries, 0);
 
-		const vm = buildQueueViewModel(ctx, null);
+		const vm = buildQueueViewModel(ctx, null, get(songList));
 
 		expect(vm.items.map((item) => item.durationSec)).toEqual([141, null]);
 	});
@@ -153,7 +177,7 @@ describe('buildQueueViewModel', () => {
 		);
 		const ctx = { type: 'library' as const, takes: [current], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, current);
+		const vm = buildQueueViewModel(ctx, current, get(songList));
 
 		expect(vm.items[0]).toEqual(
 			expect.objectContaining({ versionNumber: null, generationNumber: 5 })
@@ -165,7 +189,7 @@ describe('buildQueueViewModel', () => {
 		const current = makePlayback(makeGen(genDefaults), song);
 		const ctx = { type: 'library' as const, takes: [current], index: 0 };
 
-		const vm = buildQueueViewModel(ctx, current);
+		const vm = buildQueueViewModel(ctx, current, get(songList));
 
 		expect(vm.upNext).toBeNull();
 	});
@@ -187,10 +211,90 @@ describe('buildQueueViewModel', () => {
 		];
 		const ctx = playlistQueue(entries, 0);
 
-		const vm = buildQueueViewModel(ctx, null);
+		const vm = buildQueueViewModel(ctx, null, get(songList));
 
 		expect(vm.currentIndex).toBe(0);
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 4, generationNumber: 1 }));
 		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
+	});
+});
+
+describe('songTakeQueue', () => {
+	function take(id: string, versionNumber: number | null, overrides = {}) {
+		return makeGen({
+			...genDefaults,
+			id,
+			version_id: versionNumber === null ? null : `v${versionNumber}`,
+			version_number: versionNumber,
+			...overrides
+		});
+	}
+
+	const song = makeSong({
+		...queuedSongDefaults(),
+		generations: [
+			take('g-v1', 1),
+			take('g-imported', null),
+			take('g-v3a', 3),
+			take('g-archived', 3, { is_archived: true }),
+			take('g-v2', 2),
+			take('g-v3b', 3)
+		]
+	});
+
+	// Spec: REQ-LISTENING-08 -- the song's takes follow in the order the take list shows them.
+	it("holds the playable takes in the take list's order, the tapped one in play", () => {
+		const queue = songTakeQueue(song, 'g-v2');
+
+		expect(queue?.takes.map((queued) => queued.generation.id)).toEqual([
+			'g-v3a',
+			'g-v3b',
+			'g-v2',
+			'g-v1',
+			'g-imported'
+		]);
+		expect(queue && queue.takes[queue.index].generation.id).toBe('g-v2');
+	});
+
+	it('wraps from the last take to the first and names the song once', () => {
+		const queue = songTakeQueue(song, 'g-imported');
+		if (!queue) throw new Error('Expected a queue');
+
+		const next = adjacentQueueTake(queue, get(songList), queue.takes[queue.index]);
+
+		expect(next.kind === 'take' && next.take.generation.id).toBe('g-v3a');
+		expect(buildQueueViewModel(queue, null, get(songList)).again).toBe(song.title);
+	});
+
+	it('names no start over for a queue with no other take to wrap to', () => {
+		const lone = makeSong({ ...song, generations: [song.generations[2]] });
+		const queue = songTakeQueue(lone, 'g-v3a');
+		if (!queue) throw new Error('Expected a queue');
+
+		expect(buildQueueViewModel(queue, null, get(songList)).again).toBeUndefined();
+	});
+
+	it('names no start over once the only other take is archived in the song list', () => {
+		const pair = makeSong({
+			...song,
+			id: 's-pair',
+			generations: [song.generations[0], song.generations[2]]
+		});
+		const queue = songTakeQueue(pair, 'g-v3a');
+		if (!queue) throw new Error('Expected a queue');
+		songList.set([
+			{
+				...pair,
+				generations: pair.generations.map((gen) =>
+					gen.id === 'g-v1' ? { ...gen, is_archived: true } : gen
+				)
+			}
+		]);
+
+		expect(buildQueueViewModel(queue, null, get(songList)).again).toBeUndefined();
+	});
+
+	it.each(['g-archived', 'g-absent'])('is nothing for the unplayable or absent take %s', (id) => {
+		expect(songTakeQueue(song, id)).toBeNull();
 	});
 });

@@ -33,7 +33,7 @@ const firstTake = words['takeRow.takeLabel']({ number: '1' });
 import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
 import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';
-import { openNowPlayingFromBar } from './play-album';
+import { openThisTakeFromBar } from './play-album';
 import {
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
@@ -657,6 +657,7 @@ test.describe('the versions of a song', () => {
 		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: nameStartingWith(firstTake) })
 			.click();
+		await openThisTakeFromBar(page, shellOf(testInfo), song.title);
 		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
@@ -680,6 +681,7 @@ test.describe('the versions of a song', () => {
 		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: nameStartingWith(firstTake) })
 			.click();
+		await openThisTakeFromBar(page, shellOf(testInfo), song.title);
 		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
@@ -705,14 +707,8 @@ test.describe('the versions of a song', () => {
 		).toBeVisible();
 		await expect.poll(() => shownTakePosition(page, phoneTakeSeconds)).toBeCloseTo(heldAt, 1);
 		const shownAt = await shownTakePosition(page, phoneTakeSeconds);
-		if (mobile) {
-			await openNowPlayingFromBar(page, 'mobile', song.title);
-			await page
-				.getByRole('dialog', { name: song.title })
-				.getByRole('button', { name: new RegExp(`${words['nowPlaying.queueTab']}$`) })
-				.click();
-		}
-		await page.getByRole('tab', { name: words['nowPlaying.takeTab'] }).click();
+		if (mobile) await openThisTakeFromBar(page, 'mobile', song.title);
+		else await page.getByRole('tab', { name: words['nowPlaying.takeTab'] }).click();
 
 		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
 		await openV1.click();
@@ -820,7 +816,7 @@ test.describe('the versions of a song', () => {
 
 	test('an imported take groups as Imported with no Open link, and Now Playing names it "Imported take" and says why it has no lyrics', async ({
 		page
-	}) => {
+	}, testInfo) => {
 		const { albumId, pickedSongTitle: title } = readSeededLibrary();
 		await page.goto(`/album/${albumId}`);
 		await workspace(page)
@@ -832,6 +828,7 @@ test.describe('the versions of a song', () => {
 		await expect(imported.getByRole('button', { name: /Open v/ })).toHaveCount(0);
 
 		await imported.getByRole('button', { name: nameStartingWith(firstTake) }).click();
+		await openThisTakeFromBar(page, shellOf(testInfo), title);
 		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 		await expect(page.getByText(words['nowPlaying.importedNoLyrics'])).toBeVisible();
 		await expect(

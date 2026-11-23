@@ -12,7 +12,6 @@ import {
 	LIBRARY_PATH,
 	listenRegion,
 	LIBRARY_URL,
-	nameStartingWith,
 	observePlayingAudio,
 	ONLY_IN_SHELL,
 	openHome,
@@ -614,7 +613,7 @@ async function playFirstTakeFromTheWall(
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
-	await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
+	await take.locator('.take-summary').click();
 	expect((await listenRecorded).ok()).toBe(true);
 }
 

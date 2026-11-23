@@ -177,6 +177,17 @@ export class ContinuousDeck<Take> {
 		return this.queueTake(take, url, (buffer) => this.removeAhead(buffer));
 	}
 
+	/**
+	 * Gives up whatever the deck holds or still waits to append after the take
+	 * under the playhead, so that nothing follows it: the playhead ends where
+	 * that take does. A stream already ended keeps what it holds.
+	 */
+	dropAhead(): Promise<void> {
+		if (this.ending !== null) return Promise.resolve();
+		this.withdrawAhead();
+		return this.queueStep((buffer) => this.removeAhead(buffer));
+	}
+
 	endStream(): Promise<void> {
 		this.ending ??= this.queueStep(() => this.ports.mediaSource.endOfStream());
 		return this.ending;

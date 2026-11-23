@@ -32,7 +32,7 @@ from songmaker_cli.scheduler import (
     _PickedWorker,
     dispatch_generation_on_worker,
 )
-from songmaker_cli.settings import GENERATION_RESULT_MAX_BYTES, get_settings
+from songmaker_cli.settings import GENERATION_RESULT_MAX_BYTES
 
 _TAKE = b"RIFF" + b"\x01" * 600
 _LIMIT = 256
@@ -107,7 +107,7 @@ def _serves(body: bytes) -> Callable[[httpx.Request], httpx.Response]:
 
 
 def test_the_take_is_fetched_by_task_id_into_musics_own_temp_dir_then_deleted(
-    music_tmp: Path,
+    music_tmp: Path, internal_token: str,
 ) -> None:
     worker = _Worker(_serves(_TAKE))
 
@@ -116,12 +116,11 @@ def test_the_take_is_fetched_by_task_id_into_musics_own_temp_dir_then_deleted(
     assert Path(fetched.audio_path).read_bytes() == _TAKE
     assert Path(fetched.audio_path).parent == music_tmp
     assert (fetched.seed, fetched.cot_caption) == (7, "c")
-    token = get_settings().songmaker_internal_token.get_secret_value()
     fetch, delete = worker.calls("GET", "/tasks/gen-1/result")[0], worker.calls(
         "DELETE", "/tasks/gen-1/result")[0]
-    assert fetch.headers["X-Internal-Token"] == token
+    assert fetch.headers["X-Internal-Token"] == internal_token
     assert fetch.headers["Accept-Encoding"] == "identity"
-    assert delete.headers["X-Internal-Token"] == token
+    assert delete.headers["X-Internal-Token"] == internal_token
     assert worker.requests.index(delete) > worker.requests.index(fetch)
 
 

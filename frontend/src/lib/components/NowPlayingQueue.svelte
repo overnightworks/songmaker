@@ -117,6 +117,9 @@
 			</li>
 		{/if}
 	</ol>
+	{#if queue.again}
+		<p class="queue-again">{pageText('nowPlaying.queueAgain', { title: queue.again })}</p>
+	{/if}
 	{#if queue.upNext}
 		<p class="up-next">{pageText('nowPlaying.upNext', { title: queue.upNext.songTitle })}</p>
 	{/if}
@@ -246,6 +249,7 @@
 		color: var(--text-subtle);
 		font-size: 0.72rem;
 	}
+	.queue-again,
 	.up-next {
 		margin: 0;
 		font-size: 0.75rem;

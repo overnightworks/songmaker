@@ -64,7 +64,7 @@ test(
 			await page.goto(`/album/${albumId}`);
 
 			await openSong(page, SONG_A_TITLE);
-			const playControls = page.locator('.take-row .play-btn');
+			const playControls = page.locator('.take-row .take-summary');
 			for (let index = 0; index < SELECTED_TAKE_COUNT; index += 1)
 				await playControls.nth(index).click({ modifiers: ['ControlOrMeta'] });
 			const toolbar = page.locator('.selection-toolbar');
@@ -104,7 +104,7 @@ test(
 				tickedIds.push(((await rows.nth(index).getAttribute('id')) ?? '').replace('take-', ''));
 				await rows
 					.nth(index)
-					.locator('.play-btn')
+					.locator('.take-summary')
 					.click({ modifiers: ['ControlOrMeta'] });
 			}
 			const toolbar = page.locator('.selection-toolbar');

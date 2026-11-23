@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
-	import { COARSE_POINTER_MEDIA } from '#lib/constants/media.ts';
 	import { removeGenerationFromSong } from '#lib/stores/libraryData.ts';
 	import { currentVersionIndex, versions } from '#lib/stores/editor.ts';
 	import { selectedGenerationId } from '#lib/stores/player.ts';
@@ -19,23 +18,19 @@
 		keepOnlySelected
 	} from '#lib/stores/selection.ts';
 	import {
-		groupTakes,
 		isGroupOpen,
 		renderedTakes,
 		revealTakeGroup,
 		settleTakeFolds,
 		takeFolds,
-		takeGroupKey,
-		toggleTakeGroup,
-		type TakeGroup
+		toggleTakeGroup
 	} from '#lib/stores/takeFolds.ts';
+	import { groupTakes, takeGroupKey, type TakeGroup } from '#lib/utils/takeGroups.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { bulkDeleteGenerations } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
-	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
-	import InfoTip from '../InfoTip.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import { generateAction, isGenerateJobActive } from '#lib/stores/generateAction.ts';
@@ -70,16 +65,6 @@
 	}: Props = $props();
 
 	const actions: GenerationActions = getGenerationActions();
-
-	// "Tap play" is touch copy: a narrow desktop window is compact but still
-	// has a mouse, so the hint asks the pointer, not the layout width.
-	let touchPointer = $state(false);
-
-	$effect(() => {
-		return subscribeCompactLayout((value) => {
-			touchPointer = value;
-		}, COARSE_POINTER_MEDIA);
-	});
 
 	let deleteFor = $state<GenerationItem | null>(null);
 
@@ -198,12 +183,6 @@
 	{/if}
 {/snippet}
 
-{#snippet takesTip()}
-	{#if touchPointer && song.generations.length > 0}
-		<InfoTip label={pageText('takesList.aboutTakes')} text={pageText('takesList.mobileHint')} />
-	{/if}
-{/snippet}
-
 {#snippet takeRows(generations: GenerationItem[])}
 	{#each generations as gen (gen.id)}
 		<TakeRow
@@ -293,7 +272,6 @@
 							number: String(current.versionNumber ?? 0)
 						})}
 					</span>
-					{@render takesTip()}
 					{@render openLink(current)}
 				</div>
 				{#if current.generations.length === 0 && !jobRunning}
@@ -309,7 +287,7 @@
 			<p class="earlier-label">{pageText('takesList.earlier')}</p>
 		{/if}
 
-		{#each groups.earlier as group, index (group.key)}
+		{#each groups.earlier as group (group.key)}
 			{@const open = isGroupOpen($takeFolds, groups, group.key)}
 			<div class="version-section">
 				<div class="version-header-row">
@@ -332,7 +310,6 @@
 							</span>
 						{/if}
 					</button>
-					{#if !groups.current && index === 0}{@render takesTip()}{/if}
 					{#if open}{@render openLink(group)}{/if}
 				</div>
 				{#if open}
