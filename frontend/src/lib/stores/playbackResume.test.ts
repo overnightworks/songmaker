@@ -491,6 +491,7 @@ describe('playback resume record', () => {
 
 		it.each([
 			{ rewritten: 'from the song queue', record: { source: { type: 'song' } } },
+			{ rewritten: 'at a later position', record: { position: PLAYLIST_RECORD.position + 20 } },
 			{
 				rewritten: 'from another playlist',
 				record: { source: { type: 'playlist', playlistId: OTHER_PLAYLIST } }

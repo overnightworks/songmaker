@@ -117,10 +117,9 @@ function sameQueueSource(a: ResumeQueueSource, b: ResumeQueueSource): boolean {
 	return entriesOf(a) === entriesOf(b);
 }
 
-// A record that another tab has written since, for another take or from
-// another queue, or one of another user, is not this restore's to drop. Only
-// the position may differ: it moves on while the record still names the
-// same gone thing.
+// Only the record this restore read is this restore's to drop: one that
+// another tab has written since (another take or queue, a later position), or
+// one of another user, stays.
 function forgetSavedPlayback(userId: string | null, gone: SavedPlayback): void {
 	if (userId === null || signedInUserId() !== userId) return;
 	const stored = parseSavedPlayback(readStorage(storageKey(userId)));
@@ -128,6 +127,7 @@ function forgetSavedPlayback(userId: string | null, gone: SavedPlayback): void {
 		stored !== null &&
 		stored.songId === gone.songId &&
 		stored.generationId === gone.generationId &&
+		stored.position === gone.position &&
 		sameQueueSource(stored.source, gone.source)
 	) {
 		retireCurrentPlaybackResume(userId);
