@@ -10,6 +10,7 @@
 		playlistDetailLoad,
 		loadPlaylistDetail,
 		addPlaylistToPlaylist,
+		toastPlaylistAdd,
 		deletePlaylist,
 		renamePlaylist,
 		removePlaylistEntry,
@@ -175,24 +176,10 @@
 		}
 	}
 
-	async function onAddToPlaylist(targetPlaylistId: string): Promise<void> {
-		if (!playlistMeta) return;
-		try {
-			const result = await addPlaylistToPlaylist(targetPlaylistId, playlistMeta.id);
-			if (result.skipped.length > 0) {
-				addToast(
-					pageText('playlistPage.addedSkipped', {
-						added: String(result.added_count),
-						skipped: String(result.skipped.length)
-					}),
-					'info'
-				);
-			} else {
-				addToast(pageText('playlistPage.addedToPlaylist'), 'success');
-			}
-		} catch (error) {
-			addToast(describeFailure(error, pageText('playlistPage.addFailed')), 'error');
-		}
+	function onAddToPlaylist(targetPlaylistId: string): Promise<void> {
+		const sourceId = playlistMeta?.id;
+		if (!sourceId) return Promise.resolve();
+		return toastPlaylistAdd(() => addPlaylistToPlaylist(targetPlaylistId, sourceId));
 	}
 
 	async function onRemoveEntry(entryId: string): Promise<void> {

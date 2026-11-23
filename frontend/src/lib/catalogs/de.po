@@ -1019,18 +1019,6 @@ msgctxt "albumPage.archiveFailed"
 msgid "Archive failed"
 msgstr "Archivieren fehlgeschlagen"
 
-msgctxt "albumPage.addedSkipped"
-msgid "Added {added}, skipped {skipped}"
-msgstr "{added} hinzugefügt, {skipped} übersprungen"
-
-msgctxt "albumPage.addedToPlaylist"
-msgid "Added to playlist"
-msgstr "Zur Playlist hinzugefügt"
-
-msgctxt "albumPage.addFailed"
-msgid "Failed to add"
-msgstr "Hinzufügen fehlgeschlagen"
-
 msgctxt "albumPage.songsLoadFailed"
 msgid "Failed to load songs"
 msgstr "Songs konnten nicht geladen werden"

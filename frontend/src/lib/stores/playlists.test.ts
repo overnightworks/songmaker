@@ -49,6 +49,7 @@ import {
 	resetPlaylistsForTests,
 	selectedPlaylistDetail,
 	selectedPlaylistId,
+	toastPlaylistAdd,
 	uploadPlaylistCover
 } from './playlists';
 
@@ -610,5 +611,36 @@ describe('playlist mutations', () => {
 
 		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
 		expect(get(selectedPlaylistDetail)?.entry_count).toBe(2);
+	});
+});
+
+describe('toastPlaylistAdd', () => {
+	it.each([
+		{
+			description: 'confirms an add that skipped nothing',
+			add: () => Promise.resolve({ added_count: 2, skipped: [] }),
+			toast: { message: words['playlistPage.addedToPlaylist'], type: 'success' }
+		},
+		{
+			description: 'counts the skipped entries of an add that skipped some',
+			add: () =>
+				Promise.resolve({
+					added_count: 1,
+					skipped: [{ song_id: 's2', title: 'Gone', reason: 'missing_audio' }]
+				}),
+			toast: {
+				message: words['playlistPage.addedSkipped']({ added: '1', skipped: '1' }),
+				type: 'info'
+			}
+		},
+		{
+			description: 'names the refusal of an add that failed',
+			add: () => Promise.reject(new ApiError(404, 'Playlist not found', '/api/playlists/p1')),
+			toast: { message: 'Playlist not found', type: 'error' }
+		}
+	])('$description', async ({ add, toast }) => {
+		await toastPlaylistAdd(add);
+
+		expect(get(toasts)).toEqual([expect.objectContaining(toast)]);
 	});
 });

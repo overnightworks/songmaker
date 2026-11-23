@@ -215,33 +215,5 @@ describe('PlaylistDetailView menu', () => {
 			);
 			expect(document.body.querySelector('.menu-panel')).toBeNull();
 		});
-
-		it('counts the skipped entries in the toast', async () => {
-			vi.mocked(addPlaylistToPlaylist).mockResolvedValue({
-				added_count: 1,
-				skipped: [{ song_id: 's2', title: 'Gone', reason: 'missing_audio' }]
-			});
-			await openPicker(await mountPlaylistView());
-
-			requireElement<HTMLButtonElement>(document.body, '.menu-picker-row').click();
-
-			await vi.waitFor(() =>
-				expect(addToast).toHaveBeenCalledWith(
-					words['playlistPage.addedSkipped']({ added: '1', skipped: '1' }),
-					'info'
-				)
-			);
-		});
-
-		it('toasts the failure when the add is refused', async () => {
-			vi.mocked(addPlaylistToPlaylist).mockRejectedValue(
-				new ApiError(404, 'Playlist not found', '/api/playlists/p-run/entries/playlist')
-			);
-			await openPicker(await mountPlaylistView());
-
-			requireElement<HTMLButtonElement>(document.body, '.menu-picker-row').click();
-
-			await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Playlist not found', 'error'));
-		});
 	});
 });

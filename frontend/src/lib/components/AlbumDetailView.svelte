@@ -37,7 +37,7 @@
 	import { setOpenCollection } from '#lib/stores/collection.ts';
 	import { forgetListenedPlace, readRestoredPlace } from '#lib/stores/libraryOrder.ts';
 	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
-	import { addAlbumToPlaylist } from '#lib/stores/playlists.ts';
+	import { addAlbumToPlaylist, toastPlaylistAdd } from '#lib/stores/playlists.ts';
 	import {
 		coverStanding,
 		discardCoverSuggestions,
@@ -321,24 +321,10 @@
 		}
 	}
 
-	async function onAddToPlaylist(playlistId: string): Promise<void> {
-		if (!currentAlbumId) return;
-		try {
-			const result = await addAlbumToPlaylist(playlistId, currentAlbumId);
-			if (result.skipped.length > 0) {
-				addToast(
-					pageText('albumPage.addedSkipped', {
-						added: String(result.added_count),
-						skipped: String(result.skipped.length)
-					}),
-					'info'
-				);
-			} else {
-				addToast(pageText('albumPage.addedToPlaylist'), 'success');
-			}
-		} catch (e) {
-			addToast(describeFailure(e, pageText('albumPage.addFailed')), 'error');
-		}
+	function onAddToPlaylist(playlistId: string): Promise<void> {
+		const albumId = currentAlbumId;
+		if (!albumId) return Promise.resolve();
+		return toastPlaylistAdd(() => addAlbumToPlaylist(playlistId, albumId));
 	}
 
 	function onCurate(): void {

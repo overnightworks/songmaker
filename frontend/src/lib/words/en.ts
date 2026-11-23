@@ -251,9 +251,6 @@ export type Words = {
     readonly "albumPage.unarchived": string;
     readonly "albumPage.unarchiveFailed": string;
     readonly "albumPage.archiveFailed": string;
-    readonly "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => string;
-    readonly "albumPage.addedToPlaylist": string;
-    readonly "albumPage.addFailed": string;
     readonly "albumPage.songsLoadFailed": string;
     readonly "albumPage.deleteTitle": (gaps: { readonly title: string }) => string;
     readonly "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => string;
@@ -1718,9 +1715,6 @@ export const words: Words = {
     "albumPage.unarchived": "Album unarchived",
     "albumPage.unarchiveFailed": "Unarchive failed",
     "albumPage.archiveFailed": "Archive failed",
-    "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => "Added " + gaps.added + ", skipped " + gaps.skipped,
-    "albumPage.addedToPlaylist": "Added to playlist",
-    "albumPage.addFailed": "Failed to add",
     "albumPage.songsLoadFailed": "Failed to load songs",
     "albumPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",
     "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => ({

@@ -351,6 +351,28 @@ export async function addPlaylistToPlaylist(
 	return result;
 }
 
+/** Runs an add of an album's or a playlist's songs and tells with a toast what it did, counting the skipped entries, or why it failed. */
+export async function toastPlaylistAdd(
+	add: () => Promise<AddEntriesToPlaylistResult>
+): Promise<void> {
+	try {
+		const result = await add();
+		if (result.skipped.length > 0) {
+			addToast(
+				pageText('playlistPage.addedSkipped', {
+					added: String(result.added_count),
+					skipped: String(result.skipped.length)
+				}),
+				'info'
+			);
+		} else {
+			addToast(pageText('playlistPage.addedToPlaylist'), 'success');
+		}
+	} catch (error) {
+		addToast(describeFailure(error, pageText('playlistPage.addFailed')), 'error');
+	}
+}
+
 export async function removePlaylistEntry(playlistId: string, entryId: string): Promise<void> {
 	await apiRemoveEntry(playlistId, entryId);
 	await refreshPlaylist(playlistId);

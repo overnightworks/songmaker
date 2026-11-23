@@ -286,9 +286,6 @@ const translated = {
     "albumPage.unarchived": "Album aus dem Archiv geholt",
     "albumPage.unarchiveFailed": "Aus dem Archiv holen fehlgeschlagen",
     "albumPage.archiveFailed": "Archivieren fehlgeschlagen",
-    "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => gaps.added + " hinzugefügt, " + gaps.skipped + " übersprungen",
-    "albumPage.addedToPlaylist": "Zur Playlist hinzugefügt",
-    "albumPage.addFailed": "Hinzufügen fehlgeschlagen",
     "albumPage.songsLoadFailed": "Songs konnten nicht geladen werden",
     "albumPage.deleteTitle": (gaps: { readonly title: string }) => "„" + gaps.title + "“ löschen?",
     "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => ({
