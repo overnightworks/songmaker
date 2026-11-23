@@ -82,7 +82,7 @@ beforeEach(() => {
 	toasts.set([]);
 	activeJobs.set([]);
 	vi.stubGlobal('EventSource', SilentEventSource);
-	vi.clearAllMocks();
+	vi.resetAllMocks();
 });
 
 afterEach(() => {
