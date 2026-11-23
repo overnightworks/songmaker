@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { sameOriginHeaders, openPlaylistsPage, openRailNav } from './helpers';
+import { nameStartingWith, sameOriginHeaders, openPlaylistsPage, openRailNav } from './helpers';
 import { archiveOwnedAlbum, seedTake } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -133,7 +133,9 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
 
 		await page.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
-		await page.getByRole('button', { name: words['collectionMenu.cover'], exact: true }).click();
+		await page
+			.getByRole('button', { name: nameStartingWith(words['collectionMenu.cover']) })
+			.click();
 		await page.getByRole('button', { name: words['collectionMenu.upload'], exact: true }).click();
 		await page.locator('.cover-file-input').setInputFiles({
 			name: 'playlist-cover.png',
@@ -167,7 +169,9 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		await wallPlaylistTile.click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
 		await page.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
-		await page.getByRole('button', { name: words['collectionMenu.cover'], exact: true }).click();
+		await page
+			.getByRole('button', { name: nameStartingWith(words['collectionMenu.cover']) })
+			.click();
 		await page
 			.getByRole('button', { name: words['collectionMenu.removeCover'], exact: true })
 			.click();
