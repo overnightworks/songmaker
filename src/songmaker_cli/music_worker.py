@@ -122,7 +122,8 @@ class MusicWorker(WorkerBase):
         self._arq_context = {"redis": self._owner_redis}
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:
-        return (*super().servings(), serve_due_crons(self._owner_redis, self.cron_bodies()))
+        crons = serve_due_crons(self._arq_context["redis"], self.cron_bodies())
+        return (*super().servings(), crons)
 
     def cron_bodies(self) -> dict[Cron, CronBody]:
         return {

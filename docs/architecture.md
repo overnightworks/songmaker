@@ -81,7 +81,7 @@ post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
 
-Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app (through webauth's `front=`) and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id` (a cron job has none), `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
+Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app (through webauth's `front=`) and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id`, `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. A cron run is no arq job and carries no `job_id`: it ends with its own `cron_job.ended` line, carrying `job_function` (the cron's name), `duration_ms` and `outcome`, inside tandem's handling trace of its due key, so an alert on a failed cron reads that line (a failing cron also leaves tandem's `deadline_handling.ended` and `deadline_handler.failed`). The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
 
 ## Job Routing
 
@@ -991,7 +991,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
-| Worker | Job queues in PostgreSQL rows (music + scoring), hosted by arq processes, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
+| Worker | Job queues in PostgreSQL rows (music + scoring), the music worker's own process and the scoring worker hosted by arq, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/songmaker_acestep_worker/` (top-level package, separate from `songmaker_cli`) |
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
@@ -1611,11 +1611,26 @@ SIGKILLed and even the values the run did produce would be lost.
 - `MUSIC_MAX_JOBS` places, 2 by default (concurrent SSE consumers; the actual generation runs on the
   acestep-worker); each job runs within `ARQ_JOB_TIMEOUT`, a LoRA training within
   `LORA_TRAINING_JOB_TIMEOUT`
-- Cron: audits orphaned audio files and applies file-expiry cleanup; once a day
-  (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
+- Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`: no arq. The
+  claiming loop and the crons are the tasks of one `asyncio.TaskGroup`, so a stop signal ends both
+  (a running job drains within `ARQ_DRAIN_TIMEOUT`), and one that raises ends the worker
+  process loudly while the lease is released.
+- Crons: audits orphaned audio files and applies file-expiry cleanup every even minute; once a
+  day (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed (arq hosts these crons). A web process fails a stopped worker's running jobs through the
+  has passed. The four are keys of one tandem `Deadlines` of kind `worker-crons`
+  (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
+  once across all workers, extends the claim while the body runs and calls `done` after it. Redis
+  TIME is the only clock: a run ends with `recur`, which arms the key for the next tick
+  (`next_tick`) computed from it. Each round arms every cron absent from Redis due now, so a
+  missed tick runs once after a restart and a Redis that lost its data costs one more run of
+  the idempotent bodies, never a skipped day; a due key of no known cron is cancelled with a
+  warning. A body that raises is recurred like one that returns and waits for its next tick. A
+  stop gives a running body `CRON_STOP_WAIT_SECONDS` (two thirds of `CRON_CLAIM_FOR_SECONDS`,
+  the part of its claim a stop leaves) before it is cut, so no other worker starts a body that
+  still runs here; a body cut is not recurred and runs again on another worker when its claim
+  runs out. A due time runs up to `CRON_EVERY_SECONDS` late. A web process fails a stopped worker's running jobs through the
   owner lease; see "Owner liveness". Whether a music worker lives is read from the lease family
   `music-worker` and its readiness from its own owner lease; see "Owner liveness".
 - Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
@@ -1648,10 +1663,14 @@ SIGKILLed and even the values the run did produce would be lost.
   disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
   recovery below). Queued work remains in its rows for a replacement worker to claim after a
-  deploy. A worker's arq connection retries a refused or lost connection for
+  deploy. The scoring worker's arq connection retries a refused or lost connection for
   `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
   process's arq pool fails fast. A stop signal ends that retry, so a worker
-  stops within seconds during the outage.
+  stops within seconds during the outage. The music worker has no arq connection: its own
+  client's retry and the loops' next poll ride out an outage.
+- `WorkerBase.run()` is the ctx-free entry of a worker arq does not host: start (database, lease),
+  serve every task of `servings()` in one `TaskGroup`, then end the lease and the pool.
+  The scoring worker still starts through `on_startup(ctx)`.
 - A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
   type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
   the transaction that creates the row, and `jobs.run_after` holds the time a
@@ -1798,13 +1817,13 @@ grace refuses nothing). The async callers (`create_job_with_rate_limit` and the 
 through `AppContext.music_leases`, the stale-job reaper loop and the start-up pass) read the
 roster first and pass it in. The `owner_lapses` loop serves the lapses of this family beside the
 owner family's, so the holders and lapses of ended or expired leases leave Redis. The readiness
-probe `scripts/arq_healthcheck.py music` is ready only when this container start's own owner
+probe `scripts/music_worker_readiness.py` is ready only when this container start's own owner
 lease is live: the worker writes its owner id and PID 1's start ticks (field 22 of `/proc/1/stat`)
 to `MUSIC_WORKER_READINESS_FILE` as the first step of its start, and the probe requires the
 ticks to equal the current ones and `owner_leases(...).state({owner_id})` to read `alive`. A file
 left by an earlier start of the container carries other ticks, so the lease of a stopped worker,
 which lives on for its lifespan, never makes a restarting container ready. The scoring probe
-still reads arq's key.
+(`scripts/arq_healthcheck.py scoring`) still reads arq's key.
 
 The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.

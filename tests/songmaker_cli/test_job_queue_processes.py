@@ -7,10 +7,18 @@ from dataclasses import dataclass
 
 import pytest
 from redis import Redis
-from support.app_processes import WorkerProcess, owners_of, poll_until, times_run
+from support.app_processes import (
+    WorkerProcess,
+    owners_of,
+    poll_until,
+    times_cron_ran,
+    times_run,
+)
 from support.music_jobs import MISSING_VOICE_KEY, queued_music_job
 from support.score_jobs import queued_score_job
 
+from songmaker_cli.constants import CRON_EVERY_SECONDS
+from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobStatus
@@ -162,3 +170,20 @@ def test_a_cancelled_job_is_never_run(queue, web_cluster) -> None:
         deadline_seconds=QUEUE_POLL_INTERVAL_SECONDS + START_MARGIN_SECONDS,
     ), worker.log_tail()
     assert (times_run([worker], cancelled), owners_of(factory, [cancelled])) == (0, {None})
+
+
+def test_two_music_workers_start_together_and_each_cron_ends_once_in_total(web_cluster) -> None:
+    cluster, _ = web_cluster
+    workers = [cluster.start_music_worker("first"), cluster.start_music_worker("second")]
+
+    assert poll_until(
+        lambda: all(times_cron_ran(workers, cron) >= 1 for cron in Cron),
+        deadline_seconds=START_MARGIN_SECONDS,
+    ), [worker.log_tail() for worker in workers]
+    more_than_once = poll_until(
+        lambda: any(times_cron_ran(workers, cron) > 1 for cron in Cron),
+        deadline_seconds=2 * CRON_EVERY_SECONDS,
+    )
+
+    assert not more_than_once, [worker.log_tail() for worker in workers]
+    assert {cron: times_cron_ran(workers, cron) for cron in Cron} == dict.fromkeys(Cron, 1)

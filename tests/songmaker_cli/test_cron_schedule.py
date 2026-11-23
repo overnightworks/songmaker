@@ -135,7 +135,7 @@ def _every_cron_ran(runs: Runs, times: int = 1) -> Callable[[], bool]:
     return lambda: all(runs.count(cron) >= times for cron in Cron)
 
 
-def _run(scenario: Awaitable[None]) -> None:
+def _run_within_a_minute(scenario: Awaitable[None]) -> None:
     async def bounded() -> None:
         async with asyncio.timeout(60):
             await scenario
@@ -158,7 +158,7 @@ def test_each_cron_runs_once_across_two_workers_that_start_together(
                 await until(_every_cron_ran(runs))
                 await until_redis_has_passed(redis, SETTLED)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     assert runs.counts() == dict.fromkeys(Cron, 1)
 
@@ -177,7 +177,7 @@ def test_a_due_time_missed_while_the_worker_was_down_runs_once_after_its_restart
                 await until(lambda: runs.count(Cron.CLEANUP_FILES) == 2)
                 await until_redis_has_passed(redis, SETTLED)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     assert runs.counts() == {**dict.fromkeys(Cron, 1), Cron.CLEANUP_FILES: 2}
 
@@ -192,7 +192,7 @@ def test_a_cron_that_is_not_yet_due_does_not_run(redis_url: str) -> None:
             async with serving(redis_url, runs):
                 await until_redis_has_passed(redis, SETTLED)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     assert runs.started == []
 
@@ -214,7 +214,7 @@ def test_reconciling_while_a_claim_is_held_neither_voids_it_nor_runs_the_cron_tw
                 release.set()
                 await until_redis_has_passed(redis, SETTLED)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     assert counts_while_held == [1]
     assert runs.count(Cron.CLEANUP_FILES) == 1
@@ -232,7 +232,7 @@ def test_a_redis_flush_costs_each_cron_one_more_run(redis_url: str) -> None:
                 await until(_every_cron_ran(runs, times=2))
                 await until_redis_has_passed(redis, SETTLED)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     assert runs.counts() == dict.fromkeys(Cron, 2)
 
@@ -255,7 +255,7 @@ def test_a_raising_body_writes_one_failure_line_naming_its_cron_and_waits_for_it
                 await until_redis_has_passed(redis, SHORT_CLAIM_FOR + SETTLED)
 
     with caplog.at_level(logging.INFO):
-        _run(scenario())
+        _run_within_a_minute(scenario())
 
     ended = [record for record in caplog.records if record.getMessage() == CRON_ENDED_EVENT]
     (failed,) = [record for record in ended if record.outcome == "failed"]
@@ -291,7 +291,7 @@ def test_a_stop_waits_for_the_running_body_recurs_it_and_starts_no_further_key(
                 await until(lambda: len(second_worker.started) == len(Cron) - 1)
                 await until_redis_has_passed(redis, SETTLED)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     held, = first_worker.started
     assert stopped_while_waiting == [False]
@@ -333,7 +333,7 @@ def test_a_body_that_outlasts_the_stop_wait_is_cut_not_recurred_and_not_run_else
                     first_ended_at_ms.append(await redis_ms(redis))
                     await until(lambda: second_started_at_ms)
 
-    _run(scenario())
+    _run_within_a_minute(scenario())
 
     wait_ms = int(STOP_WAIT.total_seconds() * 1000)
     assert cut_bodies == [long_cron]
@@ -357,7 +357,7 @@ def test_an_unknown_due_key_is_cancelled_with_one_warning_naming_it(
             assert not await cron_deadlines(redis).cancel(unknown_key)
 
     with caplog.at_level(logging.WARNING):
-        _run(scenario())
+        _run_within_a_minute(scenario())
 
     warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
     assert [warning.cron_key for warning in warnings] == [unknown_key]

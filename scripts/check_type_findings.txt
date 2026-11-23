@@ -222,10 +222,6 @@ src/songmaker_cli/memory_api.py :: pydantic-orm :: "MemoryScopeResponse" does no
 src/songmaker_cli/memory_api.py :: pydantic-orm :: "MemoryScopeResponse" does not have from_attributes=True
 src/songmaker_cli/memory_api.py :: pydantic-orm :: "MemoryScopeResponse" does not have from_attributes=True
 src/songmaker_cli/messages.py :: arg-type :: Argument 3 to "text" has incompatible type "**Mapping[str, str]"; expected "int | None"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[None]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
 src/songmaker_cli/playlist_api.py :: arg-type :: Argument 2 to "can_access_album" has incompatible type "AuthenticatedUser"; expected "Actor"
 src/songmaker_cli/playlist_api.py :: arg-type :: Argument 2 to "public_share_url" has incompatible type "str | None"; expected "str"
 src/songmaker_cli/playlist_api.py :: pydantic-orm :: "PlaylistDetailResponse" does not have from_attributes=True
@@ -272,7 +268,6 @@ src/songmaker_cli/scoring/subprocess_runner.py :: union-attr :: Item "None" of "
 src/songmaker_cli/scoring/subprocess_runner.py :: union-attr :: Item "None" of "Process | None" has no attribute "start"
 src/songmaker_cli/scoring/text_accuracy.py :: attr-defined :: "object" has no attribute "transcribe"
 src/songmaker_cli/scoring_worker.py :: arg-type :: Argument 1 to "func" has incompatible type "Callable[..., Awaitable[Any]]"; expected "str | Function | WorkerCoroutine"
-src/songmaker_cli/scoring_worker.py :: var-annotated :: Need type annotation for "cron_jobs" (hint: "cron_jobs: list[<type>] = ...")
 src/songmaker_cli/server.py :: misc :: Cannot infer type of lambda
 src/songmaker_cli/settings_api.py :: pydantic-orm :: "PresetResponse" does not have from_attributes=True
 src/songmaker_cli/settings_api.py :: pydantic-orm :: "PresetResponse" does not have from_attributes=True
