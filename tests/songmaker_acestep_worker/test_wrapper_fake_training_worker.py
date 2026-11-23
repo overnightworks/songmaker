@@ -15,7 +15,6 @@ from support.wrapper_deps import settled_fake_redis
 
 from songmaker_acestep_worker.heartbeat import worker_state_key
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
-from songmaker_cli.settings import get_settings
 
 _FIXTURE_PATH = Path(__file__).parents[1] / "support" / "fake_training_worker.py"
 _fixture_spec = importlib.util.spec_from_file_location("fake_training_worker", _FIXTURE_PATH)
@@ -66,11 +65,11 @@ def _events(stream: str) -> list[tuple[str, dict[str, object]]]:
 
 
 def test_fake_worker_registers_with_the_internal_api(
-    tmp_path: Path, mock_arq_pool, pg_factory,
+    tmp_path: Path, mock_arq_pool, pg_factory, internal_token: str,
 ) -> None:
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",
-        internal_token=get_settings().songmaker_internal_token.get_secret_value(),
+        internal_token=internal_token,
         audio_dir=tmp_path,
         output_dir=tmp_path / "worker-output",
     )
@@ -89,11 +88,11 @@ def test_fake_worker_registers_with_the_internal_api(
     assert response.json()["worker_id"] == FAKE_WORKER_ID
 
 
-def test_fake_worker_publishes_the_worker_heartbeat(tmp_path: Path) -> None:
+def test_fake_worker_publishes_the_worker_heartbeat(tmp_path: Path, internal_token: str) -> None:
     redis = settled_fake_redis()
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",
-        internal_token=get_settings().songmaker_internal_token.get_secret_value(),
+        internal_token=internal_token,
         audio_dir=tmp_path,
         output_dir=tmp_path / "worker-output",
         control_plane_url="",
@@ -114,14 +113,16 @@ def test_fake_worker_publishes_the_worker_heartbeat(tmp_path: Path) -> None:
     assert state["loaded"] == []
 
 
-def test_fake_worker_emits_epoch_progress_and_an_adapter_result(tmp_path: Path) -> None:
+def test_fake_worker_emits_epoch_progress_and_an_adapter_result(
+    tmp_path: Path, internal_token: str,
+) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
     (dataset_dir / "sample.caption.txt").write_text("voice", encoding="utf-8")
     output_dir = tmp_path / "output"
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",
-        internal_token=get_settings().songmaker_internal_token.get_secret_value(),
+        internal_token=internal_token,
         audio_dir=tmp_path,
         output_dir=tmp_path / "worker-output",
         control_plane_url="",

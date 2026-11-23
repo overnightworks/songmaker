@@ -409,12 +409,10 @@ def test_t22_another_persons_shared_take_stays_private_under_audio_and_public_un
 
 
 def test_t23_a_bearer_alone_does_not_register_a_worker_and_the_internal_token_still_does(
-    token_world: TokenWorld,
+    token_world: TokenWorld, internal_token: str,
 ) -> None:
-    from songmaker_cli.settings import get_settings
-
     worker = {"worker_id": "w1", "host": "gpu-1", "port": 8001}
-    internal = {"X-Internal-Token": get_settings().songmaker_internal_token.get_secret_value()}
+    internal = {"X-Internal-Token": internal_token}
 
     bearer_only = token_world.client.post(
         "/api/internal/workers/register", json=worker, headers=token_world.bearer(),
