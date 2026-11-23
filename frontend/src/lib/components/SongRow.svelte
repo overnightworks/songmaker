@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
@@ -42,8 +42,11 @@
 
 	let titleField: EditableTitle | undefined = $state();
 
+	const isRenaming = $derived(Boolean(renaming));
+
+	// Starts the edit once when renaming turns on; startEdit's own reads (saving, value) must not re-run it.
 	$effect(() => {
-		if (renaming) titleField?.startEdit();
+		if (isRenaming && titleField) untrack(() => titleField?.startEdit());
 	});
 
 	const controlCount = $derived(Number(Boolean(onedit)) + Number(Boolean(menu)));
