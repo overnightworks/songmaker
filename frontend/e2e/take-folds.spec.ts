@@ -46,7 +46,7 @@ const toolbar = (page: Page) => workspace(page).locator('.selection-toolbar');
 async function tickTakes(page: Page, ...ids: string[]): Promise<void> {
 	for (const id of ids)
 		await takeRow(page, id)
-			.locator('.play-btn')
+			.locator('.take-summary')
 			.click({ modifiers: ['ControlOrMeta'] });
 }
 
@@ -531,7 +531,7 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 	}) => {
 		const song = await seedFoldedSong(page, albumId, 'phone-playing');
 		await openTakes(page, song);
-		await takeRow(page, song.v2[0]).locator('.play-btn').click();
+		await takeRow(page, song.v2[0]).locator('.take-summary').click();
 		await tickTakes(page, song.v2[1]);
 		await expectSelected(page, 1);
 

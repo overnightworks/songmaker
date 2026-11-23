@@ -31,6 +31,7 @@ export interface DeckDouble {
 	ended: boolean;
 	closed: boolean;
 	retries: number;
+	drops: number;
 	seeks: number[];
 	scrubs: number[];
 }
@@ -56,6 +57,7 @@ export function continuousDeckModule() {
 		ended = false;
 		closed = false;
 		retries = 0;
+		drops = 0;
 		seeks: number[] = [];
 		scrubs: number[] = [];
 
@@ -103,6 +105,11 @@ export function continuousDeckModule() {
 			return new Promise((_resolve, reject) =>
 				this.requests.push({ take, url, placement, fail: reject })
 			);
+		}
+
+		dropAhead(): Promise<void> {
+			this.drops += 1;
+			return Promise.resolve();
 		}
 
 		endStream(): Promise<void> {

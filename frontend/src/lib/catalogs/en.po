@@ -2425,14 +2425,6 @@ msgctxt "takesList.retry"
 msgid "Try again"
 msgstr ""
 
-msgctxt "takesList.aboutTakes"
-msgid "About takes"
-msgstr ""
-
-msgctxt "takesList.mobileHint"
-msgid "Tap play → details in Now Playing"
-msgstr ""
-
 msgctxt "takesList.empty"
 msgid "No takes yet · {generate} makes the first"
 msgstr ""
@@ -2583,18 +2575,6 @@ msgstr ""
 
 msgctxt "takeRow.selectTake"
 msgid "Select {take}"
-msgstr ""
-
-msgctxt "takeRow.playTake"
-msgid "Play {take}"
-msgstr ""
-
-msgctxt "takeRow.pauseTake"
-msgid "Pause {take}"
-msgstr ""
-
-msgctxt "takeRow.retryTake"
-msgid "Retry {take}"
 msgstr ""
 
 msgctxt "takeRow.pickTake"
@@ -5453,6 +5433,10 @@ msgctxt "transport.shufflePlaylist"
 msgid "Shuffle this playlist"
 msgstr ""
 
+msgctxt "transport.shuffleSong"
+msgid "Shuffle this song"
+msgstr ""
+
 msgctxt "transport.unshuffleLibrary"
 msgid "Disable shuffle (all albums)"
 msgstr ""
@@ -5463,6 +5447,10 @@ msgstr ""
 
 msgctxt "transport.unshufflePlaylist"
 msgid "Disable shuffle (this playlist)"
+msgstr ""
+
+msgctxt "transport.unshuffleSong"
+msgid "Disable shuffle (this song)"
 msgstr ""
 
 msgctxt "player.openNowPlaying"
@@ -5507,10 +5495,6 @@ msgstr ""
 
 msgctxt "player.takeNotInQueue"
 msgid "This take is not in the queue"
-msgstr ""
-
-msgctxt "player.playTakeFailed"
-msgid "Playback failed"
 msgstr ""
 
 msgctxt "player.takeSkipped"
@@ -5625,12 +5609,20 @@ msgctxt "nowPlaying.fromSource"
 msgid "from {title}"
 msgstr ""
 
+msgctxt "nowPlaying.queueAgain"
+msgid "{title} again"
+msgstr ""
+
 msgctxt "nowPlaying.openAlbumSource"
 msgid "from {title} — open album"
 msgstr ""
 
 msgctxt "nowPlaying.openPlaylistSource"
 msgid "from {title} — open playlist"
+msgstr ""
+
+msgctxt "nowPlaying.openSongSource"
+msgid "from {title} — open song"
 msgstr ""
 
 msgctxt "nowPlaying.takeVersioned"

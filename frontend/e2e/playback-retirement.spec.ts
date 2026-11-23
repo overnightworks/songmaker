@@ -7,7 +7,6 @@ import {
 	FlowGuard,
 	leftTheApp,
 	nextSignInStart,
-	nameStartingWith,
 	HOME_PATH,
 	observePlayingAudio,
 	openLibraryWall,
@@ -143,10 +142,7 @@ function transport(page: Page, label: string) {
 }
 
 async function playTake(page: Page, slow = true): Promise<void> {
-	await workspace(page)
-		.locator('.take-row')
-		.getByRole('button', { name: nameStartingWith(words['transport.play']) })
-		.click();
+	await workspace(page).locator('.take-row .take-summary').click();
 	await expect(transport(page, words['transport.pause'])).toHaveAttribute('aria-busy', 'false');
 	if (slow) {
 		await page.evaluate((rate) => {

@@ -1,4 +1,4 @@
-// A queue plays on by itself (#1187 P1, P6): when a take ends, the next one
+// A queue plays on by itself (#1187 P1): when a take ends, the next one
 // starts without a tap, and it was already loading while the first one played
 // (P5: no server-side concat before the first byte, so the next take's own
 // request is the preload). Where the browser appends MP3 into one source, as
@@ -8,7 +8,7 @@
 // Both shells walk every flow. The seeded takes are three seconds long, so a
 // real track change happens inside the flow's own time.
 
-import { expect, request, test, type APIRequestContext, type Page } from './coverage-test';
+import { expect, request, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import {
 	FlowGuard,
@@ -21,19 +21,12 @@ import {
 import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import {
 	BASE_URL,
-	archiveOwnedAlbum,
 	readSeededLibrary,
-	runMarker,
-	seedAccount,
 	seedPlaylist,
-	seedUnpickedLibrary,
-	signedInApi,
 	STORAGE_STATE_FILE,
-	type SeededAccount,
 	type SeededLibrary,
 	type SeededTake,
-	type SeededTrack,
-	type SeededUnpickedLibrary
+	type SeededTrack
 } from './seed';
 
 // A three-second take plus the next take's start, with room for a slow runner.
@@ -497,46 +490,4 @@ test('an album whose second take is refused names it once, when playback reaches
 	await playsUntilUpNextNames(third);
 	await playsUntilUpNextNames(first);
 	expect(toasts.count(skipped)).toBe(1);
-});
-
-test.describe('on a fresh account', () => {
-	let account: SeededAccount;
-	let accountApi: APIRequestContext;
-	let unpicked: SeededUnpickedLibrary;
-
-	test.beforeAll(async () => {
-		account = await seedAccount(`e2e-queue-${test.info().project.name}-${runMarker()}`);
-		accountApi = await signedInApi(account);
-		unpicked = await seedUnpickedLibrary(accountApi);
-	});
-
-	test.afterAll(async () => {
-		// The admin's Search lists every account's live albums.
-		await archiveOwnedAlbum(accountApi, unpicked.albumId);
-		await accountApi.dispose();
-	});
-
-	test('a take row in a library with nothing picked continues through its album', async ({
-		page,
-		context
-	}, testInfo) => {
-		const guard = new FlowGuard(page);
-		const [first, second] = unpicked.tracks;
-		await context.clearCookies();
-		await context.addCookies(account.cookies);
-		const surface = workspace(page);
-
-		await page.goto(`/album/${unpicked.albumId}`);
-		await surface
-			.getByRole('button', { name: words['songRow.openInEditor']({ title: first.songTitle }) })
-			.click();
-		if (shellOf(testInfo) === 'mobile')
-			await surface.getByRole('tab', { name: words['songTabs.takes'] }).click();
-		const take = surface.locator('.take-row');
-		await expect(take).toHaveCount(1);
-		await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
-
-		await expectTransportMovesOn(page, first, second);
-		guard.assertClean();
-	});
 });

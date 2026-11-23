@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { words } from '../src/lib/words/en';
 import { workspace, type Shell } from './helpers';
 
@@ -26,4 +26,28 @@ export async function openNowPlayingFromBar(
 			exact: true
 		})
 		.click();
+}
+
+/**
+ * Now Playing's This take panel, raised from the bar. On the phone the panel
+ * is a sheet: a song of one take opens it already (and on This take), a
+ * song of several leaves it shut behind the tab strip's trigger.
+ */
+export async function openThisTakeFromBar(
+	page: Page,
+	shell: Shell,
+	songTitle: string
+): Promise<void> {
+	await openNowPlayingFromBar(page, shell, songTitle);
+	const takeTab = page.getByRole('tab', { name: words['nowPlaying.takeTab'] });
+	if (shell === 'mobile') {
+		const closedSheetTrigger = page.getByRole('dialog', { name: songTitle }).getByRole('button', {
+			name: new RegExp(`${words['nowPlaying.queueTab']}$`),
+			expanded: false
+		});
+		// The sheet either opens itself on mount or waits behind its trigger.
+		await expect(takeTab.or(closedSheetTrigger)).toBeVisible();
+		if (await closedSheetTrigger.isVisible()) await closedSheetTrigger.click();
+	}
+	await takeTab.click();
 }

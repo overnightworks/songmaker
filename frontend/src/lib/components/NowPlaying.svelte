@@ -57,8 +57,8 @@
 	let { info }: { info: PlaybackInfo } = $props();
 
 	// Seeded once from the shared request store, not bound to it: a take-row
-	// click (playTakeAndShowNowPlaying) leaves it on 'take' before opening
-	// this surface, while PlayerBar's own Now Playing button opens on the tab
+	// click (playPlaylistEntryAndShowNowPlaying) leaves it on 'take' before
+	// opening this surface, while PlayerBar's own Now Playing button opens on the tab
 	// its queue calls for. Each open is a fresh mount, so this stays correct
 	// without the tab flipping under the listener while the panel is open.
 	let rightPanelTab: 'queue' | 'take' = $state(get(nowPlayingPanel));
@@ -85,7 +85,9 @@
 	);
 	const skipped = $derived(isLibraryQueue ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
-	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current));
+	// The again line follows which takes of a song queue can still play, which
+	// songs decides.
+	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current, songs));
 	const source: NowPlayingSource | null = $derived.by(() => {
 		const playing = $playbackSource;
 		return playing ? { ...playing, open: () => leaveFor(() => openSource(playing)) } : null;
@@ -185,6 +187,7 @@
 	}
 
 	function openSource(source: PlaybackSource): Promise<void> {
+		if (source.kind === 'song') return navigateToPlaying();
 		return source.kind === 'album' ? openAlbum(source.id) : openPlaylist(source.id);
 	}
 

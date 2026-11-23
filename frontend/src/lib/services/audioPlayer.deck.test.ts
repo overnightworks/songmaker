@@ -18,9 +18,10 @@ vi.mock('./continuousDeck', async () =>
 );
 
 let fakeAudio: FakeAudio;
+let createdAudios: FakeAudio[];
 
 beforeEach(() => {
-	({ fakeAudio } = stubPlayerGlobals());
+	({ fakeAudio, createdAudios } = stubPlayerGlobals());
 	vi.stubGlobal('MediaSource', vi.fn());
 	continuousDecks.supported = true;
 	continuousDecks.attached = [];
@@ -157,5 +158,25 @@ describe('the continuous deck, REQ-PLAYER-20 to REQ-PLAYER-23', () => {
 
 		expect(onTakeSkipped).toHaveBeenCalledWith(second);
 		expect(attachedDeck().requests.map((request) => request.take)).toEqual([first, second, third]);
+	});
+
+	it('gives up the take held ahead once no take is to follow the playing one, and only once', () => {
+		playFirstWithSecondAppended();
+
+		audioPlayer.withdrawPreload();
+		audioPlayer.withdrawPreload();
+
+		expect(attachedDeck().drops).toBe(1);
+	});
+
+	it('takes the standby take back when the queue plays on two decks', () => {
+		continuousDecks.supported = false;
+		audioPlayer.load(first);
+		audioPlayer.preload(second);
+		const standby = createdAudios.at(-1);
+
+		audioPlayer.withdrawPreload();
+
+		expect(standby?.src).toBe('');
 	});
 });

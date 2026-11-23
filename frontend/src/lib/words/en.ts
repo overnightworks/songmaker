@@ -592,8 +592,6 @@ export type Words = {
     readonly "takesList.loading": string;
     readonly "takesList.error": string;
     readonly "takesList.retry": string;
-    readonly "takesList.aboutTakes": string;
-    readonly "takesList.mobileHint": string;
     readonly "takesList.empty": (gaps: { readonly generate: string }) => string;
     readonly "takesList.draftUnsaved": (gaps: { readonly next: string }) => string;
     readonly "takesList.draftDiffers": (gaps: { readonly latest: string; readonly next: string }) => string;
@@ -623,9 +621,6 @@ export type Words = {
     readonly "takeRow.takeUnversioned": (gaps: { readonly take: string }) => string;
     readonly "takeRow.archivedTitle": string;
     readonly "takeRow.selectTake": (gaps: { readonly take: string }) => string;
-    readonly "takeRow.playTake": (gaps: { readonly take: string }) => string;
-    readonly "takeRow.pauseTake": (gaps: { readonly take: string }) => string;
-    readonly "takeRow.retryTake": (gaps: { readonly take: string }) => string;
     readonly "takeRow.pickTake": (gaps: { readonly take: string }) => string;
     readonly "takeRow.unpickTake": (gaps: { readonly take: string }) => string;
     readonly "takeRow.keepTake": (gaps: { readonly take: string }) => string;
@@ -1328,9 +1323,11 @@ export type Words = {
     readonly "transport.shuffleLibrary": string;
     readonly "transport.shuffleAlbum": string;
     readonly "transport.shufflePlaylist": string;
+    readonly "transport.shuffleSong": string;
     readonly "transport.unshuffleLibrary": string;
     readonly "transport.unshuffleAlbum": string;
     readonly "transport.unshufflePlaylist": string;
+    readonly "transport.unshuffleSong": string;
     readonly "player.openNowPlaying": (gaps: { readonly title: string }) => string;
     readonly "player.loading": string;
     readonly "player.nothingToPlay": string;
@@ -1342,7 +1339,6 @@ export type Words = {
     readonly "player.keepsQueueFailed": string;
     readonly "player.allTakesQueueFailed": string;
     readonly "player.takeNotInQueue": string;
-    readonly "player.playTakeFailed": string;
     readonly "player.takeSkipped": (gaps: { readonly title: string }) => string;
     readonly "collectionHeader.playAlbum": string;
     readonly "collectionHeader.pauseAlbum": string;
@@ -1371,8 +1367,10 @@ export type Words = {
     readonly "nowPlaying.queueHeading": (gaps: { readonly source: string }) => string;
     readonly "nowPlaying.upNext": (gaps: { readonly title: string }) => string;
     readonly "nowPlaying.fromSource": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.queueAgain": (gaps: { readonly title: string }) => string;
     readonly "nowPlaying.openAlbumSource": (gaps: { readonly title: string }) => string;
     readonly "nowPlaying.openPlaylistSource": (gaps: { readonly title: string }) => string;
+    readonly "nowPlaying.openSongSource": (gaps: { readonly title: string }) => string;
     readonly "nowPlaying.takeVersioned": (gaps: { readonly take: string; readonly version: string }) => string;
     readonly "nowPlaying.takeUnversioned": (gaps: { readonly take: string }) => string;
     readonly "nowPlaying.takeDetailsFailed": string;
@@ -2147,8 +2145,6 @@ export const words: Words = {
     "takesList.loading": "Loading takes…",
     "takesList.error": "Failed to load takes",
     "takesList.retry": "Try again",
-    "takesList.aboutTakes": "About takes",
-    "takesList.mobileHint": "Tap play → details in Now Playing",
     "takesList.empty": (gaps: { readonly generate: string }) => "No takes yet · " + gaps.generate + " makes the first",
     "takesList.draftUnsaved": (gaps: { readonly next: string }) => "Draft — unsaved changes. Generate creates v" + gaps.next + ".",
     "takesList.draftDiffers": (gaps: { readonly latest: string; readonly next: string }) => "Draft — differs from v" + gaps.latest + ". Generate creates v" + gaps.next + ".",
@@ -2241,9 +2237,6 @@ export const words: Words = {
     "takeRow.takeUnversioned": (gaps: { readonly take: string }) => "take " + gaps.take,
     "takeRow.archivedTitle": "Archived take",
     "takeRow.selectTake": (gaps: { readonly take: string }) => "Select " + gaps.take,
-    "takeRow.playTake": (gaps: { readonly take: string }) => "Play " + gaps.take,
-    "takeRow.pauseTake": (gaps: { readonly take: string }) => "Pause " + gaps.take,
-    "takeRow.retryTake": (gaps: { readonly take: string }) => "Retry " + gaps.take,
     "takeRow.pickTake": (gaps: { readonly take: string }) => "Pick " + gaps.take,
     "takeRow.unpickTake": (gaps: { readonly take: string }) => "Unpick " + gaps.take,
     "takeRow.keepTake": (gaps: { readonly take: string }) => "Keep " + gaps.take,
@@ -3030,9 +3023,11 @@ export const words: Words = {
     "transport.shuffleLibrary": "Shuffle all albums",
     "transport.shuffleAlbum": "Shuffle this album",
     "transport.shufflePlaylist": "Shuffle this playlist",
+    "transport.shuffleSong": "Shuffle this song",
     "transport.unshuffleLibrary": "Disable shuffle (all albums)",
     "transport.unshuffleAlbum": "Disable shuffle (this album)",
     "transport.unshufflePlaylist": "Disable shuffle (this playlist)",
+    "transport.unshuffleSong": "Disable shuffle (this song)",
     "player.openNowPlaying": (gaps: { readonly title: string }) => gaps.title + " — open Now Playing",
     "player.loading": "Loading",
     "player.nothingToPlay": "Nothing to play yet",
@@ -3044,7 +3039,6 @@ export const words: Words = {
     "player.keepsQueueFailed": "+ Keeps queue failed. Press play to retry.",
     "player.allTakesQueueFailed": "All takes queue failed. Press play to retry.",
     "player.takeNotInQueue": "This take is not in the queue",
-    "player.playTakeFailed": "Playback failed",
     "player.takeSkipped": (gaps: { readonly title: string }) => gaps.title + " couldn't be loaded, skipped.",
     "collectionHeader.playAlbum": "Play album",
     "collectionHeader.pauseAlbum": "Pause album",
@@ -3073,8 +3067,10 @@ export const words: Words = {
     "nowPlaying.queueHeading": (gaps: { readonly source: string }) => "Queue · " + gaps.source,
     "nowPlaying.upNext": (gaps: { readonly title: string }) => "Up next: " + gaps.title,
     "nowPlaying.fromSource": (gaps: { readonly title: string }) => "from " + gaps.title,
+    "nowPlaying.queueAgain": (gaps: { readonly title: string }) => gaps.title + " again",
     "nowPlaying.openAlbumSource": (gaps: { readonly title: string }) => "from " + gaps.title + " — open album",
     "nowPlaying.openPlaylistSource": (gaps: { readonly title: string }) => "from " + gaps.title + " — open playlist",
+    "nowPlaying.openSongSource": (gaps: { readonly title: string }) => "from " + gaps.title + " — open song",
     "nowPlaying.takeVersioned": (gaps: { readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take,
     "nowPlaying.takeUnversioned": (gaps: { readonly take: string }) => "take " + gaps.take,
     "nowPlaying.takeDetailsFailed": "Failed to load take details",

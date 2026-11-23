@@ -1,69 +1,23 @@
-import { makeGeneration } from '#lib/test-utils/factories.ts';
+import { makeTakeOfVersion, makeTakesAcrossVersions } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem } from '#lib/api/types.ts';
 import { selectedSongId } from './player';
 import {
-	groupTakes,
 	isGroupOpen,
 	renderedTakes,
 	revealTakeGroup,
 	settleTakeFolds,
 	takeFolds,
-	takeGroupKey,
 	toggleTakeGroup
 } from './takeFolds';
+import { groupTakes } from '#lib/utils/takeGroups.ts';
 
-function takeOf(id: string, versionNumber: number | null, overrides: Partial<GenerationItem> = {}) {
-	return makeGeneration({
-		id,
-		version_id: versionNumber === null ? null : `ver-${versionNumber}`,
-		version_number: versionNumber,
-		...overrides
-	});
-}
-
-const SONG_TAKES = [
-	takeOf('c1', 3),
-	takeOf('a1', 2, { is_picked: true }),
-	takeOf('a2', 2, { is_archived: true }),
-	takeOf('o1', 1, { is_archived: true }),
-	takeOf('i1', null)
-];
+const SONG_TAKES = makeTakesAcrossVersions();
 
 let songSequence = 0;
 
 beforeEach(() => {
 	selectedSongId.set(`song-${(songSequence += 1)}`);
-});
-
-describe('groupTakes (rules 1, 2 and 5, cells 1/8/9)', () => {
-	it('puts the latest version first, the earlier ones newest first and Imported last', () => {
-		const groups = groupTakes(SONG_TAKES, 3);
-
-		expect(groups.current?.key).toBe('v3');
-		expect(groups.earlier.map((group) => group.key)).toEqual(['v2', 'v1', 'imported']);
-	});
-
-	it('counts the archived takes of a group and names its album pick', () => {
-		const [second, first] = groupTakes(SONG_TAKES, 3).earlier;
-
-		expect(second.archivedCount).toBe(1);
-		expect(second.pick?.id).toBe('a1');
-		expect(first.archivedCount).toBe(1);
-		expect(first.pick).toBeNull();
-	});
-
-	it('keeps the current version with no takes, and none at all for a song with no saved version', () => {
-		expect(groupTakes([takeOf('a1', 2)], 3).current?.generations).toEqual([]);
-		expect(groupTakes([takeOf('a1', 2)], null).current).toBeNull();
-	});
-
-	it('names the group of a take by its version, and Imported when it has none', () => {
-		expect(takeGroupKey(takeOf('c1', 3))).toBe('v3');
-		expect(takeGroupKey(takeOf('i1', null))).toBe('imported');
-		expect(takeGroupKey(takeOf('i2', 3, { version_id: null }))).toBe('imported');
-	});
 });
 
 describe('the rendered takes (rules 1 and 3, cells 3/5)', () => {
@@ -123,7 +77,7 @@ describe('revealTakeGroup (rule 10, cell 43)', () => {
 });
 
 describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
-	const importedOnly = [takeOf('i1', null)];
+	const importedOnly = [makeTakeOfVersion('i1', null)];
 
 	it('when no version of the song holds a take', () => {
 		const groups = groupTakes(importedOnly, 1);
@@ -142,7 +96,7 @@ describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
 	});
 
 	it('not when a version holds a take', () => {
-		const groups = groupTakes([...importedOnly, takeOf('c1', 1)], 1);
+		const groups = groupTakes([...importedOnly, makeTakeOfVersion('c1', 1)], 1);
 		settleTakeFolds(groups);
 
 		expect(isGroupOpen(get(takeFolds), groups, 'imported')).toBe(false);
@@ -150,7 +104,7 @@ describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
 
 	it('keeps the default through a take arriving on a version', () => {
 		settleTakeFolds(groupTakes(importedOnly, 1));
-		const later = groupTakes([...importedOnly, takeOf('c1', 1)], 1);
+		const later = groupTakes([...importedOnly, makeTakeOfVersion('c1', 1)], 1);
 		settleTakeFolds(later);
 
 		expect(isGroupOpen(get(takeFolds), later, 'imported')).toBe(true);

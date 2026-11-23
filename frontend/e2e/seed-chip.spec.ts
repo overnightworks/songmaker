@@ -175,7 +175,7 @@ test(
 		const songs = await seedSongs();
 		await page.goto(`/album/${albumId}`);
 		await openSong(page, songs.otherTitle);
-		await workspace(page).locator('.take-row').last().locator('.play-btn').click();
+		await workspace(page).locator('.take-row').last().locator('.take-summary').click();
 		await page.goBack();
 		await openSong(page, songs.title);
 		await page

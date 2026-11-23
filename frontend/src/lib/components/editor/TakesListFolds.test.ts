@@ -13,7 +13,8 @@ import {
 	selectionMode,
 	toggleSelection
 } from '#lib/stores/selection.ts';
-import { toggleTakeGroup, groupTakes } from '#lib/stores/takeFolds.ts';
+import { toggleTakeGroup } from '#lib/stores/takeFolds.ts';
+import { groupTakes } from '#lib/utils/takeGroups.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
@@ -283,7 +284,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		const row = target.querySelector<HTMLElement>('#take-a3');
 		expect(row?.textContent).toContain(words['takeRow.archived']);
 		expect(row?.textContent).toContain('1:01');
-		expect(row?.querySelector('.play-btn, .pick-btn, .keep-btn, .score-badge')).toBeNull();
+		expect(row?.querySelector('.pick-btn, .keep-btn, .score-badge')).toBeNull();
 		expect(row?.querySelector('.take-origin, .take-voice')).toBeNull();
 		expect(row?.querySelector('[aria-label="' + words['takeMenu.label'] + '"]')).not.toBeNull();
 	});

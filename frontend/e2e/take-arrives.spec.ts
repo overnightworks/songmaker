@@ -80,9 +80,7 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 			generationStartedOffsetSeconds: 30
 		});
 		const panel = page.getByRole('tabpanel');
-		const playButtons = panel.getByRole('button', {
-			name: new RegExp(`^${words['transport.play']} v`)
-		});
+		const takeRows = panel.locator('.take-summary');
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
@@ -95,7 +93,7 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 				words['takesList.currentHead'](SEEDED_TAKE_COUNT, { number: String(seeded.versionNumber) })
 			)
 		).toBeVisible();
-		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT);
+		await expect(takeRows).toHaveCount(SEEDED_TAKE_COUNT);
 
 		await completeGenerationJobWithoutEvent(jobId);
 
@@ -109,7 +107,7 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 				})
 			)
 		).toBeVisible();
-		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 2);
+		await expect(takeRows).toHaveCount(SEEDED_TAKE_COUNT + 2);
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
 		await expect(page.getByRole('tab', { name: words['songTabs.takes'] })).toHaveAttribute(
 			'aria-selected',
