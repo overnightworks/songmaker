@@ -258,6 +258,7 @@ function albumQueueTakeIds(): string[] {
 }
 
 beforeEach(() => {
+	setLibraryTakePool('mix');
 	vi.mocked(fetchSongs).mockResolvedValue({
 		items: [],
 		total: 0,
@@ -290,7 +291,6 @@ afterEach(() => {
 	queueContext.set({ type: 'library' });
 	selectedPlaylistDetail.set(null);
 	setShuffle(false);
-	setLibraryTakePool('mix');
 	playStartNotice.set('idle');
 	libraryQueueSkipped.set([]);
 	libraryQueueSkippedComplete.set(true);
