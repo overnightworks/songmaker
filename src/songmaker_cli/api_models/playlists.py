@@ -23,7 +23,7 @@ from songmaker_cli.whisper_cues import WhisperCue
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Album, Playlist, PlaylistEntry
-    from songmaker_cli.db.queries.playlists import PlaylistAlbumAddResult, PlaylistAlbumSkip
+    from songmaker_cli.db.queries.playlists import PlaylistAddResult, PlaylistAddSkip
 
 log = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ class AddPlaylistToPlaylistRequest(BaseModel):
     source_playlist_id: str
 
 
-class PlaylistAlbumSkipResponse(BaseModel):
+class PlaylistAddSkipResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     song_id: str
@@ -239,7 +239,7 @@ class PlaylistAlbumSkipResponse(BaseModel):
     reason: str
 
     @classmethod
-    def from_orm(cls, skip: PlaylistAlbumSkip) -> PlaylistAlbumSkipResponse:
+    def from_orm(cls, skip: PlaylistAddSkip) -> PlaylistAddSkipResponse:
         return cls(song_id=skip.song_id, title=skip.title, reason=skip.reason)
 
 
@@ -249,13 +249,13 @@ class AddEntriesToPlaylistResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     added_count: int
-    skipped: list[PlaylistAlbumSkipResponse]
+    skipped: list[PlaylistAddSkipResponse]
 
     @classmethod
-    def from_orm(cls, result: PlaylistAlbumAddResult) -> AddEntriesToPlaylistResponse:
+    def from_orm(cls, result: PlaylistAddResult) -> AddEntriesToPlaylistResponse:
         return cls(
             added_count=len(result.entries),
-            skipped=[PlaylistAlbumSkipResponse.from_orm(skip) for skip in result.skipped],
+            skipped=[PlaylistAddSkipResponse.from_orm(skip) for skip in result.skipped],
         )
 
 

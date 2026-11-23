@@ -30,16 +30,16 @@ PLAYLIST_SKIP_MISSING_AUDIO: Final = "missing_audio"
 
 
 @dataclass(frozen=True)
-class PlaylistAlbumSkip:
+class PlaylistAddSkip:
     song_id: str
     title: str
     reason: str
 
 
 @dataclass(frozen=True)
-class PlaylistAlbumAddResult:
+class PlaylistAddResult:
     entries: list[PlaylistEntry]
-    skipped: list[PlaylistAlbumSkip]
+    skipped: list[PlaylistAddSkip]
 
 
 @dataclass(frozen=True)
@@ -219,7 +219,7 @@ def add_album_to_playlist(
     playlist_id: str,
     album_id: str,
     is_readable: Callable[[Generation], bool],
-) -> PlaylistAlbumAddResult:
+) -> PlaylistAddResult:
     album = (
         session.query(Album)
         .options(
@@ -242,7 +242,7 @@ def add_playlist_entries_to_playlist(
     playlist_id: str,
     source_entries: Sequence[PlaylistEntry],
     is_readable: Callable[[Generation], bool],
-) -> PlaylistAlbumAddResult:
+) -> PlaylistAddResult:
     """Append the playable takes of the source entries, in their order, to the playlist.
 
     The caller passes the entries its source view shows; an entry the view hides is neither
@@ -272,7 +272,7 @@ def _candidate(
 
 def _append_candidates(
     session: Session, playlist_id: str, candidates: Sequence[_Candidate],
-) -> PlaylistAlbumAddResult:
+) -> PlaylistAddResult:
     """Lock the candidates' takes in id order, then append each one still playable, in order.
 
     A take archived or deleted before its lock is granted is skipped like one that was
@@ -286,17 +286,17 @@ def _append_candidates(
         )
     }
     entries: list[PlaylistEntry] = []
-    skipped: list[PlaylistAlbumSkip] = []
+    skipped: list[PlaylistAddSkip] = []
     for item in candidates:
         gen = locked.get(item.take.id) if item.take is not None else None
         if gen is None or gen.is_archived:
-            skipped.append(PlaylistAlbumSkip(
+            skipped.append(PlaylistAddSkip(
                 song_id=item.song_id, title=item.title,
                 reason=item.skip_reason or PLAYLIST_SKIP_NO_PLAYABLE,
             ))
             continue
         entries.append(_append_entry(session, playlist_id, gen))
-    return PlaylistAlbumAddResult(entries=entries, skipped=skipped)
+    return PlaylistAddResult(entries=entries, skipped=skipped)
 
 
 def remove_from_playlist(

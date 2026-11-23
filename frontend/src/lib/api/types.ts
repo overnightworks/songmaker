@@ -43,7 +43,7 @@ export interface AddAlbumToPlaylistRequest {
 
 export interface AddEntriesToPlaylistResult {
 	added_count: number;
-	skipped: PlaylistAlbumSkipItem[];
+	skipped: PlaylistAddSkipItem[];
 }
 
 export interface AddGenerationToPlaylistRequest {
@@ -509,7 +509,7 @@ export interface PinModelOnWorkerRequest {
 	mode: string;
 }
 
-export interface PlaylistAlbumSkipItem {
+export interface PlaylistAddSkipItem {
 	song_id: string;
 	title: string;
 	reason: string;

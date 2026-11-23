@@ -75,7 +75,7 @@ TS_MODEL_NAMES: dict[str, str] = {
     "LoadedModelDetail": "LoadedModelDetailItem",
     "MemoryBundleResponse": "MemoryBundle",
     "MemoryScopeResponse": "MemoryScopeItem",
-    "PlaylistAlbumSkipResponse": "PlaylistAlbumSkipItem",
+    "PlaylistAddSkipResponse": "PlaylistAddSkipItem",
     "PlaylistDetailResponse": "PlaylistDetailItem",
     "PlaylistEntryResponse": "PlaylistEntryItem",
     "PlaylistResponse": "PlaylistItem",
