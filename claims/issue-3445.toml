@@ -1,0 +1,7 @@
+claim_id = "7513a8bc34884549908cf6992d20591e"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "9a54758033e0cec86d2e67cc5b49ec6b9eede850"
+branch = "claude/issue-3445-startup-wait-retries-crash-recovery"
+scope = ["src/songmaker_cli/db/engine.py", "tests/songmaker_cli/test_server_store_startup_wait.py"]
+opened_commit = "b48c2e50efe728f645b4a8408cc05959d75623c6"
