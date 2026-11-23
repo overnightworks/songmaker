@@ -140,6 +140,33 @@ def test_t8_a_token_write_without_provenance_passes_csrf_and_is_committed(
     assert token_world.albums() == [("From the CLI", TokenWorld.ALICE)]
 
 
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
+def test_a_token_first_call_write_is_the_tokens_own_whatever_the_host(
+    token_world: TokenWorld, host: str,
+) -> None:
+    response = token_world.client.post(
+        "/api/albums",
+        json={"title": "From the CLI"},
+        headers={**token_world.bearer(), "host": host},
+    )
+
+    assert response.status_code == 200
+    assert token_world.albums() == [("From the CLI", TokenWorld.ALICE)]
+    assert token_world.users() == [(TokenWorld.ALICE, "alice", "user")]
+    assert (TokenWorld.ALICE, "create", "album", response.json()["id"]) in token_world.audits()
+    assert token_world.audits().count((None, "create", "user", TokenWorld.ALICE)) == 1
+
+
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
+def test_a_token_read_is_served_whatever_the_host(token_world: TokenWorld, host: str) -> None:
+    token_world.seed_take(TokenWorld.ALICE, "alices")
+
+    response = token_world.client.get("/api/songs", headers={**token_world.bearer(), "host": host})
+
+    assert response.status_code == 200
+    assert [song["title"] for song in response.json()["items"]] == ["Song alices"]
+
+
 def test_t9_a_cookie_only_cross_origin_write_is_still_refused(token_world: TokenWorld) -> None:
     with token_world.factory() as session:
         seed_user(session, "cookie-user", user_id=TokenWorld.BOB)
@@ -290,16 +317,18 @@ def test_t14_monitoring_serves_the_monitoring_token_beside_the_person_gate(
     assert token_world.users() == []
 
 
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
 @pytest.mark.parametrize(
     ("requested_header", "status"),
     [("content-type", 200), ("authorization", 400)],
 )
 def test_t26_a_preflight_keeps_authorization_out_of_the_allowed_headers(
-    token_world: TokenWorld, requested_header: str, status: int,
+    token_world: TokenWorld, requested_header: str, status: int, host: str,
 ) -> None:
     response = token_world.client.options(
         "/api/albums",
         headers={
+            "host": host,
             "Origin": "http://localhost:5173",
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": requested_header,

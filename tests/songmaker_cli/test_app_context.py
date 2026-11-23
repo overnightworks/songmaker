@@ -45,7 +45,7 @@ def test_the_configuration_carries_the_deployments_own_facts(
     assert config.allowed_hosts_exact == frozenset({"songmaker.example", "localhost"})
 
 
-def test_the_allowed_hosts_are_one_list_for_the_host_check_and_the_origin_allowlist(
+def test_the_allowed_hosts_are_the_origin_allowlist(
     ctx: AppContext, monkeypatch: pytest.MonkeyPatch, fresh_settings,
 ) -> None:
     monkeypatch.setenv("ALLOWED_HOSTS", " a.example,,b.example ,localhost")

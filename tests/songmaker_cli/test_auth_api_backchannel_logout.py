@@ -30,9 +30,11 @@ FORM = {"content-type": "application/x-www-form-urlencoded"}
 BACKCHANNEL_MAX_BODY_BYTES = 32 * 1024
 
 
-# Every Host TrustedHost admits, bare and with the port the realm and Compose post to.
-ADMITTED_HOSTS = [
-    f"{host}{port}" for host in allowed_hosts(get_settings()) for port in ("", ":8080")
+# The listed Hosts bare and with the port the realm and Compose post to, and a Host no list names:
+# the route's decision does not read the Host.
+POSTED_HOSTS = [
+    *(f"{host}{port}" for host in allowed_hosts(get_settings()) for port in ("", ":8080")),
+    "evil.example:8080",
 ]
 
 
@@ -61,7 +63,7 @@ def _sign_in_twice(world: World, subject: str = SUBJECT) -> None:
     other_browser.sign_in(_member(subject))
 
 
-@pytest.mark.parametrize("host", ADMITTED_HOSTS)
+@pytest.mark.parametrize("host", POSTED_HOSTS)
 def test_a_valid_logout_token_ends_every_session_of_its_subject(world: World, host: str) -> None:
     _sign_in_twice(world)
     _sign_in_twice(world, OTHER_SUBJECT)
@@ -199,12 +201,15 @@ def test_a_body_that_is_not_one_logout_token_form_answers_400(
     assert world.session_count() == 2
 
 
-def test_an_unlisted_host_gets_the_trusted_host_400_and_ends_nothing(world: World) -> None:
+@pytest.mark.parametrize("host", ["songmaker-web:8080", "evil.example:8080"])
+def test_an_invalid_logout_token_is_refused_and_ends_nothing_whatever_the_host(
+    world: World, host: str,
+) -> None:
     _sign_in_twice(world)
 
-    response = _backchannel(world, world.issuer.logout_token(SUBJECT), host="evil.example:8080")
+    response = _backchannel(world, "not-a-logout-token", host=host)
 
-    assert response.status_code == 400
+    assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
 
 
