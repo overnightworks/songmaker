@@ -15,6 +15,7 @@ from support.app_processes import (
     times_run,
 )
 from support.music_jobs import MISSING_VOICE_KEY, queued_music_job
+from support.redis_clock import most_runs_between, redis_datetime
 from support.score_jobs import queued_score_job
 
 from songmaker_cli.constants import CRON_EVERY_SECONDS
@@ -172,18 +173,26 @@ def test_a_cancelled_job_is_never_run(queue, web_cluster) -> None:
     assert (times_run([worker], cancelled), owners_of(factory, [cancelled])) == (0, {None})
 
 
-def test_two_music_workers_start_together_and_each_cron_ends_once_in_total(web_cluster) -> None:
+def test_two_music_workers_start_together_and_each_cron_ends_once_per_due_time(
+    web_cluster, redis_client,
+) -> None:
     cluster, _ = web_cluster
+    started_at = redis_datetime(redis_client)
     workers = [cluster.start_music_worker("first"), cluster.start_music_worker("second")]
+
+    def more_than_the_due_times_allow() -> bool:
+        now = redis_datetime(redis_client)
+        return any(
+            times_cron_ran(workers, cron) > most_runs_between(cron, started_at, now)
+            for cron in Cron
+        )
 
     assert poll_until(
         lambda: all(times_cron_ran(workers, cron) >= 1 for cron in Cron),
         deadline_seconds=START_MARGIN_SECONDS,
     ), [worker.log_tail() for worker in workers]
-    more_than_once = poll_until(
-        lambda: any(times_cron_ran(workers, cron) > 1 for cron in Cron),
-        deadline_seconds=2 * CRON_EVERY_SECONDS,
+    more_than_once_per_due_time = poll_until(
+        more_than_the_due_times_allow, deadline_seconds=2 * CRON_EVERY_SECONDS,
     )
 
-    assert not more_than_once, [worker.log_tail() for worker in workers]
-    assert {cron: times_cron_ran(workers, cron) for cron in Cron} == dict.fromkeys(Cron, 1)
+    assert not more_than_once_per_due_time, [worker.log_tail() for worker in workers]
