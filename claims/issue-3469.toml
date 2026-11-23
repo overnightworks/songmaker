@@ -1,7 +1,0 @@
-claim_id = "d5e66697b39240f89e83ffd3856f3f7a"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "c18cde3b40bfeb40ea48bb8a97c489eed71d6f64"
-branch = "claude/issue-3469-security-deployment-section"
-scope = ["docs/security.md"]
-opened_commit = "63dbe66486b4c767a9eca13ec394d32f63c1ed7b"
