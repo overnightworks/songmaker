@@ -45,14 +45,16 @@ def token_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> 
 # -- T1, T2: the token is the person -------------------------------------------------
 
 
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
 def test_t1_a_members_token_lists_only_their_songs_and_makes_the_account_without_a_session(
-    token_world: TokenWorld,
+    token_world: TokenWorld, host: str,
 ) -> None:
     token_world.seed_take(TokenWorld.BOB, "bobs")
+    headers = {**token_world.bearer(TokenWorld.ALICE), "host": host}
 
-    first = token_world.client.get("/api/songs", headers=token_world.bearer(TokenWorld.ALICE))
+    first = token_world.client.get("/api/songs", headers=headers)
     token_world.seed_take(TokenWorld.ALICE, "alices")
-    second = token_world.client.get("/api/songs", headers=token_world.bearer(TokenWorld.ALICE))
+    second = token_world.client.get("/api/songs", headers=headers)
 
     assert first.json()["items"] == []
     assert [song["title"] for song in second.json()["items"]] == ["Song alices"]
@@ -127,31 +129,54 @@ def test_t7_an_admin_route_needs_the_admin_group(token_world: TokenWorld) -> Non
 # -- T8, T9, T10, T19, T20: CSRF and the cookie --------------------------------------
 
 
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
 def test_t8_a_token_write_without_provenance_passes_csrf_and_is_committed(
-    token_world: TokenWorld,
+    token_world: TokenWorld, host: str,
 ) -> None:
     body = {"title": "From the CLI"}
 
-    without_token = token_world.client.post("/api/albums", json=body)
-    with_token = token_world.client.post("/api/albums", json=body, headers=token_world.bearer())
+    without_token = token_world.client.post("/api/albums", json=body, headers={"host": host})
+    with_token = token_world.client.post(
+        "/api/albums", json=body, headers={**token_world.bearer(), "host": host},
+    )
 
     assert without_token.status_code == 403
     assert with_token.status_code == 200
     assert token_world.albums() == [("From the CLI", TokenWorld.ALICE)]
+    assert token_world.users() == [(TokenWorld.ALICE, "alice", "user")]
+    assert (TokenWorld.ALICE, "create", "album", with_token.json()["id"]) in token_world.audits()
+    assert token_world.audits().count((None, "create", "user", TokenWorld.ALICE)) == 1
 
 
-def test_t9_a_cookie_only_cross_origin_write_is_still_refused(token_world: TokenWorld) -> None:
-    with token_world.factory() as session:
-        seed_user(session, "cookie-user", user_id=TokenWorld.BOB)
-        session.commit()
-    seed_session(token_world.client, "cookie-user")
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
+def test_t9_a_cookie_only_cross_origin_write_is_still_refused(
+    token_world: TokenWorld, host: str,
+) -> None:
+    _a_session_of_bob(token_world)
 
     response = token_world.client.post(
-        "/api/albums", json={"title": "Forged"}, headers={"Origin": "https://evil.example"},
+        "/api/albums",
+        json={"title": "Forged"},
+        headers={"Origin": "https://evil.example", "host": host},
     )
 
     assert response.status_code == 403
     assert token_world.albums() == []
+
+
+def test_a_same_origin_cookie_write_is_served_under_a_host_no_list_names(
+    token_world: TokenWorld,
+) -> None:
+    _a_session_of_bob(token_world)
+
+    response = token_world.client.post(
+        "/api/albums",
+        json={"title": "Bobs"},
+        headers={"Sec-Fetch-Site": "same-origin", "host": "evil.example"},
+    )
+
+    assert response.status_code == 200
+    assert token_world.albums() == [("Bobs", TokenWorld.BOB)]
 
 
 def _a_session_of_bob(token_world: TokenWorld) -> tuple:
@@ -290,16 +315,18 @@ def test_t14_monitoring_serves_the_monitoring_token_beside_the_person_gate(
     assert token_world.users() == []
 
 
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
 @pytest.mark.parametrize(
     ("requested_header", "status"),
     [("content-type", 200), ("authorization", 400)],
 )
 def test_t26_a_preflight_keeps_authorization_out_of_the_allowed_headers(
-    token_world: TokenWorld, requested_header: str, status: int,
+    token_world: TokenWorld, requested_header: str, status: int, host: str,
 ) -> None:
     response = token_world.client.options(
         "/api/albums",
         headers={
+            "host": host,
             "Origin": "http://localhost:5173",
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": requested_header,

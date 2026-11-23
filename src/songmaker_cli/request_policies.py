@@ -85,9 +85,8 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r"^/api/references/[^/]+/audio\Z"),       # reference_api.api_reference_audio
 )
 
-# The Logout Token's signature is the route's only control. It answers every Host
-# `ALLOWED_HOSTS` lists (an unlisted one gets TrustedHost's 400); keeping the path off the
-# public internet is the deployment's duty.
+# The Logout Token's signature is the route's only control, whatever the request's
+# Host; keeping the path off the public internet is the deployment's duty.
 BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 
 # Static PWA root assets are fetched by the browser and the service worker

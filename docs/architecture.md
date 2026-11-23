@@ -481,9 +481,9 @@ presentational cover/Play markup with no store or auth coupling — so the
 share surface (below) can reuse the identical frame with a plain title in
 place of `EditableTitle`/`CollectionMenu`. There is no visible
 Share icon — the menu's first line names the object ("Album · <title>" /
-"Playlist · <title>"). The album menu then has exactly seven rows, each a
-bare verb with one icon: Edit details · Cover · Pick album takes · Add to… ·
-Share · Archive · Delete (red, last). Edit details opens `AlbumMetaEditor`
+"Playlist · <title>"). The album menu then has exactly six rows, each a
+bare verb with one icon: Edit details · Cover · Add to… · Share · Archive ·
+Delete (red, last). Edit details opens `AlbumMetaEditor`
 in place of the title, where title, subtitle and year change together;
 Cover opens the album's cover editor (`AlbumCoverEditor`) in place of the
 cover, which owns upload, suggestions and removal. One store,
@@ -593,7 +593,9 @@ along the bar's top edge. The source line reads `playbackSource` in
 `stores/queue.ts`, the one owner of "where is this music from": it follows
 the player's queue context, never the page that is open, and a library queue
 has no source, so the bar keeps the take line there. `NowPlaying` reads the
-same derived store. `PlayerBar` tracks this breakpoint in script via
+same derived store. In `NowPlaying` the keys P and K pick and keep the playing
+take through `stores/takeActions.ts`, like the Take tab's two buttons, whenever
+no text field has focus; they never move to the next song. `PlayerBar` tracks this breakpoint in script via
 `subscribeCompactLayout` (its own media string, not the shared 768px
 `COMPACT_LAYOUT_MEDIA`) and applies one `.mobile-transport` class, rather
 than duplicating the ruleset under both a `@media` block and a
@@ -1193,18 +1195,17 @@ exemption from the rate limit and the origin check with its 32 KiB body cap.
 No middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is RequestLine → ClientAddress →
 ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → PathRefusal → BodySize →
-IpRateLimit → [BearerGate →] CsrfOrigin → TrustedHost → HttpMetrics → Router. The composition call
+IpRateLimit → [BearerGate →] CsrfOrigin → HttpMetrics → Router. The composition call
 places it: `front=` the request line and, immediately inside it, the client-address writer with
 `TRUSTED_PROXIES`; `outside=` ResourceStreamDeadline, SelectiveGZip and CORS; the library everything from
 SecurityHeaders to CsrfOrigin, with the bearer layer from `auth.install(app, bearer=...)`; `inside=`
-TrustedHost and HttpMetrics. The call adds no session gate: songmaker passes none, and every route asks
+HttpMetrics. The call adds no session gate: songmaker passes none, and every route asks
 for `current_user`. The request line sits
 outside the security layers, so a refused request leaves its line too. The client-address writer decides the
 client address once, ahead of CORS and every library refusal, so the line's `ip` names the forwarded
 client of a preflight CORS answers itself, as it does that of every other request; webauth fills the line's `sub`
-(the gates and `current_user`, the stream endpoints' direct call included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
-`TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
-library's host lists are Origin allowlists only. Library refusals therefore carry security
+(the gates and `current_user`, the stream endpoints' direct call included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. No layer reads the Host:
+`ALLOWED_HOSTS` is the Origin allowlist only, so a foreign Host is decided like a listed one. Library refusals carry security
 headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
@@ -1752,7 +1753,8 @@ process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then
 removes the suggestion and staging directory of the covers it ended. The `owner_lapses` loop
 (`Leases.serve_lapses`) runs the same pass as soon as a lease has ended or expired, on the one
-web process that claims the lapse. No lock orders the processes: the failing update is
+web process that claims the lapse; tandem rides out a refusal of Redis like an outage, so a refusal
+ends no loop and shows as tandem's `lapse_round.ended` warning, never in `owner_lapses`. No lock orders the processes: the failing update is
 conditional on the row it read. Only a web
 process reads leases, so a worker's jobs end while a web process runs. A start of
 either kind leaves a live sibling's jobs alone; a clean stop ends the stopped
@@ -1771,8 +1773,8 @@ like any other's, so a job of a generation its lease lost fails although the pro
 empty restart, a live owner's stamped jobs of the lost generation fail on the first pass after its
 renewal, while rows without a generation follow their owner. A renewal that fails is retried every interval and logged by tandem; the
 `owner_gone_reaper` tick reads this process's own lease, and the `owner_lease`
-loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the lapse
-pass apart). A pod that lost its lease while alive (a Redis outage longer than the
+loop health shows in `/health/details` when the roster of live leases lacks it (`owner_lapses` shows the failure of the lapse
+pass only, not a refusal of Redis). A pod that lost its lease while alive (a Redis outage longer than the
 lease span) may see a sibling fail its jobs; every later write of that job then refuses, as
 for any terminal job. When its lease starts anew, `keep_owner_lease` sees the changed
 generation of tandem's `Hold`, logs it as a start and, in a web process, removes what every
@@ -2020,7 +2022,7 @@ The platform's Prometheus scrapes `/metrics` with the monitoring token as its be
 
 Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_last_job_failure_timestamp_seconds` (0 while nothing has ever failed), `songmaker_queue_depth{queue="music"|"scoring"}`, `songmaker_acestep_workers_total{status=...}`, `songmaker_acestep_worker_loaded_models`, `songmaker_acestep_worker_queue_depth`, `songmaker_acestep_worker_vram_used_gigabytes`, `songmaker_acestep_worker_vram_total_gigabytes` (the last two come from each acestep-worker's own heartbeat — `songmaker-web` itself has no GPU access and cannot produce a VRAM number of its own), `songmaker_background_loop_consecutive_failures{loop=...}`, and `songmaker_background_loop_alive{loop=...}`.
 
-The request line and the HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500. The metrics count only the requests that pass the Host check; the request line covers every request.
+The request line and the HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500. The metrics count only the requests the security stack admits; the request line covers every request.
 
 `GET /health` answers only `status` (below) to anyone. `GET /health/details`, behind the monitoring token (the one that guards `/metrics`), reports:
 - `music_worker`: running/stopped

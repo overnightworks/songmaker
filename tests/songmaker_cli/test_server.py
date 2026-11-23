@@ -630,11 +630,11 @@ def test_a_request_the_security_stack_refuses_still_gets_its_request_line(
     server_app: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
     with configured("songmaker-web"):
-        response = server_app.get("/api/songs", headers={"host": "unlisted.example"})
+        response = server_app.post("/api/songs", headers={"origin": "http://evil.com"})
 
     (request_line,) = request_lines(capsys.readouterr().out)
-    assert response.status_code == 400
-    assert request_line["status"] == 400
+    assert response.status_code == 403
+    assert request_line["status"] == 403
     assert request_line["outcome"] == "ok"
 
 

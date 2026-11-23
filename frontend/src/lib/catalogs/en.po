@@ -867,10 +867,6 @@ msgctxt "collectionMenu.coverHint"
 msgid "upload · suggest"
 msgstr ""
 
-msgctxt "collectionMenu.curate"
-msgid "Pick album takes"
-msgstr ""
-
 msgctxt "collectionMenu.addTo"
 msgid "Add to…"
 msgstr ""
@@ -5667,38 +5663,6 @@ msgstr ""
 
 msgctxt "nowPlaying.importedNoLyrics"
 msgid "Imported take — no lyrics were saved with it."
-msgstr ""
-
-msgctxt "nowPlaying.curateGroup"
-msgid "Pick album takes"
-msgstr ""
-
-msgctxt "nowPlaying.curateProgress"
-msgid "Pick album takes · Song {index} of {total}"
-msgstr ""
-
-msgctxt "nowPlaying.pick"
-msgid "Pick"
-msgstr ""
-
-msgctxt "nowPlaying.keep"
-msgid "Keep"
-msgstr ""
-
-msgctxt "nowPlaying.unkeep"
-msgid "Unkeep"
-msgstr ""
-
-msgctxt "nowPlaying.skip"
-msgid "Skip"
-msgstr ""
-
-msgctxt "nowPlaying.skipName"
-msgid "Skip — Next song"
-msgstr ""
-
-msgctxt "nowPlaying.done"
-msgid "Done"
 msgstr ""
 
 msgctxt "nowPlaying.takePool"

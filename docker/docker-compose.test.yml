@@ -155,9 +155,8 @@ services:
       AWS_SHARED_CREDENTIALS_FILE: /s3/credentials
       SONGMAKER_S3_BUCKET: songmaker
       FINAL_DELETION_DAYS:
-      # The container's own healthcheck calls localhost and the ACE-Step control
-      # plane calls songmaker-web, so the Host check admits these whatever
-      # ALLOWED_HOSTS lists.
+      # These names are always Origin allowlist entries, whatever ALLOWED_HOSTS
+      # lists; the request's Host decides nothing.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-},localhost,127.0.0.1,songmaker-web
       OIDC_ISSUER: ${OIDC_ISSUER:?OIDC_ISSUER must be set}
       OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_client_secret

@@ -74,8 +74,8 @@ def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
 
 
 def allowed_hosts(settings: Settings) -> tuple[str, ...]:
-    """ALLOWED_HOSTS entries: exact host names, the one list behind both the Host
-    check and the Origin allowlist. A `*` entry raises at startup."""
+    """ALLOWED_HOSTS entries: exact host names, the Origin allowlist. A `*` entry raises at
+    startup."""
     hosts = tuple(entry.strip() for entry in settings.allowed_hosts.split(",") if entry.strip())
     for host in hosts:
         if "*" in host:
