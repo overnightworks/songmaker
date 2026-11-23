@@ -1,8 +1,4 @@
-import {
-	makeAlbum as album,
-	makeGeneration as generation,
-	makeSong as song
-} from '#lib/test-utils/factories.ts';
+import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -22,7 +18,7 @@ import { clearHitboxStyles, clearPointer } from '#lib/test-utils/hitbox.ts';
 import { clearComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
 import { nowPlayingSurface, selectedAlbumId } from '#lib/stores/player.ts';
-import { curationActive, queueContext } from '#lib/stores/queue.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();
@@ -127,7 +123,6 @@ afterEach(async () => {
 	albumList.set([]);
 	songList.set([]);
 	openCollection.set(null);
-	curationActive.set(false);
 	queueContext.set({ type: 'library' });
 	nowPlayingSurface.set('closed');
 	audioPlayer.current = null;
@@ -141,7 +136,7 @@ afterEach(async () => {
 });
 
 describe('AlbumDetailView menu', () => {
-	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to…, Share, Archive, Delete in the menu', async () => {
+	it('915_C3: names the album and lists Edit details, Cover, Add to…, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe(
@@ -150,33 +145,11 @@ describe('AlbumDetailView menu', () => {
 		expect(menuRowLabels(menu)).toEqual([
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
-			words['collectionMenu.curate'],
 			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],
 			words['collectionMenu.albumDelete']
 		]);
-	});
-
-	it('opens curation mode from the menu', async () => {
-		songList.set([
-			song({
-				id: 's-local',
-				album_id: 'a-local',
-				album_title: 'Night Drive',
-				generation_count: 1,
-				generations: [generation({ song_id: 's-local' })]
-			})
-		]);
-		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === words['collectionMenu.curate']
-		);
-		curateItem?.click();
-		await tick();
-
-		await vi.waitFor(() => expect(get(curationActive)).toBe(true));
 	});
 
 	it('uploads a cover through the cover editor the menu opens', async () => {

@@ -28,19 +28,13 @@ async function refreshSong(songId: string): Promise<void> {
 	upsertSongInList(updated);
 }
 
-// Returns whether the pick actually landed — a failed request still only
-// toasts here rather than throwing (every existing caller relies on that),
-// but curation's auto-advance (NowPlaying.svelte) needs to tell a real pick
-// from a swallowed failure before it moves on to the next song.
-export async function setPick(songId: string, genId: string, picked: boolean): Promise<boolean> {
+export async function setPick(songId: string, genId: string, picked: boolean): Promise<void> {
 	try {
 		if (picked) await pickGeneration(genId);
 		else await unpickGeneration(genId);
 		await refreshSong(songId);
-		return true;
 	} catch (e) {
 		addToast(describeFailure(e, pageText('takeActions.pickFailed')), 'error');
-		return false;
 	}
 }
 

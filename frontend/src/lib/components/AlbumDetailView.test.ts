@@ -46,7 +46,7 @@ import {
 } from '#lib/stores/libraryData.ts';
 import { fetchSongs } from '#lib/api/songs.ts';
 import { nowPlayingSurface, selectedAlbumId } from '#lib/stores/player.ts';
-import { curationActive, queueContext } from '#lib/stores/queue.ts';
+import { queueContext } from '#lib/stores/queue.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();
@@ -169,7 +169,6 @@ afterEach(async () => {
 	albumList.set([]);
 	songList.set([]);
 	openCollection.set(null);
-	curationActive.set(false);
 	queueContext.set({ type: 'library' });
 	nowPlayingSurface.set('closed');
 	audioPlayer.current = null;

@@ -334,7 +334,6 @@ describe('CollectionHeader', () => {
 		const target = await render({
 			...detailsEditingAlbum(),
 			coverEditor: fakeCoverEditor(),
-			oncurate: vi.fn(),
 			onarchive: vi.fn()
 		});
 		const menu = await openCollectionMenu(target);
@@ -342,7 +341,6 @@ describe('CollectionHeader', () => {
 		expect(menuRowLabels(menu)).toEqual([
 			words['collectionMenu.editDetails'],
 			words['collectionMenu.cover'],
-			words['collectionMenu.curate'],
 			words['collectionMenu.addTo'],
 			words['collectionMenu.albumShare'],
 			words['collectionMenu.archive'],

@@ -1,11 +1,10 @@
-// Now Playing opens on the tab its queue calls for, and the album walk carries
-// its ruled name (#1831, N1 and N3 of #1816): a queue of one take opens on
-// This take, several on Queue, and the album ⋯ row, the walk's card and its
-// way out say "Pick album takes" and "Done". Both shells walk the flow.
+// Now Playing opens on the tab its queue calls for (a queue of one take opens
+// on This take, several on Queue), the album menu holds six rows, and P and K
+// pick and keep the playing take. Both shells walk the flow.
 
 import { expect, test, type Page, type TestInfo } from './coverage-test';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
-import { openNowPlayingFromBar } from './play-album';
+import { openNowPlayingFromBar, openThisTakeFromBar } from './play-album';
 import { readSeededLibrary, seedPlaylist } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -112,24 +111,51 @@ test(
 	}
 );
 
-test('the album walk is "Pick album takes" and ends with "Done"', async ({ page }, testInfo) => {
+test('the album menu lists six rows and none picks album takes', async ({ page }) => {
 	const library = readSeededLibrary();
 	await page.goto(`/album/${library.albumId}`);
 
 	await workspace(page)
 		.getByRole('button', { name: words['collectionMenu.label'], exact: true })
 		.click();
-	await page
+	const rows = page
 		.getByRole('dialog', { name: words['collectionMenu.label'] })
-		.getByRole('button', { name: words['collectionMenu.curate'], exact: true })
-		.click();
+		.locator('.menu-item');
 
-	const walk = page.getByRole('group', { name: words['nowPlaying.curateGroup'] });
-	await expect(walk).toContainText(
-		new RegExp(`^${words['nowPlaying.curateGroup']} · Song \\d+ of \\d+`)
-	);
-	// The phone opens the walk with the This take sheet over its card.
-	if (shellOf(testInfo) === 'mobile') await page.keyboard.press('Escape');
-	await walk.getByRole('button', { name: words['nowPlaying.done'], exact: true }).click();
-	await expect(walk).toBeHidden();
+	await expect(rows).toHaveCount(6);
+	await expect(rows).toContainText([
+		words['collectionMenu.editDetails'],
+		words['collectionMenu.cover'],
+		words['collectionMenu.addTo'],
+		words['collectionMenu.albumShare'],
+		words['collectionMenu.archive'],
+		words['collectionMenu.albumDelete']
+	]);
+});
+
+test.describe('the P and K keys judge the playing take', () => {
+	const judgements = [
+		{ key: 'p', on: 'nowPlayingTake.unpick', off: 'nowPlayingTake.pick' },
+		{ key: 'k', on: 'nowPlayingTake.unkeep', off: 'nowPlayingTake.keep' }
+	] as const;
+
+	for (const { key, on, off } of judgements) {
+		test(`${key} flips the playing take's ${off} and flips it back`, async ({ page }, testInfo) => {
+			const library = readSeededLibrary();
+			await page.goto(`/album/${library.albumId}`);
+			await playCollection(page, 'album');
+			await openThisTakeFromBar(page, shellOf(testInfo), library.albumTracks[0].songTitle);
+			const badge = page.getByRole('button', {
+				name: new RegExp(`^(${words[on]}|${words[off]})$`)
+			});
+			const before = await badge.getAttribute('aria-pressed');
+			const flipped = before === 'true' ? 'false' : 'true';
+
+			await page.keyboard.press(key);
+			await expect(badge).toHaveAttribute('aria-pressed', flipped);
+
+			await page.keyboard.press(key);
+			await expect(badge).toHaveAttribute('aria-pressed', before ?? 'false');
+		});
+	}
 });

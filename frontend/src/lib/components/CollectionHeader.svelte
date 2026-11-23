@@ -37,7 +37,6 @@
 		/** Playlist-only, like oncover. */
 		onremovecover?: () => void;
 		onaddto?: (playlistId: string) => void;
-		oncurate?: () => void;
 		playlistCovers?: AlbumCoverUrls[];
 		playlistCover?: AlbumCoverUrls | null;
 		/** Album-only: the subtitle and year line read under the title, empty when neither is set. */
@@ -79,7 +78,6 @@
 		oncover,
 		onremovecover,
 		onaddto,
-		oncurate,
 		playlistCovers,
 		playlistCover,
 		meta = '',
@@ -225,7 +223,6 @@
 		hasCover={showCover}
 		{onremovecover}
 		{onaddto}
-		{oncurate}
 		oneditdetails={detailsEditor ? openDetailsEditing : undefined}
 		onrename={onrename ? triggerRename : undefined}
 	/>

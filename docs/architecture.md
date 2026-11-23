@@ -481,9 +481,9 @@ presentational cover/Play markup with no store or auth coupling — so the
 share surface (below) can reuse the identical frame with a plain title in
 place of `EditableTitle`/`CollectionMenu`. There is no visible
 Share icon — the menu's first line names the object ("Album · <title>" /
-"Playlist · <title>"). The album menu then has exactly seven rows, each a
-bare verb with one icon: Edit details · Cover · Pick album takes · Add to… ·
-Share · Archive · Delete (red, last). Edit details opens `AlbumMetaEditor`
+"Playlist · <title>"). The album menu then has exactly six rows, each a
+bare verb with one icon: Edit details · Cover · Add to… · Share · Archive ·
+Delete (red, last). Edit details opens `AlbumMetaEditor`
 in place of the title, where title, subtitle and year change together;
 Cover opens the album's cover editor (`AlbumCoverEditor`) in place of the
 cover, which owns upload, suggestions and removal. One store,
@@ -593,7 +593,9 @@ along the bar's top edge. The source line reads `playbackSource` in
 `stores/queue.ts`, the one owner of "where is this music from": it follows
 the player's queue context, never the page that is open, and a library queue
 has no source, so the bar keeps the take line there. `NowPlaying` reads the
-same derived store. `PlayerBar` tracks this breakpoint in script via
+same derived store. In `NowPlaying` the keys P and K pick and keep the playing
+take through `stores/takeActions.ts`, like the Take tab's two buttons, whenever
+no text field has focus; they never move to the next song. `PlayerBar` tracks this breakpoint in script via
 `subscribeCompactLayout` (its own media string, not the shared 768px
 `COMPACT_LAYOUT_MEDIA`) and applies one `.mobile-transport` class, rather
 than duplicating the ruleset under both a `@media` block and a
