@@ -12,6 +12,102 @@ mandatory_jobs = [
 render_pass = "Render pass"
 
 [[gate.loosened]]
+what = "size baseline adds ccn frontend/e2e/helpers.ts constructor 27"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds ccn frontend/src/lib/services/audioPlayer.svelte.ts attachListeners 44"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/e2e/helpers.ts constructor 73"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/e2e/seed.ts seedLibrary 80"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/e2e/share-playlist-fixtures.ts createRealPlaylist 82"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/actions/kineticScroll.ts kineticScroll 309"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/components/CoWriterPanel.svelte runTurn 71"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/services/audioPlayer-test-fixtures.ts continuousDeckModule 82"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/services/audioPlayer.svelte.ts attachListeners 120"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/services/referencePreview.svelte.ts createReferencePreview 66"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/stores/addressLoad.svelte.ts createAddressLoad 74"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/stores/adminPolling.ts createPollingStore 90"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/stores/connectivity.ts reloadWhileUnreachable 68"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/stores/resourceSync.test.ts setup 92"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/test-utils/library-history.ts describeBackClosesOverlay 88"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
+what = "size baseline adds function_lines frontend/src/lib/utils/visualizer.ts drawFrame 71"
+item = "overnightworks/songmaker#3455"
+date = 2026-11-23
+reason = "the operator ruled the adoption of the size rule's script and CSS measurement (quality#884, A, 18.11.2026): the function already existed and is recorded at its present size; no code grows"
+
+[[gate.loosened]]
 what = 'import contract "Independent packages do not import the application" changes source_modules'
 item = "#3386"
 date = 2026-11-21

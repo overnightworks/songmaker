@@ -1,5 +1,11 @@
 # Measured by `quality check --fix`. Entries only ever go down.
 
+[ccn."frontend/e2e/helpers.ts"]
+"constructor" = 27
+
+[ccn."frontend/src/lib/services/audioPlayer.svelte.ts"]
+"attachListeners" = 44
+
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
 
@@ -64,6 +70,48 @@
 "tests/songmaker_cli/test_scheduler.py" = 1279
 "tests/songmaker_cli/test_server.py" = 1749
 "tests/songmaker_cli/test_sharing_api.py" = 2393
+
+[function_lines."frontend/e2e/helpers.ts"]
+"constructor" = 73
+
+[function_lines."frontend/e2e/seed.ts"]
+"seedLibrary" = 80
+
+[function_lines."frontend/e2e/share-playlist-fixtures.ts"]
+"createRealPlaylist" = 82
+
+[function_lines."frontend/src/lib/actions/kineticScroll.ts"]
+"kineticScroll" = 309
+
+[function_lines."frontend/src/lib/components/CoWriterPanel.svelte"]
+"runTurn" = 71
+
+[function_lines."frontend/src/lib/services/audioPlayer-test-fixtures.ts"]
+"continuousDeckModule" = 82
+
+[function_lines."frontend/src/lib/services/audioPlayer.svelte.ts"]
+"attachListeners" = 120
+
+[function_lines."frontend/src/lib/services/referencePreview.svelte.ts"]
+"createReferencePreview" = 66
+
+[function_lines."frontend/src/lib/stores/addressLoad.svelte.ts"]
+"createAddressLoad" = 74
+
+[function_lines."frontend/src/lib/stores/adminPolling.ts"]
+"createPollingStore" = 90
+
+[function_lines."frontend/src/lib/stores/connectivity.ts"]
+"reloadWhileUnreachable" = 68
+
+[function_lines."frontend/src/lib/stores/resourceSync.test.ts"]
+"setup" = 92
+
+[function_lines."frontend/src/lib/test-utils/library-history.ts"]
+"describeBackClosesOverlay" = 88
+
+[function_lines."frontend/src/lib/utils/visualizer.ts"]
+"drawFrame" = 71
 
 [function_lines."src/songmaker_acestep_worker/__main__.py"]
 "build_deps" = 67
