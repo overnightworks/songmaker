@@ -1,0 +1,8 @@
+claim_id = "366491735c8f4fe9acad6efb47bc9651"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "574c882ebed008ecd034ef4e9659eca83c644aed"
+branch = "claude/issue-3420-the-playlist-menu-matches-the-album-menu"
+scope = ["docs/architecture.md", "docs/navigation.md", "frontend/e2e", "frontend/src/lib/api/playlists.test.ts", "frontend/src/lib/api/playlists.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/AddToPicker.svelte", "frontend/src/lib/components/AddToPicker.test.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistDetailViewMenu.test.ts", "frontend/src/lib/words", "src/songmaker_cli/api_models/playlists.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/playlist_api.py", "src/songmaker_cli/words.py", "tests/songmaker_cli/test_playlist_api.py"]
+opened_commit = "c9af14e2cf7fa9a9d24e2bc28517ed7209ac8111"
+whole_reason = "The playlist menu, its new add route, its API types and the picker must change together, or the menu offers an add the server cannot take."
