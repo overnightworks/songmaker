@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -19,6 +21,7 @@ from support.web_app import (
     web_client,
 )
 
+from songmaker_cli import arq_pool
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.timestamps import utcnow
@@ -42,6 +45,16 @@ def _seed_song_and_gpu_worker(session: Session) -> None:
 
 
 @pytest.fixture
+def online_gpu_worker(mock_arq_pool: None) -> Iterator[None]:
+    """The arq pool the app starts with answers the GPU worker's healthy heartbeat."""
+    gpu_heartbeat = {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": True}
+    pool = asyncio.run(arq_pool.init_arq_pool())
+    pool.get = AsyncMock(return_value=json.dumps(gpu_heartbeat).encode())
+    yield
+    asyncio.run(arq_pool.close_arq_pool())
+
+
+@pytest.fixture
 def client(tmp_path: Path, pg_factory) -> TestClient:
     with pg_factory() as session:
         _seed_song_and_gpu_worker(session)
@@ -58,6 +71,7 @@ def client(tmp_path: Path, pg_factory) -> TestClient:
         pytest.param(None, 503, id="never seen alive"),
     ],
 )
+@pytest.mark.usefixtures("online_gpu_worker")
 def test_generation_follows_the_music_signal_while_no_music_worker_holds_a_lease(
     client: TestClient, music_last_alive_seconds_ago: int | None, expected_status: int,
 ) -> None:
@@ -65,17 +79,8 @@ def test_generation_follows_the_music_signal_while_no_music_worker_holds_a_lease
     if music_last_alive_seconds_ago is not None:
         seen_at = utcnow() - timedelta(seconds=music_last_alive_seconds_ago)
         ctx.redis.set(MUSIC_LAST_ALIVE_KEY, seen_at.isoformat())
-    gpu_heartbeat = {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": True}
-    pool = AsyncMock(get=AsyncMock(return_value=json.dumps(gpu_heartbeat).encode()))
 
-    with (
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool),
-        patch(
-            "songmaker_cli.generation_api.is_scoring_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch.object(ctx.wake_channel, "publish", AsyncMock()),
-    ):
+    with patch.object(ctx.wake_channel, "publish", AsyncMock()):
         response = client.post(GENERATE, json={"count": 1, "model": "sft"})
 
     assert response.status_code == expected_status
