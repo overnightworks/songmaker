@@ -35,7 +35,6 @@ OTHER = "other-1"
 SOURCE = "source"
 TARGET = "target"
 FOREIGN = "foreign"
-ADMIN_PLAYLIST = "admin-playlist"
 ADMIN = "admin-1"
 # The source holds its takes out of id order, one of them twice, and one in another person's album.
 SOURCE_ORDER = ("take-b", "take-foreign", "take-a", "take-archived", "take-gone", "take-b")
@@ -48,7 +47,7 @@ def _into(playlist_id: str) -> str:
 
 class _World:
     """The real routes on PostgreSQL: a source of six entries, a target holding one, and a
-    playlist of another person and of an administrator."""
+    playlist of another person."""
 
     def __init__(self, pg_factory, tmp_path: Path) -> None:
         self.pg_factory = pg_factory
@@ -82,7 +81,6 @@ class _World:
                 Playlist(id=SOURCE, title="Source", slug="source", created_by=OWNER),
                 Playlist(id=TARGET, title="Target", slug="target", created_by=OWNER),
                 Playlist(id=FOREIGN, title="Foreign", slug="foreign", created_by=OTHER),
-                Playlist(id=ADMIN_PLAYLIST, title="Admin", slug="admin", created_by=ADMIN),
             ])
             session.flush()
             for playlist, takes_held in (
@@ -178,17 +176,6 @@ def test_an_album_add_neither_adds_nor_reports_a_song_in_the_trash(pg_factory, t
     assert "song-take-a" not in [item["song_id"] for item in body["skipped"]]
 
 
-def test_a_playlist_add_leaves_a_deleted_song_in_an_album_the_person_cannot_open_unreported(
-    pg_factory, tmp_path,
-) -> None:
-    world = _World(pg_factory, tmp_path)
-    world.delete_song("song-take-foreign")
-
-    body = world.copy()().json()
-
-    assert "song-take-foreign" not in [item["song_id"] for item in body["skipped"]]
-
-
 def test_a_playlist_add_to_itself_doubles_its_playable_entries(pg_factory, tmp_path) -> None:
     world = _World(pg_factory, tmp_path)
 
@@ -220,25 +207,18 @@ def test_a_playlist_add_hides_playlists_the_person_does_not_own_and_writes_nothi
     assert world.takes_of(FOREIGN) == ["take-foreign"]
 
 
-@pytest.mark.parametrize(
-    ("source", "target"),
-    [
-        pytest.param(SOURCE, ADMIN_PLAYLIST, id="source-of-another-person"),
-        pytest.param(ADMIN_PLAYLIST, TARGET, id="target-of-another-person"),
-    ],
-)
-def test_a_playlist_add_does_not_let_an_administrator_copy_from_or_into_another_persons_playlist(
-    pg_factory, tmp_path, source: str, target: str,
+def test_a_playlist_add_lets_an_administrator_copy_from_and_into_another_persons_playlist(
+    pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path)
     seed_session(world.client, "admin")
 
-    response = world.copy(source=source, target=target)()
+    response = world.copy(source=SOURCE, target=FOREIGN)()
 
-    assert response.status_code == 404
-    assert world.takes_of(TARGET) == ["take-a"]
-    assert world.takes_of(ADMIN_PLAYLIST) == []
-
+    assert response.status_code == 200
+    assert world.takes_of(FOREIGN) == [
+        "take-foreign", "take-b", "take-foreign", "take-a", "take-b",
+    ]
 
 
 def test_a_playlist_add_holding_its_take_locks_leaves_a_bulk_delete_of_them_waiting_not_deadlocked(

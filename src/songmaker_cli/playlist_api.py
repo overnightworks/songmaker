@@ -16,7 +16,6 @@ from songmaker_cli.api_helpers import (
     can_access_album,
     check_album_access,
     check_generation_access,
-    check_own_playlist_access,
     check_playlist_access,
     check_song_access,
     cover_file_response,
@@ -402,8 +401,8 @@ def api_add_playlist_to_playlist(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> AddEntriesToPlaylistResponse:
-    check_own_playlist_access(session, playlist_id, user)
-    source = check_own_playlist_access(session, req.source_playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
+    source = check_playlist_access(session, req.source_playlist_id, user)
     entries = reached_entries(source, _albums_reached_by(user))
     result = add_playlist_entries_to_playlist(
         session, playlist_id, entries, is_readable=_audio_reader(ctx),
