@@ -193,7 +193,7 @@ def test_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
-    with worker_up():
+    with worker_up(world.client):
         answers = race(pg_factory, world.delete_version(2), world.enqueue(2))
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 404
@@ -205,7 +205,7 @@ def test_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
 def test_a_version_delete_waits_for_an_enqueue_and_answers_409(pg_factory, tmp_path) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
     enqueue_written = CommitPause(lambda session: wrote_to_tables(session, "jobs"))
-    with worker_up():
+    with worker_up(world.client):
         answers = race(
             pg_factory, world.enqueue(2), world.delete_version(2), pause=enqueue_written,
         )
@@ -223,7 +223,7 @@ def test_r1_an_editor_save_waits_for_an_enqueue_and_makes_the_next_version(
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["F"], REFERENCES["H"]])
     enqueue_written = CommitPause(lambda session: wrote_to_tables(session, "jobs"))
-    with worker_up():
+    with worker_up(world.client):
         answers = race(
             pg_factory, world.enqueue(2), world.edit(leg), pause=enqueue_written,
         )
@@ -244,7 +244,7 @@ def test_r2_an_enqueue_waits_for_an_editor_save_and_renders_the_saved_version(
     pg_factory, tmp_path, leg,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["F"], REFERENCES["H"]])
-    with worker_up():
+    with worker_up(world.client):
         answers = race(pg_factory, world.edit(leg), world.enqueue(2))
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 200

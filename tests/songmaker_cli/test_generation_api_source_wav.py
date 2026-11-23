@@ -69,7 +69,7 @@ def _fill_the_active_job_limit(client: TestClient) -> None:
 def test_the_request_creates_the_job_and_records_the_converted_wav(
     client: TestClient, route: str, body: dict,
 ) -> None:
-    with worker_up():
+    with worker_up(client):
         response = client.post(f"/api/generations/{TAKE_ID}/{route}", json=body)
 
     assert response.status_code == 200
@@ -82,7 +82,7 @@ def test_a_refused_rate_limit_leaves_the_wav_unrecorded(
 ) -> None:
     _fill_the_active_job_limit(client)
 
-    with worker_up():
+    with worker_up(client):
         response = client.post(f"/api/generations/{TAKE_ID}/{route}", json=body)
 
     assert response.status_code == 429

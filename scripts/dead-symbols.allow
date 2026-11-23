@@ -168,3 +168,4 @@ songmaker_cli/take_judging_api.py:api_unarchive_generation # HTTP dispatcher: ro
 songmaker_cli/take_judging_api.py:api_unkeep_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unkeep', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/take_judging_api.py:api_unpick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unpick', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/arq_worker.py:UNCONFIGURED_LOGGING  # arq imports it by the dotted path main passes
+songmaker_cli/worker_liveness.py:worker_is_ready # Operational caller scripts/arq_healthcheck.py outside src
