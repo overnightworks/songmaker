@@ -5,7 +5,13 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import type { GenerationItem } from '#lib/api/types.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { currentUser } from '#lib/stores/auth.ts';
-import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import {
+	makeAuthUser,
+	makeGeneration,
+	makePlaylistDetail,
+	makePlaylistEntry,
+	makeSong
+} from '#lib/test-utils/factories.ts';
 import {
 	followPlaybackForResume,
 	forgetPlaybackResume,
@@ -416,7 +422,8 @@ describe('playback resume record', () => {
 	describe('loading the saved take for a restore', () => {
 		const PLAYLIST_RECORD = {
 			...WHOLE_RECORD,
-			source: { type: 'playlist', playlistId: 'b3a4c5d6-1e2f-4a3b-8c4d-5e6f7a8b9c0d' }
+			source: { type: 'playlist', playlistId: 'b3a4c5d6-1e2f-4a3b-8c4d-5e6f7a8b9c0d' },
+			savedAt: 1000
 		} as const;
 		const OTHER_PLAYLIST = 'c4b5d6e7-2f30-4b4c-9d5e-6f708192a3b4';
 
@@ -490,8 +497,37 @@ describe('playback resume record', () => {
 		});
 
 		it.each([
+			{
+				holds: 'the take',
+				entries: [makePlaylistEntry({ generation_id: WHOLE_RECORD.generationId })],
+				found: true,
+				recordKept: true
+			},
+			{
+				holds: 'other takes only',
+				entries: [makePlaylistEntry({ generation_id: 'another-take' })],
+				found: false,
+				recordKept: false
+			}
+		])(
+			'finds a playlist that holds $holds, and keeps its record only when it holds the take',
+			async ({ entries, found, recordKept }) => {
+				const saved = saveWholeRecord(PLAYLIST_RECORD);
+				vi.mocked(fetchPlaylist).mockResolvedValueOnce(makePlaylistDetail({ entries }));
+
+				const loaded = await loadSavedPlaylist(saved, PLAYLIST_RECORD.source.playlistId);
+
+				expect({ found: loaded !== null, recordKept: storedRecord(LISTENER.id) !== null }).toEqual({
+					found,
+					recordKept
+				});
+			}
+		);
+
+		it.each([
 			{ rewritten: 'from the song queue', record: { source: { type: 'song' } } },
 			{ rewritten: 'at a later position', record: { position: PLAYLIST_RECORD.position + 20 } },
+			{ rewritten: 'at a later time', record: { savedAt: PLAYLIST_RECORD.savedAt + 1 } },
 			{
 				rewritten: 'from another playlist',
 				record: { source: { type: 'playlist', playlistId: OTHER_PLAYLIST } }
@@ -524,6 +560,19 @@ describe('playback resume record', () => {
 
 			expect(storedRecord(OTHER_LISTENER.id)).toEqual(PLAYLIST_RECORD);
 			expect(storedRecord(LISTENER.id)).toEqual(PLAYLIST_RECORD);
+		});
+
+		it('keeps a record another tab rewrote at a later time for the same take, song and position while its song was gone', async () => {
+			const saved = saveWholeRecord({ ...WHOLE_RECORD, savedAt: 1000 });
+			const newerRecord = { ...WHOLE_RECORD, savedAt: 2000 };
+			vi.mocked(fetchSong).mockImplementationOnce(() => {
+				localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+				return Promise.reject(new ApiError(404, 'gone', '/x'));
+			});
+
+			await loadSavedTake(saved);
+
+			expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
 		});
 
 		it("keeps a record that names another take than the one found gone, as another tab's save", async () => {

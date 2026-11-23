@@ -1701,7 +1701,7 @@ async function restoreSavedPlayback(saved: SavedPlayback, tenure: PlayerTenure):
 	} else if (source.type === 'library') {
 		await restoreLibraryTake(source, found.take, at);
 	} else {
-		await restorePlaylistQueue(saved, source.playlistId, found.take, at, tenure);
+		await restorePlaylistQueue(saved, source.playlistId, at, tenure);
 	}
 }
 
@@ -1818,14 +1818,12 @@ function positionWithinTake(position: number, take: GenerationItem): number {
 async function restorePlaylistQueue(
 	saved: SavedPlayback,
 	playlistId: string,
-	take: GenerationItem,
 	at: number,
 	tenure: PlayerTenure
 ): Promise<void> {
-	const playlist = await loadSavedPlaylist(saved, playlistId);
-	if (playlist === null || !restoreMayLoad(tenure)) return;
-	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
-	if (index < 0) return;
+	const found = await loadSavedPlaylist(saved, playlistId);
+	if (found === null || !restoreMayLoad(tenure)) return;
+	const { playlist, index } = found;
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, {
 		restart: true,
 		...restoredStart(at)

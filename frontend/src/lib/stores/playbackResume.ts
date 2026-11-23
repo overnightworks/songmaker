@@ -101,36 +101,32 @@ export interface SavedPlayback {
 	position: number;
 }
 
+// What each saved take was read from: the user and the stored text. Only that
+// exact text is this restore's to drop; any newer write changes it.
+const readFrom = new WeakMap<SavedPlayback, { userId: string; text: string }>();
+
 /** The signed-in user's saved take; null when none is saved or it cannot be read. */
 export function savedPlayback(): SavedPlayback | null {
 	const userId = signedInUserId();
 	if (userId === null) return null;
-	const saved = parseSavedPlayback(readStorage(storageKey(userId)));
-	if (saved !== null) knownRecord = { userId, ...saved };
+	const text = readStorage(storageKey(userId));
+	if (text === null) return null;
+	const saved = parseSavedPlayback(text);
+	if (saved === null) return null;
+	knownRecord = { userId, ...saved };
+	readFrom.set(saved, { userId, text });
 	return saved;
 }
 
-// The entries are sorted, so the order a record wrote the fields in is no
-// difference.
-function sameQueueSource(a: ResumeQueueSource, b: ResumeQueueSource): boolean {
-	const entriesOf = (source: ResumeQueueSource) => JSON.stringify(Object.entries(source).sort());
-	return entriesOf(a) === entriesOf(b);
-}
-
-// Only the record this restore read is this restore's to drop: one that
-// another tab has written since (another take or queue, a later position), or
-// one of another user, stays.
-function forgetSavedPlayback(userId: string | null, gone: SavedPlayback): void {
-	if (userId === null || signedInUserId() !== userId) return;
-	const stored = parseSavedPlayback(readStorage(storageKey(userId)));
-	if (
-		stored !== null &&
-		stored.songId === gone.songId &&
-		stored.generationId === gone.generationId &&
-		stored.position === gone.position &&
-		sameQueueSource(stored.source, gone.source)
-	) {
-		retireCurrentPlaybackResume(userId);
+/**
+ * Drops the record a restore read once it names something gone. A record
+ * written since, by another tab or for another user, stays.
+ */
+function forgetGoneSavedPlayback(saved: SavedPlayback): void {
+	const origin = readFrom.get(saved);
+	if (origin === undefined || signedInUserId() !== origin.userId) return;
+	if (readStorage(storageKey(origin.userId)) === origin.text) {
+		retireCurrentPlaybackResume(origin.userId);
 	}
 }
 
@@ -138,15 +134,11 @@ function forgetSavedPlayback(userId: string | null, gone: SavedPlayback): void {
 // answer refusing the request, is no take to restore. A 404 means the record
 // names something gone, so the record goes with it and later page loads do
 // not ask again; any other failure keeps it for the next load.
-async function quietly<T>(
-	userId: string | null,
-	saved: SavedPlayback,
-	request: () => Promise<T>
-): Promise<T | null> {
+async function quietly<T>(saved: SavedPlayback, request: () => Promise<T>): Promise<T | null> {
 	try {
 		return await request();
 	} catch (err) {
-		if (err instanceof ApiError && err.status === 404) forgetSavedPlayback(userId, saved);
+		if (err instanceof ApiError && err.status === 404) forgetGoneSavedPlayback(saved);
 		if (err instanceof ApiError || err instanceof NetworkError) return null;
 		throw err;
 	}
@@ -161,23 +153,33 @@ async function quietly<T>(
 export async function loadSavedTake(
 	saved: SavedPlayback
 ): Promise<{ song: SongItem; take: GenerationItem } | null> {
-	const userId = signedInUserId();
-	const song = await quietly(userId, saved, () => fetchSong(saved.songId));
+	const song = await quietly(saved, () => fetchSong(saved.songId));
 	if (song === null) return null;
 	const take = song.generations.find((gen) => gen.id === saved.generationId && isPlayableTake(gen));
 	if (take === undefined) {
-		forgetSavedPlayback(userId, saved);
+		forgetGoneSavedPlayback(saved);
 		return null;
 	}
 	return { song, take };
 }
 
-/** The saved take's playlist; null once it is deleted or out of reach. */
-export function loadSavedPlaylist(
+/**
+ * The saved take's playlist and the take's place in it; null once the playlist
+ * is deleted, out of reach, or no longer holds the take, the record of the last
+ * two being forgotten.
+ */
+export async function loadSavedPlaylist(
 	saved: SavedPlayback,
 	playlistId: string
-): Promise<PlaylistDetailItem | null> {
-	return quietly(signedInUserId(), saved, () => fetchPlaylist(playlistId));
+): Promise<{ playlist: PlaylistDetailItem; index: number } | null> {
+	const playlist = await quietly(saved, () => fetchPlaylist(playlistId));
+	if (playlist === null) return null;
+	const index = playlist.entries.findIndex((entry) => entry.generation_id === saved.generationId);
+	if (index < 0) {
+		forgetGoneSavedPlayback(saved);
+		return null;
+	}
+	return { playlist, index };
 }
 
 interface PlaybackToFollow {
@@ -332,8 +334,7 @@ function writeRecord(userId: string, record: PlaybackResumeRecord): void {
 	writeStorage(storageKey(userId), JSON.stringify(record));
 }
 
-function parseSavedPlayback(stored: string | null): SavedPlayback | null {
-	if (stored === null) return null;
+function parseSavedPlayback(stored: string): SavedPlayback | null {
 	let value: unknown;
 	try {
 		value = JSON.parse(stored);
