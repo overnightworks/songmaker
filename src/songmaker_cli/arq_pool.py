@@ -73,7 +73,7 @@ async def is_scoring_worker_healthy(pool: Redis | None = None) -> bool:
     where every existing caller runs). A caller running outside that
     process — the music worker, dispatching an auto-score job right after a
     generation completes — has no singleton to fall back to and must pass
-    its own arq redis connection explicitly.
+    its own Redis client explicitly.
     """
     try:
         redis = pool if pool is not None else get_arq_pool()
