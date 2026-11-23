@@ -173,10 +173,13 @@ def _forged(world: World) -> str:
         pytest.param(lambda _world: "not-a-jwt", id="malformed"),
     ],
 )
-def test_a_refused_logout_token_answers_400_and_ends_nothing(world: World, make_token) -> None:
+@pytest.mark.parametrize("host", POSTED_HOSTS)
+def test_a_refused_logout_token_answers_400_and_ends_nothing(
+    world: World, make_token, host: str,
+) -> None:
     _sign_in_twice(world)
 
-    response = _backchannel(world, make_token(world))
+    response = _backchannel(world, make_token(world), host=host)
 
     assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
@@ -196,18 +199,6 @@ def test_a_body_that_is_not_one_logout_token_form_answers_400(
     _sign_in_twice(world)
 
     response = world.client.post(BACKCHANNEL_PATH, content=body, headers=headers)
-
-    assert (response.status_code, response.content) == (400, b"")
-    assert world.session_count() == 2
-
-
-@pytest.mark.parametrize("host", ["songmaker-web:8080", "evil.example:8080"])
-def test_an_invalid_logout_token_is_refused_and_ends_nothing_whatever_the_host(
-    world: World, host: str,
-) -> None:
-    _sign_in_twice(world)
-
-    response = _backchannel(world, "not-a-logout-token", host=host)
 
     assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2

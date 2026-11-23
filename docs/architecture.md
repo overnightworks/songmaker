@@ -1203,7 +1203,7 @@ outside the security layers, so a refused request leaves its line too. The clien
 client address once, ahead of CORS and every library refusal, so the line's `ip` names the forwarded
 client of a preflight CORS answers itself, as it does that of every other request; webauth fills the line's `sub`
 (the gates and `current_user`, the stream endpoints' direct call included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. No layer reads the Host:
-`ALLOWED_HOSTS` is the Origin allowlist only, so a foreign Host is decided like a listed one. Library refusals therefore carry security
+`ALLOWED_HOSTS` is the Origin allowlist only, so a foreign Host is decided like a listed one. Library refusals carry security
 headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
