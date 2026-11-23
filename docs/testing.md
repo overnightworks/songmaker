@@ -4,21 +4,23 @@
 
 GitHub CI explicitly sets `-n auto` for parallel test runs and owns the full suite.
 
+The tests run in random order (`pytest-randomly`): each run prints its seed in the header, and an order-dependent failure is reproduced by passing that seed, `pytest -p randomly --randomly-seed=<n> <files>`.
+
 A backend run with `TEST_SHARD=i` and `TEST_SHARDS=n` (1 ≤ i ≤ n) keeps the tests whose node id hashes into shard i of n and reports the rest as deselected; the partition is the same in every xdist worker and test order. Setting only one of the two, or a value outside that range, ends the run before any test runs. CI cuts the backend into three such shards; the `Backend (Python 3.14)` job compares the node ids of the newest report of each shard with one unsharded collection, and is red unless each collected test is in exactly one report.
 
 ```bash
 # Backend — targeted (local / agents)
-pytest tests/songmaker_cli/db -q --tb=short
-pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
+pytest tests/songmaker_cli/db --tb=short
+pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py
 # PostgreSQL and Redis tests — a disposable server of each per run, -n auto
-scripts/test_postgresql.sh tests/songmaker_cli/test_db_postgresql.py -q
-scripts/test_postgresql.sh tests/songmaker_cli/test_arq_codec.py -q
+scripts/test_postgresql.sh tests/songmaker_cli/test_db_postgresql.py
+scripts/test_postgresql.sh tests/songmaker_cli/test_arq_codec.py
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=songmaker_audio_engine --cov=songmaker_acestep_engine --cov=songmaker_acestep_worker --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-config=.github/workflows/coveragerc-ci.ini
+pytest tests/ -n auto --cov=songmaker_cli --cov=songmaker_audio_engine --cov=songmaker_acestep_engine --cov=songmaker_acestep_worker --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-config=.github/workflows/coveragerc-ci.ini
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
