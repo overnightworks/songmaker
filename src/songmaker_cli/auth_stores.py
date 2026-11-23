@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from webauth.ports import AccountEventKind, SignInStores
+from webauth.postgres import database_errors_as_store_errors
 
 from songmaker_cli.api_helpers import end_read_transaction_before_lock
 from songmaker_cli.constants import AuditAction, ResourceType
@@ -142,14 +143,16 @@ class DatabaseSessionTransaction:
 
     Each entry opens its own database session and commits on a clean exit; closing the session
     rolls back anything else. A rotated refresh token is therefore durable before the library
-    hands out a token.
+    hands out a token. A database that cannot be reached raises webauth's `StoreUnavailableError`
+    from the entry, the store calls and the commit; every other database error raises its
+    `SessionStoreError`.
     """
 
     factory: sessionmaker[Session]
 
     @contextmanager
     def __call__(self) -> Iterator[DatabaseSessionRecordStore]:
-        with self.factory() as session:
+        with database_errors_as_store_errors(), self.factory() as session:
             yield DatabaseSessionRecordStore(session)
             session.commit()
 
@@ -187,14 +190,16 @@ class DatabaseSignInTransaction:
 
     Each entry opens its own database session and takes the user-management lock; a clean exit
     commits; an exception leaves the block and the session closes with its transaction rolled
-    back, so a failed entry (a deletion followed by a failing audit write) persists nothing.
+    back, so a failed entry (a deletion followed by a failing audit write) persists nothing. A
+    database that cannot be reached raises webauth's `StoreUnavailableError` from the entry, the
+    store calls and the commit; every other database error raises its `SessionStoreError`.
     """
 
     factory: sessionmaker[Session]
 
     @contextmanager
     def __call__(self) -> Iterator[SignInStores]:
-        with self.factory() as session:
+        with database_errors_as_store_errors(), self.factory() as session:
             with DatabaseWriteLock(session).hold():
                 yield SignInStores(
                     accounts=DatabaseSubjectUserStore(session),

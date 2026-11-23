@@ -8,7 +8,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import SecretStr
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
 from support.session_ids import a_session_id
 from webauth.ports import (
     AccountEvent,
@@ -16,12 +18,16 @@ from webauth.ports import (
     AccountKind,
     AuditSink,
     SessionRecordStore,
+    StoreUnavailableError,
     SubjectUserStore,
 )
+from webauth.postgres import SessionStoreError
 
 from songmaker_cli.auth_stores import (
     DatabaseAuditSink,
     DatabaseSessionRecordStore,
+    DatabaseSessionTransaction,
+    DatabaseSignInTransaction,
     DatabaseSubjectUserStore,
 )
 from songmaker_cli.constants import AuditAction, ResourceType
@@ -481,3 +487,98 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     assert _StoredRows.of(session) != before
     session.rollback()
     assert _StoredRows.of(session) == before
+
+
+def _on_an_unreachable_database(postgresql_url, refused_port):
+    unreachable = postgresql_url.set(host="127.0.0.1", port=refused_port)
+    return sessionmaker(bind=create_engine(unreachable))
+
+
+def _load_in_the_session_transaction(factory) -> None:
+    with DatabaseSessionTransaction(factory)() as sessions:
+        sessions.load(a_session_id())
+
+
+def _enter_the_sign_in_transaction(factory) -> None:
+    with DatabaseSignInTransaction(factory)():
+        pass
+
+
+@pytest.mark.parametrize(
+    "use",
+    [
+        pytest.param(_load_in_the_session_transaction, id="a store call of the session transaction"),
+        pytest.param(_enter_the_sign_in_transaction, id="entering the sign-in transaction"),
+    ],
+)
+def test_an_unreachable_database_raises_store_unavailable(
+    postgresql_url, refused_port, use,
+) -> None:
+    factory = _on_an_unreachable_database(postgresql_url, refused_port)
+    try:
+        with pytest.raises(StoreUnavailableError):
+            use(factory)
+    finally:
+        factory.kw["bind"].dispose()
+
+
+def _store_call_after_the_loss(sessions) -> None:
+    sessions.load(a_session_id())
+
+
+def _nothing_after_the_loss(sessions) -> None:
+    """The block ends, so the commit meets the lost connection."""
+
+
+@pytest.mark.parametrize(
+    "after_the_loss",
+    [
+        pytest.param(_store_call_after_the_loss, id="a store call"),
+        pytest.param(_nothing_after_the_loss, id="the commit"),
+    ],
+)
+@pytest.mark.parametrize(
+    "transaction_on, sessions_of",
+    [
+        pytest.param(
+            DatabaseSessionTransaction, lambda opened: opened, id="session transaction",
+        ),
+        pytest.param(
+            DatabaseSignInTransaction, lambda opened: opened.sessions, id="sign-in transaction",
+        ),
+    ],
+)
+def test_a_connection_lost_inside_a_transaction_raises_store_unavailable(
+    pg_factory, transaction_on, sessions_of, after_the_loss,
+) -> None:
+    with pytest.raises(StoreUnavailableError):
+        with transaction_on(pg_factory)() as opened:
+            sessions = sessions_of(opened)
+            backend = sessions.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            with pg_factory() as other:
+                other.execute(text("SELECT pg_terminate_backend(:backend)"), {"backend": backend})
+            after_the_loss(sessions)
+
+
+def test_a_serialization_failure_inside_a_transaction_stays_a_session_store_error(
+    pg_factory,
+) -> None:
+    session_id = a_session_id()
+    with pg_factory() as setup:
+        DatabaseSubjectUserStore(setup).create_for_subject(
+            _SUBJECT, "nina", "user", AccountKind.PERSON,
+        )
+        DatabaseSessionRecordStore(setup).create(
+            _SUBJECT, session_id=session_id, now=_later(0), expires_at=_later(),
+            refresh_token=None, id_token=None, account_language=None,
+        )
+        setup.commit()
+
+    with pytest.raises(SessionStoreError):
+        with DatabaseSessionTransaction(pg_factory)() as sessions:
+            sessions.session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
+            sessions.load(session_id)
+            with pg_factory() as concurrent:
+                DatabaseSessionRecordStore(concurrent).touch(session_id, expires_at=_later(2))
+                concurrent.commit()
+            sessions.touch(session_id, expires_at=_later(3))
