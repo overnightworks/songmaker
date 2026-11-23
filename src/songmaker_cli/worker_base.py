@@ -1,9 +1,9 @@
-"""Shared infrastructure for arq workers.
+"""Shared infrastructure for the workers.
 
 Provides the WorkerBase class subclassed by MusicWorker and ScoringWorker.
-Owns DB engine lifecycle, the worker's owner lease, orphan-file audit, and the
-common arq startup/shutdown hooks. A web process fails the jobs of a worker
-whose lease is gone; no worker fails another's jobs.
+Owns DB engine lifecycle, the worker's owner lease, orphan-file audit, the ctx-free
+``run`` of a worker that arq does not host and the arq startup/shutdown hooks of one it does.
+A web process fails the jobs of a worker whose lease is gone; no worker fails another's jobs.
 """
 
 from __future__ import annotations
@@ -245,6 +245,26 @@ class WorkerBase:
             drain_seconds=self._settings.arq_drain_timeout,
         )
 
+    def servings(self) -> tuple[Coroutine[None, None, None], ...]:
+        """What ``run`` serves together until a stop signal or the failure of one of them."""
+        return (self.serve_queued_jobs(),)
+
+    async def run(self) -> None:
+        """Serve without arq: start, serve until a stop signal, then end the lease and the pool.
+
+        The servings are the tasks of one group: a stop signal cancels each once, which lets a
+        running job drain, and a serving that raises cancels the others and ends the worker with
+        its error, since a worker that serves only part of its work while its lease says it lives
+        would be a silent failure. The database and the lease end only after every serving has.
+        """
+        try:
+            await self.start()
+            async with asyncio.TaskGroup() as group:
+                serving_tasks = [group.create_task(serving) for serving in self.servings()]
+                self.stop_claiming_on_stop_signal(*serving_tasks)
+        finally:
+            await self.stop()
+
     def start_serving(self, serving: Coroutine[None, None, None]) -> None:
         """Run the claiming loop beside arq's own work until a stop signal or ``stop_serving``."""
         self._queue_task = asyncio.create_task(serving)
@@ -256,40 +276,48 @@ class WorkerBase:
             stop_claiming(self._queue_task)
             await asyncio.gather(self._queue_task, return_exceptions=True)
 
-    def stop_claiming_on_stop_signal(self, queue_task: asyncio.Task[None]) -> None:
-        """End the claiming when a stop signal arrives, not when arq has drained its own jobs.
+    def stop_claiming_on_stop_signal(self, *serving_tasks: asyncio.Task[None]) -> None:
+        """End the servings when a stop signal arrives, not when arq has drained its own jobs.
 
-        arq stops picking its messages at the signal but runs on_shutdown only after they
-        ended or ``job_completion_wait`` passed; without this the loop would go on starting
-        jobs until then. The event loop reads signals from its wakeup descriptor, so arq's handler
-        still runs beside this one.
+        Under arq, which stops picking its messages at the signal but runs on_shutdown only after
+        they ended or ``job_completion_wait`` passed, the loop would go on starting jobs until
+        then; ``run`` has no arq and relies on this alone. The event loop reads signals from its
+        wakeup descriptor, so arq's handler still runs beside this one.
         """
         loop = asyncio.get_running_loop()
 
         def stop(_signal_number: int, _frame: FrameType | None) -> None:
-            loop.call_soon_threadsafe(stop_claiming, queue_task)
+            for serving_task in serving_tasks:
+                loop.call_soon_threadsafe(stop_claiming, serving_task)
 
         for stop_signal in (signal.SIGINT, signal.SIGTERM):
             signal.signal(stop_signal, stop)
 
-    async def on_startup(self, ctx) -> None:
+    async def start(self) -> None:
+        """Open the database, then say this process lives."""
         configure(self.service_name)
 
         log.info("%s worker starting up...", self.worker_name())
-        # arq runs on_startup inside the task a stop signal cancels, so its end marks the stop.
-        asyncio.current_task().add_done_callback(lambda _stopped: stop_retrying(ctx["redis"]))
         # Opening the database may wait for it to start; the lease says "alive" only after.
         self.get_db_factory()
         await self._start_owner_lease()
         log.info("%s worker ready", self.worker_name())
 
-    async def on_shutdown(self, _ctx) -> None:
+    async def stop(self) -> None:
         if self._lease_stack is not None:
             await self._release_owner_lease()
 
         if self._db_engine is not None:
             self._db_engine.dispose()
             log.info("Database connection pool disposed")
+
+    async def on_startup(self, ctx) -> None:
+        # arq runs on_startup inside the task a stop signal cancels, so its end marks the stop.
+        asyncio.current_task().add_done_callback(lambda _stopped: stop_retrying(ctx["redis"]))
+        await self.start()
+
+    async def on_shutdown(self, _ctx) -> None:
+        await self.stop()
 
     async def _start_owner_lease(self) -> None:
         """Say this process lives, on a client of its own: arq's has no retry and no timeouts.

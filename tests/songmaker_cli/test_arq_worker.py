@@ -34,10 +34,7 @@ WORKER_START_PROGRAM = textwrap.dedent(
 )
 
 
-WORKER_SETTINGS_PATHS = [
-    "songmaker_cli.music_worker.MusicWorkerSettings",
-    "songmaker_cli.scoring_worker.ScoringWorkerSettings",
-]
+WORKER_SETTINGS_PATHS = ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
 
 
 def _start_worker_entry(settings_path: str) -> subprocess.CompletedProcess[str]:

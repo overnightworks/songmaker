@@ -7,8 +7,10 @@ import contextlib
 import importlib
 import json
 import logging
+import os
+import signal
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Coroutine, Iterator
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -29,10 +31,7 @@ from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
 
-WORKER_SETTINGS_PATHS = (
-    "songmaker_cli.music_worker.MusicWorkerSettings",
-    "songmaker_cli.scoring_worker.ScoringWorkerSettings",
-)
+WORKER_SETTINGS_PATHS = ("songmaker_cli.scoring_worker.ScoringWorkerSettings",)
 WORKER_STOP_BOUND_SECONDS = 10
 
 
@@ -113,9 +112,9 @@ def test_a_worker_writes_its_lines_under_its_own_service_name(
     worker.get_db_factory = MagicMock()
 
     async def start_log_and_stop() -> None:
-        await worker.on_startup(_ARQ_CTX)
+        await worker.start()
         logging.getLogger("songmaker_cli.probe").info("probe.ended")
-        await worker.on_shutdown({})
+        await worker.stop()
 
     with configured("restored-after-the-test"):
         _run(start_log_and_stop())
@@ -181,6 +180,82 @@ def test_a_worker_names_itself_on_its_jobs_with_the_generation_of_its_lease(
     generation = _run(read_the_lease_while_running())
 
     assert (worker.owner.owner_id, worker.owner.generation) == (worker.owner_id, generation)
+
+
+class _ServingWorker(_DummyWorker):
+    """A worker whose ``run`` serves what its test names."""
+
+    def __init__(self, settings: Settings, *servings: Callable[[], Coroutine[None, None, None]]):
+        super().__init__(settings)
+        self._servings = servings
+
+    def servings(self) -> tuple[Coroutine[None, None, None], ...]:
+        return tuple(serving() for serving in self._servings)
+
+
+def _serving_worker_on(redis_url: str, *servings) -> _ServingWorker:
+    worker = _ServingWorker(_settings_on(redis_url), *servings)
+    worker.get_db_factory = MagicMock()
+    return worker
+
+
+def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its_servings(
+    restored_logging: None, stop_signal_handlers: None, redis_url: str,
+) -> None:
+    serving, held_while_stopping = asyncio.Event(), []
+
+    async def serves_until_stopped() -> None:
+        try:
+            serving.set()
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            held_while_stopping.append(await _held_leases(redis_url))
+            raise
+
+    worker = _serving_worker_on(redis_url, serves_until_stopped)
+
+    async def run_and_stop() -> tuple[set[str], set[str]]:
+        running = asyncio.create_task(worker.run())
+        await serving.wait()
+        held_while_serving = await _held_leases(redis_url)
+        os.kill(os.getpid(), signal.SIGTERM)
+        async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
+            await running
+        return held_while_serving, await _held_leases(redis_url)
+
+    assert _run(run_and_stop()) == ({worker.owner_id}, set())
+    assert held_while_stopping == [{worker.owner_id}]
+
+
+def test_a_serving_that_fails_ends_the_others_and_run_with_its_error_and_releases_the_lease(
+    restored_logging: None, stop_signal_handlers: None, redis_url: str,
+) -> None:
+    other_was_cut = asyncio.Event()
+
+    async def serves_until_cut() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            other_was_cut.set()
+            raise
+
+    async def fails_once_the_other_serves() -> None:
+        await asyncio.sleep(0)
+        raise RuntimeError("the serving failed")
+
+    worker = _serving_worker_on(redis_url, serves_until_cut, fails_once_the_other_serves)
+
+    async def run_until_it_fails() -> tuple[BaseExceptionGroup, set[str]]:
+        with pytest.raises(ExceptionGroup) as raised:
+            async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
+                await worker.run()
+        return raised.value, await _held_leases(redis_url)
+
+    failure, held = _run(run_until_it_fails())
+
+    assert [str(error) for error in failure.exceptions] == ["the serving failed"]
+    assert other_was_cut.is_set()
+    assert held == set()
 
 
 def test_a_worker_whose_database_cannot_open_holds_no_lease(

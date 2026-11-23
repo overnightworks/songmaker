@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import signal
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from logline.testing import configured
 from support.job_owner import an_owner
+from support.redis_clock import until
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
+from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
@@ -27,6 +32,7 @@ from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
 
 FOREVER_SECONDS = 3600
+RUN_WITHIN_SECONDS = 30
 RUNS_LONGER_THAN_ZERO_SECONDS = 1
 
 
@@ -176,7 +182,7 @@ def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg
     worker.audio_dir = MagicMock(return_value=audio_dir)
 
     with caplog.at_level(logging.WARNING, logger="songmaker_cli.worker_base"):
-        _run(worker.cleanup_files_cron(_mock_ctx()))
+        _run(worker.cleanup_files_cron())
 
     with factory() as session:
         expired_album = (
@@ -190,7 +196,7 @@ def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg
     assert any(str(orphan) in message for message in caplog.messages)
 
 
-def test_on_shutdown_disposes_db() -> None:
+def test_stop_disposes_db() -> None:
     worker = MusicWorker()
     mock_session = MagicMock()
     mock_factory = MagicMock()
@@ -199,7 +205,7 @@ def test_on_shutdown_disposes_db() -> None:
     worker.get_db_factory = MagicMock(return_value=mock_factory)
     worker._db_engine = MagicMock()
 
-    _run(worker.on_shutdown(_mock_ctx()))
+    _run(worker.stop())
 
     worker._db_engine.dispose.assert_called_once()
 
@@ -219,42 +225,12 @@ def test_file_cleanup_cron_leaves_queued_generate_job_untouched(tmp_path, pg_fac
     worker.get_db_factory = MagicMock(return_value=factory)
     worker.audio_dir = MagicMock(return_value=audio_dir)
 
-    _run(worker.cleanup_files_cron(_mock_ctx()))
+    _run(worker.cleanup_files_cron())
 
     with factory() as session:
         job = session.query(Job).filter_by(id="generate-queued").one()
 
     assert job.status == JobStatus.QUEUED
-
-
-def test_music_worker_settings_queue_name() -> None:
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    from songmaker_cli.music_worker import MusicWorkerSettings
-    assert MusicWorkerSettings.queue_name == ARQ_MUSIC_QUEUE_NAME
-
-
-def test_music_worker_settings_has_cron() -> None:
-    from songmaker_cli.music_worker import MusicWorkerSettings
-    names = {job.name for job in MusicWorkerSettings.cron_jobs}
-    assert "cron:MusicWorker.cleanup_files_cron" in names
-    assert "cron:MusicWorker.generation_retention_cron" in names
-    assert "cron:MusicWorker.reference_remnant_cron" in names
-    assert "cron:MusicWorker.reference_unused_cron" in names
-
-
-def test_the_daily_jobs_run_at_the_daily_cleanup_hour() -> None:
-    from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-    from songmaker_cli.music_worker import MusicWorkerSettings
-
-    daily = {
-        job.name: job.hour for job in MusicWorkerSettings.cron_jobs
-        if job.name != "cron:MusicWorker.cleanup_files_cron"
-    }
-    assert daily == {
-        "cron:MusicWorker.generation_retention_cron": {DAILY_CLEANUP_HOUR_UTC},
-        "cron:MusicWorker.reference_remnant_cron": {DAILY_CLEANUP_HOUR_UTC},
-        "cron:MusicWorker.reference_unused_cron": {DAILY_CLEANUP_HOUR_UTC},
-    }
 
 
 def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_count(
@@ -274,7 +250,7 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
     # init_db checks a live PostgreSQL database.
     worker.get_db_factory = MagicMock(return_value=factory)
 
-    removed = _run(worker.reference_remnant_cron(_mock_ctx()))
+    removed = _run(worker.reference_remnant_cron())
 
     assert removed == 2
     assert list(refs.iterdir()) == []
@@ -292,7 +268,7 @@ def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
     worker = MusicWorker(_settings())
     worker.get_db_factory = MagicMock(return_value=factory)
 
-    changed = _run(worker.reference_unused_cron(_mock_ctx()))
+    changed = _run(worker.reference_unused_cron())
 
     with factory() as session:
         stamp = session.get(ReferenceRecording, "r1").unused_since
@@ -326,15 +302,41 @@ def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_delet
     ))
     worker.get_db_factory = MagicMock()
 
-    changed = _run(worker.reference_unused_cron(_mock_ctx()))
+    changed = _run(worker.reference_unused_cron())
 
     assert calls == ["reconcile", "delete"]
     assert received == {"days": 17, "hour": DAILY_CLEANUP_HOUR_UTC, "now": now}
     assert changed == 2 + 1 + 4
 
 
-def test_arq_carries_only_the_cron_jobs_of_the_music_worker() -> None:
-    from songmaker_cli.music_worker import MusicWorkerSettings
+def test_the_music_worker_has_a_body_for_every_cron() -> None:
+    assert set(MusicWorker().cron_bodies()) == set(Cron)
 
-    assert MusicWorkerSettings.functions == []
-    assert MusicWorkerSettings.cron_jobs
+
+def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
+    redis_url, tmp_path, monkeypatch, stop_signal_handlers,
+) -> None:
+    worker = MusicWorker(
+        _settings().model_copy(update={"redis_url": redis_url}),
+        readiness_file=tmp_path / "readiness",
+    )
+    worker.get_db_factory = MagicMock()
+    worker.claim_next_job = MagicMock(return_value=None)
+    runs: list[str] = []
+    for cron in Cron:
+        async def body(name: str = cron.value) -> None:
+            runs.append(name)
+
+        monkeypatch.setattr(worker, cron.value, body)
+
+    async def run_until_every_cron_ran_then_stop() -> None:
+        running = asyncio.create_task(worker.run())
+        async with asyncio.timeout(RUN_WITHIN_SECONDS):
+            await until(lambda: len(runs) >= len(Cron))
+            os.kill(os.getpid(), signal.SIGTERM)
+            await running
+
+    with configured("restored-after-the-test"):
+        _run(run_until_every_cron_ran_then_stop())
+
+    assert sorted(runs) == sorted(cron.value for cron in Cron)
