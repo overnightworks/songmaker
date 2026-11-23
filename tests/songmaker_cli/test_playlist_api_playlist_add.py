@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 
 import pytest
 from httpx import Response
 from support.postgres_lock_harness import (
-    CommitPause,
     StatementPause,
     after_the_take_locks,
+    holding_a_generation_write,
     race,
-    wrote_to_tables,
 )
 from support.web_app import make_test_app, seed_session, seed_user
 
@@ -229,10 +227,6 @@ def test_a_playlist_add_does_not_let_an_administrator_copy_from_or_into_another_
     assert world.takes_of(ADMIN_PLAYLIST) == []
 
 
-_holding_a_generation_write = partial(
-    CommitPause, lambda session: wrote_to_tables(session, "generations"),
-)
-
 
 def test_a_playlist_add_holding_its_take_locks_leaves_a_bulk_delete_of_them_waiting_not_deadlocked(
     pg_factory, tmp_path,
@@ -255,7 +249,7 @@ def test_a_playlist_add_waits_for_a_delete_of_a_take_and_skips_its_song(
     world = _World(pg_factory, tmp_path)
 
     answers = race(
-        pg_factory, world.bulk_delete("take-a"), world.copy(), _holding_a_generation_write(),
+        pg_factory, world.bulk_delete("take-a"), world.copy(), holding_a_generation_write(),
     )
 
     assert answers["second"].status_code == 200

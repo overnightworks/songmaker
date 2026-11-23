@@ -5,16 +5,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from functools import partial
 from pathlib import Path
 
 from httpx import Response
 from support.postgres_lock_harness import (
-    CommitPause,
     StatementPause,
     after_the_take_locks,
+    holding_a_generation_write,
     race,
-    wrote_to_tables,
 )
 from support.web_app import make_test_app, seed_session, seed_user
 
@@ -93,11 +91,6 @@ def _two_songs() -> dict[str, tuple[str, bool]]:
     return {FIRST_TRACK_TAKE: ("song-1", False), SECOND_TRACK_TAKE: ("song-2", False)}
 
 
-_holding_a_generation_write = partial(
-    CommitPause, lambda session: wrote_to_tables(session, "generations"),
-)
-
-
 def test_an_album_add_holding_its_take_locks_leaves_a_bulk_delete_of_them_waiting_not_deadlocked(
     pg_factory, tmp_path,
 ) -> None:
@@ -119,7 +112,7 @@ def test_an_album_add_waits_for_a_bulk_delete_of_both_takes_and_skips_their_song
     world = _World(pg_factory, tmp_path, _two_songs())
     answers = race(
         pg_factory, world.bulk_delete(FIRST_TRACK_TAKE, SECOND_TRACK_TAKE), world.album_add(),
-        _holding_a_generation_write(),
+        holding_a_generation_write(),
     )
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 200
@@ -137,7 +130,7 @@ def test_an_album_add_waits_for_a_delete_of_one_take_and_adds_the_other(
     world = _World(pg_factory, tmp_path, _two_songs())
     answers = race(
         pg_factory, world.bulk_delete(SECOND_TRACK_TAKE), world.album_add(),
-        _holding_a_generation_write(),
+        holding_a_generation_write(),
     )
     assert answers["second"].status_code == 200
     body = answers["second"].json()
@@ -171,7 +164,7 @@ def test_an_album_add_waits_for_the_archive_of_a_take_and_adds_the_others(
         FIRST_TRACK_TAKE: ("song-1", True), SECOND_TRACK_TAKE: ("song-2", False),
     })
     answers = race(
-        pg_factory, world.retention(), world.album_add(), _holding_a_generation_write(),
+        pg_factory, world.retention(), world.album_add(), holding_a_generation_write(),
     )
     assert answers["first"].json()["archived_ids"] == [FIRST_TRACK_TAKE]
     assert answers["second"].status_code == 200

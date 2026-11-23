@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 import pytest
@@ -90,6 +91,11 @@ class CommitPause(WriterPause):
     def __call__(self, session: Session) -> None:
         if not self.reached.is_set() and self.at_commit(session):
             self.hold(session)
+
+
+holding_a_generation_write = partial(
+    CommitPause, lambda session: wrote_to_tables(session, "generations"),
+)
 
 
 class StatementPause(WriterPause):
