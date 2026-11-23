@@ -13,10 +13,7 @@ from support.realm import ADMIN_GROUP, AGENT_GROUP, CLIENT_ID, LOGIN_GROUP, MCP_
 from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.api_models.songs import generation_expiry
-from songmaker_cli.db.database_url import (
-    POSTGRESQL_PSYCOPG2_DRIVERNAME,
-    connection_url_from_settings,
-)
+from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.settings import (
     UNKNOWN_COMMIT,
     UNRELEASED_TAG,
@@ -542,7 +539,7 @@ def test_without_a_secrets_directory_the_database_url_keeps_its_own_password(
     )
 
     assert connection_url_from_settings(settings).render_as_string(hide_password=False) == (
-        f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://app:today@db:5432/songs"
+        "postgresql://app:today@db:5432/songs"
     )
 
 

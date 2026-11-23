@@ -11,7 +11,6 @@ never a lucky real GPU.
 from __future__ import annotations
 
 import json
-import socket
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -20,7 +19,7 @@ from pathlib import Path
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import psycopg2
+import psycopg
 import pytest
 import redis
 import redis.asyncio
@@ -165,14 +164,6 @@ def health_client(tmp_path, mock_arq_pool, pg_factory):
 
 
 @pytest.fixture
-def refused_port():
-    """A port nothing listens on; the bound socket stays open so no process can take it."""
-    with socket.socket() as reserved:
-        reserved.bind(("127.0.0.1", 0))
-        yield reserved.getsockname()[1]
-
-
-@pytest.fixture
 def expected_health_json() -> bytes:
     return (
         b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
@@ -259,10 +250,10 @@ def test_health_answers_unavailable_while_the_database_refuses_connections(
 
     def connect():
         url = refused_url if database_lost else served_url
-        opened.append(psycopg2.connect(url.render_as_string(hide_password=False)))
+        opened.append(psycopg.connect(url.render_as_string(hide_password=False)))
         return opened[-1]
 
-    engine = create_engine("postgresql+psycopg2://", creator=connect)
+    engine = create_engine("postgresql://", creator=connect)
     client, _ = make_test_app(tmp_path, factory=sessionmaker(bind=engine))
     with client:
         database_lost = True

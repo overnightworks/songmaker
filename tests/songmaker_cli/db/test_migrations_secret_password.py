@@ -14,10 +14,7 @@ from sqlalchemy.engine import make_url
 from songmaker_cli import settings as settings_module
 from songmaker_cli.db import database_url as database_url_module
 from songmaker_cli.db import engine as engine_module
-from songmaker_cli.db.database_url import (
-    POSTGRESQL_PSYCOPG2_DRIVERNAME,
-    password_from_secret_file,
-)
+from songmaker_cli.db.database_url import password_from_secret_file
 
 ENV_SCRIPT = Path(engine_module.MIGRATIONS_DIR) / "env.py"
 PASSWORD_WITH_SPECIALS = "p%a@s/s:w ord"
@@ -86,7 +83,7 @@ def test_env_py_uses_the_environment_url_alone_without_a_password_file(
     monkeypatch.setenv("DATABASE_URL", "postgresql://app:today@db/songs")
 
     assert _url_alembic_configures(monkeypatch) == (
-        f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://app:today@db/songs"
+        "postgresql://app:today@db/songs"
     )
 
 

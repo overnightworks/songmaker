@@ -74,8 +74,10 @@ def _seed_world(engine) -> None:
         execute(
             engine,
             "INSERT INTO reference_recordings (id, user_id, storage_path, original_filename, "
-            "size_bytes, created_at) VALUES (:id, 'u1', :id, 'a.wav', 10, CURRENT_TIMESTAMP)",
+            "size_bytes, created_at) "
+            "VALUES (:id, 'u1', :storage_path, 'a.wav', 10, CURRENT_TIMESTAMP)",
             id=reference_id,
+            storage_path=reference_id,
         )
     _seed_live_or_trashed_song(engine, "live", trashed=False)
     _seed_live_or_trashed_song(engine, "trashed", trashed=True)
