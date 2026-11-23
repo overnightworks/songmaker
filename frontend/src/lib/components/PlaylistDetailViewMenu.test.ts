@@ -1,9 +1,14 @@
 import PlaylistDetailView from './PlaylistDetailView.svelte';
-import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
+import {
+	createComponentMount,
+	openCollectionMenu,
+	requireElement
+} from './shell/rail-test-fixtures';
 import { openPlaylistDetail, populatedPlaylistDefaults } from '#lib/test-utils/playlist-detail.ts';
 import { words } from '#lib/words/en.ts';
 import { makePlaylistDetail as detail } from '#lib/test-utils/factories.ts';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
@@ -18,6 +23,8 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 		...actual,
 		sharePlaylist: vi.fn(),
 		unsharePlaylist: vi.fn(),
+		addPlaylistToPlaylist: vi.fn(),
+		fetchPlaylists: vi.fn(),
 		uploadPlaylistCover: vi.fn(),
 		deletePlaylistCover: vi.fn(),
 		fetchPlaylist: vi.fn()
@@ -31,12 +38,25 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 	selectSong: vi.fn()
 }));
 
-import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { selectSong } from '#lib/stores/navigation.ts';
-import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '#lib/api/client.ts';
+import {
+	addPlaylistToPlaylist,
+	deletePlaylistCover,
+	fetchPlaylist,
+	fetchPlaylists,
+	uploadPlaylistCover
+} from '#lib/api/client.ts';
+import { playlistList } from '#lib/stores/playlists.ts';
+import { makePlaylist } from '#lib/test-utils/factories.ts';
 import { addToast } from '#lib/stores/toast.ts';
 
 const { render: mountPlaylistView, cleanup } = createComponentMount(PlaylistDetailView);
+
+async function openCoverRows(target: HTMLElement): Promise<void> {
+	menuRow(await openCollectionMenu(target), words['collectionMenu.cover']).click();
+	await tick();
+}
 
 beforeEach(() => {
 	vi.mocked(fetchPlaylist).mockReset();
@@ -91,12 +111,8 @@ describe('PlaylistDetailView menu', () => {
 		vi.mocked(deletePlaylistCover).mockResolvedValue({ ...playlistWithCover, cover: null });
 		const target = await mountPlaylistView();
 
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		const upload = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(item) => item.textContent?.trim() === words['collectionMenu.upload']
-		);
-		upload?.click();
+		await openCoverRows(target);
+		menuRow(document.body, words['collectionMenu.upload']).click();
 		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 		const file = new File(['cover'], 'cover.png', { type: 'image/png' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
@@ -105,12 +121,8 @@ describe('PlaylistDetailView menu', () => {
 		await tick();
 		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(customCover.detail);
 
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		const remove = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(item) => item.textContent?.trim() === words['collectionMenu.removeCover']
-		);
-		remove?.click();
+		await openCoverRows(target);
+		menuRow(document.body, words['collectionMenu.removeCover']).click();
 		await vi.waitFor(() => expect(deletePlaylistCover).toHaveBeenCalledWith('p1'));
 		await tick();
 		expect(target.querySelector('.header-cover img')).toBeNull();
@@ -137,11 +149,8 @@ describe('PlaylistDetailView menu', () => {
 		vi.mocked(uploadPlaylistCover).mockRejectedValue(failure);
 		const target = await mountPlaylistView();
 
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item'))
-			.find((item) => item.textContent?.trim() === menuItem)
-			?.click();
+		await openCoverRows(target);
+		menuRow(document.body, menuItem).click();
 		if (picksFile) {
 			const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 			const file = new File(['cover'], 'cover.png', { type: 'image/png' });
@@ -152,17 +161,87 @@ describe('PlaylistDetailView menu', () => {
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
 	});
 
-	it('1859_R1: lists Share playlist, Upload…, Rename and Delete playlist in the menu, with no Save offline', async () => {
-		const target = await mountPlaylistView();
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
+	it('playlist_rule_1: lists Rename, Cover, Add to…, Share and Delete in the menu, with no Save offline', async () => {
+		const menu = await openCollectionMenu(await mountPlaylistView());
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
 		expect(menuRowLabels(menu)).toEqual([
-			words['collectionMenu.playlistShare'],
-			words['collectionMenu.upload'],
 			words['collectionMenu.rename'],
+			words['collectionMenu.cover'],
+			words['collectionMenu.addTo'],
+			words['collectionMenu.playlistShare'],
 			words['collectionMenu.playlistDelete']
 		]);
+	});
+
+	describe('playlist_rule_1: Add to…', () => {
+		async function openPicker(target: HTMLElement): Promise<HTMLElement> {
+			const menu = await openCollectionMenu(target);
+			menuRow(menu, words['collectionMenu.addTo']).click();
+			await tick();
+			return menu;
+		}
+
+		beforeEach(() => {
+			vi.mocked(addToast).mockReset();
+			playlistList.update((lists) => [
+				...lists,
+				makePlaylist({ id: 'p-run', title: 'Morning Run', entry_count: 2 })
+			]);
+			vi.mocked(fetchPlaylists).mockResolvedValue(get(playlistList));
+		});
+
+		it('offers the other playlists and New playlist, not the open one', async () => {
+			const menu = await openPicker(await mountPlaylistView());
+
+			expect(
+				Array.from(
+					menu.querySelectorAll('.menu-picker-row .ap-title'),
+					(title) => title.textContent
+				)
+			).toEqual(['Morning Run']);
+			expect(menu.querySelector('.ap-input')).not.toBeNull();
+		});
+
+		it('adds the open playlist to the chosen one and tells what was added', async () => {
+			vi.mocked(addPlaylistToPlaylist).mockResolvedValue({ added_count: 1, skipped: [] });
+			const target = await mountPlaylistView();
+			await openPicker(target);
+
+			requireElement<HTMLButtonElement>(document.body, '.menu-picker-row').click();
+
+			await vi.waitFor(() => expect(addPlaylistToPlaylist).toHaveBeenCalledWith('p-run', 'p1'));
+			await vi.waitFor(() =>
+				expect(addToast).toHaveBeenCalledWith(words['playlistPage.addedToPlaylist'], 'success')
+			);
+			expect(document.body.querySelector('.menu-panel')).toBeNull();
+		});
+
+		it('counts the skipped entries in the toast', async () => {
+			vi.mocked(addPlaylistToPlaylist).mockResolvedValue({
+				added_count: 1,
+				skipped: [{ song_id: 's2', title: 'Gone', reason: 'missing_audio' }]
+			});
+			await openPicker(await mountPlaylistView());
+
+			requireElement<HTMLButtonElement>(document.body, '.menu-picker-row').click();
+
+			await vi.waitFor(() =>
+				expect(addToast).toHaveBeenCalledWith(
+					words['playlistPage.addedSkipped']({ added: '1', skipped: '1' }),
+					'info'
+				)
+			);
+		});
+
+		it('toasts the failure when the add is refused', async () => {
+			vi.mocked(addPlaylistToPlaylist).mockRejectedValue(
+				new ApiError(404, 'Playlist not found', '/api/playlists/p-run/entries/playlist')
+			);
+			await openPicker(await mountPlaylistView());
+
+			requireElement<HTMLButtonElement>(document.body, '.menu-picker-row').click();
+
+			await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Playlist not found', 'error'));
+		});
 	});
 });

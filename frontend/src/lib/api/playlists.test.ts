@@ -9,6 +9,7 @@ vi.mock('$app/navigation', async () =>
 import {
 	addAlbumToPlaylist,
 	addGenerationToPlaylist,
+	addPlaylistToPlaylist,
 	addSongToPlaylist,
 	createPlaylist,
 	deletePlaylistCover,
@@ -66,6 +67,13 @@ describe('playlist API contract', () => {
 			'/api/playlists/p-1/entries/album',
 			'POST',
 			{ album_id: 'a-1' }
+		],
+		[
+			'adds a playlist',
+			() => addPlaylistToPlaylist('p-1', 'p-2'),
+			'/api/playlists/p-1/entries/playlist',
+			'POST',
+			{ source_playlist_id: 'p-2' }
 		],
 		[
 			'reorders an entry',

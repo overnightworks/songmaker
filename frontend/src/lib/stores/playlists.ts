@@ -9,12 +9,17 @@ import {
 	addGenerationToPlaylist as apiAddGen,
 	addSongToPlaylist as apiAddSong,
 	addAlbumToPlaylist as apiAddAlbum,
+	addPlaylistToPlaylist as apiAddPlaylist,
 	removeFromPlaylist as apiRemoveEntry,
 	reorderPlaylistEntry as apiReorder,
 	uploadPlaylistCover as apiUploadPlaylistCover,
 	deletePlaylistCover as apiDeletePlaylistCover
 } from '#lib/api/client.ts';
-import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
+import type {
+	AddEntriesToPlaylistResult,
+	PlaylistDetailItem,
+	PlaylistItem
+} from '#lib/api/types.ts';
 import { pageText } from '#lib/utils/page-words.ts';
 import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import { forgetListenedPlace } from '#lib/stores/libraryOrder.ts';
@@ -331,8 +336,17 @@ export async function addSongToPlaylist(playlistId: string, songId: string): Pro
 export async function addAlbumToPlaylist(
 	playlistId: string,
 	albumId: string
-): Promise<AddAlbumToPlaylistResult> {
+): Promise<AddEntriesToPlaylistResult> {
 	const result = await apiAddAlbum(playlistId, albumId);
+	await refreshPlaylist(playlistId);
+	return result;
+}
+
+export async function addPlaylistToPlaylist(
+	playlistId: string,
+	sourcePlaylistId: string
+): Promise<AddEntriesToPlaylistResult> {
+	const result = await apiAddPlaylist(playlistId, sourcePlaylistId);
 	await refreshPlaylist(playlistId);
 	return result;
 }

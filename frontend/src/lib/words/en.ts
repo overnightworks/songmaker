@@ -224,6 +224,7 @@ export type Words = {
     readonly "collectionMenu.playlistShare": string;
     readonly "collectionMenu.shareOn": string;
     readonly "collectionMenu.shareOff": string;
+    readonly "collectionMenu.coverBack": string;
     readonly "collectionMenu.upload": string;
     readonly "collectionMenu.removeCover": string;
     readonly "collectionMenu.rename": string;
@@ -311,6 +312,9 @@ export type Words = {
     readonly "playlistPage.coverSaveFailed": string;
     readonly "playlistPage.coverRemoved": string;
     readonly "playlistPage.coverRemoveFailed": string;
+    readonly "playlistPage.addedToPlaylist": string;
+    readonly "playlistPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => string;
+    readonly "playlistPage.addFailed": string;
     readonly "playlistPage.removeFailed": string;
     readonly "playlistPage.reorderFailed": string;
     readonly "playlistPage.deleteTitle": (gaps: { readonly title: string }) => string;
@@ -1677,14 +1681,15 @@ export const words: Words = {
     "collectionMenu.addTo": "Add to…",
     "collectionMenu.archive": "Archive",
     "collectionMenu.albumShare": "Share",
-    "collectionMenu.playlistShare": "Share playlist",
+    "collectionMenu.playlistShare": "Share",
     "collectionMenu.shareOn": "on",
     "collectionMenu.shareOff": "off",
+    "collectionMenu.coverBack": "Back",
     "collectionMenu.upload": "Upload…",
     "collectionMenu.removeCover": "Remove cover",
     "collectionMenu.rename": "Rename",
     "collectionMenu.albumDelete": "Delete",
-    "collectionMenu.playlistDelete": "Delete playlist",
+    "collectionMenu.playlistDelete": "Delete",
     "albumPage.loading": "Loading albums…",
     "albumPage.retry": "Retry",
     "albumPage.noSongs": "No songs yet.",
@@ -1802,6 +1807,9 @@ export const words: Words = {
     "playlistPage.coverSaveFailed": "Cover upload failed",
     "playlistPage.coverRemoved": "Cover removed",
     "playlistPage.coverRemoveFailed": "Cover remove failed",
+    "playlistPage.addedToPlaylist": "Added to playlist",
+    "playlistPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => "Added " + gaps.added + ", skipped " + gaps.skipped,
+    "playlistPage.addFailed": "Failed to add",
     "playlistPage.removeFailed": "Remove failed",
     "playlistPage.reorderFailed": "Reorder failed",
     "playlistPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",

@@ -896,8 +896,8 @@ msgid "Share"
 msgstr "Teilen"
 
 msgctxt "collectionMenu.playlistShare"
-msgid "Share playlist"
-msgstr "Playlist teilen"
+msgid "Share"
+msgstr "Teilen"
 
 msgctxt "collectionMenu.shareOn"
 msgid "on"
@@ -906,6 +906,10 @@ msgstr "an"
 msgctxt "collectionMenu.shareOff"
 msgid "off"
 msgstr "aus"
+
+msgctxt "collectionMenu.coverBack"
+msgid "Back"
+msgstr "Zurück"
 
 msgctxt "collectionMenu.upload"
 msgid "Upload…"
@@ -924,8 +928,8 @@ msgid "Delete"
 msgstr "Löschen"
 
 msgctxt "collectionMenu.playlistDelete"
-msgid "Delete playlist"
-msgstr "Playlist löschen"
+msgid "Delete"
+msgstr "Löschen"
 
 msgctxt "albumPage.loading"
 msgid "Loading albums…"
@@ -1274,6 +1278,18 @@ msgstr "Cover entfernt"
 msgctxt "playlistPage.coverRemoveFailed"
 msgid "Cover remove failed"
 msgstr "Cover konnte nicht entfernt werden"
+
+msgctxt "playlistPage.addedToPlaylist"
+msgid "Added to playlist"
+msgstr "Zur Playlist hinzugefügt"
+
+msgctxt "playlistPage.addedSkipped"
+msgid "Added {added}, skipped {skipped}"
+msgstr "{added} hinzugefügt, {skipped} übersprungen"
+
+msgctxt "playlistPage.addFailed"
+msgid "Failed to add"
+msgstr "Hinzufügen fehlgeschlagen"
 
 msgctxt "playlistPage.removeFailed"
 msgid "Remove failed"

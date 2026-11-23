@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 import {
 	addAlbumToPlaylist,
 	addGenerationToPlaylist,
+	addPlaylistToPlaylist as addPlaylistApi,
 	addSongToPlaylist,
 	createPlaylist,
 	deletePlaylistApi,
@@ -22,7 +23,11 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
+import type {
+	AddEntriesToPlaylistResult,
+	PlaylistDetailItem,
+	PlaylistItem
+} from '#lib/api/types.ts';
 import { words } from '#lib/words/en.ts';
 import {
 	createNewPlaylist,
@@ -33,6 +38,7 @@ import {
 	addGenerationToPlaylist as addGeneration,
 	addSongToPlaylist as addSong,
 	addAlbumToPlaylist as addAlbum,
+	addPlaylistToPlaylist as addPlaylist,
 	loadPlaylistDetail,
 	loadPlaylists,
 	playlistDetailLoad,
@@ -56,12 +62,13 @@ vi.mock('#lib/api/client.ts', () => ({
 	addGenerationToPlaylist: vi.fn(),
 	addSongToPlaylist: vi.fn(),
 	addAlbumToPlaylist: vi.fn(),
+	addPlaylistToPlaylist: vi.fn(),
 	removeFromPlaylist: vi.fn(),
 	reorderPlaylistEntry: vi.fn(),
 	uploadPlaylistCover: vi.fn()
 }));
 
-const albumMutationResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
+const albumMutationResult: AddEntriesToPlaylistResult = { added_count: 2, skipped: [] };
 
 beforeEach(() => {
 	resetPlaylistsForTests();
@@ -549,6 +556,12 @@ describe('playlist mutations', () => {
 			expectedResult: albumMutationResult
 		},
 		{
+			description: 'adds a playlist',
+			mutate: () => addPlaylist('p1', 'p2'),
+			assertRequest: () => expect(addPlaylistApi).toHaveBeenCalledWith('p1', 'p2'),
+			expectedResult: albumMutationResult
+		},
+		{
 			description: 'removes an entry',
 			mutate: () => removePlaylistEntry('p1', 'entry-1'),
 			assertRequest: () => expect(removeFromPlaylist).toHaveBeenCalledWith('p1', 'entry-1')
@@ -570,6 +583,7 @@ describe('playlist mutations', () => {
 			});
 			vi.mocked(fetchPlaylists).mockResolvedValue([refreshed]);
 			vi.mocked(addAlbumToPlaylist).mockResolvedValue(albumMutationResult);
+			vi.mocked(addPlaylistApi).mockResolvedValue(albumMutationResult);
 
 			const result = await mutate();
 

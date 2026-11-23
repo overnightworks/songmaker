@@ -9,6 +9,7 @@
 		selectedPlaylistId,
 		playlistDetailLoad,
 		loadPlaylistDetail,
+		addPlaylistToPlaylist,
 		deletePlaylist,
 		renamePlaylist,
 		removePlaylistEntry,
@@ -174,6 +175,26 @@
 		}
 	}
 
+	async function onAddToPlaylist(targetPlaylistId: string): Promise<void> {
+		if (!playlistMeta) return;
+		try {
+			const result = await addPlaylistToPlaylist(targetPlaylistId, playlistMeta.id);
+			if (result.skipped.length > 0) {
+				addToast(
+					pageText('playlistPage.addedSkipped', {
+						added: String(result.added_count),
+						skipped: String(result.skipped.length)
+					}),
+					'info'
+				);
+			} else {
+				addToast(pageText('playlistPage.addedToPlaylist'), 'success');
+			}
+		} catch (error) {
+			addToast(describeFailure(error, pageText('playlistPage.addFailed')), 'error');
+		}
+	}
+
 	async function onRemoveEntry(entryId: string): Promise<void> {
 		if (!playlistDetail) return;
 		try {
@@ -234,6 +255,7 @@
 				ondelete={() => (showDeleteConfirm = true)}
 				oncover={onCoverAction}
 				onremovecover={onCoverRemove}
+				onaddto={(playlistId) => void onAddToPlaylist(playlistId)}
 			/>
 			<input
 				bind:this={coverInput}

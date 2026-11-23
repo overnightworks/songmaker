@@ -133,6 +133,7 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
 
 		await page.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
+		await page.getByRole('button', { name: words['collectionMenu.cover'], exact: true }).click();
 		await page.getByRole('button', { name: words['collectionMenu.upload'], exact: true }).click();
 		await page.locator('.cover-file-input').setInputFiles({
 			name: 'playlist-cover.png',
@@ -166,6 +167,7 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		await wallPlaylistTile.click();
 		await expect(page.getByRole('heading', { name: playlistTitle })).toBeVisible();
 		await page.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
+		await page.getByRole('button', { name: words['collectionMenu.cover'], exact: true }).click();
 		await page
 			.getByRole('button', { name: words['collectionMenu.removeCover'], exact: true })
 			.click();

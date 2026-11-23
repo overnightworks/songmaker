@@ -59,6 +59,10 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **album_rule_10** Rows carry no play glyph — the row is the target, the playing row shows the equalizer.
 - **album_rule_11** An album song row with at least one take and no Pick carries an amber No Pick badge after its title; a song without takes carries none. Once the album’s songs are loaded, the header line reads “n songs · k without a Pick” (k in amber; no k part when none lacks a Pick). Share pages show neither. *e.g. Lantern Song has 3 takes and no Pick: “Lantern Song [No Pick]”, and the header reads “9 songs · 2 without a Pick”. Not: a badge on Low Tide, which has no takes.*
 
+## Playlist page
+
+- **playlist_rule_1** ⋯ opens the one popover form at both widths, 5 rows: Rename · Cover · Add to… · Share · Delete (red, last). Cover opens Upload… and, once a cover is set, Remove cover in the same popover; Add to… opens the picker of the other playlists and New playlist… there, and a choice appends the playlist's playable entries, in order, to that playlist. A toast counts the entries skipped. *e.g. Night Drive's Add to… lists Morning Run and New playlist…, not Night Drive. Not: A sheet over the page, or the open playlist offered to itself.*
+
 ## Create, account and settings
 
 - **account_rule_1** One + NEW, on Home’s title line at both widths, with or without albums. It opens the one popover form — Album · Playlist; choosing one unfolds its inline card (album: Title, Artist optional, CREATE, ×; playlist: Name, CREATE, ×). On the phone it is the only create entry for either; on the desktop the Library and Playlists heads carry it too.
