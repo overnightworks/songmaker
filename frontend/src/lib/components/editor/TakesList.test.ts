@@ -1,6 +1,7 @@
 import { failed } from '#lib/test-utils/generate-states.ts';
 import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick, unmount } from 'svelte';
+import type { GenerationItem } from '#lib/api/types.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import {
@@ -821,7 +822,7 @@ describe('TakesList', () => {
 });
 
 describe('TakesList archived takes', () => {
-	async function renderWithArchived() {
+	async function renderWithArchived(unplayable: Partial<GenerationItem> = { is_archived: true }) {
 		return render({
 			song: song({
 				...versionedSongDefaults(),
@@ -836,14 +837,14 @@ describe('TakesList archived takes', () => {
 						id: 'g-arch',
 						version_number: 3,
 						generation_number: 2,
-						is_archived: true
+						...unplayable
 					})
 				]
 			})
 		});
 	}
 
-	it('offers no play affordance and does not play on click', async () => {
+	it('offers no play affordance', async () => {
 		const { target } = await renderWithArchived();
 		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
 		if (!archivedRow) throw new Error('Expected the archived take row');
@@ -852,10 +853,6 @@ describe('TakesList archived takes', () => {
 		expect(archivedRow.getAttribute('title')).toBe(words['takeRow.archivedTitle']);
 		expect(archivedRow.querySelector('.take-label')?.previousElementSibling).toBeNull();
 		expect(archivedRow.querySelector('.select-btn')).toBeNull();
-
-		archivedRow.click();
-		await tick();
-		expect(playTake).not.toHaveBeenCalled();
 	});
 
 	it('owns and anchors its menu, and its Add to… picker on a live row', async () => {
@@ -899,26 +896,13 @@ describe('TakesList archived takes', () => {
 		);
 	});
 
-	it('does not play an archived take from its unreachable row body outside selection mode', async () => {
-		const { target } = await renderWithArchived();
-		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
-		if (!archivedRow) throw new Error('Expected the archived take row');
-		const body = archivedRow.querySelector<HTMLElement>('.take-summary');
-		expect(body?.getAttribute('aria-disabled')).toBe('true');
-		expect(body?.getAttribute('tabindex')).toBe('-1');
-		body?.click();
-		await tick();
-		expect(playTake).not.toHaveBeenCalled();
-	});
-
-	it('does not offer a take without audio as playable, and a tap on it plays nothing', async () => {
-		const { target } = await render({
-			song: song({
-				...versionedSongDefaults(),
-				generations: [generation({ ...measuredTakeDefaults(), id: 'g-silent', mp3_path: '' })]
-			})
-		});
-		const body = target.querySelector<HTMLElement>('.take-row .take-summary');
+	it.each([
+		{ take: 'an archived take', unplayable: { is_archived: true } },
+		{ take: 'a take without audio', unplayable: { mp3_path: '' } }
+	])('a tap on the unreachable row body of $take plays nothing', async ({ unplayable }) => {
+		const { target } = await renderWithArchived(unplayable);
+		const [, row] = target.querySelectorAll<HTMLElement>('.take-row');
+		const body = row?.querySelector<HTMLElement>('.take-summary');
 		expect(body?.getAttribute('aria-disabled')).toBe('true');
 		expect(body?.getAttribute('tabindex')).toBe('-1');
 		body?.click();

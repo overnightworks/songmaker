@@ -1,9 +1,13 @@
 import { untrack } from 'svelte';
 import { get, toStore } from 'svelte/store';
+import { fetchPlaylist, fetchSong } from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { GenerationItem, PlaylistDetailItem, SongItem } from '#lib/api/types.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { currentUser } from '#lib/stores/auth.ts';
 import { LIBRARY_TAKE_POOLS, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
+import { isPlayableTake } from '#lib/utils/playable.ts';
 import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 
 // What the app was playing, kept per user on this device, so that reopening
@@ -97,12 +101,18 @@ export interface SavedPlayback {
 	position: number;
 }
 
-/**
- * Drops the record a restore found naming a song, take or queue that is gone,
- * so later page loads do not ask the server for it again. A record another
- * tab has written for another take since is not this restore's to drop.
- */
-export function forgetSavedPlayback(gone: SavedPlayback): void {
+/** The signed-in user's saved take; null when none is saved or it cannot be read. */
+export function savedPlayback(): SavedPlayback | null {
+	const userId = signedInUserId();
+	if (userId === null) return null;
+	const saved = parseSavedPlayback(readStorage(storageKey(userId)));
+	if (saved !== null) knownRecord = { userId, ...saved };
+	return saved;
+}
+
+// A record another tab has since written for another take is not this
+// restore's to drop.
+function forgetSavedPlayback(gone: SavedPlayback): void {
 	const userId = signedInUserId();
 	if (userId === null) return;
 	const stored = parseSavedPlayback(readStorage(storageKey(userId)));
@@ -111,13 +121,45 @@ export function forgetSavedPlayback(gone: SavedPlayback): void {
 	}
 }
 
-/** The signed-in user's saved take; null when none is saved or it cannot be read. */
-export function savedPlayback(): SavedPlayback | null {
-	const userId = signedInUserId();
-	if (userId === null) return null;
-	const saved = parseSavedPlayback(readStorage(storageKey(userId)));
-	if (saved !== null) knownRecord = { userId, ...saved };
-	return saved;
+// A restore reports nothing it cannot find: a server out of reach, or an
+// answer refusing the request, is no take to restore. A 404 means the record
+// names something gone, so the record goes with it and later page loads do
+// not ask again; any other failure keeps it for the next load.
+async function quietly<T>(saved: SavedPlayback, request: () => Promise<T>): Promise<T | null> {
+	try {
+		return await request();
+	} catch (err) {
+		if (err instanceof ApiError && err.status === 404) forgetSavedPlayback(saved);
+		if (err instanceof ApiError || err instanceof NetworkError) return null;
+		throw err;
+	}
+}
+
+/**
+ * The saved take as its song holds it now, when it can play. The server
+ * answers 404 for a song deleted or out of this user's reach, and a take
+ * deleted, archived or left without audio since is missing from its song or
+ * marked so; the record of any of them is forgotten.
+ */
+export async function loadSavedTake(
+	saved: SavedPlayback
+): Promise<{ song: SongItem; take: GenerationItem } | null> {
+	const song = await quietly(saved, () => fetchSong(saved.songId));
+	if (song === null) return null;
+	const take = song.generations.find((gen) => gen.id === saved.generationId && isPlayableTake(gen));
+	if (take === undefined) {
+		forgetSavedPlayback(saved);
+		return null;
+	}
+	return { song, take };
+}
+
+/** The saved take's playlist; null once it is deleted or out of reach. */
+export function loadSavedPlaylist(
+	saved: SavedPlayback,
+	playlistId: string
+): Promise<PlaylistDetailItem | null> {
+	return quietly(saved, () => fetchPlaylist(playlistId));
 }
 
 interface PlaybackToFollow {

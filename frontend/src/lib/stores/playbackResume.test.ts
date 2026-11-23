@@ -1,15 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
+import { fetchPlaylist, fetchSong } from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { GenerationItem } from '#lib/api/types.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { currentUser } from '#lib/stores/auth.ts';
 import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import {
 	followPlaybackForResume,
 	forgetPlaybackResume,
-	forgetSavedPlayback,
+	loadSavedPlaylist,
+	loadSavedTake,
 	savedPlayback,
-	type ResumeQueueSource
+	type ResumeQueueSource,
+	type SavedPlayback
 } from './playbackResume';
+
+vi.mock('#lib/api/client.ts', () => ({ fetchPlaylist: vi.fn(), fetchSong: vi.fn() }));
 
 const LISTENER = makeAuthUser({ id: 'u-listener', username: 'listener', role: 'user' });
 const OTHER_LISTENER = makeAuthUser({ id: 'u-other', username: 'other', role: 'user' });
@@ -406,30 +413,89 @@ describe('playback resume record', () => {
 		expect(savedPlayback()).toBeNull();
 	});
 
-	it('a record the restore found gone is forgotten', () => {
-		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(WHOLE_RECORD));
-		const saved = savedPlayback();
-		if (saved === null) throw new Error('the record was not read');
+	describe('loading the saved take for a restore', () => {
+		function saveWholeRecord(): SavedPlayback {
+			localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(WHOLE_RECORD));
+			const saved = savedPlayback();
+			if (saved === null) throw new Error('the record was not read');
+			return saved;
+		}
 
-		forgetSavedPlayback(saved);
+		const savedTake = makeGeneration({ id: WHOLE_RECORD.generationId });
+		const songOf = (generations: GenerationItem[]) =>
+			makeSong({ id: WHOLE_RECORD.songId, generations });
 
-		expect(localStorage.getItem(recordKey(LISTENER.id))).toBeNull();
-		expect(savedPlayback()).toBeNull();
-	});
+		it('finds a take that can still play, and keeps its record', async () => {
+			const saved = saveWholeRecord();
+			const song = songOf([savedTake]);
+			vi.mocked(fetchSong).mockResolvedValueOnce(song);
 
-	it('a record another tab has since written for another take is kept', () => {
-		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(WHOLE_RECORD));
-		const saved = savedPlayback();
-		if (saved === null) throw new Error('the record was not read');
-		const newerRecord = {
-			...WHOLE_RECORD,
-			generationId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d09'
-		};
-		localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+			await expect(loadSavedTake(saved)).resolves.toEqual({ song, take: savedTake });
 
-		forgetSavedPlayback(saved);
+			expect(storedRecord(LISTENER.id)).not.toBeNull();
+		});
 
-		expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
+		it.each([
+			{ gone: 'a deleted song', answer: () => Promise.reject(new ApiError(404, 'gone', '/x')) },
+			{ gone: 'a deleted take', answer: () => Promise.resolve(songOf([])) },
+			{
+				gone: 'an archived take',
+				answer: () => Promise.resolve(songOf([{ ...savedTake, is_archived: true }]))
+			},
+			{
+				gone: 'a take without audio',
+				answer: () => Promise.resolve(songOf([{ ...savedTake, mp3_path: '' }]))
+			}
+		])('finds nothing and forgets the record naming $gone', async ({ answer }) => {
+			const saved = saveWholeRecord();
+			vi.mocked(fetchSong).mockImplementationOnce(answer);
+
+			await expect(loadSavedTake(saved)).resolves.toBeNull();
+
+			expect(storedRecord(LISTENER.id)).toBeNull();
+		});
+
+		it.each([
+			{ failure: 'a song out of reach', error: new ApiError(403, 'no', '/x') },
+			{ failure: 'a server error', error: new ApiError(503, 'down', '/x') },
+			{
+				failure: 'an unreachable server',
+				error: new NetworkError('/x', new TypeError('Failed to fetch'))
+			}
+		])('finds nothing but keeps the record when the server answers $failure', async ({ error }) => {
+			const saved = saveWholeRecord();
+			vi.mocked(fetchSong).mockRejectedValueOnce(error);
+
+			await expect(loadSavedTake(saved)).resolves.toBeNull();
+
+			expect(storedRecord(LISTENER.id)).not.toBeNull();
+		});
+
+		it('forgets the record of a playlist the server no longer has, and keeps it on a server error', async () => {
+			const saved = saveWholeRecord();
+			vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(503, 'down', '/x'));
+			await expect(loadSavedPlaylist(saved, 'p-saved')).resolves.toBeNull();
+			expect(storedRecord(LISTENER.id)).not.toBeNull();
+
+			vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(404, 'gone', '/x'));
+			await expect(loadSavedPlaylist(saved, 'p-saved')).resolves.toBeNull();
+
+			expect(storedRecord(LISTENER.id)).toBeNull();
+		});
+
+		it("keeps a record that names another take than the one found gone, as another tab's save", async () => {
+			const saved = saveWholeRecord();
+			const newerRecord = {
+				...WHOLE_RECORD,
+				generationId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d09'
+			};
+			localStorage.setItem(recordKey(LISTENER.id), JSON.stringify(newerRecord));
+			vi.mocked(fetchSong).mockRejectedValueOnce(new ApiError(404, 'gone', '/x'));
+
+			await loadSavedTake(saved);
+
+			expect(storedRecord(LISTENER.id)).toEqual(newerRecord);
+		});
 	});
 
 	it('unreadable storage reads as nothing saved', () => {

@@ -1865,7 +1865,7 @@ describe('starting album playback', () => {
 
 		await playAlbum('a1');
 
-		const vm = buildQueueViewModel(get(queueContext), audioPlayer.current, get(songList));
+		const vm = buildQueueViewModel(get(queueContext), audioPlayer.current, []);
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 	});
 
@@ -1951,7 +1951,7 @@ describe('the queue names its next take', () => {
 	function currentRowAndTake(): { row: number; queueIndex: number; take: string | undefined } {
 		const ctx = get(queueContext);
 		return {
-			row: buildQueueViewModel(ctx, audioPlayer.current, get(songList)).currentIndex,
+			row: buildQueueViewModel(ctx, audioPlayer.current, []).currentIndex,
 			queueIndex: ctx.index ?? -1,
 			take: audioPlayer.current?.generation.id
 		};
@@ -2081,12 +2081,10 @@ describe('the queue names its next take', () => {
 	])('Up next and Next give one answer (%s)', async (_queue, nextGenerationId, start) => {
 		songList.set([albumSong(1), albumSong(2), albumSong(3)]);
 		await start();
-
 		const ctx = get(queueContext);
 		const current = audioPlayer.current;
-		expect(buildQueueViewModel(ctx, current, get(songList)).upNext?.generationId ?? null).toBe(
-			nextGenerationId
-		);
+		const { upNext } = buildQueueViewModel(ctx, current, []);
+		expect(upNext?.generationId ?? null).toBe(nextGenerationId);
 		expect(canPlayNextSong(current, get(songList), ctx)).toBe(nextGenerationId !== null);
 	});
 
@@ -2109,9 +2107,7 @@ describe('the queue names its next take', () => {
 
 		const ctx = get(queueContext);
 		expect(
-			buildQueueViewModel(ctx, audioPlayer.current, get(songList)).items.map(
-				(row) => row.generationId
-			)
+			buildQueueViewModel(ctx, audioPlayer.current, []).items.map((row) => row.generationId)
 		).toEqual(['g1', 'g2-repicked', 'g3']);
 		expect(preloadedGenerationId()).toBe('g2-repicked');
 		playNextSong();
@@ -2138,8 +2134,7 @@ describe('the queue names its next take', () => {
 
 				expect(preloadedGenerationId()).toBe('g3');
 				expect(
-					buildQueueViewModel(get(queueContext), audioPlayer.current, get(songList)).upNext
-						?.generationId
+					buildQueueViewModel(get(queueContext), audioPlayer.current, []).upNext?.generationId
 				).toBe('g3');
 				expect(mediaSession.metadata).toEqual(expect.objectContaining({ title: 'Song 2' }));
 			}
@@ -2255,8 +2250,7 @@ describe('the queue names its next take', () => {
 		}
 
 		function upNextGenerationId(): string | undefined {
-			return buildQueueViewModel(get(queueContext), audioPlayer.current, get(songList)).upNext
-				?.generationId;
+			return buildQueueViewModel(get(queueContext), audioPlayer.current, []).upNext?.generationId;
 		}
 
 		function takeAfterCurrentGenerationId(): string | undefined {
@@ -4483,67 +4477,28 @@ describe('restoring the last playback after a reload', () => {
 	});
 
 	it.each([
-		{
-			take: 'a deleted song',
-			answer: () => Promise.reject(new ApiError(404, 'gone', '/x')),
-			recordKept: false
-		},
-		{
-			take: 'a foreign song',
-			answer: () => Promise.reject(new ApiError(403, 'no', '/x')),
-			recordKept: true
-		},
+		{ take: 'a deleted song', answer: () => Promise.reject(new ApiError(404, 'gone', '/x')) },
+		{ take: 'a foreign song', answer: () => Promise.reject(new ApiError(403, 'no', '/x')) },
 		{
 			take: 'a deleted take',
-			answer: () => Promise.resolve({ ...savedSong, generations: [] }),
-			recordKept: false
+			answer: () => Promise.resolve({ ...savedSong, generations: [] })
 		},
 		{
 			take: 'an archived take',
 			answer: () =>
-				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, is_archived: true }] }),
-			recordKept: false
-		},
-		{
-			take: 'a take without audio',
-			answer: () =>
-				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, mp3_path: '' }] }),
-			recordKept: false
-		},
-		{
-			take: 'a server error',
-			answer: () => Promise.reject(new ApiError(503, 'down', '/x')),
-			recordKept: true
+				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, is_archived: true }] })
 		},
 		{
 			take: 'an unreachable server',
-			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch'))),
-			recordKept: true
+			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch')))
 		}
-	])(
-		'a deleted, archived or foreign take restores nothing, and only a gone one is forgotten ($take)',
-		async ({ answer, recordKept }) => {
-			vi.mocked(fetchSong).mockImplementationOnce(answer);
+	])('a deleted, archived or foreign take restores nothing ($take)', async ({ answer }) => {
+		vi.mocked(fetchSong).mockImplementationOnce(answer);
 
-			await restoreLastPlayback();
-
-			expect(audioPlayer.current).toBeNull();
-			expect(get(toasts)).toEqual([]);
-			expect(storedRecord() !== null).toBe(recordKept);
-		}
-	);
-
-	it('a playlist deleted since the record was saved is forgotten, and a failing server is not', async () => {
-		saveRecord({ source: QUEUES.playlist.source });
-		vi.mocked(fetchSong).mockResolvedValue(savedSong);
-		vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(503, 'down', '/x'));
-		await restoreLastPlayback();
-		expect(storedRecord()).not.toBeNull();
-
-		vi.mocked(fetchPlaylist).mockRejectedValueOnce(new ApiError(404, 'gone', '/x'));
 		await restoreLastPlayback();
 
-		expect(storedRecord()).toBeNull();
+		expect(audioPlayer.current).toBeNull();
+		expect(get(toasts)).toEqual([]);
 	});
 
 	it.each([

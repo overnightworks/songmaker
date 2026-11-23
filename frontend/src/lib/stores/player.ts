@@ -1,13 +1,8 @@
 import { writable, derived, get, readonly } from 'svelte/store';
-import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { fetchLibraryPoolQueue, fetchPlaylist, fetchSong } from '#lib/api/client.ts';
+import { NetworkError } from '#lib/api/fetch.ts';
+import { fetchLibraryPoolQueue, fetchSong } from '#lib/api/client.ts';
 import { recordSongListen } from '#lib/api/songs.ts';
-import {
-	bestTake,
-	isPlayableTake,
-	songHasPlayableTake,
-	songTakesLoaded
-} from '#lib/utils/playable.ts';
+import { bestTake, songHasPlayableTake, songTakesLoaded } from '#lib/utils/playable.ts';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -60,7 +55,8 @@ import {
 } from '#lib/stores/playlists.ts';
 import {
 	followPlaybackForResume,
-	forgetSavedPlayback,
+	loadSavedPlaylist,
+	loadSavedTake,
 	savedPlayback,
 	type ResumeQueueSource,
 	type SavedPlayback
@@ -1694,7 +1690,7 @@ export async function restoreLastPlayback(): Promise<void> {
 }
 
 async function restoreSavedPlayback(saved: SavedPlayback, tenure: PlayerTenure): Promise<void> {
-	const found = await playableSavedTake(saved);
+	const found = await loadSavedTake(saved);
 	if (found === null || !restoreMayLoad(tenure)) return;
 	const at = positionWithinTake(saved.position, found.take);
 	const { source } = saved;
@@ -1817,27 +1813,6 @@ function positionWithinTake(position: number, take: GenerationItem): number {
 		: position;
 }
 
-// The server answers 404 for a song deleted or out of this user's reach, and
-// a take deleted or archived since is missing from its song or marked so;
-// none of them, nor a server out of reach, is restored, and none is reported.
-// A record naming one of those gone ones is forgotten; one that failed only
-// for want of the server stays for the next page load.
-async function playableSavedTake(
-	saved: SavedPlayback
-): Promise<{ song: SongItem; take: GenerationItem } | null> {
-	const song = await quietly(
-		() => fetchSong(saved.songId),
-		() => forgetSavedPlayback(saved)
-	);
-	if (song === null) return null;
-	const take = song.generations.find((gen) => gen.id === saved.generationId && isPlayableTake(gen));
-	if (take === undefined) {
-		forgetSavedPlayback(saved);
-		return null;
-	}
-	return { song, take };
-}
-
 // A playlist deleted, out of reach, or no longer holding the take restores
 // nothing, as a lost take does.
 async function restorePlaylistQueue(
@@ -1847,10 +1822,7 @@ async function restorePlaylistQueue(
 	at: number,
 	tenure: PlayerTenure
 ): Promise<void> {
-	const playlist = await quietly(
-		() => fetchPlaylist(playlistId),
-		() => forgetSavedPlayback(saved)
-	);
+	const playlist = await loadSavedPlaylist(saved, playlistId);
 	if (playlist === null || !restoreMayLoad(tenure)) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
@@ -1858,14 +1830,4 @@ async function restorePlaylistQueue(
 		restart: true,
 		...restoredStart(at)
 	});
-}
-
-async function quietly<T>(request: () => Promise<T>, onNotFound?: () => void): Promise<T | null> {
-	try {
-		return await request();
-	} catch (err) {
-		if (err instanceof ApiError && err.status === 404) onNotFound?.();
-		if (err instanceof ApiError || err instanceof NetworkError) return null;
-		throw err;
-	}
 }
