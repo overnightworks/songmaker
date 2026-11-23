@@ -263,7 +263,6 @@ function albumMenuProps() {
 		oncover: vi.fn(),
 		onremovecover: vi.fn(),
 		hasCover: true,
-		oncurate: vi.fn(),
 		onaddto: vi.fn(),
 		onarchive: vi.fn()
 	};

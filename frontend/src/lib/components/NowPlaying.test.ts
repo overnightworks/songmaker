@@ -51,11 +51,9 @@ import { laidOutSeekLine, pointerOnSeekLine } from '#lib/test-utils/seek-line.ts
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import nowPlayingFrameSource from './NowPlayingFrame.svelte?raw';
 
-// setPick/setKeep stay mocked so a curation click asserts the call it makes,
+// setPick/setKeep stay mocked so a key press asserts the call it makes,
 // not the network + song-refresh chain behind it — takeActions.test.ts and
-// NowPlayingTake.test.ts already cover that chain. setPick defaults to a
-// successful pick (true); a test that needs the swallowed-failure case
-// overrides it with mockResolvedValueOnce(false).
+// NowPlayingTake.test.ts already cover that chain.
 // Stands in for the router the way the real one behaves for this app (issue
 // #275): a song selection can now cross from the wall's `/` into the song's
 // own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
@@ -67,7 +65,7 @@ vi.mock('$app/navigation', async () =>
 
 vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/stores/takeActions.ts')>()),
-	setPick: vi.fn().mockResolvedValue(true),
+	setPick: vi.fn().mockResolvedValue(undefined),
 	setKeep: vi.fn().mockResolvedValue(undefined)
 }));
 
@@ -934,38 +932,46 @@ describe('NowPlaying P and K keys', () => {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }));
 	}
 
-	it('P picks the playing take and stays on the song', async () => {
-		await renderSurface(playingTake(false, false));
+	it.each([
+		{
+			name: 'P picks the playing take and stays on the song',
+			key: 'p',
+			picked: false,
+			kept: false,
+			action: setPick,
+			expected: true
+		},
+		{
+			name: 'P on the picked take unpicks it',
+			key: 'p',
+			picked: true,
+			kept: false,
+			action: setPick,
+			expected: false
+		},
+		{
+			name: 'K keeps the playing take and stays on the song',
+			key: 'K',
+			picked: false,
+			kept: false,
+			action: setKeep,
+			expected: true
+		},
+		{
+			name: 'K on the kept take unkeeps it',
+			key: 'k',
+			picked: false,
+			kept: true,
+			action: setKeep,
+			expected: false
+		}
+	])('$name', async ({ key, picked, kept, action, expected }) => {
+		await renderSurface(playingTake(picked, kept));
 
-		press('p');
+		press(key);
 
-		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
+		await vi.waitFor(() => expect(action).toHaveBeenCalledWith('s1', 'g1', expected));
 		expect(queueIndex()).toBe(0);
-	});
-
-	it('P on the picked take unpicks it', async () => {
-		await renderSurface(playingTake(true, false));
-
-		press('p');
-
-		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', false));
-	});
-
-	it('K keeps the playing take and stays on the song', async () => {
-		await renderSurface(playingTake(false, false));
-
-		press('K');
-
-		await vi.waitFor(() => expect(setKeep).toHaveBeenCalledWith('s1', 'g1', true));
-		expect(queueIndex()).toBe(0);
-	});
-
-	it('K on the kept take unkeeps it', async () => {
-		await renderSurface(playingTake(false, true));
-
-		press('k');
-
-		await vi.waitFor(() => expect(setKeep).toHaveBeenCalledWith('s1', 'g1', false));
 	});
 
 	it('the keys act in a library queue too', async () => {
