@@ -145,7 +145,7 @@ def test_a_plain_read_tool_answers_as_the_browser_does(household: McpWorld, tool
 def test_a_write_tool_on_the_persons_own_resource_succeeds(
     household: McpWorld, tool: Tool,
 ) -> None:
-    with worker_ready():
+    with worker_ready(household.world.client):
         reply = household.call(tool.name, tool.arguments_for(ALICE))
 
     assert reply.is_error is False, reply.text
@@ -164,7 +164,7 @@ def test_a_write_tool_that_touches_another_persons_resource_is_refused_and_write
 ) -> None:
     before = household.snapshot()
 
-    with worker_ready():
+    with worker_ready(household.world.client):
         reply = household.call(tool.name, tool.arguments_for(subject, other))
 
     assert reply.is_error
@@ -305,7 +305,7 @@ def test_a_generating_tool_meets_the_persons_generation_limit(
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, generation_limit=1)
     world.seed_household(TokenWorld.ALICE, ALICE)
 
-    with worker_ready():
+    with worker_ready(world.world.client):
         first = world.call(tool.name, tool.arguments_for(ALICE))
         second = world.call(tool.name, tool.arguments_for(ALICE))
         browser = _browser(world, tool, ALICE, world.agent())
@@ -326,7 +326,7 @@ def test_the_score_tool_meets_the_persons_scoring_limit(
     world.seed_household(TokenWorld.ALICE, ALICE)
     arguments = {"gen_id": "take-alices"}
 
-    with worker_ready():
+    with worker_ready(world.world.client):
         first = world.call("score_take", arguments)
         second = world.call("score_take", arguments)
         browser = world.world.client.post(
@@ -539,7 +539,7 @@ def test_a_cookie_session_with_csrf_succeeds_on_each_tool_route(
 ) -> None:
     seed_session(household.world.client, "alice")
 
-    with worker_ready():
+    with worker_ready(household.world.client):
         reply = _browser(household, tool, ALICE, SAME_ORIGIN)
 
     assert reply.status_code == 200
@@ -553,7 +553,7 @@ def test_a_cookie_write_without_csrf_is_refused_on_each_tool_route_and_writes_no
     seed_session(household.world.client, "alice")
     before = household.snapshot()
 
-    with worker_ready():
+    with worker_ready(household.world.client):
         reply = _browser(household, tool, ALICE, FORGED)
 
     assert reply.status_code == 403
@@ -634,7 +634,7 @@ def test_a_repaint_on_a_shared_song_queues_its_job_and_keeps_the_slug_and_the_pu
     public = household.world.client
     shown = public.get(f"/shared/song/{slug}").json()
 
-    with worker_ready():
+    with worker_ready(household.world.client):
         reply = household.call("repaint_take", repaint_arguments(ALICE, ALICE))
 
     assert reply.is_error is False

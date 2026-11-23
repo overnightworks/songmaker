@@ -446,6 +446,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 			target: pickerTarget,
 			props: {
 				kind: 'album',
+				collectionId: 'a-local',
 				title: 'Local Album',
 				isShared: false,
 				shareSlug: null,

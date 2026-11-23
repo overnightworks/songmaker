@@ -224,6 +224,7 @@ export type Words = {
     readonly "collectionMenu.playlistShare": string;
     readonly "collectionMenu.shareOn": string;
     readonly "collectionMenu.shareOff": string;
+    readonly "collectionMenu.coverBack": string;
     readonly "collectionMenu.upload": string;
     readonly "collectionMenu.removeCover": string;
     readonly "collectionMenu.rename": string;
@@ -250,9 +251,6 @@ export type Words = {
     readonly "albumPage.unarchived": string;
     readonly "albumPage.unarchiveFailed": string;
     readonly "albumPage.archiveFailed": string;
-    readonly "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => string;
-    readonly "albumPage.addedToPlaylist": string;
-    readonly "albumPage.addFailed": string;
     readonly "albumPage.songsLoadFailed": string;
     readonly "albumPage.deleteTitle": (gaps: { readonly title: string }) => string;
     readonly "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => string;
@@ -311,6 +309,9 @@ export type Words = {
     readonly "playlistPage.coverSaveFailed": string;
     readonly "playlistPage.coverRemoved": string;
     readonly "playlistPage.coverRemoveFailed": string;
+    readonly "playlistPage.addedToPlaylist": string;
+    readonly "playlistPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => string;
+    readonly "playlistPage.addFailed": string;
     readonly "playlistPage.removeFailed": string;
     readonly "playlistPage.reorderFailed": string;
     readonly "playlistPage.deleteTitle": (gaps: { readonly title: string }) => string;
@@ -1675,14 +1676,15 @@ export const words: Words = {
     "collectionMenu.addTo": "Add to…",
     "collectionMenu.archive": "Archive",
     "collectionMenu.albumShare": "Share",
-    "collectionMenu.playlistShare": "Share playlist",
+    "collectionMenu.playlistShare": "Share",
     "collectionMenu.shareOn": "on",
     "collectionMenu.shareOff": "off",
+    "collectionMenu.coverBack": "Back",
     "collectionMenu.upload": "Upload…",
     "collectionMenu.removeCover": "Remove cover",
     "collectionMenu.rename": "Rename",
     "collectionMenu.albumDelete": "Delete",
-    "collectionMenu.playlistDelete": "Delete playlist",
+    "collectionMenu.playlistDelete": "Delete",
     "albumPage.loading": "Loading albums…",
     "albumPage.retry": "Retry",
     "albumPage.noSongs": "No songs yet.",
@@ -1711,9 +1713,6 @@ export const words: Words = {
     "albumPage.unarchived": "Album unarchived",
     "albumPage.unarchiveFailed": "Unarchive failed",
     "albumPage.archiveFailed": "Archive failed",
-    "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => "Added " + gaps.added + ", skipped " + gaps.skipped,
-    "albumPage.addedToPlaylist": "Added to playlist",
-    "albumPage.addFailed": "Failed to add",
     "albumPage.songsLoadFailed": "Failed to load songs",
     "albumPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",
     "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => ({
@@ -1800,6 +1799,9 @@ export const words: Words = {
     "playlistPage.coverSaveFailed": "Cover upload failed",
     "playlistPage.coverRemoved": "Cover removed",
     "playlistPage.coverRemoveFailed": "Cover remove failed",
+    "playlistPage.addedToPlaylist": "Added to playlist",
+    "playlistPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => "Added " + gaps.added + ", skipped " + gaps.skipped,
+    "playlistPage.addFailed": "Failed to add",
     "playlistPage.removeFailed": "Remove failed",
     "playlistPage.reorderFailed": "Reorder failed",
     "playlistPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",

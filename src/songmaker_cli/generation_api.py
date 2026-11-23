@@ -45,11 +45,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import (
-    get_arq_pool,
-    is_music_worker_healthy,
-    is_scoring_worker_healthy,
-)
+from songmaker_cli.arq_pool import get_arq_pool, is_scoring_worker_healthy
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     MODEL_AVAILABLE_MODES,
@@ -85,7 +81,9 @@ from songmaker_cli.jobs.generation_failure import (
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.words import SOURCE_LANGUAGE, text
+from songmaker_cli.worker_liveness import WorkerLiveness, music_worker_liveness, read_music_roster
 
 log = logging.getLogger(__name__)
 
@@ -297,14 +295,14 @@ async def api_generate_song(
     active_model_id = _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
-    shortfall = await _capacity_shortfall(session)
+    shortfall = await _capacity_shortfall(session, ctx)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song_id, version_id=version.id,
         payload=GeneratePayload(
             song_id=song_id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=None,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -427,14 +425,14 @@ async def api_repaint_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     repaint_task = _repaint_task(req, gen_id, wav_path, lyrics, prompt)
-    shortfall = await _capacity_shortfall(session)
+    shortfall = await _capacity_shortfall(session, ctx)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
         payload=GeneratePayload(
             song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=repaint_task,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -496,14 +494,14 @@ async def api_cover_generation(
         prompt=prompt,
         cover_noise_strength=req.cover_noise_strength,
     )
-    shortfall = await _capacity_shortfall(session)
+    shortfall = await _capacity_shortfall(session, ctx)
     job = await create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id,
         payload=GeneratePayload(
             song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=cover_task,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -547,7 +545,7 @@ async def api_score_generation(
     job = await create_job_with_rate_limit(
         session, user, JobType.SCORE, take.song_id,
         payload=ScorePayload(gen_id=gen_id, scorers=req.scorers),
-        redis=ctx.redis, owner_leases=ctx.owner_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
     )
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
@@ -612,12 +610,18 @@ def api_unshare_generation(
     return StatusResponse()
 
 
-async def _capacity_shortfall(session: Session) -> NoCapacityError | None:
+async def _music_worker_is_up(ctx: AppContext) -> bool:
+    """Whether the music signal is alive: a live lease holder, or a restart inside its grace."""
+    roster = await read_music_roster(ctx.music_leases)
+    return music_worker_liveness(ctx.redis, roster, now=utcnow()) is WorkerLiveness.ALIVE
+
+
+async def _capacity_shortfall(session: Session, ctx: AppContext) -> NoCapacityError | None:
     """What keeps a generation from running now, or none.
 
     It is read before the job's row exists: a committed row is claimable at once.
     """
-    if not await is_music_worker_healthy():
+    if not await _music_worker_is_up(ctx):
         return NoCapacityError(WORKER_NOT_RUNNING_DETAIL)
     if not await _has_online_acestep_worker(session):
         return NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)

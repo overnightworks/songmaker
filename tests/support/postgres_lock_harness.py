@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 import pytest
@@ -33,6 +34,11 @@ def wrote_to_tables(session: Session, *table_names: str) -> bool:
         WHERE held.pid = pg_backend_pid() AND held.granted AND held.mode = 'RowExclusiveLock'
           AND locked_table.relname = ANY(:table_names)
     """), {"table_names": list(table_names)}).scalar_one()
+
+
+def after_the_take_locks(statement: str) -> bool:
+    """True for the statement that locks takes, so a paused writer holds every take lock."""
+    return "FROM generations" in statement and "FOR UPDATE" in statement
 
 
 def wrote_song_data(session: Session) -> bool:
@@ -85,6 +91,11 @@ class CommitPause(WriterPause):
     def __call__(self, session: Session) -> None:
         if not self.reached.is_set() and self.at_commit(session):
             self.hold(session)
+
+
+holding_a_generation_write = partial(
+    CommitPause, lambda session: wrote_to_tables(session, "generations"),
+)
 
 
 class StatementPause(WriterPause):

@@ -1,4 +1,4 @@
-// Add to… is the one row that puts a take, a song or an album on a playlist,
+// Add to… is the one row that puts a take, a song, an album or a playlist on a playlist,
 // and it turns the open ⋯ popover into the picker at both widths: an existing
 // playlist adds on a tap, and the New playlist… field creates and adds on Enter.
 
@@ -112,5 +112,41 @@ test('take ⋯ › Add to… › an existing playlist holds that take', async ({
 		await expect(playlistEntryRows(page).first()).toContainText(TAKE_SONG_TITLE);
 	} finally {
 		await archiveOwnedAlbum(page.request, albumId);
+	}
+});
+
+test('playlist_rule_1: playlist ⋯ reads Rename · Cover · Add to… · Share · Delete and its Add to… puts the entries on another playlist', async ({
+	page,
+	request
+}) => {
+	const library = readSeededLibrary();
+	const source = await seedPlaylist(request, library);
+	const target = await seedPlaylist(request, library, 0);
+	await page.goto(`/playlist/${source.slug}`);
+	const label = words['collectionMenu.label'];
+	await workspace(page)
+		.locator('.collection-header')
+		.getByRole('button', { name: label, exact: true })
+		.click();
+	const menu = page.getByRole('dialog', { name: label, exact: true });
+	await expect(menu.locator('.menu-item')).toContainText([
+		words['collectionMenu.rename'],
+		words['collectionMenu.cover'],
+		words['collectionMenu.addTo'],
+		words['collectionMenu.playlistShare'],
+		words['collectionMenu.playlistDelete']
+	]);
+
+	await menu.getByRole('button', { name: nameStartingWith(words['collectionMenu.addTo']) }).click();
+	await expect(menu.getByText(words['addToPicker.heading'], { exact: true })).toBeVisible();
+	await expect(menu.getByRole('button', { name: nameStartingWith(source.title) })).toHaveCount(0);
+	await menu.getByRole('button', { name: nameStartingWith(target.title) }).click();
+	await expect(menu).toBeHidden();
+
+	await page.goto(`/playlist/${target.slug}`);
+	const rows = playlistEntryRows(page);
+	await expect(rows).toHaveCount(source.songTitles.length);
+	for (const songTitle of source.songTitles) {
+		await expect(rows.filter({ hasText: containing(songTitle) })).toHaveCount(1);
 	}
 });

@@ -51,6 +51,7 @@ MARKED_TOOLS = {
     "unarchive_album", "cover_take", "keep_take", "rate_take",
     "repaint_take", "score_take", "unarchive_take", "cancel_job", "create_lora",
     "add_lora_sample_from_take", "create_playlist", "add_album_to_playlist",
+    "add_playlist_to_playlist",
     "add_take_to_playlist", "add_song_to_playlist", "keep_reference", "create_preset",
     "set_default_preset", "restore_song", "list_own_playable_takes", "get_lora",
     "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",
@@ -174,7 +175,7 @@ def test_an_admins_agent_cannot_write_into_or_generate_for_another_persons_conte
     world.world.seed_take(TokenWorld.BOB, "bobs")
     groups = ADMIN_GROUPS
 
-    with worker_ready():
+    with worker_ready(world.world.client):
         into = world.call("create_song", {"title": "x", "album_id": "album-bobs"}, groups=groups)
         generated = world.call(
             "generate_song", {"song_id": "song-bobs", "model": "sft"}, groups=groups,
@@ -197,7 +198,7 @@ def test_a_progress_tool_answers_for_the_persons_own_song_as_the_api_does(
     mcp: McpWorld, tool: str,
 ) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
-    with worker_ready():
+    with worker_ready(mcp.world.client):
         mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     reply = mcp.call(tool, {"song_id": "song-alices"})
@@ -213,7 +214,7 @@ def test_the_active_generation_tool_names_the_queued_job_and_none_without_one(
 ) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     idle = mcp.call("get_active_generation", {"song_id": "song-alices"})
-    with worker_ready():
+    with worker_ready(mcp.world.client):
         queued = mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     active = mcp.call("get_active_generation", {"song_id": "song-alices"})
@@ -261,7 +262,7 @@ def test_a_progress_tool_for_another_persons_song_is_not_found_and_reveals_nothi
 ) -> None:
     mcp.world.seed_take(TokenWorld.BOB, "bobs")
     bobs = mcp.agent(TokenWorld.BOB)
-    with worker_ready():
+    with worker_ready(mcp.world.client):
         mcp.world.client.post(
             "/api/songs/song-bobs/generate", json={"model": "sft"}, headers=bobs,
         )
@@ -561,7 +562,7 @@ def test_the_browser_lists_its_own_takes_and_reads_its_lora_with_the_cookie(
 def test_generate_queues_a_job_for_the_person_as_the_api_queues_it(mcp: McpWorld) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
 
-    with worker_ready():
+    with worker_ready(mcp.world.client):
         reply = mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     assert (reply.is_error, reply.json()["type"]) == (False, "generate")
@@ -576,7 +577,7 @@ def test_generate_for_another_persons_song_or_a_song_without_lyrics_queues_nothi
     mcp.world.seed_take(TokenWorld.BOB, "bobs")
     bare = mcp.seed_song_without_lyrics(TokenWorld.ALICE)
 
-    with worker_ready():
+    with worker_ready(mcp.world.client):
         others = mcp.call("generate_song", {"song_id": "song-bobs", "model": "sft"})
         empty = mcp.call("generate_song", {"song_id": bare, "model": "sft"})
 
@@ -594,7 +595,7 @@ def test_generate_past_the_persons_limit_gets_the_apis_refusal_and_no_job(
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, generation_limit=1)
     world.world.seed_take(TokenWorld.ALICE, "alices")
 
-    with worker_ready():
+    with worker_ready(world.world.client):
         first = world.call("generate_song", {"song_id": "song-alices", "model": "sft"})
         second = world.call("generate_song", {"song_id": "song-alices", "model": "sft"})
         api = world.world.client.post(

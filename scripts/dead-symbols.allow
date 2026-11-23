@@ -77,6 +77,7 @@ songmaker_cli/memory_api.py:api_put_user_memory # HTTP dispatcher: router.put('/
 songmaker_cli/music_worker.py:MusicWorkerSettings # arq CLI entry point selected by the music-worker command of the test stack and the platform manifest
 songmaker_cli/playlist_api.py:api_add_album_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/album', responses={404: {'description': 'Playlist or album not found'}})
 songmaker_cli/playlist_api.py:api_add_generation_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/generation', responses={404: {'description': 'Playlist or generation not found'}})
+songmaker_cli/playlist_api.py:api_add_playlist_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/playlist', responses={404: {'description': 'Playlist or source playlist not found'}})
 songmaker_cli/playlist_api.py:api_add_song_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/song', responses={400: {'description': 'Song has no playable take'}, 404: {'description': 'Playlist or song not found'}})
 songmaker_cli/playlist_api.py:api_create_playlist # HTTP dispatcher: router.post('/playlists')
 songmaker_cli/playlist_api.py:api_delete_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}', responses={404: {'description': text(SOURCE_LANGUAGE, 'playlistRefusal.notFound')}})
@@ -168,3 +169,4 @@ songmaker_cli/take_judging_api.py:api_unarchive_generation # HTTP dispatcher: ro
 songmaker_cli/take_judging_api.py:api_unkeep_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unkeep', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/take_judging_api.py:api_unpick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unpick', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/arq_worker.py:UNCONFIGURED_LOGGING  # arq imports it by the dotted path main passes
+songmaker_cli/worker_liveness.py:worker_is_ready # Operational caller scripts/arq_healthcheck.py outside src
