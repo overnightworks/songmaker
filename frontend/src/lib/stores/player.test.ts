@@ -174,7 +174,7 @@ import {
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
 } from '#lib/stores/playlists.ts';
-import { openCollection } from '#lib/stores/collection.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { words } from '#lib/words/en.ts';
 
 type PlaylistQueueSource = Pick<PlaylistDetailItem, 'id' | 'title'>;
@@ -273,6 +273,8 @@ beforeEach(() => {
 		has_more: false
 	});
 	vi.mocked(fetchSong).mockReset();
+	vi.mocked(fetchLibraryPoolQueue).mockReset();
+	vi.mocked(fetchPlaylist).mockReset();
 	vi.mocked(fetchLastFailedGeneration).mockResolvedValue({ job: null });
 	vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 		audioPlayer.current = info;
@@ -282,6 +284,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetConnectivityForTests();
+	resetLibraryOrderForTests();
+	resetCollectionForTests();
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now: the
 	// module-level vi.fn() stubs from the vi.mock('#lib/api/client.ts', ...)
 	// factory above need an explicit clear or their call history from one
@@ -745,10 +749,13 @@ describe('playback dispatch', () => {
 			await ensureLastPlayedRead();
 			const listen = Promise.withResolvers<undefined>();
 			vi.mocked(recordSongListen).mockReturnValueOnce(listen.promise);
-			const song = makeSong({ ...queuedSongDefaults(), id: 's-ranking-outdated' });
+			const song = makeSong({
+				...queuedSongDefaults(),
+				id: `s-ranking-outdated-${listenRecorded}`
+			});
 			audioPlayer.status = 'playing';
 			audioPlayer.current = makePlayback(
-				makeGen({ ...genDefaults, id: 'g-ranking-outdated', song_id: song.id }),
+				makeGen({ ...genDefaults, id: `g-ranking-outdated-${listenRecorded}`, song_id: song.id }),
 				song
 			);
 
@@ -3851,6 +3858,9 @@ describe('playTake', () => {
 			toast: 'Take is still rendering'
 		}
 	])('names $failure as $toast, never browser text', async ({ thrown, toast }) => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({ takes: [makePoolTake({ generation_id: 'g1' })] })
+		);
 		vi.mocked(audioPlayer.load).mockImplementationOnce(() => {
 			throw thrown;
 		});
@@ -3875,6 +3885,7 @@ describe('playTakeAndShowNowPlaying', () => {
 	});
 
 	it('leaves the take it is already playing playing, and does not start it over', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue());
 		const gen = makeGen(genDefaults);
 		const song = makeSong(queuedSongDefaults());
 		await playTakeAndShowNowPlaying(gen, song);
