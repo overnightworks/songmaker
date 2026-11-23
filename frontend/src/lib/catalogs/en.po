@@ -2821,10 +2821,6 @@ msgctxt "takeActions.restoreFailed"
 msgid "Restore failed"
 msgstr ""
 
-msgctxt "takeActions.ratingSaved"
-msgid "Rating saved"
-msgstr ""
-
 msgctxt "takeActions.ratingFailed"
 msgid "Rating failed"
 msgstr ""
@@ -2869,19 +2865,23 @@ msgctxt "nowPlayingTake.openVersion"
 msgid "Open v{number}"
 msgstr ""
 
-msgctxt "nowPlayingTake.pick"
+msgctxt "nowPlayingJudging.label"
+msgid "Judge this take"
+msgstr ""
+
+msgctxt "nowPlayingJudging.pick"
 msgid "Pick"
 msgstr ""
 
-msgctxt "nowPlayingTake.unpick"
+msgctxt "nowPlayingJudging.unpick"
 msgid "Unpick"
 msgstr ""
 
-msgctxt "nowPlayingTake.keep"
+msgctxt "nowPlayingJudging.keep"
 msgid "Keep"
 msgstr ""
 
-msgctxt "nowPlayingTake.unkeep"
+msgctxt "nowPlayingJudging.unkeep"
 msgid "Unkeep"
 msgstr ""
 
@@ -2937,20 +2937,12 @@ msgctxt "nowPlayingTake.recipe"
 msgid "Recipe"
 msgstr ""
 
-msgctxt "nowPlayingTake.rating"
+msgctxt "nowPlayingJudging.rating"
 msgid "Your rating"
 msgstr ""
 
-msgctxt "nowPlayingTake.ratingNotes"
+msgctxt "nowPlayingJudging.ratingNotes"
 msgid "Notes (optional)"
-msgstr ""
-
-msgctxt "nowPlayingTake.ratingSave"
-msgid "Save rating"
-msgstr ""
-
-msgctxt "nowPlayingTake.ratingSaving"
-msgid "Saving…"
 msgstr ""
 
 msgctxt "nowPlayingTake.useSeed"

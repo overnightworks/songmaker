@@ -46,6 +46,7 @@
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { isEditableElement } from '#lib/utils/escape-level-up.ts';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
+	import NowPlayingJudging from './NowPlayingJudging.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
 	import NowPlayingTake from './NowPlayingTake.svelte';
 
@@ -267,6 +268,12 @@
 	</div>
 {/snippet}
 
+{#snippet judging()}
+	{#if playingGeneration && song}
+		<NowPlayingJudging generation={playingGeneration} {song} />
+	{/if}
+{/snippet}
+
 <svelte:window onkeydown={onJudgingKeydown} />
 
 <NowPlayingFrame
@@ -293,6 +300,7 @@
 	lyricsCues={playingGeneration?.whisper_cues ?? null}
 	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}
+	{judging}
 />
 
 <style>

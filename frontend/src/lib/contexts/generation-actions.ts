@@ -1,13 +1,12 @@
 import { setContext, getContext } from 'svelte';
 import type { GenerationItem, ShareResult, SongItem } from '#lib/api/types.ts';
 import { useSeed } from '#lib/stores/recipe.ts';
-import { rate, setKeep, setPick } from '#lib/stores/takeActions.ts';
+import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 
 export interface GenerationActions {
 	pick: (genId: string, picked: boolean) => void;
 	keep: (genId: string, kept: boolean) => void;
 	del: (genId: string) => void;
-	rate: (genId: string, rating: number, notes: string) => Promise<void>;
 	share: (genId: string) => Promise<ShareResult>;
 	unshare: (genId: string) => Promise<void>;
 	addToPlaylist: (playlistId: string, genId: string) => Promise<void>;
@@ -26,7 +25,7 @@ export function getGenerationActions(): GenerationActions {
 	return getContext<GenerationActions>(GENERATION_ACTIONS_KEY);
 }
 
-// stores/takeActions.ts is the one mutation owner for pick/keep/rate;
+// stores/takeActions.ts is the one mutation owner for pick/keep;
 // this bakes the actions' target song into that store's per-song API, so a
 // GenerationActions provider only has to supply its own bespoke handlers
 // (delete, share, ...). Takes a getter rather than a SongItem so the
@@ -34,7 +33,7 @@ export function getGenerationActions(): GenerationActions {
 // of freezing at the moment setGenerationActions runs.
 export function takeActionsFor(
 	getSong: () => SongItem | null
-): Pick<GenerationActions, 'pick' | 'keep' | 'rate' | 'useSeed'> {
+): Pick<GenerationActions, 'pick' | 'keep' | 'useSeed'> {
 	return {
 		pick: (genId, picked) => {
 			const song = getSong();
@@ -43,10 +42,6 @@ export function takeActionsFor(
 		keep: (genId, kept) => {
 			const song = getSong();
 			if (song) void setKeep(song.id, genId, kept);
-		},
-		rate: (genId, rating, notes) => {
-			const song = getSong();
-			return song ? rate(song.id, genId, rating, notes) : Promise.resolve();
 		},
 		useSeed
 	};

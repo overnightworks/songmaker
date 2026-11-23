@@ -9,7 +9,7 @@
 	} from '#lib/stores/navigation.ts';
 	import { closeNowPlaying } from '#lib/stores/player.ts';
 	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
-	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '#lib/stores/takeActions.ts';
+	import { rescore, rescoringTakeIds } from '#lib/stores/takeActions.ts';
 	import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
 	import { pageLanguage } from '#lib/utils/page-language.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
@@ -71,37 +71,6 @@
 		return entries;
 	});
 
-	let ratingValue = $state(50);
-	let ratingNotes = $state('');
-	let ratingSaving = $state(false);
-
-	const savedRating = $derived(generation.scores?.user_rating ?? 50);
-	const savedNotes = $derived(generation.scores?.user_notes ?? '');
-	const ratingDirty = $derived(ratingValue !== savedRating || ratingNotes !== savedNotes);
-
-	$effect(() => {
-		ratingValue = savedRating;
-		ratingNotes = savedNotes;
-	});
-
-	async function onTogglePick(): Promise<void> {
-		await setPick(song.id, generation.id, !generation.is_picked);
-	}
-
-	async function onToggleKeep(): Promise<void> {
-		await setKeep(song.id, generation.id, !generation.is_kept);
-	}
-
-	async function onSaveRating(): Promise<void> {
-		if (ratingSaving) return;
-		ratingSaving = true;
-		try {
-			await rate(song.id, generation.id, ratingValue, ratingNotes);
-		} finally {
-			ratingSaving = false;
-		}
-	}
-
 	function onRescore(): void {
 		void rescore(song.id, generation.id);
 	}
@@ -158,34 +127,6 @@
 				})}<Icon name="chevron-right" size={14} />
 			</button>
 		{/if}
-		<div class="take-badges">
-			<button
-				type="button"
-				class="badge-btn"
-				data-hitbox="frequent"
-				class:on={generation.is_picked}
-				onclick={onTogglePick}
-				aria-pressed={generation.is_picked}
-				aria-label={pageText(
-					generation.is_picked ? 'nowPlayingTake.unpick' : 'nowPlayingTake.pick'
-				)}
-				title={pageText(generation.is_picked ? 'nowPlayingTake.unpick' : 'nowPlayingTake.pick')}
-			>
-				<Icon name={generation.is_picked ? 'star-filled' : 'star'} size={18} />
-			</button>
-			<button
-				type="button"
-				class="badge-btn"
-				data-hitbox="frequent"
-				class:on={generation.is_kept}
-				onclick={onToggleKeep}
-				aria-pressed={generation.is_kept}
-				aria-label={pageText(generation.is_kept ? 'nowPlayingTake.unkeep' : 'nowPlayingTake.keep')}
-				title={pageText(generation.is_kept ? 'nowPlayingTake.unkeep' : 'nowPlayingTake.keep')}
-			>
-				<Icon name={generation.is_kept ? 'heart-filled' : 'heart'} size={18} />
-			</button>
-		</div>
 	</div>
 
 	<section class="take-section">
@@ -262,37 +203,6 @@
 		</section>
 	{/if}
 
-	<section class="take-section">
-		<div class="rating-row">
-			<span class="section-title">{pageText('nowPlayingTake.rating')}</span>
-			<input
-				type="range"
-				class="rating-slider"
-				min="0"
-				max="100"
-				step="1"
-				bind:value={ratingValue}
-			/>
-			<span class="rating-number">{ratingValue}</span>
-		</div>
-		<textarea
-			class="rating-notes"
-			placeholder={pageText('nowPlayingTake.ratingNotes')}
-			bind:value={ratingNotes}
-			rows="2"></textarea>
-		{#if ratingDirty}
-			<button
-				type="button"
-				class="rating-save"
-				data-hitbox="frequent"
-				onclick={onSaveRating}
-				disabled={ratingSaving}
-			>
-				{pageText(ratingSaving ? 'nowPlayingTake.ratingSaving' : 'nowPlayingTake.ratingSave')}
-			</button>
-		{/if}
-	</section>
-
 	<div class="take-links">
 		{#if generation.seed != null}
 			<button
@@ -366,32 +276,6 @@
 		font-size: 0.78rem;
 		white-space: nowrap;
 		cursor: pointer;
-	}
-	.take-badges {
-		display: flex;
-		gap: 0.4rem;
-		margin-left: auto;
-	}
-	.badge-btn {
-		width: 32px;
-		height: 32px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		border: 1px solid var(--border);
-		border-radius: 50%;
-		background: transparent;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-	.badge-btn:hover {
-		color: var(--text);
-		background: var(--surface-hover);
-	}
-	.badge-btn.on {
-		color: var(--accent);
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 	}
 	.take-section {
 		display: flex;
@@ -531,53 +415,6 @@
 		font-size: 1.05rem;
 		font-family: var(--font-display);
 		color: var(--text);
-	}
-	.rating-row {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-	}
-	.rating-notes {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		font-size: 0.8rem;
-		font-family: var(--font-body);
-		padding: 0.4rem 0.55rem;
-		resize: vertical;
-	}
-	.rating-notes:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-	.rating-slider {
-		flex: 1;
-		accent-color: var(--accent);
-		cursor: pointer;
-	}
-	.rating-number {
-		font-size: 1rem;
-		font-family: var(--font-display);
-		color: var(--text);
-		min-width: 28px;
-		text-align: right;
-	}
-	.rating-save {
-		align-self: flex-end;
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--accent);
-		border-radius: var(--btn-radius-sm);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		color: var(--accent);
-		font-size: 0.72rem;
-		font-family: var(--font-display);
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-	}
-	.rating-save:disabled {
-		opacity: 0.5;
-		cursor: default;
 	}
 	.take-links {
 		display: flex;

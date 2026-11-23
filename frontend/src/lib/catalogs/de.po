@@ -2914,10 +2914,6 @@ msgctxt "takeActions.restoreFailed"
 msgid "Restore failed"
 msgstr "Wiederherstellen fehlgeschlagen"
 
-msgctxt "takeActions.ratingSaved"
-msgid "Rating saved"
-msgstr "Bewertung gespeichert"
-
 msgctxt "takeActions.ratingFailed"
 msgid "Rating failed"
 msgstr "Bewertung fehlgeschlagen"
@@ -2962,19 +2958,23 @@ msgctxt "nowPlayingTake.openVersion"
 msgid "Open v{number}"
 msgstr "v{number} öffnen"
 
-msgctxt "nowPlayingTake.pick"
+msgctxt "nowPlayingJudging.label"
+msgid "Judge this take"
+msgstr "Diesen Take bewerten"
+
+msgctxt "nowPlayingJudging.pick"
 msgid "Pick"
 msgstr "Fürs Album"
 
-msgctxt "nowPlayingTake.unpick"
+msgctxt "nowPlayingJudging.unpick"
 msgid "Unpick"
 msgstr "Nicht fürs Album"
 
-msgctxt "nowPlayingTake.keep"
+msgctxt "nowPlayingJudging.keep"
 msgid "Keep"
 msgstr "Behalten"
 
-msgctxt "nowPlayingTake.unkeep"
+msgctxt "nowPlayingJudging.unkeep"
 msgid "Unkeep"
 msgstr "Nicht behalten"
 
@@ -3030,21 +3030,13 @@ msgctxt "nowPlayingTake.recipe"
 msgid "Recipe"
 msgstr "Rezept"
 
-msgctxt "nowPlayingTake.rating"
+msgctxt "nowPlayingJudging.rating"
 msgid "Your rating"
 msgstr "Deine Bewertung"
 
-msgctxt "nowPlayingTake.ratingNotes"
+msgctxt "nowPlayingJudging.ratingNotes"
 msgid "Notes (optional)"
 msgstr "Notizen (optional)"
-
-msgctxt "nowPlayingTake.ratingSave"
-msgid "Save rating"
-msgstr "Bewertung speichern"
-
-msgctxt "nowPlayingTake.ratingSaving"
-msgid "Saving…"
-msgstr "Wird gespeichert…"
 
 msgctxt "nowPlayingTake.useSeed"
 msgid "Use seed"

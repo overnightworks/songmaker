@@ -7,9 +7,6 @@ import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 // drives it: by the scoring job sitting in the jobs store.
 vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/stores/takeActions.ts')>()),
-	setPick: vi.fn().mockResolvedValue(undefined),
-	setKeep: vi.fn().mockResolvedValue(undefined),
-	rate: vi.fn().mockResolvedValue(undefined),
 	rescore: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
@@ -23,7 +20,7 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 import { get } from 'svelte/store';
 import { words } from '#lib/words/en.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
-import { rate, rescore, setKeep, setPick } from '#lib/stores/takeActions.ts';
+import { rescore } from '#lib/stores/takeActions.ts';
 import { followAppPageLink, openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
 import { nowPlayingOpen, nowPlayingSurface } from '#lib/stores/player.ts';
 import { pendingTakeUse } from '#lib/stores/recipe.ts';
@@ -249,7 +246,7 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).not.toContain(words['nowPlayingTake.rescoreAction']);
 	});
 
-	it.each(['.badge-btn', '.use-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
+	it.each(['.use-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
 		'opts %s into the frequent hitbox',
 		async (selector) => {
 			// Sizing itself is pinned once for the shared mechanism in
@@ -260,57 +257,6 @@ describe('NowPlayingTake', () => {
 			for (const control of controls) expect(control.dataset.hitbox).toBe('frequent');
 		}
 	);
-
-	it('flips pick through takeActions', async () => {
-		await render({ generation: generation(generationDefaults) });
-		target
-			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlayingTake.pick']}"]`)
-			?.click();
-		await tick();
-		expect(setPick).toHaveBeenCalledWith('s1', 'g1', true);
-	});
-
-	it('flips keep through takeActions', async () => {
-		await render({ generation: generation({ ...generationDefaults, is_kept: true }) });
-		target
-			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlayingTake.unkeep']}"]`)
-			?.click();
-		await tick();
-		expect(setKeep).toHaveBeenCalledWith('s1', 'g1', false);
-	});
-
-	it('saves the rating through takeActions once the slider is dirty', async () => {
-		await render({
-			generation: generation({ ...generationDefaults, scores: { user_rating: 50 } })
-		});
-		const slider = target.querySelector<HTMLInputElement>('.rating-slider');
-		if (!slider) throw new Error('Expected rating slider');
-		slider.value = '80';
-		slider.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-
-		const save = target.querySelector<HTMLButtonElement>('.rating-save');
-		expect(save).not.toBeNull();
-		save?.click();
-		await tick();
-		expect(rate).toHaveBeenCalledWith('s1', 'g1', 80, '');
-	});
-
-	it('saves rating notes alongside the rating through takeActions', async () => {
-		await render({
-			generation: generation({ ...generationDefaults, scores: { user_rating: 50 } })
-		});
-		const notes = target.querySelector<HTMLTextAreaElement>('.rating-notes');
-		if (!notes) throw new Error('Expected a notes textarea');
-		notes.value = 'Loved the bridge';
-		notes.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-
-		const save = target.querySelector<HTMLButtonElement>('.rating-save');
-		save?.click();
-		await tick();
-		expect(rate).toHaveBeenCalledWith('s1', 'g1', 50, 'Loved the bridge');
-	});
 
 	it('C5: names the seed action Use seed with the seed as its hint', async () => {
 		await render({ generation: generation(generationDefaults) });
