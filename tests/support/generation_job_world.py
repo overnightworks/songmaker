@@ -9,6 +9,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+from support.web_app import hold_a_music_lease
 
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.jobs import _persist_generation_row
@@ -171,14 +173,15 @@ def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_
     )
 
 
-def worker_up() -> ExitStack:
+def worker_up(client: TestClient) -> ExitStack:
+    """The generation routes admit: a music worker holds its lease on the app's Redis, and the
+    arq pool, the scoring worker and a GPU worker answer."""
+    hold_a_music_lease(client.app.state.ctx.async_redis)
     stack = ExitStack()
     stack.enter_context(
         patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
     )
-    for health in (
-        "is_music_worker_healthy", "is_scoring_worker_healthy", "_has_online_acestep_worker",
-    ):
+    for health in ("is_scoring_worker_healthy", "_has_online_acestep_worker"):
         stack.enter_context(
             patch(f"songmaker_cli.generation_api.{health}", AsyncMock(return_value=True)),
         )

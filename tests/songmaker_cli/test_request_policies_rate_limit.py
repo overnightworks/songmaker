@@ -117,7 +117,7 @@ def test_score_rate_limit_for_user(client: TestClient, monkeypatch) -> None:
             session.add(Job(type="score", user_id=user_id, status="completed"))
         session.commit()
 
-    with worker_ready():
+    with worker_ready(client):
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 429
@@ -174,7 +174,7 @@ def test_stale_own_job_does_not_block_generate_at_active_job_limit(
         session.commit()
         own_job_id, other_job_id = own_job.id, other_job.id
 
-    with worker_ready():
+    with worker_ready(client):
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
@@ -195,7 +195,7 @@ def test_score_job_does_not_block_generate(client: TestClient) -> None:
         session.add(Job(type="score", user_id=user_id, status="running"))
         session.commit()
 
-    with worker_ready():
+    with worker_ready(client):
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
@@ -210,7 +210,7 @@ def test_generate_job_does_not_block_score(client: TestClient) -> None:
         session.add(Job(type="generate", user_id=user_id, status="running"))
         session.commit()
 
-    with worker_ready():
+    with worker_ready(client):
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 200
@@ -706,7 +706,7 @@ def test_generate_job_gets_user_id(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
-    with worker_ready():
+    with worker_ready(client):
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
@@ -722,7 +722,7 @@ def test_score_job_gets_user_id(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
-    with worker_ready():
+    with worker_ready(client):
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 200

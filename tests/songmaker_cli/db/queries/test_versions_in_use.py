@@ -35,7 +35,7 @@ from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_jo
 from songmaker_cli.db.queries.songs import delete_song
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_lyrics
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_liveness import MUSIC_WORKER_KIND, owner_leases, worker_kind_leases
 
 OWNER_ID = "owner"
 OWNER = make_authenticated_user(OWNER_ID, username="owner")
@@ -134,7 +134,7 @@ TAKE_JOB_REQUESTS = {
 @pytest.mark.parametrize("request_name", list(TAKE_JOB_REQUESTS))
 def test_a_take_job_row_holds_the_version_the_endpoint_resolved(client, request_name):
     path, body, expected_version = TAKE_JOB_REQUESTS[request_name]
-    with worker_up():
+    with worker_up(client):
         response = client.post(path, json=body)
     assert response.status_code == 200
     assert response.json()["version_id"] == _job_version(client, response.json()["id"])
@@ -200,6 +200,7 @@ def test_a_job_that_names_no_version_holds_none(client):
         job = asyncio.run(create_job_with_rate_limit(
             session, OWNER, JobType.SCORE, redis=make_fake_redis(),
             owner_leases=owner_leases(make_fake_async_redis()),
+            music_leases=worker_kind_leases(make_fake_async_redis(), MUSIC_WORKER_KIND),
         ))
         session.commit()
         assert job.version_id is None
@@ -215,6 +216,7 @@ def test_a_job_for_a_version_that_is_gone_or_belongs_to_another_song_answers_404
             asyncio.run(create_job_with_rate_limit(
                 session, OWNER, JobType.GENERATE, song_id="song", version_id=version_id,
                 redis=redis, owner_leases=owner_leases(make_fake_async_redis()),
+                music_leases=worker_kind_leases(make_fake_async_redis(), MUSIC_WORKER_KIND),
             ))
     assert (refusal.value.status_code, refusal.value.detail) == (404, "Version not found")
     with _database(client) as session:

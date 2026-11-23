@@ -23,7 +23,7 @@ def _started_in_the_browser(
         attach_cowriter_gateway(
             world.world.client, world.world.factory, directory, TokenWorld.ALICE,
         )
-        with worker_ready():
+        with worker_ready(world.world.client):
             reply = world.world.client.post(path, json=body or {}, headers=SAME_ORIGIN)
         assert reply.status_code == 200
         return reply.json()["id"]
@@ -57,7 +57,7 @@ def test_an_admins_agent_is_refused_the_job_the_admin_started_on_another_persons
 
 
 def test_a_members_agent_reaches_the_score_job_the_member_started(household: McpWorld) -> None:
-    with worker_ready():
+    with worker_ready(household.world.client):
         job_id = household.call("score_take", {"gen_id": f"take-{ALICE}"}).json()["id"]
 
     read = household.call("get_job", {"job_id": job_id})
