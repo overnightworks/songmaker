@@ -233,7 +233,8 @@ def _binds_loopback_only(host_ip: str) -> bool:
 
 def _startup_modules(service: dict, dockerfile: Path) -> tuple[str, ...]:
     """The modules a container starts: its worker settings, else the module its image's
-    ENTRYPOINT runs with ``python -m`` (a package's ``__main__``, or the module itself), else the CLI's server."""
+    ENTRYPOINT runs with ``python -m`` (a package's ``__main__``, or the module itself), else
+    the CLI's server."""
     command = service.get("command")
     if command:
         return (command[0].rpartition(".")[0],)
