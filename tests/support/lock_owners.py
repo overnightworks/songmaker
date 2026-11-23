@@ -24,7 +24,7 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.auth_stores import DatabaseWriteLock
 from songmaker_cli.db.models import Album, User
 from songmaker_cli.job_types import JobType
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_liveness import MUSIC_WORKER_KIND, owner_leases, worker_kind_leases
 
 OWNER_ID = "owner"
 
@@ -38,6 +38,7 @@ LOCK_OWNERS: dict[str, Callable[[Session], object]] = {
     "create_job_with_rate_limit": lambda session: asyncio.run(create_job_with_rate_limit(
         session, make_authenticated_user(OWNER_ID), JobType.SCORE, redis=make_fake_redis(),
         owner_leases=owner_leases(make_fake_async_redis()),
+        music_leases=worker_kind_leases(make_fake_async_redis(), MUSIC_WORKER_KIND),
     )),
     "lock_lora_capacity": lock_lora_capacity,
     "unique_album_id": lambda session: unique_album_id(session, "Title"),
