@@ -111,8 +111,9 @@
 </script>
 
 {#snippet markedText(parts: RailSearchTextPart[])}
-	{#each parts as part, index (index)}{#if part.matched}<mark>{part.text}</mark
-			>{:else}{part.text}{/if}{/each}
+	{#each parts as part, index (index)}{#if part.matched}<mark>
+				{part.text}
+			</mark>{:else}{part.text}{/if}{/each}
 {/snippet}
 
 <div class="rail-search-region" class:rail-search-results={hasQuery}>
@@ -151,8 +152,10 @@
 				class="rail-search-clear"
 				data-hitbox="frequent"
 				aria-label={pageText('railSearch.clear')}
-				onclick={clearSearch}>×</button
+				onclick={clearSearch}
 			>
+				×
+			</button>
 		{/if}
 	</div>
 
@@ -203,17 +206,20 @@
 										<span
 											class="rail-search-glyph"
 											class:rail-search-page-glyph={result.picture.kind === 'page'}
-											aria-hidden="true">{result.picture.glyph}</span
+											aria-hidden="true"
 										>
+											{result.picture.glyph}
+										</span>
 									{/if}
 									<span class="rail-search-text">
 										<span class="rail-search-title">{@render markedText(result.labelParts)}</span>
-										<small
-											><span class="rail-search-kind">{result.kindWord}</span
-											>{#if result.detailParts.length > 0}{DETAIL_SEPARATOR}{@render markedText(
+										<small>
+											<span class="rail-search-kind">
+												{result.kindWord}
+											</span>{#if result.detailParts.length > 0}{DETAIL_SEPARATOR}{@render markedText(
 													result.detailParts
-												)}{/if}</small
-										>
+												)}{/if}
+										</small>
 									</span>
 								</li>
 							{/each}

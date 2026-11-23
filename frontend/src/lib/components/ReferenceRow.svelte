@@ -86,8 +86,8 @@
 	</button>
 	<span class="reference-text">
 		<span class="reference-name" title={reference.filename}>{reference.filename}</span>
-		<span class="reference-meta"
-			>{metaLabel()}{#if reference.deletes_at !== null}{WORD_GAP}<ReferenceExpiry
+		<span class="reference-meta">
+			{metaLabel()}{#if reference.deletes_at !== null}{WORD_GAP}<ReferenceExpiry
 					deletesAt={reference.deletes_at}
 					{now}
 				/>{/if}{#if reference.in_use}{META_SEPARATOR}<button
@@ -98,10 +98,12 @@
 					onclick={(event) => {
 						event.stopPropagation();
 						onusestoggle();
-					}}>{usedLabel()}</button
+					}}
 				>
-			{/if}</span
-		>
+					{usedLabel()}
+				</button>
+			{/if}
+		</span>
 		{#if fault !== null}
 			<span class="reference-meta reference-fault" role="alert">{fault}</span>
 		{/if}

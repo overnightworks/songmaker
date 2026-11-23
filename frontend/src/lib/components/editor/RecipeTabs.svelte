@@ -142,8 +142,10 @@
 			data-field-reset={field}
 			{title}
 			aria-label={title}
-			onclick={() => change(field)}>{RECIPE_RESET_GLYPH}</button
+			onclick={() => change(field)}
 		>
+			{RECIPE_RESET_GLYPH}
+		</button>
 	{/if}
 {/snippet}
 
@@ -218,8 +220,10 @@
 			<button
 				type="button"
 				aria-pressed={values.takes === count}
-				onclick={() => onchange({ ...values, takes: count })}>{count}</button
+				onclick={() => onchange({ ...values, takes: count })}
 			>
+				{count}
+			</button>
 		{/each}
 	</span>
 {/snippet}
@@ -253,8 +257,9 @@
 			class="reset-all"
 			disabled={!changedTabs.has(tab)}
 			onclick={() => onchange(resetRecipeTab(values, tab, standard))}
-			>{pageText('recipe.resetAll')}</button
 		>
+			{pageText('recipe.resetAll')}
+		</button>
 	</div>
 {/snippet}
 
@@ -289,8 +294,10 @@
 			class="close"
 			title={pageText('recipe.close')}
 			aria-label={pageText('recipe.close')}
-			onclick={onclose}>˄</button
+			onclick={onclose}
 		>
+			˄
+		</button>
 	</div>
 
 	<div id="recipe-panel" role="tabpanel" aria-labelledby={`recipe-tab-${selected}`}>
@@ -314,9 +321,9 @@
 			{@render row('model', pageText('recipe.model'), modelControl)}
 			{#if $activeModelsError}
 				<p class="error" role="alert">{$activeModelsError}</p>
-				<button type="button" class="retry" onclick={loadActiveModels}
-					>{pageText('recipe.retry')}</button
-				>
+				<button type="button" class="retry" onclick={loadActiveModels}>
+					{pageText('recipe.retry')}
+				</button>
 			{/if}
 			{@render row('takes', pageText('recipe.takes'), takesControl)}
 		{:else}
@@ -331,26 +338,27 @@
 						onkeydown={(event) => event.key === 'Enter' && confirmSavePreset()}
 					/>
 					<button type="button" onclick={confirmSavePreset}>{pageText('recipe.presetSave')}</button>
-					<button type="button" onclick={() => (savingPreset = false)}
-						>{pageText('recipe.presetCancel')}</button
-					>
+					<button type="button" onclick={() => (savingPreset = false)}>
+						{pageText('recipe.presetCancel')}
+					</button>
 				{:else}
-					<button type="button" onclick={() => (savingPreset = true)}
-						>{pageText('recipe.saveAsPreset')}</button
-					>
+					<button type="button" onclick={() => (savingPreset = true)}>
+						{pageText('recipe.saveAsPreset')}
+					</button>
 				{/if}
 				<a
 					href="/settings/generation"
 					onclick={(event) => followAppPageLink(event, '/settings/generation')}
-					>{pageText('recipe.managePresets')}</a
 				>
+					{pageText('recipe.managePresets')}
+				</a>
 			</div>
 			{#if presetError}<p class="error" role="alert">{presetError}</p>{/if}
 			{#if $generationDefaultsError}
 				<p class="error" role="alert">{pageText('recipe.defaultsError')}</p>
-				<button type="button" class="retry" onclick={loadGenerationDefaults}
-					>{pageText('recipe.retry')}</button
-				>
+				<button type="button" class="retry" onclick={loadGenerationDefaults}>
+					{pageText('recipe.retry')}
+				</button>
 			{/if}
 			<div class="engine">
 				<ParamControls

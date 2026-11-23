@@ -416,8 +416,9 @@
 				<button
 					class="retry-btn"
 					onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
-					>{pageText('albumPage.retry')}</button
 				>
+					{pageText('albumPage.retry')}
+				</button>
 			{:else if albumSongs.length > 0 || albumLoad !== 'unreachable'}
 				{#if albumSongs.length === 0}
 					<p class="empty-tab">{pageText('albumPage.noSongs')}</p>

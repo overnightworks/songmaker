@@ -77,9 +77,9 @@
 
 <div class="voice-picker">
 	<span class="label desktop-label">{pageText('voicePicker.label')}</span>
-	<span class="label mobile-label"
-		>{pageText('voicePicker.mobileLabel', { mode: targetModelMode })}</span
-	>
+	<span class="label mobile-label">
+		{pageText('voicePicker.mobileLabel', { mode: targetModelMode })}
+	</span>
 	<div class="picker-wrap">
 		<button
 			bind:this={triggerButton}
@@ -129,9 +129,9 @@
 							<span class="mode-chip">{lora.model_mode}</span>
 						{/if}
 						{#if unavailable}
-							<span class="unavailable-label"
-								>{pageText('voicePicker.optionUnavailable', { state: unavailable })}</span
-							>
+							<span class="unavailable-label">
+								{pageText('voicePicker.optionUnavailable', { state: unavailable })}
+							</span>
 						{/if}
 					</button>
 				{/each}
@@ -143,8 +143,9 @@
 			class="hint"
 			href="/settings/voices"
 			onclick={(event) => followAppPageLink(event, '/settings/voices')}
-			>{pageText('voicePicker.create')}</a
 		>
+			{pageText('voicePicker.create')}
+		</a>
 	{/if}
 </div>
 

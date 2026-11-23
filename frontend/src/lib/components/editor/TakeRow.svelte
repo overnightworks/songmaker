@@ -328,9 +328,9 @@
 				<span class="take-origin">
 					{#if provenance.source}
 						{@const source = provenance.source}
-						<a href={`#take-${source.id}`} onclick={(event) => followSource(event, source)}
-							>{provenance.label}</a
-						>
+						<a href={`#take-${source.id}`} onclick={(event) => followSource(event, source)}>
+							{provenance.label}
+						</a>
 					{:else}
 						{provenance.label}
 					{/if}

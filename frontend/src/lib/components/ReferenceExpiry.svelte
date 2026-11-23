@@ -14,9 +14,9 @@
 	});
 </script>
 
-<span class="exp" class:warn={deletion.days <= EXPIRY_WARN_DAYS} title={deletion.tooltip}
-	>⏳ {pageText('referenceExpiry.daysLeft', deletion.days)}</span
->
+<span class="exp" class:warn={deletion.days <= EXPIRY_WARN_DAYS} title={deletion.tooltip}>
+	⏳ {pageText('referenceExpiry.daysLeft', deletion.days)}
+</span>
 
 <style>
 	.exp {

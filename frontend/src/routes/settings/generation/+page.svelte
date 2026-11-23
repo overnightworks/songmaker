@@ -259,9 +259,9 @@
 							? pageText('generationPage.saving')
 							: pageText(editingPresetId ? 'generationPage.update' : 'generationPage.save')}
 					</button>
-					<button class="reset-btn" onclick={closePresetForm}
-						>{pageText('generationPage.cancel')}</button
-					>
+					<button class="reset-btn" onclick={closePresetForm}>
+						{pageText('generationPage.cancel')}
+					</button>
 				</div>
 			</div>
 		{/if}

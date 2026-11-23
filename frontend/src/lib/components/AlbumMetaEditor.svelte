@@ -80,9 +80,9 @@
 			aria-describedby={titleMissing ? titleReasonId : undefined}
 		/>
 		{#if titleMissing}
-			<span id={titleReasonId} class="field-reason" role="alert"
-				>{pageText('albumDetails.titleRequired')}</span
-			>
+			<span id={titleReasonId} class="field-reason" role="alert">
+				{pageText('albumDetails.titleRequired')}
+			</span>
 		{/if}
 	</label>
 	<label class="field">
@@ -105,9 +105,9 @@
 		/>
 	</label>
 	<div class="details-foot">
-		<button type="submit" class="save-btn" disabled={!canSave}
-			>{pageText('albumDetails.save')}</button
-		>
+		<button type="submit" class="save-btn" disabled={!canSave}>
+			{pageText('albumDetails.save')}
+		</button>
 	</div>
 </form>
 

@@ -181,10 +181,7 @@
 		}));
 	}
 
-	/**
-	 * `turnBeforeRead` is the latest turn when the history read began, which
-	 * for the first read is its conversation-list step (#1170).
-	 */
+	/** `turnBeforeRead` is the latest turn when the history read began: for the first read, its conversation-list step. */
 	async function loadMessages(
 		conversationId: string,
 		turnBeforeRead: Promise<void> = latestTurn
@@ -211,9 +208,8 @@
 
 	/**
 	 * A message sent while the history was still being read owns the chat's
-	 * end: once its turn settles, the history the read found goes before it
-	 * rather than in its place, so the exchange keeps its answer, refusal or
-	 * failure (#1170).
+	 * end: once its turn settles, the history the read found goes before it,
+	 * so the exchange keeps its answer, refusal or failure.
 	 */
 	async function keepTurnSentDuringRead(
 		conversationId: string,
@@ -256,8 +252,7 @@
 	 * A stream that drops without the server's own error frame did not fail
 	 * the turn: the server runs it to completion regardless. Show what the
 	 * conversation holds instead — the running turn, its reply, or the
-	 * unanswered message — and name a failure only when the message never
-	 * reached the server (#1014).
+	 * unanswered message; only a message that never reached the server fails.
 	 */
 	async function reattachDroppedTurn(
 		sentMessage: string,
@@ -340,7 +335,7 @@
 	/**
 	 * Wait out a turn the server still runs — started by a panel since left or
 	 * by another tab — and show how it ended. The server's chat job decides
-	 * whether a turn runs; a web-process restart ends one that process ran (#1014).
+	 * whether a turn runs; a web-process restart ends one that process ran.
 	 */
 	async function followRunningTurn(conversationId: string): Promise<void> {
 		const placeholderIndex = messages.length;
@@ -534,10 +529,9 @@
 	/**
 	 * An answered turn shows what the conversation holds, so the chat reads
 	 * the same before and after a reload: an older failed message stays as the
-	 * server stored it, or leaves when it never reached the server (#1014).
-	 * Every reply keeps the tool calls it streamed in this session; they are
-	 * not persisted. When the history cannot be read, the streamed exchange
-	 * stays as it is.
+	 * server stored it, or leaves when it never reached the server. Every reply
+	 * keeps the tool calls it streamed in this session; they are not persisted.
+	 * When the history cannot be read, the streamed exchange stays as it is.
 	 */
 	async function adoptPersistedHistory(conversationId: string): Promise<void> {
 		const conversation = await fetchConversationMessages(conversationId).catch(() => null);
@@ -557,21 +551,20 @@
 
 	/**
 	 * The server answers an unanswered last message that is sent again instead
-	 * of storing it twice (#1014), so the panel sends it in place of its bubble.
+	 * of storing it twice, so the panel sends it in place of its bubble.
 	 */
 	function unansweredMessageSentAgain(msg: string): Message | undefined {
 		const last = messages.at(-1);
 		return isUnansweredResend(last, msg) ? last : undefined;
 	}
 
-	/** The server's resend rule (#1014): an unanswered last message with the same text is that message. */
 	function isUnansweredResend(last: Message | undefined, text: string): last is Message {
 		return last?.role === 'user' && last.text === text;
 	}
 
 	/**
 	 * Only the newest message can be sent again: the server answers its stored
-	 * copy, while an older one would be stored a second time (#1014). An older
+	 * copy, while an older one would be stored a second time. An older
 	 * failure therefore reads as the reload shows it — a message without a reply.
 	 */
 	const retryableMessageIndex = $derived(
@@ -599,7 +592,7 @@
 	/*
 	 * The chat follows the newest message unless the musician scrolled up to
 	 * read. A pane hidden behind Edit or Takes has no box to scroll and loses
-	 * its offset, so the place is taken again when the pane is shown (#1063).
+	 * its offset, so the place is taken again when the pane is shown.
 	 * Only a scroll upwards stops the following: content growing under a
 	 * scroll the chat made itself must not read as the musician leaving.
 	 */
@@ -891,8 +884,9 @@
 			class="tool-target"
 			class:foreign={target.foreign}
 			title={target.foreign ? pageText('cowriter.toolForeignTarget') : undefined}
-			>{pageText('cowriter.toolTarget', { title: target.title })}</span
 		>
+			{pageText('cowriter.toolTarget', { title: target.title })}
+		</span>
 	{/if}
 {/snippet}
 
@@ -922,8 +916,9 @@
 					<button
 						class="mention-remove"
 						onclick={() => (mentionedSongIds = mentionedSongIds.filter((id) => id !== song.id))}
-						>&#x2715;</button
 					>
+						&#x2715;
+					</button>
 				</span>
 			{/each}
 			{#each mentionedVersions as version (version.id)}
@@ -933,8 +928,9 @@
 						class="mention-remove"
 						onclick={() =>
 							(mentionedVersionIds = mentionedVersionIds.filter((id) => id !== version.id))}
-						>&#x2715;</button
 					>
+						&#x2715;
+					</button>
 				</span>
 			{/each}
 		</div>
@@ -983,8 +979,9 @@
 						class="convo-new"
 						data-hitbox="text"
 						onclick={() => chooseFromConversationMenu(startNew)}
-						>{pageText('cowriter.newConversation')}</button
 					>
+						{pageText('cowriter.newConversation')}
+					</button>
 					<button
 						type="button"
 						role="menuitem"
@@ -993,10 +990,11 @@
 							memoryProposalWaiting ? 'cowriter.memoryWaiting' : 'cowriter.memory'
 						)}
 						onclick={() => chooseFromConversationMenu(openMemory)}
-						>{pageText(
-							'cowriter.memory'
-						)}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>
+						{pageText(
+							'cowriter.memory'
+						)}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}
+					</button>
 					{#each menuConversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
 							<button
@@ -1014,8 +1012,10 @@
 								class="conv-del"
 								data-hitbox="frequent"
 								onclick={() => chooseFromConversationMenu(() => askToDelete(conv))}
-								aria-label={pageText('cowriter.deleteConversation')}>&#x2715;</button
+								aria-label={pageText('cowriter.deleteConversation')}
 							>
+								&#x2715;
+							</button>
 						</div>
 					{/each}
 				</div>

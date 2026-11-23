@@ -89,9 +89,9 @@
 						aria-current={index === queue.currentIndex ? 'true' : undefined}
 						onclick={() => onJump(index)}
 					>
-						<span class="queue-position" aria-hidden="true"
-							>{index === queue.currentIndex ? '' : formatDecimal(index + 1, 0)}</span
-						>
+						<span class="queue-position" aria-hidden="true">
+							{index === queue.currentIndex ? '' : formatDecimal(index + 1, 0)}
+						</span>
 						{#if subtitleByEntryId?.get(item.key)}
 							<span class="queue-label">
 								<span class="queue-title">{item.songTitle}</span>
@@ -105,9 +105,9 @@
 								{nowPlayingTakeLabel(item.versionNumber, item.generationNumber)}
 							</span>
 						{/if}
-						<span class="queue-duration"
-							>{item.durationSec != null ? formatTime(item.durationSec) : ''}</span
-						>
+						<span class="queue-duration">
+							{item.durationSec != null ? formatTime(item.durationSec) : ''}
+						</span>
 					</button>
 				</li>
 			{/each}

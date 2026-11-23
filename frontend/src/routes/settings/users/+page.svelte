@@ -384,8 +384,9 @@
 				<div class="limits-grid">
 					{#each globalLimits as item (item.setting_key)}
 						<label class="limit-row">
-							<span class="limit-label">{SETTING_LABELS[item.setting_key] ?? item.setting_key}</span
-							>
+							<span class="limit-label">
+								{SETTING_LABELS[item.setting_key] ?? item.setting_key}
+							</span>
 							<input
 								type="number"
 								min="0"
@@ -442,9 +443,9 @@
 						>
 							{genSaving ? pageText('adminPage.saving') : pageText('adminPage.saveDefaults')}
 						</button>
-						<button class="clear-btn" onclick={handleResetGenDefaults}
-							>{pageText('generationDefaults.reset')}</button
-						>
+						<button class="clear-btn" onclick={handleResetGenDefaults}>
+							{pageText('generationDefaults.reset')}
+						</button>
 					</div>
 				{/if}
 			</section>
@@ -495,11 +496,9 @@
 							onclick={() => handleToggleModel(model.id, model.is_active)}
 						>
 							{model.id.toUpperCase()}
-							<span class="model-status"
-								>{model.is_active
-									? pageText('availableModels.on')
-									: pageText('availableModels.off')}</span
-							>
+							<span class="model-status">
+								{model.is_active ? pageText('availableModels.on') : pageText('availableModels.off')}
+							</span>
 						</button>
 					{/each}
 				</div>
@@ -522,14 +521,14 @@
 		value={cowriterBudget}
 		onchange={(event) => saveCowriterBudget(Number(event.currentTarget.value))}
 	/>
-	<span class="saved" aria-live="polite"
-		>{cowriterBudgetSaved ? `✓ ${pageText('modelsTable.saved')}` : ''}</span
-	>
+	<span class="saved" aria-live="polite">
+		{cowriterBudgetSaved ? `✓ ${pageText('modelsTable.saved')}` : ''}
+	</span>
 	{#if cowriterBudgetFailure !== null}
 		<span class="budget-error" role="alert">{cowriterBudgetFailure}</span>
-		<button type="button" class="retry" onclick={() => saveCowriterBudget(cowriterBudget)}
-			>{pageText('modelsTable.retry')}</button
-		>
+		<button type="button" class="retry" onclick={() => saveCowriterBudget(cowriterBudget)}>
+			{pageText('modelsTable.retry')}
+		</button>
 	{/if}
 {/snippet}
 

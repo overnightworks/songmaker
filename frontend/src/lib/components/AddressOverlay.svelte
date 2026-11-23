@@ -25,9 +25,9 @@
 {:else}
 	<div class="address-overlay" role="alert">
 		<p>{overlay.message}</p>
-		<button class="address-action" type="button" onclick={overlay.onRetry}
-			>{overlay.retryLabel}</button
-		>
+		<button class="address-action" type="button" onclick={overlay.onRetry}>
+			{overlay.retryLabel}
+		</button>
 	</div>
 {/if}
 

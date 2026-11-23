@@ -83,12 +83,14 @@
 				aria-label={pageText('takeRetention.whatThisDoes')}
 				aria-expanded={explaining}
 				aria-describedby={explaining ? 'retention-explanation' : undefined}
-				onclick={() => (explaining = !explaining)}><Icon name="info" size={14} /></button
+				onclick={() => (explaining = !explaining)}
 			>
+				<Icon name="info" size={14} />
+			</button>
 			{#if explaining}
-				<span id="retention-explanation" role="tooltip" class="explanation"
-					>{pageText('takeRetention.explanation')}</span
-				>
+				<span id="retention-explanation" role="tooltip" class="explanation">
+					{pageText('takeRetention.explanation')}
+				</span>
 			{/if}
 		</span>
 		{#if report}
@@ -125,12 +127,12 @@
 			<p class="dim"><span aria-hidden="true">✓</span> {pageText('takeRetention.nothingDue')}</p>
 		{:else if !confirming}
 			<div class="actions">
-				<button type="button" class="btn" onclick={refreshPreview} disabled={loading}
-					>{pageText('takeRetention.refresh')}</button
-				>
-				<button type="button" class="btn danger" onclick={askToRun} disabled={loading}
-					>{pageText('takeRetention.runNow')}</button
-				>
+				<button type="button" class="btn" onclick={refreshPreview} disabled={loading}>
+					{pageText('takeRetention.refresh')}
+				</button>
+				<button type="button" class="btn danger" onclick={askToRun} disabled={loading}>
+					{pageText('takeRetention.runNow')}
+				</button>
 			</div>
 		{:else}
 			<div class="confirm">

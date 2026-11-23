@@ -65,15 +65,15 @@
 	<h1 bind:this={headingElement} tabindex="-1">{heading}</h1>
 	{#if kind === 'missing'}
 		<p>{pageText('shareStatus.invalidLink')}</p>
-		<a class="primary" href={SIGN_IN_PATH}
-			>{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a
-		>
+		<a class="primary" href={SIGN_IN_PATH}>
+			{pageText('shareStatus.openApp', { app: pageText('app.name') })}
+		</a>
 	{:else if kind === 'error'}
 		<p>{pageText(SHARE_STATUS_ERROR_BODIES[resource])}</p>
 		{#if onretry}
-			<button type="button" class="primary" onclick={onretry}
-				>{pageText('shareStatus.retry')}</button
-			>
+			<button type="button" class="primary" onclick={onretry}>
+				{pageText('shareStatus.retry')}
+			</button>
 		{/if}
 		<a href={SIGN_IN_PATH}>{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a>
 	{/if}

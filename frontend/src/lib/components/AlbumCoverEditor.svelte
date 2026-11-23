@@ -299,8 +299,10 @@
 				class="stage-nav"
 				aria-label={pageText('albumCover.previousSuggestion')}
 				disabled={coverSuggestionsBusy || shownSlotIndex === 0}
-				onclick={() => showSlot(shownSlotIndex - 1)}>‹</button
+				onclick={() => showSlot(shownSlotIndex - 1)}
 			>
+				‹
+			</button>
 		{:else}
 			<span class="stage-nav-gap"></span>
 		{/if}
@@ -314,11 +316,11 @@
 			{:else if shownSlot?.kind === 'making'}
 				<div class="stage-making" role="status">
 					<span class="stage-ring ring-turn" aria-hidden="true"></span>
-					<span
-						>{pageText('albumCover.suggesting')}{#if shownSlot.startedAt}<CoverRunElapsed
+					<span>
+						{pageText('albumCover.suggesting')}{#if shownSlot.startedAt}<CoverRunElapsed
 								startedAt={shownSlot.startedAt}
-							/>{/if}</span
-					>
+							/>{/if}
+					</span>
 				</div>
 			{:else if album.cover}
 				<img
@@ -327,9 +329,9 @@
 					draggable="false"
 				/>
 			{:else}
-				<button type="button" class="stage-empty" onclick={() => onupload()}
-					>{pageText('albumCover.add')}</button
-				>
+				<button type="button" class="stage-empty" onclick={() => onupload()}>
+					{pageText('albumCover.add')}
+				</button>
 			{/if}
 		</div>
 		{#if stageSlots.length > 1}
@@ -338,8 +340,10 @@
 				class="stage-nav"
 				aria-label={pageText('albumCover.nextSuggestion')}
 				disabled={coverSuggestionsBusy || shownSlotIndex === stageSlots.length - 1}
-				onclick={() => showSlot(shownSlotIndex + 1)}>›</button
+				onclick={() => showSlot(shownSlotIndex + 1)}
 			>
+				›
+			</button>
 		{:else}
 			<span class="stage-nav-gap"></span>
 		{/if}
@@ -351,16 +355,17 @@
 				class="cover-suggestions-retry"
 				type="button"
 				onclick={() => retryCoverActivity(currentAlbumId)}
-				>{pageText('albumCover.suggestionsRetry')}</button
 			>
+				{pageText('albumCover.suggestionsRetry')}
+			</button>
 		{:else if coverSuggestions}
 			{#if shownSuggestionNumber}
-				<b
-					>{pageText('albumCover.suggestionPosition', {
+				<b>
+					{pageText('albumCover.suggestionPosition', {
 						shown: String(shownSuggestionNumber),
 						total: String(suggestionCount)
-					})}</b
-				>
+					})}
+				</b>
 			{/if}
 		{:else if coverSuggestionsLoading}
 			<span role="status">{pageText('albumCover.suggestionsLoading')}</span>
@@ -387,8 +392,10 @@
 			class="cover-action"
 			data-hitbox="frequent"
 			disabled={coverSuggestionsBusy}
-			onclick={() => onupload()}>{pageText('albumCover.upload')}</button
+			onclick={() => onupload()}
 		>
+			{pageText('albumCover.upload')}
+		</button>
 		<button
 			type="button"
 			class="cover-action"
@@ -396,12 +403,13 @@
 			data-hitbox="frequent"
 			disabled={!canSuggestCover}
 			onclick={suggestCover}
-			>{hasSuggestions
-				? pageText('albumCover.suggestAnother')
-				: pageText('albumCover.suggest')}{#if coverProblem === 'busy'}<span class="cover-wait-time"
-					>&nbsp;{formatTime(busyWaitSeconds)}</span
-				>{/if}</button
 		>
+			{hasSuggestions
+				? pageText('albumCover.suggestAnother')
+				: pageText('albumCover.suggest')}{#if coverProblem === 'busy'}<span class="cover-wait-time">
+					&nbsp;{formatTime(busyWaitSeconds)}
+				</span>{/if}
+		</button>
 		{#if hasSuggestions}
 			<button
 				type="button"
@@ -409,8 +417,9 @@
 				data-hitbox="frequent"
 				disabled={!shownSuggestionId || coverSuggestionsBusy}
 				onclick={() => shownSuggestionId && selectCoverSuggestion(shownSuggestionId)}
-				>{pageText('albumCover.use')}</button
 			>
+				{pageText('albumCover.use')}
+			</button>
 		{/if}
 		{#if album.cover}
 			<button
@@ -418,8 +427,10 @@
 				class="cover-action cover-remove"
 				data-hitbox="frequent"
 				disabled={coverSuggestionsBusy}
-				onclick={onremove}>{pageText('albumCover.remove')}</button
+				onclick={onremove}
 			>
+				{pageText('albumCover.remove')}
+			</button>
 		{/if}
 		<button
 			type="button"

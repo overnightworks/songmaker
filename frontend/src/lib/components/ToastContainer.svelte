@@ -16,8 +16,10 @@
 				<button
 					class="toast-dismiss"
 					onclick={() => dismissToast(toast.id)}
-					aria-label={pageText('toast.dismiss')}>&times;</button
+					aria-label={pageText('toast.dismiss')}
 				>
+					&times;
+				</button>
 			</div>
 		{/each}
 	</div>
