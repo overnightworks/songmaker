@@ -20,6 +20,7 @@ from support.request_lines import request_lines
 from support.web_app import (
     BUILT_SHELL,
     TEST_SECRET,
+    hold_a_music_lease,
     make_app_context,
     make_fake_async_redis,
     make_fake_redis,
@@ -339,12 +340,15 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
         signing_key=TEST_SECRET,
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
+    hold_a_music_lease(ctx.async_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
         with web_client(app):
             pass
 
-    mock_reap.assert_called_once_with(ctx)
+    mock_reap.assert_called_once()
+    assert mock_reap.call_args.args == (ctx,)
+    assert mock_reap.call_args.kwargs["music_roster"].holders == {"music-worker"}
 
     with pg_factory() as session:
         from songmaker_cli.db.models import UserSession
