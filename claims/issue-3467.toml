@@ -1,8 +1,0 @@
-claim_id = "83b46ca1869244ef8cca2778ba88d912"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "b4e9567ea1862b1f15fd152771e7ba4095769550"
-branch = "claude/issue-3467-tandem-v0-17-0"
-scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/app_context.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/server.py", "tests/songmaker_acestep_worker/test_heartbeat.py", "tests/songmaker_acestep_worker/test_wrapper_training_hold.py", "tests/songmaker_cli/test_acestep_state.py", "tests/songmaker_cli/test_acestep_state_redis.py", "tests/songmaker_cli/test_cover_runner.py", "tests/songmaker_cli/test_cover_runner_through_gateway.py", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/songmaker_cli/test_queue_streams_across_processes.py", "tests/songmaker_cli/test_scheduler.py", "tests/support/loop_ticks.py", "tests/support/owner_lease_epoch.py", "tests/support/score_jobs.py", "tests/support/web_app.py", "tests/support/wrapper_deps.py", "uv.lock"]
-opened_commit = "44388631c4deada62a31b5b78208e3fd8e30d787"
-whole_reason = "A release pin, the web's wake client its documented shape asks for, and the imports its public surface allows are one adoption; split, songmaker pins a release it does not follow."
