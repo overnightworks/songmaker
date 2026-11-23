@@ -15,6 +15,8 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from logline.testing import configured
+from sqlalchemy.engine import URL
+from support.object_store import configured_bucket
 from support.request_lines import request_lines
 from support.web_app import (
     BUILT_SHELL,
@@ -693,22 +695,38 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
     asyncio.run(_run())
 
 
-def test_default_context_follows_wakes_on_a_client_without_socket_timeout(tmp_path: Path) -> None:
+def test_default_context_follows_wakes_through_a_quiet_channel_on_one_subscription(
+    postgresql_url: URL, redis_url: str, monkeypatch, fresh_settings: None, tmp_path: Path,
+) -> None:
     from songmaker_cli.server import _create_default_context
 
-    with (
-        patch("songmaker_cli.db.engine.init_db"),
-        patch("songmaker_cli.redis_client.wait_for_redis"),
-        patch("songmaker_cli.object_store.object_store_of"),
-    ):
+    monkeypatch.setenv("DATABASE_URL", postgresql_url.render_as_string(hide_password=False))
+    monkeypatch.setenv("REDIS_URL", redis_url)
+    monkeypatch.setenv("SONGMAKER_S3_BUCKET", configured_bucket())
+    quiet_for = 5  # several of the bounded client's 2 s socket timeouts
+
+    async def subscriptions_while_quiet() -> int:
         ctx = _create_default_context(tmp_path / "audio", tmp_path / "data")
+        subscriptions = 0
 
-    def socket_timeout(client) -> float | None:
-        return client.connection_pool.connection_kwargs["socket_timeout"]
+        def subscribed() -> None:
+            nonlocal subscriptions
+            subscriptions += 1
 
-    assert socket_timeout(ctx.wake_redis) is None
-    assert socket_timeout(ctx.async_redis) is not None
-    assert ctx.following_wake_channel is not ctx.wake_channel
+        try:
+            async with ctx.following_wake_channel.following(
+                on_resync=subscribed, on_wake=lambda _wake: None, on_failed=lambda _error: None,
+                ready_within=timedelta(seconds=5),
+            ):
+                await asyncio.sleep(quiet_for)
+        finally:
+            await ctx.wake_redis.aclose()
+            await ctx.async_redis.aclose()
+            ctx.redis.close()
+            ctx.db.kw["bind"].dispose()
+        return subscriptions
+
+    assert asyncio.run(subscriptions_while_quiet()) == 1
 
 
 def test_lifespan_closes_the_client_that_follows_wakes(tmp_path: Path, pg_factory) -> None:
