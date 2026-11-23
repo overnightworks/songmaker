@@ -1,8 +1,0 @@
-claim_id = "90c69808a6e141e7b0d89ee23262cb9c"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
-role = "builder"
-base = "c90c27a282355df7c31b3a286a292e0bb89fcaa5"
-branch = "claude/issue-3456-host-decides-nothing"
-scope = [".github/workflows/e2e.yml", "docker/docker-compose.test.yml", "docs/architecture.md", "docs/security.md", "docs/testing.md", "src/songmaker_cli/app_context.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/server.py", "tests/songmaker_cli/test_app_context.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_oidc_client_person_token_paths.py", "tests/songmaker_cli/test_server.py", "tests/songmaker_cli/test_server_middleware.py"]
-opened_commit = "9bafce2cfc169932278073e3fbcab938258d034f"
-whole_reason = "One protective layer leaves the middleware order; its one setting, the documents that state it and the tests that pin it change with it, or the order and its record disagree."
