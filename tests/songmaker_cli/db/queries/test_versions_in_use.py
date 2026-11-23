@@ -134,7 +134,7 @@ TAKE_JOB_REQUESTS = {
 @pytest.mark.parametrize("request_name", list(TAKE_JOB_REQUESTS))
 def test_a_take_job_row_holds_the_version_the_endpoint_resolved(client, request_name):
     path, body, expected_version = TAKE_JOB_REQUESTS[request_name]
-    with worker_up():
+    with worker_up(client):
         response = client.post(path, json=body)
     assert response.status_code == 200
     assert response.json()["version_id"] == _job_version(client, response.json()["id"])
