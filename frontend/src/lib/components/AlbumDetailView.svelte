@@ -482,12 +482,12 @@
 {/if}
 
 {#if songToDelete}
+	{@const doomed = songToDelete}
 	<SongDeleteDialog
-		song={songToDelete}
+		song={doomed}
 		onconfirm={() => {
-			const { id } = songToDelete!;
+			void deleteSongWithUndo(doomed.id);
 			songToDelete = null;
-			void deleteSongWithUndo(id);
 		}}
 		oncancel={() => (songToDelete = null)}
 	/>

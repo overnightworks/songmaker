@@ -122,10 +122,7 @@
 		</h1>
 		{@render searchButton()}
 		<div class="song-control" {@attach inertWhileAddressOverlay}>
-			<SongMenu
-				{...$phoneAppBar.menu}
-				onrename={() => titleEditor?.startEdit()}
-			/>
+			<SongMenu {...$phoneAppBar.menu} onrename={() => titleEditor?.startEdit()} />
 		</div>
 	{:else if backShown}
 		<button
