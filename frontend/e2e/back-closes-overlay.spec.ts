@@ -1,4 +1,5 @@
 import { GROUPS, openSearchSheet, phoneSearchResult, searchSheet } from './phone-search';
+import { openThisTakeFromBar } from './play-album';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import {
 	mockPlaylist,
@@ -115,9 +116,8 @@ function takeSheet(page: Page): Locator {
 }
 
 async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
-	const takes = await openSongsTakes(page, playlist);
-	await seededTakeRow(takes).click();
-	await expect(page.getByRole('dialog', { name: firstSong(playlist) })).toBeVisible();
+	await seededTakeRow(await openSongsTakes(page, playlist)).click();
+	await openThisTakeFromBar(page, 'mobile', firstSong(playlist));
 	await expect(takeSheet(page)).toBeVisible();
 }
 

@@ -19,6 +19,7 @@ import {
 } from './helpers';
 import { contrastRatio, expectEmulatedTheme, tokenColor } from './contrast';
 import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
+import { openNowPlayingFromBar } from './play-album';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -350,6 +351,7 @@ test(
 				.first()
 				.getByRole('button', { name: nameStartingWith('Take') })
 				.click();
+			await openNowPlayingFromBar(page, 'desktop', SONG_TITLE);
 			await expect(page.getByRole('complementary', { name: SONG_TITLE })).toBeVisible();
 
 			await takeMenuTriggers(page).nth(2).click();

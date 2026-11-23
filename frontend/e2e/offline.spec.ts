@@ -80,8 +80,8 @@ function generateButton(page: Page): Locator {
 	return page.getByRole('tabpanel').getByRole('button', { name: nameStartingWith(GENERATE_LABEL) });
 }
 
-function playTakeButton(scope: Locator): Locator {
-	return scope.getByRole('button', { name: new RegExp(`^${words['transport.play']} v`) });
+function takeRowTarget(scope: Locator): Locator {
+	return scope.locator('.take-summary');
 }
 
 /** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */
@@ -314,7 +314,7 @@ test.describe(
 			const pause = miniPlayer.getByRole('button', { name: words['transport.pause'], exact: true });
 
 			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
-			await playTakeButton(page.getByRole('tabpanel')).click();
+			await takeRowTarget(page.getByRole('tabpanel')).click();
 			await expect(pause).toBeVisible();
 			const [miniPlayerOnline, pauseOnline] = await boundingBoxes(miniPlayer, pause);
 
@@ -361,7 +361,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const retry = transport.getByRole('button', { name: words['transport.retry'], exact: true });
 		const spinner = transport.locator('.play-btn .spinner');
 		const waitingSpinner = pause.locator('.spinner');
-		const takeRowPlay = playTakeButton(workspace(page).locator('.take-row'));
+		const takeRowPlay = takeRowTarget(workspace(page).locator('.take-row'));
 
 		await openSong(page, library.songPhoneAlbumId, songTitle);
 		if (isMobile) await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
@@ -492,7 +492,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 
 		await openSong(page, library.songPhoneAlbumId, loadedTitle);
 		if (isMobile) await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
-		await playTakeButton(workspace(page).locator('.take-row')).click();
+		await takeRowTarget(workspace(page).locator('.take-row')).click();
 		await expect(barPause.locator('.spinner')).toHaveCount(0);
 		await barPause.click();
 		await expect(
@@ -576,15 +576,14 @@ test.describe(
 				const panel = page.getByRole('tabpanel');
 				const takesTab = page.getByRole('tab', { name: words['songTabs.takes'] });
 				const runningRing = takesTab.locator('.ring');
-				const playTakePrefix = `${words['transport.play']} v`;
-				const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });
+				const takeRows = takeRowTarget(panel);
 				const lastSeenBar = panel.getByRole('progressbar', {
 					name: words['generate.lastKnownProgress']
 				});
 				await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 				await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
 				await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
-				await expect(playButtons).toHaveCount(seededTakes);
+				await expect(takeRows).toHaveCount(seededTakes);
 				await loseNetwork(page, context, { keepOpenStreams });
 				await expect(panel.getByText(words['generate.reconnecting'])).toBeVisible({
 					timeout: OFFLINE_NOTICE_MS
@@ -602,19 +601,18 @@ test.describe(
 				await expect(cancel).toHaveCSS('color', grey);
 				await expect(runningRing).toHaveCSS('color', grey);
 				await page.evaluate(
-					({ prefix, takesBefore }) => {
+					({ rowSelector, takesBefore }) => {
 						const takes = document.querySelector('[role="tabpanel"]');
 						if (!takes) throw new Error('Expected the Takes panel');
 						const gaps = { seen: false };
 						Object.assign(window, { takeArrivalGaps: gaps });
 						new MutationObserver(() => {
 							const cardShows = takes.querySelector('[role="progressbar"]') !== null;
-							const takeShows =
-								takes.querySelectorAll(`button[aria-label^="${prefix}"]`).length > takesBefore;
+							const takeShows = takes.querySelectorAll(rowSelector).length > takesBefore;
 							if (!cardShows && !takeShows) gaps.seen = true;
 						}).observe(takes, { childList: true, subtree: true });
 					},
-					{ prefix: playTakePrefix, takesBefore: seededTakes }
+					{ rowSelector: '.take-summary', takesBefore: seededTakes }
 				);
 				const songRefreshFailed = keepOpenStreams
 					? page.waitForEvent(
@@ -630,7 +628,7 @@ test.describe(
 				await expect(lastSeenBar).toBeVisible();
 				await expect(page.getByText(words['jobEnd.generateCompleted'])).toHaveCount(0);
 				await regainNetwork(page, context);
-				await expect(playButtons).toHaveCount(seededTakes + 2, { timeout: BACK_ONLINE_MS });
+				await expect(takeRows).toHaveCount(seededTakes + 2, { timeout: BACK_ONLINE_MS });
 				await expect(page.getByText(words['jobEnd.generateCompleted'])).toBeVisible();
 				await expect(panel.getByRole('progressbar')).toHaveCount(0);
 				await expect(runningRing).toHaveCount(0);

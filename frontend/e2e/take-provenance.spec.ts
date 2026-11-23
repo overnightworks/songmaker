@@ -19,6 +19,7 @@ import {
 	type FoldedSong
 } from './foldedSong';
 import { ONLY_IN_SHELL, workspace } from './helpers';
+import { openThisTakeFromBar } from './play-album';
 import { archiveOwnedAlbum } from './seed';
 
 const EDITED_LYRICS = 'Lyrics nobody saved';
@@ -273,12 +274,7 @@ test.describe(
 			await startDirtyDraft(page);
 			await provenanceLink(page, song).click();
 			await expect(takeRow(page, song.source)).toBeInViewport();
-			await page
-				.getByRole('contentinfo')
-				.getByRole('button', {
-					name: new RegExp(`${words['player.openNowPlaying']({ title: '' })}$`)
-				})
-				.click();
+			await openThisTakeFromBar(page, 'mobile', song.title);
 			const nowPlaying = page.getByRole('dialog', { name: song.title });
 			await expect(nowPlaying).toBeVisible();
 

@@ -441,28 +441,15 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	}
 	const takeControl = surface.locator('.take-row').filter({ hasText: library.takeLabel });
 	await expect(takeControl).toHaveCount(1);
-	if (shell === 'desktop') {
-		// The click rule (#140): a tap on the row body plays the take and shows
-		// it in Now Playing on This take. A row body never stops the music, so
-		// tapping the pick that's already playing only opens the panel, without
-		// pausing it.
-		await takeControl.getByRole('button', { name: nameStartingWith('Take') }).click();
-		await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
-		// The row body tap never touches play/pause: the pick that was already
-		// playing is still playing after it.
-		await expect(
-			shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
-				name: words['transport.pause'],
-				exact: true
-			})
-		).toBeVisible();
-		await closeNowPlaying(page, shell);
-	} else {
-		await expect(takeControl).toHaveClass(/playing/);
-		await expect(
-			takeControl.getByRole('button', { name: nameStartingWith(words['transport.pause']) })
-		).toBeVisible();
-	}
+	// A tap on the row of the take that is already playing pauses it and opens
+	// no Now Playing (#3419); the row keeps its equalizer, standing still.
+	await expect(takeControl).toHaveClass(/playing/);
+	await takeControl.locator('.take-summary').click();
+	await expect(
+		transport.getByRole('button', { name: words['transport.play'], exact: true })
+	).toBeVisible();
+	await expect(playingMarkIn(takeControl)).toHaveClass(/paused/);
+	await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toHaveCount(0);
 
 	if (shell === 'desktop') {
 		const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });

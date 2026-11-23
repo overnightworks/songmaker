@@ -237,10 +237,7 @@ request budget per shell.
   has no admin bootstrap. Global setup seeds an album, songs, takes, a pick and
   a share link through the public API with that admin's session and hands it to
   every attempt as storage state. Mutable fixtures (the playlist) are seeded
-  per attempt so a retry starts clean. `queue-continuity.spec.ts` seeds a
-  flow-owned account once per project, gives it an album with three songs and
-  no pick, and deletes the account afterwards: a library with nothing picked
-  cannot be reached from the shared admin library. `auth-flows.spec.ts`
+  per attempt so a retry starts clean. `auth-flows.spec.ts`
   starts from an explicitly empty storage state and proves what runs without
   Keycloak: the start redirect to the issuer, the signed-out, no-access and
   failed pages, and logout. The identity provider is a stub

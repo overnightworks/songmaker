@@ -3,14 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import {
-	sameOriginHeaders,
-	FlowGuard,
-	nameStartingWith,
-	shellOf,
-	workspace,
-	type Shell
-} from './helpers';
+import { sameOriginHeaders, FlowGuard, shellOf, workspace, type Shell } from './helpers';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong, seedTake } from './seed';
 
 /**
@@ -211,7 +204,7 @@ async function playTheSongsTake(
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
-	await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
+	await take.locator('.take-summary').click();
 	await expect(transportOf(page).pause).toHaveAttribute('aria-busy', 'false');
 }
 

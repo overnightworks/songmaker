@@ -16,6 +16,7 @@ import {
 	FlowGuard,
 	ONLY_IN_SHELL,
 	MOBILE_VIEWPORT,
+	nameStartingWith,
 	openSettingsSection,
 	openPageFromSearch,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
@@ -40,7 +41,6 @@ const SECOND_TAKE_LABEL = words['nowPlaying.takeVersioned']({
 	version: String(SONG_PHONE_VERSION_NUMBER),
 	take: String(SONG_PHONE_TAKE_COUNT)
 });
-const PLAYS_FROM_AN_ALBUM = new RegExp(`^${words['nowPlaying.openAlbumSource']({ title: '.+' })}$`);
 const RUNNING_JOB_TAKE_INDEX = 1;
 const RUNNING_JOB_TAKE_COUNT = 2;
 // A cold start: the job begins by loading the model, which names no percent
@@ -150,7 +150,7 @@ function expectSongAddressStands(page: Page, albumId: string, title: string): vo
 
 test.describe('song page at phone width', () => {
 	test(
-		'[defect:#1568] [defect:#1579] lists takes with a play control each, shows a running generation, then its failure',
+		'[defect:#1568] [defect:#1579] lists takes with a tappable row each, shows a running generation, then its failure',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const guard = new FlowGuard(page);
@@ -173,8 +173,8 @@ test.describe('song page at phone width', () => {
 			const panel = page.getByRole('tabpanel');
 
 			// A cold open of the song's own address (a reload, a shared link, a
-			// bookmark) stands in its album exactly as a track-list open does, so
-			// a non-pick take queues the album, not the library pool (#997).
+			// bookmark) plays a tapped take with the song's other takes, whatever
+			// the pool is.
 			await page.goto(songAddress);
 			await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
@@ -186,19 +186,20 @@ test.describe('song page at phone width', () => {
 				)
 			).toBeVisible();
 
-			const playButtons = panel.getByRole('button', {
-				name: new RegExp(`^${words['transport.play']} v`)
+			const takeRows = panel.getByRole('button', {
+				name: new RegExp(`^${words['takeRow.takeLabel']({ number: '' })}\\d`)
 			});
-			await expect(playButtons).toHaveCount(SONG_PHONE_TAKE_COUNT);
-			for (const box of await boundingBoxes(...(await playButtons.all()))) {
+			await expect(takeRows).toHaveCount(SONG_PHONE_TAKE_COUNT);
+			for (const box of await boundingBoxes(...(await takeRows.all()))) {
 				expect(box.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 				expect(box.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 			}
 
 			await panel
 				.getByRole('button', {
-					name: `${words['transport.play']} ${SECOND_TAKE_LABEL}`,
-					exact: true
+					name: nameStartingWith(
+						words['takeRow.takeLabel']({ number: String(SONG_PHONE_TAKE_COUNT) })
+					)
 				})
 				.click();
 			// The phone bar says where the music comes from (#1058, frame C2); the
@@ -207,7 +208,11 @@ test.describe('song page at phone width', () => {
 			// once the song has loaded, starts with the same label.
 			await openNowPlayingFromBar(page, 'mobile', songTitle);
 			const nowPlaying = page.getByRole('dialog', { name: songTitle });
-			await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
+			await expect(
+				nowPlaying.getByRole('button', {
+					name: words['nowPlaying.openSongSource']({ title: songTitle })
+				})
+			).toBeVisible();
 			await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
 			await nowPlaying
 				.getByRole('button', { name: words['nowPlaying.close'], exact: true })

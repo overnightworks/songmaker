@@ -13,9 +13,9 @@
 [file_lines]
 "frontend/e2e/back-closes-overlay.spec.ts" = 1202
 "frontend/e2e/helpers.ts" = 819
-"frontend/e2e/library.spec.ts" = 1244
+"frontend/e2e/library.spec.ts" = 1231
 "frontend/e2e/seed.ts" = 1173
-"frontend/e2e/song-versions.spec.ts" = 842
+"frontend/e2e/song-versions.spec.ts" = 839
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1310
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1800
 "frontend/src/lib/components/LibraryWall.test.ts" = 925

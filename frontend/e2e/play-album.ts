@@ -27,3 +27,22 @@ export async function openNowPlayingFromBar(
 		})
 		.click();
 }
+
+/**
+ * Now Playing's This take panel, raised from the bar: it opens on the Queue
+ * tab for a song's takes. On the phone the panel is a sheet that the tab
+ * strip's trigger raises first.
+ */
+export async function openThisTakeFromBar(
+	page: Page,
+	shell: Shell,
+	songTitle: string
+): Promise<void> {
+	await openNowPlayingFromBar(page, shell, songTitle);
+	if (shell === 'mobile')
+		await page
+			.getByRole('dialog', { name: songTitle })
+			.getByRole('button', { name: new RegExp(`${words['nowPlaying.queueTab']}$`) })
+			.click();
+	await page.getByRole('tab', { name: words['nowPlaying.takeTab'] }).click();
+}

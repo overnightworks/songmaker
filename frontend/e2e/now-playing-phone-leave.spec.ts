@@ -9,7 +9,7 @@ import {
 	workspace
 } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
-import { openNowPlayingFromBar } from './play-album';
+import { openNowPlayingFromBar, openThisTakeFromBar } from './play-album';
 
 // Phone Back/× restores the origin without duplicate history (#1002). A take opens
 // a sheet clear of × (#1052); Back closes the sheet first (#1119). Playlists play
@@ -74,6 +74,7 @@ const NOW_PLAYING_ORIGINS: {
 					name: nameStartingWith(words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
 				})
 				.click();
+			await openThisTakeFromBar(page, 'mobile', playing);
 			await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 			return {
 				playing,
