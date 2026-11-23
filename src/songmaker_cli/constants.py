@@ -212,7 +212,7 @@ ARQ_HEALTH_CHECK_INTERVAL_SECONDS: Final[int] = 30
 SCORING_SERVICE_NAME: Final = "songmaker-scoring-worker"
 WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
 # The music worker writes it at its start, its readiness probe reads it: both run in one
-# container, whose /tmp starts empty; /tmp is the only writable path of its read-only root.
+# container; /tmp, the pod's writable mount, is the only writable path of its read-only root.
 MUSIC_WORKER_READINESS_FILE: Final = Path(
     "/tmp/music-worker-readiness",  # noqa: S108 - a per-container file the probe reads  # NOSONAR(S5443) One fixed file, shared by the worker and its probe, on the pod's emptyDir.
 )

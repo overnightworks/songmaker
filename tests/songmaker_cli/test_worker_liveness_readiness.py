@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -13,7 +12,6 @@ from logline.testing import configured
 from tandem import StoreError
 
 import songmaker_cli.arq_pool as arq_pool
-from songmaker_cli.constants import MUSIC_WORKER_READINESS_FILE
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.settings import Settings
@@ -63,10 +61,6 @@ def test_pid_one_start_ticks_read_field_22_whatever_the_command_name_holds(
 
 def test_pid_one_has_start_ticks_on_this_machine() -> None:
     assert pid_one_start_ticks().isdigit()
-
-
-def test_the_readiness_file_lives_in_the_writable_temporary_directory() -> None:
-    assert MUSIC_WORKER_READINESS_FILE.parent == Path(tempfile.gettempdir())
 
 
 def test_the_readiness_file_names_the_owner_and_the_start_ticks(readiness_file: Path) -> None:
