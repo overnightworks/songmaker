@@ -65,10 +65,9 @@
 		// be a thin library-pool stub. Null means no cues yet: static lyrics.
 		lyricsCues = null,
 		whisperText = null,
-		// #138: the resolved take's lyrics, for callers whose `info` cannot
-		// carry them. A share page in stream mode builds `info` from the
-		// public queue-stream manifest, which redacts `lyrics` — the text
-		// comes from the share payload instead.
+		// The resolved take's lyrics, for callers whose `info` cannot carry
+		// them: a share page in stream mode builds `info` from a manifest that
+		// redacts `lyrics`, so the text comes from the share payload.
 		lyricsText = null,
 		rightPanel,
 		curationBar,
@@ -89,7 +88,7 @@
 		// 'full' covers the viewport as a modal dialog; 'docked' is a column in
 		// the page's own layout — no dialog role, no focus trap, no transport
 		// of its own, since the transport bar beside it keeps carrying that.
-		// 'page' is the whole page a share link opens (#1391): no header, no
+		// 'page' is the whole page a share link opens: no header, no
 		// close, no bar beside it, flowing in the page's own scroll.
 		surface?: NowPlayingSurfaceKind | 'page';
 		// The overlay surfaces' ×; the page has nothing to close.
@@ -141,10 +140,9 @@
 		// The queue or take panel; a single shared song has none, so it shows
 		// neither the column nor the phone's sheet trigger.
 		rightPanel?: Snippet;
-		// Curation mode's Pick/Keep/Skip strip (issue #228). Rendered in the
-		// cover column, which stays visible in every layout (docked, full,
-		// and mobile stacked) — unlike the queue/take tabs, which mobile
-		// hides behind an extra sheet-opening tap.
+		// Curation mode's Pick/Keep/Skip strip, rendered in the cover column,
+		// which stays visible in every layout — unlike the queue/take tabs,
+		// which mobile hides behind an extra sheet-opening tap.
 		curationBar?: Snippet;
 	} = $props();
 
@@ -236,9 +234,9 @@
 
 {#snippet coverMeta()}
 	<div class="cover-meta">
-		<svelte:element this={isPage ? 'h1' : 'span'} class="cover-title"
-			>{info.songTitle}</svelte:element
-		>
+		<svelte:element this={isPage ? 'h1' : 'span'} class="cover-title">
+			{info.songTitle}
+		</svelte:element>
 		{#if stacked && source}
 			<button
 				type="button"
@@ -248,8 +246,10 @@
 				aria-label={pageText(
 					source.kind === 'album' ? 'nowPlaying.openAlbumSource' : 'nowPlaying.openPlaylistSource',
 					{ title: source.title }
-				)}>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
+				)}
 			>
+				{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
+			</button>
 		{:else if albumLine && showTakeLabel}<span class="cover-line">{albumLine}</span>{/if}
 		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
 	</div>
@@ -267,9 +267,10 @@
 
 {#snippet playButton()}
 	{#if ended}
-		<button type="button" class="play-again" onclick={onTogglePlay}
-			><span aria-hidden="true">↻</span> {pageText('nowPlaying.playAgain')}</button
-		>
+		<button type="button" class="play-again" onclick={onTogglePlay}>
+			<span aria-hidden="true">↻</span>
+			{pageText('nowPlaying.playAgain')}
+		</button>
 	{:else}
 		<button
 			type="button"
@@ -364,9 +365,9 @@
 
 {#snippet goToSongButton()}
 	{#if onGoToSong}
-		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}
-			>{pageText('nowPlaying.goToSong')}</button
-		>
+		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}>
+			{pageText('nowPlaying.goToSong')}
+		</button>
 	{/if}
 {/snippet}
 
@@ -422,13 +423,13 @@
 				<div class="np-header-actions">
 					{#if stacked}{@render goToSongButton()}{/if}
 					{#if isDocked && onExpand}
-						<button type="button" class="surface-btn" onclick={onExpand}
-							>{pageText('nowPlaying.expand')}</button
-						>
+						<button type="button" class="surface-btn" onclick={onExpand}>
+							{pageText('nowPlaying.expand')}
+						</button>
 					{:else if !isDocked && onCollapse}
-						<button type="button" class="surface-btn" onclick={onCollapse}
-							>{pageText('nowPlaying.collapse')}</button
-						>
+						<button type="button" class="surface-btn" onclick={onCollapse}>
+							{pageText('nowPlaying.collapse')}
+						</button>
 					{/if}
 					{@render iconButton('x', pageText('nowPlaying.close'), onclose)}
 				</div>
@@ -468,14 +469,14 @@
 					aria-expanded={$sheetOpen}
 				>
 					{#if upNextTitle}
-						<span class="trigger-up-next"
-							>{pageText('nowPlaying.upNext', { title: upNextTitle })}</span
-						>
+						<span class="trigger-up-next">
+							{pageText('nowPlaying.upNext', { title: upNextTitle })}
+						</span>
 					{/if}
-					<span class="trigger-label"
-						>{rightPanelLabel}
-						<Icon name="chevron-up" size={14} /></span
-					>
+					<span class="trigger-label">
+						{rightPanelLabel}
+						<Icon name="chevron-up" size={14} />
+					</span>
 				</button>
 				{#if $sheetOpen}
 					<button
@@ -886,11 +887,10 @@
 		gap: 0.5rem;
 	}
 
-	/* The page a share link opens (#1391): the frame flows in the page's own
-	   scroll instead of covering the viewport. Wide, the cover stands beside
-	   the song, Play, the slider and the words; on a phone, the frame fills
-	   the screen (below). The page around it is a column of the screen's
-	   height. */
+	/* The page a share link opens: the frame flows in the page's own scroll
+	   instead of covering the viewport. Wide, the cover stands beside the
+	   song, Play, the slider and the words; on a phone, the frame fills the
+	   screen (below). The page around it is a column of the screen's height. */
 	.now-playing.page {
 		--page-play-size: 76px;
 		position: static;

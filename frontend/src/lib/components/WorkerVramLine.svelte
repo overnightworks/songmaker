@@ -27,32 +27,32 @@
 		</div>
 		{#if !unknown && used != null && total != null}
 			<div class="numbers">
-				<span
-					>{pageText(
+				<span>
+					{pageText(
 						estimated ? 'workerPool.vramUsedEstimated' : 'workerPool.vramUsed',
 						gigabytes(used, total)
-					)}</span
-				>
-				{#if !estimated}<span class="free"
-						>{pageText('workerPool.vramFree', {
+					)}
+				</span>
+				{#if !estimated}<span class="free">
+						{pageText('workerPool.vramFree', {
 							free: formatDecimal(Math.max(0, total - used), 1)
-						})}</span
-					>{/if}
+						})}
+					</span>{/if}
 			</div>
 			{#if estimated}<span class="reason">{pageText('workerPool.vramEstimateReason')}</span>{/if}
 		{:else}
-			<span class="unknown-text"
-				><span class="ring" aria-hidden="true"></span>{pageText('workerPool.vramUnknown')}</span
-			>
-			<span class="reason"
-				>{!state
+			<span class="unknown-text">
+				<span class="ring" aria-hidden="true"></span>{pageText('workerPool.vramUnknown')}
+			</span>
+			<span class="reason">
+				{!state
 					? pageText('workerPool.vramNoHeartbeat')
 					: offline
 						? pageText('workerPool.vramOffline')
 						: used != null && total == null
 							? pageText('workerPool.vramNoTotal')
-							: pageText('workerPool.vramNoFields')}</span
-			>
+							: pageText('workerPool.vramNoFields')}
+			</span>
 		{/if}
 	</div>
 </div>

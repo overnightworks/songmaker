@@ -53,9 +53,9 @@
 		/>
 	</label>
 	<label class="field">
-		<span class="field-label"
-			>{pageText('newAlbum.artistLabel')} <em>{pageText('newAlbum.artistOptional')}</em></span
-		>
+		<span class="field-label">
+			{pageText('newAlbum.artistLabel')} <em>{pageText('newAlbum.artistOptional')}</em>
+		</span>
 		<input
 			bind:value={artist}
 			type="text"

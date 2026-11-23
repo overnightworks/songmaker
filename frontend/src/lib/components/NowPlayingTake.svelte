@@ -152,10 +152,11 @@
 				class="open-version"
 				data-hitbox="text"
 				onclick={() => openVersion(versionId)}
-				>{pageText('nowPlayingTake.openVersion', {
-					number: String(openableVersion.versionNumber)
-				})}<Icon name="chevron-right" size={14} /></button
 			>
+				{pageText('nowPlayingTake.openVersion', {
+					number: String(openableVersion.versionNumber)
+				})}<Icon name="chevron-right" size={14} />
+			</button>
 		{/if}
 		<div class="take-badges">
 			<button
@@ -220,9 +221,9 @@
 	{#if recipeGroups.length > 0}
 		<section class="take-section">
 			<details class="recipe-section">
-				<summary class="section-title recipe-summary-toggle"
-					>{pageText('nowPlayingTake.recipe')}</summary
-				>
+				<summary class="section-title recipe-summary-toggle">
+					{pageText('nowPlayingTake.recipe')}
+				</summary>
 				<div class="recipe-groups">
 					{#each recipeGroups as group (group.label)}
 						<div class="recipe-group">
@@ -239,12 +240,13 @@
 													class="recipe-link"
 													href={appPageAddress(link.route, link.query)}
 													onclick={(event) => followAppPageLink(event, link.route, link.query)}
-													><span class="recipe-link-name">{entry.value}</span><Icon
+												>
+													<span class="recipe-link-name">{entry.value}</span><Icon
 														name="chevron-right"
 														size={12}
 														class="recipe-link-chevron"
-													/></a
-												>
+													/>
+												</a>
 												<!-- eslint-enable svelte/no-navigation-without-resolve -->
 											{:else}
 												{entry.value}

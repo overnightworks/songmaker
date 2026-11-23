@@ -346,8 +346,9 @@
 				<button
 					class="retry-btn"
 					onclick={() => $selectedPlaylistId && loadPlaylistDetail($selectedPlaylistId)}
-					>{pageText('playlistPage.retry')}</button
 				>
+					{pageText('playlistPage.retry')}
+				</button>
 			{:else if detailLoad.status !== 'unreachable'}
 				<p class="empty-tab" role="status">{pageText('playlistPage.loading')}</p>
 			{/if}

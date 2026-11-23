@@ -235,11 +235,11 @@
 				onclick={() => fileInput?.click()}
 			>
 				{#if uploading}
-					<span class="upload-name"
-						>{pageText('referencesPage.uploadingName', { name: uploading.name })}</span
-					><span class="upload-percent"
-						>{PROGRESS_SEPARATOR}{formatPercent(uploading.percent / 100)}</span
-					>
+					<span class="upload-name">
+						{pageText('referencesPage.uploadingName', { name: uploading.name })}
+					</span><span class="upload-percent">
+						{PROGRESS_SEPARATOR}{formatPercent(uploading.percent / 100)}
+					</span>
 				{:else}
 					<Icon name={reason !== null ? 'triangle-alert' : 'arrow-up'} size={16} />{pageText(
 						'referencesPage.upload'
@@ -262,8 +262,9 @@
 	{#if usage && meterShown}
 		<div class="quota">
 			<div class="quota-figures">
-				<span>{pageText('referencesPage.filesFigure', usage.file_limit, filesGaps(usage))}</span
-				><span>{pageText('referencesPage.sizeFigure', sizeGaps(usage))}</span>
+				<span>
+					{pageText('referencesPage.filesFigure', usage.file_limit, filesGaps(usage))}
+				</span><span>{pageText('referencesPage.sizeFigure', sizeGaps(usage))}</span>
 			</div>
 			<div class="quota-bar" aria-hidden="true">
 				<i style:width={`${Math.min(storageShare, 1) * 100}%`}></i>

@@ -39,9 +39,9 @@
 			{@const kept = pinned.includes(model.mode)}
 			<div class="model" role="group" aria-label={model.mode}>
 				<span class="name">{model.mode}</span>
-				<span class="size"
-					>{pageText('workerPool.modelSize', { size: formatDecimal(model.size_gb, 0) })}</span
-				>
+				<span class="size">
+					{pageText('workerPool.modelSize', { size: formatDecimal(model.size_gb, 0) })}
+				</span>
 				<button
 					class="keep"
 					role="switch"
@@ -57,8 +57,10 @@
 					class="unload"
 					aria-label={pageText('workerPool.unloadModel', { mode: model.mode })}
 					disabled={isUnloadDisabled(model.mode)}
-					onclick={() => onUnload(model.mode)}>{pageText('workerPool.unload')}</button
+					onclick={() => onUnload(model.mode)}
 				>
+					{pageText('workerPool.unload')}
+				</button>
 			</div>
 		{:else}
 			<p>

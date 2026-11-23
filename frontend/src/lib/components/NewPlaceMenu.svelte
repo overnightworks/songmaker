@@ -46,21 +46,21 @@
 		closeLabel={pageText('newPlace.menuClose', { library: pageText('places.library') })}
 		pressed={$card !== null}
 	>
-		{#snippet trigger()}<span class="new-face"
-				><Icon name="plus" size={16} />{pageText('newPlace.face')}</span
-			>{/snippet}
+		{#snippet trigger()}<span class="new-face">
+				<Icon name="plus" size={16} />{pageText('newPlace.face')}
+			</span>{/snippet}
 		<p class="menu-heading">
 			<Marked
 				parts={pageParts('newPlace.heading', { library: pageText('places.library') })}
 				marked={{ strong }}
 			/>
 		</p>
-		<button type="button" class="menu-item" onclick={() => startNew('album')}
-			><Icon name="album" size={16} />{pageText('newPlace.album')}</button
-		>
-		<button type="button" class="menu-item" onclick={() => startNew('playlist')}
-			><Icon name="playlist" size={16} />{pageText('newPlace.playlist')}</button
-		>
+		<button type="button" class="menu-item" onclick={() => startNew('album')}>
+			<Icon name="album" size={16} />{pageText('newPlace.album')}
+		</button>
+		<button type="button" class="menu-item" onclick={() => startNew('playlist')}>
+			<Icon name="playlist" size={16} />{pageText('newPlace.playlist')}
+		</button>
 	</MenuPopover>
 </span>
 {#if $card}

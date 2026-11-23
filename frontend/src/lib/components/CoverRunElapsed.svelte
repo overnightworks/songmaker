@@ -16,6 +16,6 @@
 	const elapsedSeconds = $derived(Math.max(0, (now - Date.parse(startedAt)) / TICK_MS));
 </script>
 
-<span aria-hidden="true"
-	>{#if separated}&nbsp;·&nbsp;{/if}{formatTime(elapsedSeconds)}</span
->
+<span aria-hidden="true">
+	{#if separated}&nbsp;·&nbsp;{/if}{formatTime(elapsedSeconds)}
+</span>

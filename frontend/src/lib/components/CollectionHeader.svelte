@@ -203,9 +203,9 @@
 		{pageText(
 			'collectionHeader.songCount',
 			songCount
-		)}{#if withoutPickCount}{PLACE_LINE_SEPARATOR}<span class="header-without-pick"
-				>{pageText('collectionHeader.withoutPick', { count: withoutPickCount })}</span
-			>{/if}
+		)}{#if withoutPickCount}{PLACE_LINE_SEPARATOR}<span class="header-without-pick">
+				{pageText('collectionHeader.withoutPick', { count: withoutPickCount })}
+			</span>{/if}
 	</p>
 {/snippet}
 

@@ -113,8 +113,8 @@
 </script>
 
 {#snippet fieldHead(key: keyof VersionGenerationParams, label: string)}
-	<span class="setting-head"
-		><label for={fieldId(key)}>{label}</label>
+	<span class="setting-head">
+		<label for={fieldId(key)}>{label}</label>
 		{#if changedKeys?.has(key)}
 			<i class="changed-dot" data-field-changed aria-hidden="true"></i>
 			<button
@@ -123,10 +123,12 @@
 				data-field-reset
 				title={pageText('paramField.resetTitle')}
 				aria-label={pageText('paramField.resetLabel', { field: label })}
-				onclick={() => onresetfield?.(key)}>{RECIPE_RESET_GLYPH}</button
+				onclick={() => onresetfield?.(key)}
 			>
-		{/if}</span
-	>
+				{RECIPE_RESET_GLYPH}
+			</button>
+		{/if}
+	</span>
 {/snippet}
 
 {#snippet fieldError(f: {
@@ -172,13 +174,13 @@
 				title={pageText(f.helpKey)}
 				onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 			>
-				<option value=""
-					>{defaultsLoaded
+				<option value="">
+					{defaultsLoaded
 						? pageText('paramField.defaultOptionValue', {
 								value: String(resolvedPlaceholder(f.key))
 							})
-						: pageText('paramField.defaultOption')}</option
-				>
+						: pageText('paramField.defaultOption')}
+				</option>
 				{#each f.options as opt (opt)}
 					<option value={opt}>{opt}</option>
 				{/each}
