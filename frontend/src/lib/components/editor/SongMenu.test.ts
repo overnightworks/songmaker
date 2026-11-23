@@ -8,7 +8,6 @@ import { makeAlbum, makePlaylist, makeSong } from '#lib/test-utils/factories.ts'
 import type { AlbumItem, ShareResult, SongItem } from '#lib/api/types.ts';
 import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
-import { selectedSongId } from '#lib/stores/player.ts';
 import { closeSongMovePicker, songMoveConfirm, songMoveRun } from '#lib/stores/songMove.ts';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
@@ -31,14 +30,12 @@ afterEach(async () => {
 
 function defaultProps() {
 	return {
-		title: 'Sommerlicht',
+		song: makeSong({ id: 's1', title: 'Sommerlicht', album_id: 'home' }),
 		saveDisabled: true,
 		onsave: vi.fn(),
 		onrename: vi.fn(),
 		onaddto: vi.fn(),
 		ondelete: vi.fn(),
-		isShared: false,
-		shareSlug: null as string | null,
 		onshare: vi.fn<() => Promise<ShareResult>>().mockResolvedValue({
 			status: 'shared',
 			share_url: 'https://example.test/share/abc',
@@ -97,7 +94,9 @@ describe('SongMenu', () => {
 	])(
 		'shows the Share row $hint and runs $handler on a tap, keeping the menu open',
 		async ({ isShared, hint, handler }) => {
-			const { target, props } = await renderMenu({ isShared, shareSlug: isShared ? 'abc' : null });
+			const { target, props } = await renderMenu({
+				song: makeSong({ id: 's1', is_shared: isShared, share_slug: isShared ? 'abc' : null })
+			});
 			openSongMenu(target);
 			await tick();
 			const share = menuRow(target, words['songMenu.share']);
@@ -110,6 +109,14 @@ describe('SongMenu', () => {
 			expect(target.querySelector('.menu-panel')).not.toBeNull();
 		}
 	);
+
+	it('has no Save version row for a song whose editor is not open', async () => {
+		const { target } = await renderMenu({ onsave: undefined });
+		openSongMenu(target);
+		await tick();
+
+		expect(menuRowLabels(target)).not.toContain(words['songMenu.save']);
+	});
 
 	it.each([true, false])(
 		'defect:#1495: enables saving only when the draft is dirty (disabled: %s)',
@@ -254,10 +261,11 @@ describeBackClosesOverlay({
 });
 
 describe('SongMenu move picker', () => {
-	async function openPickerOver(albums: AlbumItem[], settled: string) {
+	const otherSong = makeSong({ id: 's2', album_id: 'home' });
+
+	async function openPickerOver(albums: AlbumItem[], settled: string, song?: SongItem) {
 		libraryWallOrder.set('title');
-		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
-		selectedSongId.set('s1');
+		songList.set([makeSong({ id: 's1', album_id: 'home' }), otherSong]);
 		vi.mocked(fetchAlbums).mockResolvedValue({
 			items: albums,
 			total: albums.length,
@@ -265,7 +273,7 @@ describe('SongMenu move picker', () => {
 			limit: 50,
 			has_more: false
 		});
-		const { target } = await renderMenu();
+		const { target } = await renderMenu(song ? { song } : {});
 		openSongMenu(target);
 		await tick();
 		menuRow(target, words['songMenu.move']).click();
@@ -316,7 +324,6 @@ describe('SongMenu move picker', () => {
 	it('says when the albums did not load and loads them again on retry', async () => {
 		libraryWallOrder.set('title');
 		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
-		selectedSongId.set('s1');
 		vi.mocked(fetchAlbums).mockRejectedValueOnce(new Error('offline'));
 		const { target } = await renderMenu();
 		openSongMenu(target);
@@ -431,32 +438,35 @@ describe('SongMenu move picker', () => {
 			const target = await openPickerOver(albums, '.pk-list');
 			rowTitled(target, 'Berlin').click();
 			await tick();
-
-			selectedSongId.set('s2');
+			window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 			await tick();
 
-			expect(target.querySelector('[aria-busy="true"]')).toBeNull();
-			const rows = [...target.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')];
+			const other = await openPickerOver(albums, '.pk-list', otherSong);
+
+			expect(other.querySelector('[aria-busy="true"]')).toBeNull();
+			const rows = [...other.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')];
 			expect(rows.length).toBeGreaterThan(0);
 			expect(rows.every((row) => row.disabled)).toBe(true);
 		});
 
 		it('shows no red row and no Retry on another song after a move failed', async () => {
-			vi.mocked(moveSong).mockRejectedValue(new Error('boom'));
-			const target = await openPickerOver(albums, '.pk-list');
-			rowTitled(target, 'Berlin').click();
-			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+			songMoveRun.set({
+				status: 'failed',
+				songId: 's1',
+				albumId: 'b',
+				line: 'not moved',
+				retryable: true
+			});
 
-			selectedSongId.set('s2');
-			await tick();
+			const other = await openPickerOver(albums, '.pk-list', otherSong);
 
-			expect(target.querySelector('.pk-error')).toBeNull();
-			expect(target.querySelector('.pk-retry')).toBeNull();
-			const rows = [...target.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')];
+			expect(other.querySelector('.pk-error')).toBeNull();
+			expect(other.querySelector('.pk-retry')).toBeNull();
+			const rows = [...other.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')];
 			expect(rows.some((row) => row.disabled)).toBe(false);
 		});
 
-		it('reopens the picker for a failed run only while its song is the open song', async () => {
+		it("reopens the picker of the song whose move failed and no other song's", async () => {
 			const pending = Promise.withResolvers<SongItem>();
 			vi.mocked(moveSong).mockReturnValue(pending.promise);
 			const target = await openPickerOver(albums, '.pk-list');
@@ -464,15 +474,12 @@ describe('SongMenu move picker', () => {
 			await tick();
 			window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 			await tick();
-			selectedSongId.set('s2');
+			const { target: other } = await renderMenu({ song: otherSong });
 
 			pending.reject(new Error('boom'));
-			await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
-			await tick();
-			expect(target.querySelector('.menu-panel')).toBeNull();
 
-			selectedSongId.set('s1');
 			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+			expect(other.querySelector('.menu-panel')).toBeNull();
 		});
 
 		it('reopens the picker with the red row when a move into a shared album is refused', async () => {

@@ -9,9 +9,11 @@
 		/** The key of the field's name, and of the name of the button that starts the edit. */
 		labelKey: TextKey;
 		editLabelKey: TextKey;
+		/** Runs each time the edit ends, saved or cancelled. */
+		onend?: () => void;
 	}
 
-	let { value, onsave, labelKey, editLabelKey }: Props = $props();
+	let { value, onsave, labelKey, editLabelKey, onend }: Props = $props();
 
 	let editing = $state(false);
 	let draft = $state('');
@@ -32,13 +34,13 @@
 		if (saving) return;
 		const trimmed = draft.trim();
 		if (trimmed === value || !trimmed) {
-			editing = false;
+			finish();
 			return;
 		}
 		saving = true;
 		try {
 			await onsave(trimmed);
-			editing = false;
+			finish();
 		} catch {
 			// The caller already surfaces the failure (e.g. a toast); leave
 			// the field in edit mode with the draft intact so the user can fix it.
@@ -47,8 +49,9 @@
 		}
 	}
 
-	function cancel(): void {
+	function finish(): void {
 		editing = false;
+		onend?.();
 	}
 
 	function onKeyDown(e: KeyboardEvent): void {
@@ -57,7 +60,7 @@
 			commit();
 		} else if (e.key === 'Escape') {
 			e.preventDefault();
-			cancel();
+			finish();
 		}
 	}
 </script>
