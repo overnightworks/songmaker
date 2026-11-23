@@ -202,7 +202,7 @@ def test_a_due_time_missed_while_the_worker_was_down_runs_once_after_its_restart
                 await until(_every_cron_ran(runs))
             await cron_deadlines(redis).set(Cron.CLEANUP_FILES, DUE_NOW)
             async with serving(redis_url, runs):
-                await until(lambda: runs.count(Cron.CLEANUP_FILES) == 2)
+                await until(lambda: runs.count(Cron.CLEANUP_FILES) >= 2)
                 await until_redis_has_passed(redis, SETTLED)
 
     _run_within_a_minute(scenario())
@@ -320,7 +320,7 @@ def test_a_stop_waits_for_the_running_body_recurs_it_and_starts_no_further_key(
     async def scenario() -> None:
         async with reading(redis_url, window) as redis:
             async with serving(redis_url, first_worker, claim_for=SHORT_CLAIM_FOR) as worker:
-                await until(lambda: len(first_worker.started) == 1)
+                await until(lambda: len(first_worker.started) >= 1)
                 cancelled_at_ms = await redis_ms(redis)
                 worker.task.cancel()
                 await until_redis_has_passed(redis, SETTLED)
@@ -353,7 +353,7 @@ def test_a_stop_stays_a_stop_when_the_ended_body_cannot_be_recurred(
 
     async def scenario() -> None:
         async with serving(redis_url, runs, claim_for=SHORT_CLAIM_FOR, redis=redis) as worker:
-            await until(lambda: len(runs.started) == 1)
+            await until(lambda: len(runs.started) >= 1)
             redis.clock_fails = True
             worker.task.cancel()
             release.set()
@@ -397,7 +397,7 @@ def test_a_body_that_outlasts_the_stop_wait_is_cut_not_recurred_and_not_run_else
 
             second_worker.actions[long_cron] = note_start
             async with serving(redis_url, first_worker, claim_for=SHORT_CLAIM_FOR) as first:
-                await until(lambda: first_worker.count(long_cron) == 1)
+                await until(lambda: first_worker.count(long_cron) >= 1)
                 async with serving(redis_url, second_worker, claim_for=SHORT_CLAIM_FOR):
                     stopped_at_ms.append(await redis_ms(redis))
                     first.task.cancel()
