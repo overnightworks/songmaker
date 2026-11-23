@@ -181,11 +181,10 @@ def test_two_music_workers_start_together_and_each_cron_ends_once_per_due_time(
     workers = [cluster.start_music_worker("first"), cluster.start_music_worker("second")]
 
     def more_than_the_due_times_allow() -> bool:
+        # The counts come first: a run counted ended at a tick no later than the time read after.
+        counts = {cron: times_cron_ran(workers, cron) for cron in Cron}
         now = redis_datetime(redis_client)
-        return any(
-            times_cron_ran(workers, cron) > most_runs_between(cron, started_at, now)
-            for cron in Cron
-        )
+        return any(counts[cron] > most_runs_between(cron, started_at, now) for cron in Cron)
 
     assert poll_until(
         lambda: all(times_cron_ran(workers, cron) >= 1 for cron in Cron),
