@@ -75,6 +75,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
 	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
+	vi.mocked(fetchMemory).mockReset().mockResolvedValue(null);
 });
 
 afterEach(async () => {
@@ -1763,7 +1764,12 @@ describeBackClosesOverlay({
 
 describeBackClosesOverlay({
 	name: 'the co-writer Memory editor',
-	render: () => render(),
+	render: () => {
+		vi.mocked(fetchMemory).mockResolvedValue({
+			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
+		});
+		return render();
+	},
 	open: async (target) => {
 		await openMemoryFromMenu(target);
 		await historyComesToRest();
