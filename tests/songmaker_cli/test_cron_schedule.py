@@ -20,7 +20,6 @@ from support.redis_clock import (
     until_redis_ms,
 )
 
-from songmaker_cli import cron_schedule
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.cron_schedule import Cron, cron_deadlines, next_tick, serve_due_crons
 from songmaker_cli.redis_client import create_async_redis
@@ -104,6 +103,17 @@ class Runs:
         return run
 
 
+class ClockThatCanFail(Redis):
+    """A client whose Redis TIME read fails once ``clock_fails`` is set."""
+
+    clock_fails = False
+
+    async def time(self) -> tuple[int, int]:
+        if self.clock_fails:
+            raise ConnectionError("Redis TIME is unreadable")
+        return await super().time()
+
+
 @dataclass
 class Serving:
     task: asyncio.Task[None]
@@ -116,10 +126,11 @@ class Serving:
 @asynccontextmanager
 async def serving(
     redis_url: str, runs: Runs, *, claim_for: timedelta = HELD_CLAIM_FOR,
-    stop_wait: timedelta = STOP_WAIT,
+    stop_wait: timedelta = STOP_WAIT, redis: Redis | None = None,
 ) -> AsyncIterator[Serving]:
-    """One music worker's crons, on a client of its own, until the block ends."""
-    redis = create_async_redis(redis_url)
+    """One music worker's crons, on a client of its own or the one handed in, until the block
+    ends."""
+    redis = redis or create_async_redis(redis_url)
     task = asyncio.create_task(serve_due_crons(
         redis, runs.bodies(), claim_for=claim_for, every=EVERY, stop_wait=stop_wait,
     ))
@@ -316,20 +327,18 @@ def test_a_stop_waits_for_the_running_body_recurs_it_and_starts_no_further_key(
 
 
 def test_a_stop_stays_a_stop_when_the_ended_body_cannot_be_recurred(
-    redis_url: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    redis_url: str, caplog: pytest.LogCaptureFixture,
 ) -> None:
     runs = Runs()
     release = asyncio.Event()
     for cron in Cron:
         runs.actions[cron] = release.wait
-
-    async def clock_is_unreadable(_redis: Redis) -> datetime:
-        raise ConnectionError("Redis TIME is unreadable")
+    redis = ClockThatCanFail.from_url(redis_url)
 
     async def scenario() -> None:
-        async with serving(redis_url, runs, claim_for=SHORT_CLAIM_FOR) as worker:
+        async with serving(redis_url, runs, claim_for=SHORT_CLAIM_FOR, redis=redis) as worker:
             await until(lambda: len(runs.started) == 1)
-            monkeypatch.setattr(cron_schedule, "redis_now", clock_is_unreadable)
+            redis.clock_fails = True
             worker.task.cancel()
             release.set()
             await until(worker.task.done)
