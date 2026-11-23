@@ -2,7 +2,11 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
+import {
+	makeAlbum as album,
+	makePlaylist as playlist,
+	makeSong as song
+} from '#lib/test-utils/factories.ts';
 import { words } from '#lib/words/en.ts';
 import {
 	albumList,
@@ -10,6 +14,7 @@ import {
 	resetLibraryDataForTests,
 	songList
 } from '#lib/stores/libraryData.ts';
+import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { selectedAlbumId } from '#lib/stores/player.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
@@ -20,6 +25,9 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	renameSong: vi.fn(),
 	deleteSong: vi.fn(),
+	shareSong: vi.fn(),
+	unshareSong: vi.fn(),
+	addSongToPlaylist: vi.fn(),
 	fetchPlaylists: vi.fn().mockResolvedValue([])
 }));
 vi.mock('#lib/stores/player.ts', async (importOriginal) => ({
@@ -29,7 +37,14 @@ vi.mock('#lib/stores/player.ts', async (importOriginal) => ({
 	playAlbumSong: vi.fn()
 }));
 
-import { deleteSong, renameSong } from '#lib/api/client.ts';
+import {
+	addSongToPlaylist,
+	deleteSong,
+	fetchPlaylists,
+	renameSong,
+	shareSong,
+	unshareSong
+} from '#lib/api/client.ts';
 import { fetchSongs } from '#lib/api/songs.ts';
 import AlbumDetailView from './AlbumDetailView.svelte';
 
@@ -84,6 +99,11 @@ afterEach(async () => {
 	resetLibraryDataForTests();
 	vi.mocked(renameSong).mockReset();
 	vi.mocked(deleteSong).mockReset();
+	vi.mocked(shareSong).mockReset();
+	vi.mocked(unshareSong).mockReset();
+	vi.mocked(addSongToPlaylist).mockReset();
+	vi.mocked(fetchPlaylists).mockResolvedValue([]);
+	resetPlaylistsForTests();
 });
 
 describe('AlbumDetailView song rows', () => {
@@ -184,6 +204,87 @@ describe('AlbumDetailView song row menu', () => {
 
 		expect(renameSong).not.toHaveBeenCalled();
 		expect(row.querySelector('button.song-row-body')).not.toBeNull();
+	});
+
+	it('album_rule_12: a refused rename leaves the typed draft in the field', async () => {
+		vi.mocked(renameSong).mockRejectedValue(new Error('refused'));
+		const target = await renderLoadedAlbum();
+		const row = await openRowMenu(target, 'Open');
+		menuRow(row, words['songMenu.rename']).click();
+		await tick();
+		const field = requireElement<HTMLInputElement>(row, 'input.editable-title-input');
+		field.value = 'Opener';
+		field.dispatchEvent(new Event('input', { bubbles: true }));
+		field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await vi.waitFor(() => expect(renameSong).toHaveBeenCalledWith('s-open', 'Opener'));
+		await vi.waitFor(() =>
+			expect(requireElement<HTMLInputElement>(row, 'input.editable-title-input').disabled).toBe(
+				false
+			)
+		);
+		await tick();
+
+		expect(requireElement<HTMLInputElement>(row, 'input.editable-title-input').value).toBe(
+			'Opener'
+		);
+	});
+
+	it("album_rule_12: Share on a row shares that row's song and nobody else", async () => {
+		vi.mocked(shareSong).mockResolvedValue({
+			status: 'shared',
+			share_url: 'https://x/s/open',
+			share_slug: 'open',
+			songs_without_playable_take: []
+		});
+		const target = await renderLoadedAlbum();
+		const row = await openRowMenu(target, 'Open');
+
+		menuRow(row, words['songMenu.share']).click();
+		await vi.waitFor(() => expect(shareSong).toHaveBeenCalledTimes(1));
+
+		expect(shareSong).toHaveBeenCalledWith('s-open');
+		await vi.waitFor(() =>
+			expect(get(songList).find((item) => item.id === 's-open')?.is_shared).toBe(true)
+		);
+		expect(get(songList).find((item) => item.id === 's-picked')?.is_shared).toBe(false);
+	});
+
+	it("album_rule_12: Share on a shared row unshares that row's song", async () => {
+		vi.mocked(unshareSong).mockResolvedValue(undefined);
+		songList.set([]);
+		const items = songsWithOneWaitingForPick().map((item) =>
+			item.id === 's-open' ? { ...item, is_shared: true, share_slug: 'open' } : item
+		);
+		vi.mocked(fetchSongs).mockResolvedValue({
+			items,
+			total: items.length,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+		await loadSongsForAlbum('a-local');
+		const target = await renderDetail();
+		const row = await openRowMenu(target, 'Open');
+
+		menuRow(row, words['songMenu.share']).click();
+		await vi.waitFor(() => expect(unshareSong).toHaveBeenCalledTimes(1));
+
+		expect(unshareSong).toHaveBeenCalledWith('s-open');
+	});
+
+	it("album_rule_12: Add to… adds that row's song to the chosen playlist", async () => {
+		vi.mocked(fetchPlaylists).mockResolvedValue([playlist({ id: 'p-chosen', title: 'Chosen' })]);
+		vi.mocked(addSongToPlaylist).mockResolvedValue(undefined);
+		const target = await renderLoadedAlbum();
+		const row = await openRowMenu(target, 'Open');
+
+		menuRow(row, words['songMenu.addTo']).click();
+		await tick();
+		await vi.waitFor(() => expect(row.querySelector('.menu-picker-row')).not.toBeNull());
+		requireElement<HTMLButtonElement>(row, '.menu-picker-row').click();
+		await vi.waitFor(() => expect(addSongToPlaylist).toHaveBeenCalledTimes(1));
+
+		expect(addSongToPlaylist).toHaveBeenCalledWith('p-chosen', 's-open');
 	});
 
 	it('album_rule_12: Delete asks first, then removes the song and offers Undo', async () => {
