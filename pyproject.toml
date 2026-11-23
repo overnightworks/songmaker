@@ -58,7 +58,7 @@ server = [
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
     "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.71.1",
     # Cross-pod coordination in Redis (owner lease). A git pin by tag like the other two.
-    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.16.0",
+    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.17.0",
     # Every process writes its lines through logline; tandem's range names it, so the host pins the tag.
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.9.0",
 ]
@@ -77,7 +77,7 @@ acestep-worker = [
     "redis[hiredis]>=5.0,<9",
     # The GPU hold is a tandem lock; the worker writes its lines through logline. Git pins by tag
     # like the server extra's, from the same tags.
-    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.16.0",
+    "overnightworks-tandem @ git+https://github.com/overnightworks/tandem@v0.17.0",
     "overnightworks-logline @ git+https://github.com/overnightworks/logline@v1.9.0",
     # logline imports it at start; the server extra pins the same range.
     "structlog>=24.0,<27",

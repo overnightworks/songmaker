@@ -1653,6 +1653,14 @@ SIGKILLed and even the values the run did produce would be lost.
   `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
   process's arq pool fails fast. A stop signal ends that retry, so a worker
   stops within seconds during the outage.
+- Each process follows the wake channel on a client of its own with no `socket_timeout` and with
+  TCP keepalive (`create_async_redis(..., follows_wakes=True)`), and publishes on its bounded
+  client: a worker follows on `wake_redis` (`WorkerBase`), a web process on `AppContext.wake_redis`,
+  closed at shutdown, through `AppContext.following_wake_channel`; `AppContext.wake_channel`
+  publishes on `async_redis`. Below redis-py 8.2 a quiet subscription ends at its client's
+  `socket_timeout` and tandem subscribes again (WAKE-30), which would make a running cover's cancel
+  listener re-read the job every 2 s; arq keeps songmaker on redis-py 5.3, so the second client stays
+  until songmaker leaves arq and tandem's floor reaches 8.2.
 - A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
   type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
   the transaction that creates the row, and `jobs.run_after` holds the time a

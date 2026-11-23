@@ -11,8 +11,8 @@ from collections.abc import Awaitable, Callable
 
 import pytest
 from redis import Redis
-from support.owner_lease_epoch import settled_epoch
 from support.refused_download import attempt_download_that_must_not_run
+from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import reserve_gpu_hold
 from songmaker_cli.acestep_state import (
@@ -22,6 +22,7 @@ from songmaker_cli.acestep_state import (
     read_queue_depth,
     single_flight_download,
 )
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.lifecycle import JOB_REAPER_LOCK_NAME, tick_locks
 from songmaker_cli.redis_client import create_async_redis
 
@@ -31,7 +32,7 @@ WORKER = "acestep-worker-0"
 def _settle_the_real_servers_epoch(redis_url: str) -> None:
     """Date the epoch as on a Redis that has run longer than any lock lasts."""
     with Redis.from_url(redis_url) as server:
-        server.set(*settled_epoch())
+        server.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
 
 
 def _lose_everything(redis_url: str) -> None:

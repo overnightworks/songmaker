@@ -14,7 +14,7 @@ from anyio import from_thread
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from tandem.slots import Slots
+from tandem import Slots
 from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 

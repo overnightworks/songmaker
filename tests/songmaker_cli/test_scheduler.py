@@ -11,8 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from support.owner_lease_epoch import settled_epoch
-from support.web_app import SettledFakeAsyncRedis
+from support.web_app import SettledFakeAsyncRedis, settle_owner_leases
 from support.worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
 
 from songmaker_acestep_engine.constants import MODE_NOT_LOADED_DETAIL
@@ -206,7 +205,7 @@ def test_pick_worker_defers_instead_of_failing_while_a_redis_restart_may_have_lo
     async def pick_before_and_after_the_span() -> str:
         with pytest.raises(AllWorkersHeld):
             await pick_worker(db_session, redis, "sft")
-        redis.store[settled_epoch()[0]] = str(settled_epoch()[1])
+        await settle_owner_leases(redis)
         return (await pick_worker(db_session, redis, "sft")).id
 
     assert _run(pick_before_and_after_the_span()) == "w1"

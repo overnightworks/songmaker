@@ -16,19 +16,23 @@ import fakeredis
 import pytest
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
 from support.object_store import an_object_store
-from support.owner_lease_epoch import aged_epoch
 from support.web_app import (
     TEST_SECRET,
     arrange_fake_async_redis,
     make_fake_redis,
     make_test_app,
 )
+from tandem.testing import aged_epoch
 
 import songmaker_cli.cover_runner as cover_runner
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.constants import (
+    ARQ_SCORING_HEALTH_KEY,
+    BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    REDIS_KEY_PREFIX,
+)
 from songmaker_cli.db.models import (
     Album,
     AlbumCoverSuggestion,
@@ -342,7 +346,7 @@ async def _nothing(_redis) -> None:
 def _settle_the_fake_servers_epoch(server: fakeredis.FakeServer) -> None:
     arrange_fake_async_redis(
         fakeredis.FakeAsyncRedis(server=server),
-        lambda redis: redis.set(*aged_epoch(TICK_LOCK_LASTS.total_seconds())),
+        lambda redis: redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX, ran_for=TICK_LOCK_LASTS)),
     )
 
 

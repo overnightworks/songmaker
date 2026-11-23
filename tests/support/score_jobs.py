@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import fakeredis
 import pytest
 from support.web_app import SettledFakeAsyncRedis
-from tandem.keys import wake_channel
+from tandem import wake_channel
 
 from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, REDIS_KEY_PREFIX
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
