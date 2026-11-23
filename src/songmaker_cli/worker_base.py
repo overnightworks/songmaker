@@ -141,17 +141,14 @@ def stop_claiming(queue_task: asyncio.Task[None]) -> None:
 
 
 class WorkerBase:
-    """Base class for arq workers.
+    """Base class of the workers that claim their queue's jobs from PostgreSQL.
 
-    Subclasses set the ClassVars (service_name, job_types, queue_name, max_jobs) and add
-    their own task methods. The instance owns the DB engine + factory and the
-    process's owner id: its jobs carry the id from the moment they run, and its
-    lease says the process lives.
+    Subclasses set the ClassVars (service_name, queue, job_types, lease_kind) and implement
+    ``run_claimed``. The instance owns the DB engine + factory and the process's owner id: its
+    jobs carry the id from the moment they run, and its lease says the process lives.
 
-    arq integration: instantiate once at module load, then expose the
-    instance methods on a sibling WorkerSettings shim class so arq's
-    inspection of `functions`, `on_startup`, `on_shutdown`, `cron_jobs`
-    finds bound methods.
+    ``run`` is the entry point of a worker that no arq hosts; a worker that arq still hosts
+    reaches ``start`` and ``stop`` through the ``on_startup`` and ``on_shutdown`` hooks.
     """
 
     service_name: ClassVar[str]

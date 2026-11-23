@@ -59,7 +59,7 @@ class MusicWorker(WorkerBase):
         super().__init__(settings)
         self._readiness_file = readiness_file
         self._places = asyncio.Semaphore(self._settings.music_max_jobs)
-        self._arq_context: dict = {}
+        self._job_context: dict = {}
         self._run_logged = {
             job_type: logged_job(
                 JobFunction(job_type), self._run_payload, status_of=self.job_status,
@@ -71,7 +71,7 @@ class MusicWorker(WorkerBase):
         """Run the claimed row within its type's time limit."""
         async with asyncio.timeout(self._timeout_seconds(claimed.job_type)):
             await self._run_logged[claimed.job_type](
-                self._arq_context, claimed.job_id, claimed.payload,
+                self._job_context, claimed.job_id, claimed.payload,
             )
 
     def _timeout_seconds(self, job_type: JobType) -> int:
@@ -119,10 +119,11 @@ class MusicWorker(WorkerBase):
     async def start(self) -> None:
         write_readiness_file(self._readiness_file, self.owner_id, pid_one_start_ticks())
         await super().start()
-        self._arq_context = {"redis": self._owner_redis}
+        self._job_context = {"redis": self._owner_redis}
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:
-        crons = serve_due_crons(self._arq_context["redis"], self.cron_bodies())
+        assert self._owner_redis is not None  # noqa: S101 - run serves only after start
+        crons = serve_due_crons(self._owner_redis, self.cron_bodies())
         return (*super().servings(), crons)
 
     def cron_bodies(self) -> dict[Cron, CronBody]:

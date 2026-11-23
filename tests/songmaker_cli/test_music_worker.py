@@ -6,7 +6,10 @@ import asyncio
 import logging
 import os
 import signal
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,7 +21,7 @@ from support.reference_rows import a_reference
 import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-from songmaker_cli.cron_schedule import Cron
+from songmaker_cli.cron_schedule import Cron, CronBody
 from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
@@ -45,10 +48,10 @@ def _mock_ctx():
 
 
 def _make_worker(worker: MusicWorker | None = None) -> MusicWorker:
-    """A worker with DB / dirs stubbed and the arq context a started worker holds."""
+    """A worker with DB / dirs stubbed and the context a started worker's jobs run with."""
     worker = worker or MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._arq_context = _mock_ctx()
+    worker._job_context = _mock_ctx()
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
@@ -115,7 +118,7 @@ def test_a_claimed_generation_runs_with_the_arguments_of_its_row() -> None:
     assert work.await_args.args == ("j1", "s1", "v1", 2, "u1")
     kwargs = work.await_args.kwargs
     assert (kwargs["seed"], kwargs["target_model"], kwargs["redis"]) == (
-        42, "xl-sft", worker._arq_context["redis"],
+        42, "xl-sft", worker._job_context["redis"],
     )
 
 
@@ -314,20 +317,23 @@ def test_the_music_worker_has_a_body_for_every_cron() -> None:
 
 
 def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
-    redis_url, tmp_path, monkeypatch, stop_signal_handlers,
+    redis_url, tmp_path, stop_signal_handlers,
 ) -> None:
-    worker = MusicWorker(
+    runs: list[str] = []
+
+    class RecordingMusicWorker(MusicWorker):
+        def cron_bodies(self) -> dict[Cron, CronBody]:
+            async def record(cron: Cron) -> None:
+                runs.append(cron.value)
+
+            return {cron: partial(record, cron) for cron in Cron}
+
+    worker = RecordingMusicWorker(
         _settings().model_copy(update={"redis_url": redis_url}),
         readiness_file=tmp_path / "readiness",
     )
     worker.get_db_factory = MagicMock()
     worker.claim_next_job = MagicMock(return_value=None)
-    runs: list[str] = []
-    for cron in Cron:
-        async def body(name: str = cron.value) -> None:
-            runs.append(name)
-
-        monkeypatch.setattr(worker, cron.value, body)
 
     async def run_until_every_cron_ran_then_stop() -> None:
         running = asyncio.create_task(worker.run())
@@ -340,3 +346,14 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
         _run(run_until_every_cron_ran_then_stop())
 
     assert sorted(runs) == sorted(cron.value for cron in Cron)
+
+
+def test_the_music_worker_module_imports_no_arq() -> None:
+    imported = subprocess.run(
+        [sys.executable, "-c",
+         "import sys, songmaker_cli.music_worker;"
+         " print(sorted(name for name in sys.modules if name.split('.')[0] == 'arq'))"],
+        capture_output=True, text=True, check=True,
+    )
+
+    assert imported.stdout.strip() == "[]"

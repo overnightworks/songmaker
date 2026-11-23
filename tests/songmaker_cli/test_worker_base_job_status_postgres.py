@@ -75,7 +75,7 @@ def test_a_music_job_ends_its_line_failed_when_its_run_failed_the_row(job_rows, 
         LoraTrainingPayload(lora_id="missing-voice", user_id="user", target_mode="turbo"),
     )
     worker = MusicWorker()
-    worker._arq_context = {"redis": AsyncMock()}
+    worker._job_context = {"redis": AsyncMock()}
 
     with caplog.at_level("INFO"):
         asyncio.run(worker.run_claimed(claimed))
