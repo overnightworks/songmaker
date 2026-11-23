@@ -30,7 +30,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 			created_at: '2026-01-01T00:00:00+00:00'
 		})),
 		deleteConversation: vi.fn(),
-		fetchMemory: vi.fn().mockResolvedValue(null),
+		fetchMemory: vi.fn(async () => null),
 		saveUserMemory: vi.fn(async (body: string) => ({
 			scope: 'user',
 			target_id: 'u1',
@@ -75,7 +75,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
 	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
-	vi.mocked(fetchMemory).mockReset().mockResolvedValue(null);
+	vi.mocked(fetchMemory).mockReset();
 });
 
 afterEach(async () => {
