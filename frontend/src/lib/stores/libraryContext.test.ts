@@ -5,6 +5,7 @@ import {
 	mountRouteUnderKeptPage,
 	pressBack,
 	pressForward,
+	pushHistoryEntry,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry,
@@ -200,7 +201,9 @@ beforeEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
-	replaceHistoryEntry('/');
+	// A test that stepped back leaves entries above the one it stands on; a
+	// push drops them, so each test starts on the top of the test browser's history.
+	pushHistoryEntry('/');
 	vi.mocked(goto).mockClear();
 	vi.mocked(pushState).mockClear();
 	vi.mocked(replaceState).mockClear();
