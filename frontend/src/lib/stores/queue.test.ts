@@ -7,7 +7,7 @@ import {
 	makeSong
 } from '#lib/test-utils/factories.ts';
 import { openCollection } from '#lib/stores/collection.ts';
-import { albumList } from '#lib/stores/libraryData.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
 	genDefaults,
 	makePlayback,
@@ -25,6 +25,7 @@ import {
 
 afterEach(() => {
 	albumList.set([]);
+	songList.set([]);
 	queueContext.set({ type: 'library' });
 });
 
@@ -264,6 +265,26 @@ describe('songTakeQueue', () => {
 		const lone = makeSong({ ...song, generations: [song.generations[2]] });
 		const queue = songTakeQueue(lone, 'g-v3a');
 		if (!queue) throw new Error('Expected a queue');
+
+		expect(buildQueueViewModel(queue, null).again).toBeUndefined();
+	});
+
+	it('names no start over once the only other take is archived in the song list', () => {
+		const pair = makeSong({
+			...song,
+			id: 's-pair',
+			generations: [song.generations[0], song.generations[2]]
+		});
+		const queue = songTakeQueue(pair, 'g-v3a');
+		if (!queue) throw new Error('Expected a queue');
+		songList.set([
+			{
+				...pair,
+				generations: pair.generations.map((gen) =>
+					gen.id === 'g-v1' ? { ...gen, is_archived: true } : gen
+				)
+			}
+		]);
 
 		expect(buildQueueViewModel(queue, null).again).toBeUndefined();
 	});

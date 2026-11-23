@@ -241,10 +241,11 @@ export function songQueueTakeIsGone(ctx: SongQueue, take: PlaybackInfo): boolean
 	return live === undefined || !isPlayableTake(live);
 }
 
-// The line after the last row promises a start over, which only a take other
-// than the last one that can still play keeps.
+// The line after the last row promises a start over, which only a queue with
+// at least two takes that can still play keeps: a lone one has no other to
+// start over with.
 function songQueueWraps(ctx: SongQueue): boolean {
-	return ctx.takes.slice(0, -1).some((take) => queueTakeCanPlay(ctx, take));
+	return ctx.takes.filter((take) => queueTakeCanPlay(ctx, take)).length >= 2;
 }
 
 export function albumQueueTake(song: SongItem, gen: GenerationItem): PlaybackInfo {
