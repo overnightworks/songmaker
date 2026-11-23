@@ -491,24 +491,6 @@ def test_csrf_fetch_metadata_takes_precedence_over_the_origin_allowlist(
         assert response.json()["title"] == "Fetch metadata proof"
 
 
-@pytest.mark.parametrize("host", ["testserver", "evil.example"])
-def test_a_cookie_write_is_decided_by_csrf_and_the_session_whatever_the_host(
-    server_app: TestClient, host: str,
-) -> None:
-    served = server_app.post(
-        "/api/songs",
-        json={"title": "Same origin", "album_id": "test_album"},
-        headers={"Sec-Fetch-Site": "same-origin", "host": host},
-    )
-    refused = server_app.post(
-        "/api/songs",
-        json={"title": "Foreign origin", "album_id": "test_album"},
-        headers={"origin": "http://evil.com", "host": host},
-    )
-
-    assert (served.status_code, refused.status_code) == (200, 403)
-
-
 def test_a_spoofed_host_with_matching_origin_is_refused(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
@@ -648,11 +630,7 @@ def test_a_request_the_security_stack_refuses_still_gets_its_request_line(
     server_app: TestClient, capsys: pytest.CaptureFixture[str],
 ) -> None:
     with configured("songmaker-web"):
-        response = server_app.post(
-            "/api/songs",
-            json={"title": "X", "album_id": "test_album"},
-            headers={"origin": "http://evil.com"},
-        )
+        response = server_app.post("/api/songs", headers={"origin": "http://evil.com"})
 
     (request_line,) = request_lines(capsys.readouterr().out)
     assert response.status_code == 403

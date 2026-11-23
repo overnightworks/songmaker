@@ -167,6 +167,30 @@ def test_a_token_read_is_served_whatever_the_host(token_world: TokenWorld, host:
     assert [song["title"] for song in response.json()["items"]] == ["Song alices"]
 
 
+@pytest.mark.parametrize("host", ["testserver", "evil.example"])
+def test_a_cookie_write_is_decided_by_the_session_and_csrf_whatever_the_host(
+    token_world: TokenWorld, host: str,
+) -> None:
+    with token_world.factory() as session:
+        seed_user(session, "cookie-user", user_id=TokenWorld.BOB)
+        session.commit()
+    seed_session(token_world.client, "cookie-user")
+
+    served = token_world.client.post(
+        "/api/albums",
+        json={"title": "Bobs"},
+        headers={"Sec-Fetch-Site": "same-origin", "host": host},
+    )
+    refused = token_world.client.post(
+        "/api/albums",
+        json={"title": "Forged"},
+        headers={"Origin": "https://evil.example", "host": host},
+    )
+
+    assert (served.status_code, refused.status_code) == (200, 403)
+    assert token_world.albums() == [("Bobs", TokenWorld.BOB)]
+
+
 def test_t9_a_cookie_only_cross_origin_write_is_still_refused(token_world: TokenWorld) -> None:
     with token_world.factory() as session:
         seed_user(session, "cookie-user", user_id=TokenWorld.BOB)

@@ -1193,18 +1193,17 @@ exemption from the rate limit and the origin check with its 32 KiB body cap.
 No middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is RequestLine → ClientAddress →
 ResourceStreamDeadline → SelectiveGZip → CORS → SecurityHeaders → PathRefusal → BodySize →
-IpRateLimit → [BearerGate →] CsrfOrigin → TrustedHost → HttpMetrics → Router. The composition call
+IpRateLimit → [BearerGate →] CsrfOrigin → HttpMetrics → Router. The composition call
 places it: `front=` the request line and, immediately inside it, the client-address writer with
 `TRUSTED_PROXIES`; `outside=` ResourceStreamDeadline, SelectiveGZip and CORS; the library everything from
 SecurityHeaders to CsrfOrigin, with the bearer layer from `auth.install(app, bearer=...)`; `inside=`
-TrustedHost and HttpMetrics. The call adds no session gate: songmaker passes none, and every route asks
+HttpMetrics. The call adds no session gate: songmaker passes none, and every route asks
 for `current_user`. The request line sits
 outside the security layers, so a refused request leaves its line too. The client-address writer decides the
 client address once, ahead of CORS and every library refusal, so the line's `ip` names the forwarded
 client of a preflight CORS answers itself, as it does that of every other request; webauth fills the line's `sub`
-(the gates and `current_user`, the stream endpoints' direct call included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
-`TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
-library's host lists are Origin allowlists only. Library refusals therefore carry security
+(the gates and `current_user`, the stream endpoints' direct call included). The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. No layer reads the Host:
+`ALLOWED_HOSTS` is the Origin allowlist only, so a foreign Host is decided like a listed one. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
@@ -2020,7 +2019,7 @@ The platform's Prometheus scrapes `/metrics` with the monitoring token as its be
 
 Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_last_job_failure_timestamp_seconds` (0 while nothing has ever failed), `songmaker_queue_depth{queue="music"|"scoring"}`, `songmaker_acestep_workers_total{status=...}`, `songmaker_acestep_worker_loaded_models`, `songmaker_acestep_worker_queue_depth`, `songmaker_acestep_worker_vram_used_gigabytes`, `songmaker_acestep_worker_vram_total_gigabytes` (the last two come from each acestep-worker's own heartbeat — `songmaker-web` itself has no GPU access and cannot produce a VRAM number of its own), `songmaker_background_loop_consecutive_failures{loop=...}`, and `songmaker_background_loop_alive{loop=...}`.
 
-The request line and the HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500. The metrics count only the requests that pass the Host check; the request line covers every request.
+The request line and the HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500. The metrics count only the requests the security stack admits; the request line covers every request.
 
 `GET /health` answers only `status` (below) to anyone. `GET /health/details`, behind the monitoring token (the one that guards `/metrics`), reports:
 - `music_worker`: running/stopped

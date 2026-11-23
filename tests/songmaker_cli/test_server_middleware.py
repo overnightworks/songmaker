@@ -263,8 +263,8 @@ def test_created_app_places_its_own_layers_in_the_two_slots_of_the_composition_c
     Outermost first, because Starlette runs the last-added layer first: the gzip and CORS layers
     sit outside the stack, so they see every refusal with its headers and CORS answers a
     preflight itself; the metrics sit inside it, so they see only admitted requests. No layer
-    reads the Host. CORS is registered for every configuration (`CORS_ORIGIN` only picks its policy).
-    The stack's own order is webauth's, driven by the refusal tests below.
+    reads the Host. CORS is registered for every configuration (`CORS_ORIGIN` only picks its
+    policy). The stack's own order is webauth's, driven by the refusal tests below.
     """
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
