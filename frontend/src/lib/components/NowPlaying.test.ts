@@ -983,10 +983,13 @@ describe('NowPlaying P and K keys', () => {
 		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
 	});
 
-	it('S does nothing', async () => {
+	it.each([
+		{ name: 'S does nothing', key: 's', init: {} },
+		{ name: 'P with a modifier held does nothing', key: 'p', init: { ctrlKey: true } }
+	])('$name', async ({ key, init }) => {
 		await renderSurface(playingTake(false, false));
 
-		press('s');
+		press(key, init);
 		await tick();
 
 		expect(queueIndex()).toBe(0);
@@ -1001,15 +1004,6 @@ describe('NowPlaying P and K keys', () => {
 		textarea.focus();
 
 		textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
-		await tick();
-
-		expect(setPick).not.toHaveBeenCalled();
-	});
-
-	it('ignores the keys with a modifier held', async () => {
-		await renderSurface(playingTake(false, false));
-
-		press('p', { ctrlKey: true });
 		await tick();
 
 		expect(setPick).not.toHaveBeenCalled();
