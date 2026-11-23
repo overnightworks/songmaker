@@ -911,6 +911,21 @@ describe('TakesList archived takes', () => {
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
+	it('does not offer a take without audio as playable, and a tap on it plays nothing', async () => {
+		const { target } = await render({
+			song: song({
+				...versionedSongDefaults(),
+				generations: [generation({ ...measuredTakeDefaults(), id: 'g-silent', mp3_path: '' })]
+			})
+		});
+		const body = target.querySelector<HTMLElement>('.take-row .take-summary');
+		expect(body?.getAttribute('aria-disabled')).toBe('true');
+		expect(body?.getAttribute('tabindex')).toBe('-1');
+		body?.click();
+		await tick();
+		expect(playTake).not.toHaveBeenCalled();
+	});
+
 	it('selects an archived take from its row body in selection mode', async () => {
 		const { target } = await renderWithArchived();
 		enterSelectionMode();

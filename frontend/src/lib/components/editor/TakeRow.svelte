@@ -23,6 +23,7 @@
 	import { takeGroupKey } from '#lib/utils/takeGroups.ts';
 	import { followPlainClick, jumpToTake } from '#lib/stores/navigation.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { isPlayableTake } from '#lib/utils/playable.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
@@ -115,15 +116,15 @@
 			toggleSelection(gen.id);
 			return;
 		}
-		if (gen.is_archived) return;
-		void playTake(gen, song);
+		if (!isPlayableTake(gen)) return;
+		playTake(gen, song);
 	}
 
-	// An archived take has nothing for a row activation to do, so the row
-	// stops announcing itself as reachable — except in selection mode, where
-	// ticking it is still a real action.
+	// An archived take and a take without audio have nothing for a row
+	// activation to do, so the row stops announcing itself as reachable —
+	// except in selection mode, where ticking it is still a real action.
 	function rowIsActionable(gen: GenerationItem): boolean {
-		return $selectionMode || !gen.is_archived;
+		return $selectionMode || isPlayableTake(gen);
 	}
 
 	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
