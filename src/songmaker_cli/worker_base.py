@@ -257,7 +257,9 @@ class WorkerBase:
         try:
             await self.start()
             async with asyncio.TaskGroup() as group:
-                serving_tasks = [group.create_task(serving) for serving in self.servings()]
+                serving_tasks = []
+                for serving in self.servings():
+                    serving_tasks.append(group.create_task(serving))
                 self.stop_claiming_on_stop_signal(*serving_tasks)
         finally:
             await self.stop()
