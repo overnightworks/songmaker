@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import SecretStr
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from support.session_ids import a_session_id
 from webauth.ports import (
@@ -16,12 +19,16 @@ from webauth.ports import (
     AccountKind,
     AuditSink,
     SessionRecordStore,
+    StoreUnavailableError,
     SubjectUserStore,
 )
+from webauth.postgres import SessionStoreError
 
 from songmaker_cli.auth_stores import (
     DatabaseAuditSink,
     DatabaseSessionRecordStore,
+    DatabaseSessionTransaction,
+    DatabaseSignInTransaction,
     DatabaseSubjectUserStore,
 )
 from songmaker_cli.constants import AuditAction, ResourceType
@@ -38,10 +45,26 @@ def session(pg_factory):
 
 
 @pytest.fixture
-def production_factory(postgresql_url: str):
-    factory = connect_db(postgresql_url)
-    yield factory
-    factory.kw["bind"].dispose()
+def production_factory_on(postgresql_url):
+    """Builds session factories through the production engine setup.
+
+    Every engine is disposed before the database's reset.
+    """
+    built = []
+
+    def build(url):
+        factory = connect_db(url)
+        built.append(factory)
+        return factory
+
+    yield build
+    for factory in built:
+        factory.kw["bind"].dispose()
+
+
+@pytest.fixture
+def production_factory(production_factory_on, postgresql_url):
+    return production_factory_on(postgresql_url)
 
 
 @pytest.fixture
@@ -481,3 +504,138 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     assert _StoredRows.of(session) != before
     session.rollback()
     assert _StoredRows.of(session) == before
+
+
+@pytest.fixture
+def unreachable_factory(production_factory_on, postgresql_url, refused_port):
+    return production_factory_on(postgresql_url.set(host="127.0.0.1", port=refused_port))
+
+
+def _load_in_the_session_transaction(factory) -> None:
+    with DatabaseSessionTransaction(factory)() as sessions:
+        sessions.load(a_session_id())
+
+
+def _enter_the_sign_in_transaction(factory) -> None:
+    with DatabaseSignInTransaction(factory)():
+        pass
+
+
+@pytest.mark.parametrize(
+    "use",
+    [
+        pytest.param(
+            _load_in_the_session_transaction, id="a store call of the session transaction",
+        ),
+        pytest.param(_enter_the_sign_in_transaction, id="entering the sign-in transaction"),
+    ],
+)
+def test_an_unreachable_database_raises_store_unavailable(unreachable_factory, use) -> None:
+    with pytest.raises(StoreUnavailableError):
+        use(unreachable_factory)
+
+
+def _store_call_after_the_loss(sessions) -> None:
+    sessions.load(a_session_id())
+
+
+def _nothing_after_the_loss(sessions) -> None:
+    """The block ends, so the commit meets the lost connection."""
+
+
+def _lose_the_connection_in(pg_factory, transaction_on, sessions_of, after_the_loss) -> None:
+    with transaction_on(pg_factory)() as opened:
+        sessions = sessions_of(opened)
+        backend = sessions.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+        with pg_factory() as other:
+            other.execute(text("SELECT pg_terminate_backend(:backend)"), {"backend": backend})
+        after_the_loss(sessions)
+
+
+@pytest.mark.parametrize(
+    "after_the_loss",
+    [
+        pytest.param(_store_call_after_the_loss, id="a store call"),
+        pytest.param(_nothing_after_the_loss, id="the commit"),
+    ],
+)
+@pytest.mark.parametrize(
+    "transaction_on, sessions_of",
+    [
+        pytest.param(
+            DatabaseSessionTransaction, lambda opened: opened, id="session transaction",
+        ),
+        pytest.param(
+            DatabaseSignInTransaction, lambda opened: opened.sessions, id="sign-in transaction",
+        ),
+    ],
+)
+def test_a_connection_lost_inside_a_transaction_raises_store_unavailable(
+    pg_factory, transaction_on, sessions_of, after_the_loss,
+) -> None:
+    with pytest.raises(StoreUnavailableError):
+        _lose_the_connection_in(pg_factory, transaction_on, sessions_of, after_the_loss)
+
+
+def _touch_after_a_concurrent_touch(pg_factory, session_id) -> None:
+    with DatabaseSessionTransaction(pg_factory)() as sessions:
+        sessions.session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
+        sessions.load(session_id)
+        with pg_factory() as concurrent:
+            DatabaseSessionRecordStore(concurrent).touch(session_id, expires_at=_later(2))
+            concurrent.commit()
+        sessions.touch(session_id, expires_at=_later(3))
+
+
+def _store_two_sessions(pg_factory) -> tuple[str, str]:
+    first, second = a_session_id(), a_session_id()
+    with pg_factory() as setup:
+        DatabaseSubjectUserStore(setup).create_for_subject(
+            _SUBJECT, "nina", "user", AccountKind.PERSON,
+        )
+        for session_id in (first, second):
+            DatabaseSessionRecordStore(setup).create(
+                _SUBJECT, session_id=session_id, now=_later(0), expires_at=_later(),
+                refresh_token=None, id_token=None, account_language=None,
+            )
+        setup.commit()
+    return first, second
+
+
+def _fail_with_a_serialization_failure(pg_factory, first, second) -> None:
+    _touch_after_a_concurrent_touch(pg_factory, first)
+
+
+def _fail_with_a_deadlock(pg_factory, first, second) -> None:
+    """Two transactions each touch one session and then the other's, so one is the victim."""
+    both_hold_a_row = threading.Barrier(2)
+
+    def touch_in_order(own_id: str, other_id: str) -> None:
+        with DatabaseSessionTransaction(pg_factory)() as sessions:
+            sessions.session.execute(text("SET LOCAL deadlock_timeout = '100ms'"))
+            sessions.touch(own_id, expires_at=_later(2))
+            both_hold_a_row.wait()
+            sessions.touch(other_id, expires_at=_later(3))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = [pool.submit(touch_in_order, first, second),
+                    pool.submit(touch_in_order, second, first)]
+    for outcome in outcomes:
+        outcome.result()
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        pytest.param(_fail_with_a_serialization_failure, id="a serialization failure"),
+        pytest.param(_fail_with_a_deadlock, id="a deadlock"),
+    ],
+)
+def test_a_database_conflict_inside_a_transaction_stays_a_session_store_error(
+    pg_factory, fail,
+) -> None:
+    """Webauth's `StoreUnavailableError` is for an unreachable database only."""
+    first, second = _store_two_sessions(pg_factory)
+
+    with pytest.raises(SessionStoreError):
+        fail(pg_factory, first, second)

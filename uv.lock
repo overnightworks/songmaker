@@ -1474,8 +1474,8 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.44.0"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.44.0#43cf8d1693a175c0f63b27ec0427e843baa513e9" }
+version = "0.46.0"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.46.0#b70f583c27a7f01b1f471d9dd84dd19d6992ab1d" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
@@ -1489,6 +1489,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+postgres = [
+    { name = "sqlalchemy" },
+]
 redis = [
     { name = "redis" },
 ]
@@ -2305,7 +2308,7 @@ server = [
     { name = "overnightworks-agents" },
     { name = "overnightworks-logline" },
     { name = "overnightworks-tandem" },
-    { name = "overnightworks-webauth", extra = ["redis"] },
+    { name = "overnightworks-webauth", extra = ["postgres", "redis"] },
     { name = "psycopg", extra = ["binary"] },
     { name = "python-multipart" },
     { name = "redis", extra = ["hiredis"] },
@@ -2354,7 +2357,7 @@ requires-dist = [
     { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
     { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.15.0" },
     { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.15.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.44.0" },
+    { name = "overnightworks-webauth", extras = ["postgres", "redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.46.0" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'server'", specifier = ">=3.2,<4" },
