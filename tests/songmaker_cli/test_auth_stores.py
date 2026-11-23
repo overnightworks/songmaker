@@ -507,7 +507,9 @@ def _enter_the_sign_in_transaction(factory) -> None:
 @pytest.mark.parametrize(
     "use",
     [
-        pytest.param(_load_in_the_session_transaction, id="a store call of the session transaction"),
+        pytest.param(
+            _load_in_the_session_transaction, id="a store call of the session transaction",
+        ),
         pytest.param(_enter_the_sign_in_transaction, id="entering the sign-in transaction"),
     ],
 )
