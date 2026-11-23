@@ -233,8 +233,7 @@ def _binds_loopback_only(host_ip: str) -> bool:
 
 def _startup_modules(service: dict, dockerfile: Path) -> tuple[str, ...]:
     """The modules a container starts: its worker settings, else the module its image's
-    ENTRYPOINT runs with ``python -m`` (a package's ``__main__``, or the module itself), else
-    the CLI's server."""
+    ENTRYPOINT runs with ``python -m``, else the CLI's server."""
     command = service.get("command")
     if command:
         return (command[0].rpartition(".")[0],)
@@ -243,8 +242,8 @@ def _startup_modules(service: dict, dockerfile: Path) -> tuple[str, ...]:
             words := json.loads(instruction.removeprefix("ENTRYPOINT "))
         ):
             module = words[words.index("-m") + 1]
-            runs_main_submodule = SOURCE_ROOT.joinpath(*module.split("."), "__main__.py").is_file()
-            return (f"{module}.__main__" if runs_main_submodule else module,)
+            main_file = SOURCE_ROOT.joinpath(*module.split("."), "__main__.py")
+            return (f"{module}.__main__" if main_file.is_file() else module,)
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
     script_module = pyproject["project"]["scripts"]["songmaker"].partition(":")[0]
     return (script_module, WEB_SERVER_MODULE)
