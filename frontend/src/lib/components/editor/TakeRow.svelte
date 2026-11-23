@@ -19,7 +19,8 @@
 		type GenerationActions
 	} from '#lib/contexts/generation-actions.ts';
 	import { selectionMode, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
-	import { revealTakeGroup, takeGroupKey } from '#lib/stores/takeFolds.ts';
+	import { revealTakeGroup } from '#lib/stores/takeFolds.ts';
+	import { takeGroupKey } from '#lib/utils/takeGroups.ts';
 	import { followPlainClick, jumpToTake } from '#lib/stores/navigation.ts';
 	import { formatTime } from '#lib/utils/format.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';

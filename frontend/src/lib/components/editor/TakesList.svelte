@@ -18,16 +18,14 @@
 		keepOnlySelected
 	} from '#lib/stores/selection.ts';
 	import {
-		groupTakes,
 		isGroupOpen,
 		renderedTakes,
 		revealTakeGroup,
 		settleTakeFolds,
 		takeFolds,
-		takeGroupKey,
-		toggleTakeGroup,
-		type TakeGroup
+		toggleTakeGroup
 	} from '#lib/stores/takeFolds.ts';
+	import { groupTakes, takeGroupKey, type TakeGroup } from '#lib/utils/takeGroups.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { bulkDeleteGenerations } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';

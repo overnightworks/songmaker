@@ -13,7 +13,8 @@ import {
 	selectionMode,
 	toggleSelection
 } from '#lib/stores/selection.ts';
-import { toggleTakeGroup, groupTakes } from '#lib/stores/takeFolds.ts';
+import { toggleTakeGroup } from '#lib/stores/takeFolds.ts';
+import { groupTakes } from '#lib/utils/takeGroups.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
