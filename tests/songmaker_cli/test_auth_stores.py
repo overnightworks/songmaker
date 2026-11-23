@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -585,19 +587,55 @@ def _touch_after_a_concurrent_touch(pg_factory, session_id) -> None:
         sessions.touch(session_id, expires_at=_later(3))
 
 
-def test_a_serialization_failure_inside_a_transaction_stays_a_session_store_error(
-    pg_factory,
-) -> None:
-    session_id = a_session_id()
+def _store_two_sessions(pg_factory) -> tuple[str, str]:
+    first, second = a_session_id(), a_session_id()
     with pg_factory() as setup:
         DatabaseSubjectUserStore(setup).create_for_subject(
             _SUBJECT, "nina", "user", AccountKind.PERSON,
         )
-        DatabaseSessionRecordStore(setup).create(
-            _SUBJECT, session_id=session_id, now=_later(0), expires_at=_later(),
-            refresh_token=None, id_token=None, account_language=None,
-        )
+        for session_id in (first, second):
+            DatabaseSessionRecordStore(setup).create(
+                _SUBJECT, session_id=session_id, now=_later(0), expires_at=_later(),
+                refresh_token=None, id_token=None, account_language=None,
+            )
         setup.commit()
+    return first, second
+
+
+def _fail_with_a_serialization_failure(pg_factory, first, second) -> None:
+    _touch_after_a_concurrent_touch(pg_factory, first)
+
+
+def _fail_with_a_deadlock(pg_factory, first, second) -> None:
+    """Two transactions each touch one session and then the other's, so one is the victim."""
+    both_hold_a_row = threading.Barrier(2)
+
+    def touch_in_order(own_id: str, other_id: str) -> None:
+        with DatabaseSessionTransaction(pg_factory)() as sessions:
+            sessions.session.execute(text("SET LOCAL deadlock_timeout = '100ms'"))
+            sessions.touch(own_id, expires_at=_later(2))
+            both_hold_a_row.wait()
+            sessions.touch(other_id, expires_at=_later(3))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = [pool.submit(touch_in_order, first, second),
+                    pool.submit(touch_in_order, second, first)]
+    for outcome in outcomes:
+        outcome.result()
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        pytest.param(_fail_with_a_serialization_failure, id="a serialization failure"),
+        pytest.param(_fail_with_a_deadlock, id="a deadlock"),
+    ],
+)
+def test_a_database_conflict_inside_a_transaction_stays_a_session_store_error(
+    pg_factory, fail,
+) -> None:
+    """Webauth's `StoreUnavailableError` is for an unreachable database only."""
+    first, second = _store_two_sessions(pg_factory)
 
     with pytest.raises(SessionStoreError):
-        _touch_after_a_concurrent_touch(pg_factory, session_id)
+        fail(pg_factory, first, second)
