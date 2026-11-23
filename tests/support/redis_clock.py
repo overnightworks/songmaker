@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable, Mapping
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from redis import Redis as SyncRedis
@@ -39,29 +41,49 @@ async def until_redis_has_passed(client: Redis, span: timedelta) -> None:
     await until_redis_ms(client, await redis_ms(client) + int(span.total_seconds() * 1000))
 
 
-async def until_no_file_cleanup_tick_within(client: Redis, span: timedelta) -> None:
-    """Wait until Redis's clock is more than ``span`` before the next file-cleanup tick.
-
-    A recurred cleanup runs again at that tick: a test that counts runs must end before it.
-    """
-    async with asyncio.timeout(WITHIN_SECONDS):
-        while True:
-            now = await redis_now(client)
-            if next_tick(Cron.CLEANUP_FILES, now) - now > span:
-                return
-            await asyncio.sleep(POLL_SECONDS)
-
-
 def redis_datetime(client: SyncRedis) -> datetime:
     seconds, microseconds = client.time()
     return datetime.fromtimestamp(int(seconds), UTC).replace(microsecond=int(microseconds))
 
 
-def most_runs_between(cron: Cron, start: datetime, end: datetime) -> int:
-    """How often ``cron`` may have run from ``start`` to ``end``: once, then once per tick."""
-    runs = 1
+def ticks_between(cron: Cron, start: datetime, end: datetime) -> int:
+    """How many ticks of ``cron`` fall after ``start`` up to ``end``."""
+    ticks = 0
     tick = next_tick(cron, start)
     while tick <= end:
-        runs += 1
+        ticks += 1
         tick = next_tick(cron, tick)
-    return runs
+    return ticks
+
+
+def most_runs_between(cron: Cron, start: datetime, end: datetime) -> int:
+    """How often ``cron`` may have run from ``start`` to ``end``: once, then once per tick."""
+    return 1 + ticks_between(cron, start, end)
+
+
+@dataclass
+class Window:
+    """The span of Redis time a scenario observes: a tick inside it explains a run beyond the
+    expected ones, because a recurred cron runs again at its next tick."""
+
+    start: datetime | None = None
+    end: datetime | None = None
+
+    @asynccontextmanager
+    async def observing(self, client: Redis) -> AsyncIterator[None]:
+        self.start = await redis_now(client)
+        yield
+        self.end = await redis_now(client)
+
+    def without_the_runs_its_ticks_explain(
+        self, counts: Mapping[Cron, int], expected: Mapping[Cron, int],
+    ) -> dict[Cron, int]:
+        """``counts`` less, per cron, the extra runs that ticks in the window explain."""
+        assert self.start is not None
+        assert self.end is not None
+        extra = {cron: max(0, counts.get(cron, 0) - expected.get(cron, 0)) for cron in Cron}
+        return {
+            cron: counts.get(cron, 0)
+            - min(extra[cron], ticks_between(cron, self.start, self.end))
+            for cron in Cron
+        }

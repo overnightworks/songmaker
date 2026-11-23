@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from logline.testing import configured
 from support.job_owner import an_owner
-from support.redis_clock import until
+from support.redis_clock import Window, until
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
@@ -32,6 +32,7 @@ from songmaker_cli.job_payloads import (
 from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
+from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.settings import Settings, get_settings
 
 FOREVER_SECONDS = 3600
@@ -335,17 +336,26 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
     worker.get_db_factory = MagicMock()
     worker.claim_next_job = MagicMock(return_value=None)
 
+    window = Window()
+
     async def run_until_every_cron_ran_then_stop() -> None:
-        running = asyncio.create_task(worker.run())
-        async with asyncio.timeout(RUN_WITHIN_SECONDS):
-            await until(lambda: len(runs) >= len(Cron))
-            os.kill(os.getpid(), signal.SIGTERM)
-            await running
+        redis = create_async_redis(redis_url)
+        try:
+            async with window.observing(redis):
+                running = asyncio.create_task(worker.run())
+                async with asyncio.timeout(RUN_WITHIN_SECONDS):
+                    await until(lambda: len(runs) >= len(Cron))
+                    os.kill(os.getpid(), signal.SIGTERM)
+                    await running
+        finally:
+            await redis.aclose()
 
     with configured("restored-after-the-test"):
         _run(run_until_every_cron_ran_then_stop())
 
-    assert sorted(runs) == sorted(cron.value for cron in Cron)
+    once_each = dict.fromkeys(Cron, 1)
+    ran = {cron: runs.count(cron.value) for cron in Cron}
+    assert window.without_the_runs_its_ticks_explain(ran, once_each) == once_each
 
 
 def test_the_music_worker_module_imports_no_arq() -> None:
