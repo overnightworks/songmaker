@@ -54,6 +54,14 @@ function renderWorkspace(): HTMLElement {
 	return target;
 }
 
+// The first mount in a test file loads the active models before the library
+// shows; the mounts after it find them loaded.
+async function renderShownWorkspace(): Promise<HTMLElement> {
+	const target = renderWorkspace();
+	await vi.waitFor(() => expect(target.querySelector('.library-root')).not.toBeNull());
+	return target;
+}
+
 function streamLive(): void {
 	resourceSync.update((state) => ({ ...state, status: 'live', ready: true }));
 }
@@ -136,8 +144,7 @@ describe('the library workspace', () => {
 
 	it('shows no banner over a working library when a live refresh fails for lack of a network', async () => {
 		streamLive();
-		const target = renderWorkspace();
-		await vi.waitFor(() => expect(target.querySelector('.library-root')).not.toBeNull());
+		const target = await renderShownWorkspace();
 
 		resourceSync.update((state) => ({ ...state, status: 'error', error: null, ready: true }));
 		await tick();
@@ -153,8 +160,7 @@ describe('the library workspace', () => {
 	it('shows the library on its first frame when the stream is already live', async () => {
 		streamLive();
 		openCollection.set({ kind: 'album', id: 'anfield' });
-		const first = renderWorkspace();
-		await tick();
+		const first = await renderShownWorkspace();
 		expect(first.textContent).toContain(ALBUM_TITLE);
 
 		const second = renderWorkspace();
@@ -170,8 +176,7 @@ describe('the library workspace', () => {
 		playlistLoad.set({ status: 'ready', error: null });
 		librarySurface.set('playlists');
 
-		const target = renderWorkspace();
-		await tick();
+		const target = await renderShownWorkspace();
 
 		const titles = [...target.querySelectorAll('.wall-tile .tile-title')];
 		expect(titles.map((title) => title.textContent)).toEqual(['Night Drive']);
@@ -187,8 +192,7 @@ describe('the library workspace', () => {
 		openCollection.set({ kind: 'album', id: 'anfield' });
 		librarySurface.set('home');
 
-		const target = renderWorkspace();
-		await tick();
+		const target = await renderShownWorkspace();
 
 		expect(target.querySelector('.library-home h1')?.textContent).toBe(words['places.home']);
 		expect(
@@ -204,8 +208,7 @@ describe('the library workspace', () => {
 		streamLive();
 		librarySurface.set('browse');
 
-		const target = renderWorkspace();
-		await tick();
+		const target = await renderShownWorkspace();
 
 		expect(target.querySelector('.library-wall h1')?.textContent).toContain(
 			words['places.library']
@@ -215,8 +218,7 @@ describe('the library workspace', () => {
 
 	it('keeps showing the library when the stream errors after it was live', async () => {
 		streamLive();
-		const target = renderWorkspace();
-		await tick();
+		const target = await renderShownWorkspace();
 
 		resourceSync.update((state) => ({
 			...state,
@@ -245,8 +247,7 @@ describe('the library workspace', () => {
 			})
 		]);
 		selectedSongId.set('stadion-lauf-a');
-		const target = renderWorkspace();
-		await tick();
+		const target = await renderShownWorkspace();
 
 		const workspace = target.querySelector('.main');
 		expect(workspace?.firstElementChild).toHaveClass('detail-panel');
