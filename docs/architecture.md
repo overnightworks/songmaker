@@ -1669,6 +1669,14 @@ SIGKILLed and even the values the run did produce would be lost.
   process's arq pool fails fast. A stop signal ends that retry, so a worker
   stops within seconds during the outage. The music worker has no arq connection: its own
   client's retry and the loops' next poll ride out an outage.
+- Each process follows the wake channel on a client of its own with no `socket_timeout` and with
+  TCP keepalive (`create_async_redis(..., follows_wakes=True)`), and publishes on its bounded
+  client: a worker follows on `wake_redis` (`WorkerBase`), a web process on `AppContext.wake_redis`,
+  closed at shutdown, through `AppContext.following_wake_channel`; `AppContext.wake_channel`
+  publishes on `async_redis`. Below redis-py 8.2 a quiet subscription ends at its client's
+  `socket_timeout` and tandem subscribes again (WAKE-30), which would make a running cover's cancel
+  listener re-read the job every 2 s; arq keeps songmaker on redis-py 5.3, so the second client stays
+  until songmaker leaves arq and tandem's floor reaches 8.2.
 - `WorkerBase.run()` is the ctx-free entry of a worker arq does not host: start (database, lease),
   serve every task of `servings()` in one `TaskGroup`, then end the lease and the pool.
   The scoring worker still starts through `on_startup(ctx)`.

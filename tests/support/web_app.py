@@ -16,9 +16,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from support.fake_oidc_issuer import IssuerSlot
 from support.job_owner import an_owner
 from support.object_store import an_object_store
-from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
-from tandem.testing import settle_epoch
+from tandem.testing import aged_epoch, settle_epoch
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
@@ -67,7 +66,7 @@ class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
         self.server = fakeredis.FakeServer()
         super().__init__(server=self.server)
         self.store = _KeyView(self.server)
-        epoch_key, epoch_ms = settled_epoch()
+        epoch_key, epoch_ms = aged_epoch(key_prefix=REDIS_KEY_PREFIX)
         self.store[epoch_key] = str(epoch_ms)
 
     def another_process(self) -> fakeredis.FakeAsyncRedis:

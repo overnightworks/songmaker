@@ -8,9 +8,9 @@ from datetime import timedelta
 
 import fakeredis.aioredis
 import pytest
-from support.owner_lease_epoch import settled_epoch
 from support.refused_download import attempt_download_that_must_not_run
 from support.wrapper_deps import settled_fake_redis
+from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
@@ -36,6 +36,7 @@ from songmaker_cli.acestep_state import (
     worker_is_online,
     worker_state_key,
 )
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 
 @pytest.fixture
@@ -58,7 +59,7 @@ def redis(server):
 @pytest.fixture
 def settled_redis(redis, event_loop):
     """A Redis that has run longer than any lock lasts, as a process finds it in operation."""
-    event_loop.run_until_complete(redis.set(*settled_epoch()))
+    event_loop.run_until_complete(redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX)))
     return redis
 
 
@@ -286,7 +287,7 @@ def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(
 
     assert event_loop.run_until_complete(scenario()) == (False, False, None, 0)
 
-    event_loop.run_until_complete(settled_redis.set(*settled_epoch()))
+    event_loop.run_until_complete(settled_redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX)))
 
     assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
 
@@ -429,7 +430,7 @@ def test_a_download_waits_out_a_redis_restart_instead_of_failing(
     async def settle_while_waiting(_seconds: float) -> None:
         nonlocal waits
         waits += 1
-        await settled_redis.set(*settled_epoch())
+        await settled_redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
         await real_sleep(0)
 
     async def scenario() -> str | None:

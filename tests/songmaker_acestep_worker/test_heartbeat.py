@@ -7,9 +7,9 @@ from datetime import timedelta
 import fakeredis
 import fakeredis.aioredis
 import pytest
-from support.owner_lease_epoch import settled_epoch
 from support.wrapper_deps import settled_fake_redis
 from tandem import Liveness
+from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import (
     GPU_HOLD_LASTS,
@@ -19,6 +19,7 @@ from songmaker_acestep_worker.heartbeat import (
     reserve_gpu_hold,
     worker_state_key,
 )
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 
 def _run(coro):
@@ -119,7 +120,7 @@ def test_clear_orphaned_queue_leaves_a_hold_taken_after_its_state_read() -> None
 
     async def go():
         server = fakeredis.FakeServer()
-        fakeredis.FakeRedis(server=server).set(*settled_epoch())
+        fakeredis.FakeRedis(server=server).set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
         other = fakeredis.aioredis.FakeRedis(server=server, decode_responses=False)
         previous = await gpu_hold_locks(other).acquire(worker_id)
         assert previous is not None

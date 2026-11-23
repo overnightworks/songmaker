@@ -7,8 +7,9 @@ from collections.abc import Awaitable, Callable, Coroutine
 
 import fakeredis
 import pytest
-from support.owner_lease_epoch import settled_epoch
+from tandem.testing import aged_epoch
 
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
@@ -58,7 +59,7 @@ class ScriptedTickLock:
         self._lock_name = lock_name
         self._answers = answers
         self._server = fakeredis.FakeServer()
-        fakeredis.FakeRedis(server=self._server).set(*settled_epoch())
+        fakeredis.FakeRedis(server=self._server).set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
         self.async_redis = fakeredis.FakeAsyncRedis(server=self._server)
         self._other_process = fakeredis.FakeAsyncRedis(server=self._server)
 

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from arq.connections import RedisSettings
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
-    from tandem.slots import Slots
+    from tandem import Slots
 
 log = logging.getLogger(__name__)
 
