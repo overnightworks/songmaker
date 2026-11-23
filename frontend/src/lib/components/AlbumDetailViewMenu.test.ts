@@ -1,8 +1,4 @@
-import {
-	makeAlbum as album,
-	makeGeneration as generation,
-	makeSong as song
-} from '#lib/test-utils/factories.ts';
+import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';

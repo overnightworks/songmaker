@@ -25,12 +25,7 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '#lib/stores/libraryData.ts';
-	import {
-		isSongCurrent,
-		playAlbum,
-		playAlbumSong,
-		selectedAlbumId
-	} from '#lib/stores/player.ts';
+	import { isSongCurrent, playAlbum, playAlbumSong, selectedAlbumId } from '#lib/stores/player.ts';
 	import { selectSong } from '#lib/stores/navigation.ts';
 	import { historyLayerState, holdOpenWhile } from '#lib/stores/layers.ts';
 	import { setOpenCollection } from '#lib/stores/collection.ts';

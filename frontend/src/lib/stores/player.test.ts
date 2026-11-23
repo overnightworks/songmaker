@@ -135,11 +135,7 @@ import {
 	pendingStart,
 	windowEnded
 } from './player';
-import {
-	buildQueueViewModel,
-	libraryQueueSkippedComplete,
-	queueContext
-} from './queue';
+import { buildQueueViewModel, libraryQueueSkippedComplete, queueContext } from './queue';
 import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,

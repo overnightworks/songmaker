@@ -901,14 +901,12 @@ function setAlbumQueueTakes(
 			)
 		: 0;
 	const ordered = shuffledWithStart(entries, startIndex);
-	setQueueContext(
-		{
-			type: 'album',
-			albumId,
-			takes: ordered.items.map(playlistEntryToPlaybackInfo),
-			index: ordered.startIndex
-		}
-	);
+	setQueueContext({
+		type: 'album',
+		albumId,
+		takes: ordered.items.map(playlistEntryToPlaybackInfo),
+		index: ordered.startIndex
+	});
 }
 
 songList.subscribe(followPicksAheadInAlbumQueue);
