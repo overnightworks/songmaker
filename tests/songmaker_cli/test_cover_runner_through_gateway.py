@@ -523,7 +523,12 @@ def test_a_cancel_with_redis_down_answers_and_the_picture_ends_cancelled(
 ):
     held = HeldGateway(picture(_image_bytes("PNG")))
     world.stack.uses(held)
-    break_redis(world.app.state.ctx.wake_channel, monkeypatch)
+    ctx = world.app.state.ctx
+    break_redis(
+        ctx.wake_channel if break_redis is _redis_refuses_every_wake_publication
+        else ctx.following_wake_channel,
+        monkeypatch,
+    )
     job_id = world.queue()
 
     async def scenario() -> bool:
@@ -553,7 +558,7 @@ def test_a_cancel_the_channel_cannot_carry_is_logged_as_a_warning(
     world, monkeypatch, caplog, break_redis,
 ):
     ctx = world.app.state.ctx
-    break_redis(ctx.wake_channel, monkeypatch)
+    break_redis(ctx.following_wake_channel, monkeypatch)
 
     async def work() -> str:
         return "picture"
@@ -569,7 +574,12 @@ def test_a_cancel_the_database_cannot_confirm_is_logged_as_an_error(world, caplo
     def unreachable_database():
         raise RuntimeError("database unreachable")
 
-    ctx = SimpleNamespace(db=unreachable_database, wake_channel=world.app.state.ctx.wake_channel)
+    app_ctx = world.app.state.ctx
+    ctx = SimpleNamespace(
+        db=unreachable_database,
+        wake_channel=app_ctx.wake_channel,
+        following_wake_channel=app_ctx.following_wake_channel,
+    )
 
     async def work() -> str:
         await ctx.wake_channel.publish("job")
