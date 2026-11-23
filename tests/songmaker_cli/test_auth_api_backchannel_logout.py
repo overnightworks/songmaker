@@ -153,11 +153,13 @@ def _forged(world: World) -> str:
 
 
 @pytest.mark.parametrize(
-    "make_token",
+    ("make_token", "headers"),
     [
-        pytest.param(_forged, id="forged-signature"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, aud="other"), id="wrong-aud"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, iss="https://evil"), id="wrong-iss"),
+        pytest.param(_forged, {}, id="forged-signature"),
+        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, aud="other"), {}, id="wrong-aud"),
+        pytest.param(
+            lambda w: w.issuer.logout_token(SUBJECT, iss="https://evil"), {}, id="wrong-iss",
+        ),
         pytest.param(
             lambda w: w.issuer.sign(
                 {"iss": w.issuer.issuer, "aud": w.issuer.client_id, "sub": SUBJECT,
@@ -165,21 +167,27 @@ def _forged(world: World) -> str:
                  "events": {"http://schemas.openid.net/event/backchannel-logout": {}}},
                 token_type="JWT",
             ),
+            {},
             id="wrong-typ",
         ),
-        pytest.param(lambda w: w.issuer.logout_token(None, sid="a-session"), id="sid-only"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, nonce="n"), id="nonce"),
-        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, events={}), id="no-event"),
-        pytest.param(lambda _world: "not-a-jwt", id="malformed"),
+        pytest.param(lambda w: w.issuer.logout_token(None, sid="a-session"), {}, id="sid-only"),
+        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, nonce="n"), {}, id="nonce"),
+        pytest.param(lambda w: w.issuer.logout_token(SUBJECT, events={}), {}, id="no-event"),
+        pytest.param(lambda _world: "not-a-jwt", {}, id="malformed"),
+        pytest.param(
+            lambda _world: "not-a-jwt", {"host": POSTED_HOSTS[0]}, id="malformed-listed-host",
+        ),
+        pytest.param(
+            lambda _world: "not-a-jwt", {"host": POSTED_HOSTS[-1]}, id="malformed-foreign-host",
+        ),
     ],
 )
-@pytest.mark.parametrize("host", POSTED_HOSTS)
 def test_a_refused_logout_token_answers_400_and_ends_nothing(
-    world: World, make_token, host: str,
+    world: World, make_token, headers: dict[str, str],
 ) -> None:
     _sign_in_twice(world)
 
-    response = _backchannel(world, make_token(world), host=host)
+    response = _backchannel(world, make_token(world), **headers)
 
     assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
