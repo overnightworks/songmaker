@@ -78,7 +78,7 @@ most 60 seconds so session expiry or revocation is enforced on reconnect.
 `TRUSTED_PROXIES` is a comma-separated list of IP addresses and CIDR networks
 (default: empty — no peer is trusted). The platform's web Deployment sets
 `10.42.0.0/16`, the pod network (platform `apps/songmaker/web.yaml`, env
-`TRUSTED_PROXIES`); the test stack sets its own (see "Production Deployment").
+`TRUSTED_PROXIES`); the test stack sets its own (see "Deployment").
 `app_context.parse_trusted_proxies()` turns each entry into an
 `ip_network` at startup and hands the result to the composition call's `front=`, which hands it to webauth's
 client-address writer, and a peer is trusted when its address falls inside one of them — so
@@ -142,8 +142,10 @@ become an identity:
   platform file holds it). Traefik's
   `web` entrypoint trusts forwarded headers from `10.42.0.0/16`
   (platform `infrastructure/traefik/values.yaml`, `ports.web.forwardedHeaders.trustedIPs`),
-  so it keeps the chain cloudflared sent and appends cloudflared's pod address,
-  and the web steps over that pod hop as a trusted peer. Only the pods that can
+  so it keeps the chain cloudflared sent and appends cloudflared's pod address
+  ([Traefik's entrypoint documentation](https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/):
+  with `forwardedHeaders.trustedIPs` set and `notAppendXForwardedFor` left at its default false, Traefik appends the client's `RemoteAddr`; platform holds
+  only the trusted range), and the web steps over that pod hop as a trusted peer. Only the pods that can
   reach the web (below) can trigger a fallback, so a line there means a
   misconfigured proxy or a pod of the cluster, not a visitor from the internet.
 - Addresses are canonicalized: `::ffff:203.0.113.9` and `203.0.113.9` are one
@@ -184,8 +186,8 @@ container is never TLS; only `auth.request_is_https()` resolves the real
 (album/song/generation/playlist) do not read either signal at request time:
 building a public URL from a request is redundant when the public address is
 a deployment-time fact, so they call `public_share_url()`
-instead, backed by the validated `PUBLIC_BASE_URL` setting — see "Production
-Deployment" below.
+instead, backed by the validated `PUBLIC_BASE_URL` setting — see "Deployment"
+below.
 
 ## CSRF Protection
 
@@ -619,15 +621,18 @@ A worker writes a take only into its container-local output root, which it empti
 
 ### Container confinement
 
-Every service runs under Docker's default AppArmor and seccomp profiles, and
-Docker masks its system paths. `songmaker-web` and the three workers drop every
+The platform's web, music and scoring pods run as non-root with the runtime's
+default seccomp profile, and their containers drop every capability, forbid
+privilege escalation and mount a read-only root filesystem
+(`securityContext` in platform `apps/songmaker/web.yaml`, `music-worker.yaml`
+and `scoring-worker.yaml`). The test stack's Compose services drop every
 capability and set `no-new-privileges:true`. The web image's code, scripts,
 installed packages and frontend build belong to root: the app's user cannot
 write them.
 
 ### Trust model and accepted risks
 
-- **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker. Every image creates that user as uid and gid 1000 and runs `USER 1000:1000`: the named volumes and the checkpoints bind mount belong to that uid, and Kubernetes' `runAsNonRoot` can verify only a numeric `USER`. The live `acestep-worker` is confined as the platform manifest `apps/songmaker/acestep-worker.yaml` declares; the test stack's `songmaker-acestep-worker-N`, `songmaker-music-worker` and `songmaker-scoring-worker` drop every capability (`cap_drop: [ALL]`, no `cap_add`) and set `no-new-privileges`. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a deployment of admitted musicians ([`docs/VISION.md`](VISION.md)).
+- **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in the containers. Every image creates that user as uid and gid 1000 and runs `USER 1000:1000`: the named volumes and the checkpoints bind mount belong to that uid, and Kubernetes' `runAsNonRoot` can verify only a numeric `USER`. The live `acestep-worker` is confined as the platform manifest `apps/songmaker/acestep-worker.yaml` declares; the test stack's `songmaker-acestep-worker-N`, `songmaker-music-worker` and `songmaker-scoring-worker` drop every capability (`cap_drop: [ALL]`, no `cap_add`) and set `no-new-privileges`. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a deployment of admitted musicians ([`docs/VISION.md`](VISION.md)).
 - **ACE-Step code and weights are trusted.** The ACE-Step code at the pinned fork and the ACE-Step project's published weights are not isolated as hostile input. The weights are safetensors; the one pickle-format file per DiT, `silence_latent.pt`, loads with `weights_only=True`. Before each DiT load the fork overwrites the model-code files it knows with its own copies. The residual: the DiT load keeps `trust_remote_code=True` and `auto_map` comes from the downloaded `config.json`, so a changed checkpoint could name a module the fork does not overwrite. No weight is pinned by revision or hash; the download takes whatever the repository serves.
 - **Secret files are readable by every child of the same uid.** The session secret, database password, internal token and monitoring token are files under `/run/secrets` in the containers that read them, as the Keycloak client secret is: the scrub cannot hide a file from the scorer children of the same OS user, and the files are mode 0644 inside a 0700 host directory because postgres (uid 70) reads its under another uid. Only a process on the host as the operator, or root, reaches the host directory.
 - **One shared token.** All workers hold the same internal token (`internal-token`); compromising one grants full internal-API access. Multi-node deployments should move to per-worker tokens or mTLS.
@@ -678,7 +683,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
 - **Read access**: none over HTTP — `GET /api/admin/audit-log` answers 404 because no admin surface shows the trail; the rows stay in the database and are read there.
 
-## Production Deployment
+## Deployment
 
 ### Recommended
 
@@ -692,7 +697,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated exact host names; an entry containing `*` stops startup). Used by CSRF origin verification only: nothing reads the request's Host. The platform sets `songmaker.hallucinai.de,web,web.songmaker.svc,localhost` (platform `apps/songmaker/web.yaml`); the test stack's `docker/docker-compose.test.yml` sets `localhost,127.0.0.1,songmaker-web`. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The platform and the test stack set `HOST=0.0.0.0` (platform `apps/songmaker/web.yaml`; `docker/docker-compose.test.yml`) — that binding is inside the container, where the network policy or the Compose network keeps the service private. |
 | Published ports | `docker/docker-compose.test.yml` publishes `songmaker-web` as `127.0.0.1:${WEB_PORT:-8080}:8080`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. In the test stack the Vite dev proxy and the CLI run host-local, and callers on the Compose network use `songmaker-web:8080`. |
-| Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported database. |
+| Workers | The web and each worker run as platform Deployments (`apps/songmaker/web.yaml`, `music-worker.yaml`, `scoring-worker.yaml` on platform's main). The web runs one uvicorn process per pod (its command is `songmaker server`, which starts one); worker concurrency comes from `MUSIC_MAX_JOBS` and `SCORING_MAX_JOBS` (`settings.py`). How the workers are hosted is [`docs/architecture.md`](architecture.md#worker-architecture)'s. PostgreSQL is the only supported database. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). If an operator provides an upstream proxy, align its path-specific limits for defense in depth; this repository provides no such proxy configuration. |
 | IP rate limit | `IP_RATE_LIMIT` (API class, default 120/min), `MEDIA_RATE_LIMIT` (`/audio/*`, default 600/min), `STREAM_RATE_LIMIT` (SSE opens, default 45/min). Adjust based on expected traffic — see "Per-IP (global middleware)" above. The sign-in budget (40 per 10 min on start, callback and logout) is webauth's; leave `SIGN_IN_RATE_LIMIT` unset in production. |
 | Resource-event stream open limit | `RESOURCE_EVENT_STREAM_OPEN_LIMIT` (per-user resource-events stream opens, default 12/min). CI overrides it — see "Resource-event streams" above. |
