@@ -8,7 +8,6 @@ import pytest
 from sqlalchemy.engine import make_url
 
 from songmaker_cli.db.database_url import (
-    POSTGRESQL_PSYCOPG2_DRIVERNAME,
     database_url_with_password,
     password_from_secret_file,
 )
@@ -21,7 +20,7 @@ def test_a_base_with_its_own_password_comes_back_unchanged_when_no_password_file
     url = database_url_with_password("postgresql://app:today@db:5432/songs", None)
 
     assert url.render_as_string(hide_password=False) == (
-        f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://app:today@db:5432/songs"
+        "postgresql://app:today@db:5432/songs"
     )
 
 
@@ -31,24 +30,17 @@ def test_a_given_password_joins_a_password_less_base() -> None:
     assert url.password == "apart"
     assert url.username == "app"
     assert url.render_as_string(hide_password=False) == (
-        f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://app:apart@db:5432/songs"
+        "postgresql://app:apart@db:5432/songs"
     )
 
 
-@pytest.mark.parametrize("password", [None, "apart"])
-def test_a_bare_postgresql_base_gets_the_named_driver(password: str | None) -> None:
-    url = database_url_with_password("postgresql://app@db/songs", password)
-
-    assert url.drivername == POSTGRESQL_PSYCOPG2_DRIVERNAME
-
-
 @pytest.mark.parametrize("base_url", [
+    "postgresql://app@db/songs",
     "postgresql+asyncpg://app@db/songs",
-    "postgresql+psycopg://app@db/songs",
     "sqlite:///songs.db",
 ])
 @pytest.mark.parametrize("password", [None, "apart"])
-def test_a_base_that_names_another_driver_keeps_it(base_url: str, password: str | None) -> None:
+def test_a_base_keeps_the_driver_it_names(base_url: str, password: str | None) -> None:
     url = database_url_with_password(base_url, password)
 
     assert url.drivername == make_url(base_url).drivername

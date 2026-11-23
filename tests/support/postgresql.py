@@ -14,13 +14,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import cache
 from graphlib import TopologicalSorter
-from io import BytesIO
 
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from psycopg2 import errors as postgresql_errors
+from psycopg import errors as postgresql_errors
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
@@ -39,7 +38,7 @@ CONNECT_TIMEOUT_SECONDS = 10
 DIAGNOSTIC_BACKEND_LIMIT = 20
 # A client that closed its connection may still be listed while its backend exits.
 CLOSING_BACKEND_POLL_SECONDS = 0.02
-# psycopg2 and libpq take these URL query options over the database named in the path.
+# libpq takes these URL query options over the database named in the path.
 DATABASE_SELECTING_OPTIONS = frozenset({"dbname", "database"})
 # Alembic's own bookkeeping table; the reset keeps it, since it names the revision.
 ALEMBIC_VERSION_TABLE = "alembic_version"
@@ -305,7 +304,8 @@ class PostgresqlTestDatabases:
                 connection.execute(text(f"DELETE FROM {table}"))  # noqa: S608 - tables from the recorded schema
             cursor = connection.connection.driver_connection.cursor()
             for table, rows in baseline.rows_in_restore_order:
-                cursor.copy_expert(f"COPY {table} FROM STDIN", BytesIO(rows))
+                with cursor.copy(f"COPY {table} FROM STDIN") as copy:
+                    copy.write(rows)
             for sequence, value, is_called in baseline.sequences:
                 connection.execute(
                     _RESTORE_SEQUENCE,
@@ -434,10 +434,10 @@ def _record_baseline(connection: Connection) -> Baseline:
     cursor = connection.connection.driver_connection.cursor()
     rows: dict[str, bytes] = {}
     for table in tables:
-        buffer = BytesIO()
-        cursor.copy_expert(f"COPY {table} TO STDOUT", buffer)
-        if buffer.getvalue():
-            rows[table] = buffer.getvalue()
+        with cursor.copy(f"COPY {table} TO STDOUT") as copy:
+            copied = b"".join(bytes(chunk) for chunk in copy)
+        if copied:
+            rows[table] = copied
     sequences = tuple(
         (name, start if last is None else last, last is not None)
         for name, start, last in connection.execute(_SEQUENCES)

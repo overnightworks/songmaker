@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 import shutil
+import socket
 import tempfile
 
 # Required env vars for Settings construction at module-import time. Real values from the
@@ -358,6 +359,14 @@ def postgresql_databases(testrun_uid: str, worker_id: str):
     )
     yield databases
     databases.close()
+
+
+@pytest.fixture
+def refused_port():
+    """A port nothing listens on; the bound socket stays open so no process can take it."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        yield reserved.getsockname()[1]
 
 
 @pytest.fixture
