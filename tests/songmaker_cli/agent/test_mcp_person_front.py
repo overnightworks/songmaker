@@ -51,6 +51,7 @@ MARKED_TOOLS = {
     "unarchive_album", "cover_take", "keep_take", "rate_take",
     "repaint_take", "score_take", "unarchive_take", "cancel_job", "create_lora",
     "add_lora_sample_from_take", "create_playlist", "add_album_to_playlist",
+    "add_playlist_to_playlist",
     "add_take_to_playlist", "add_song_to_playlist", "keep_reference", "create_preset",
     "set_default_preset", "restore_song", "list_own_playable_takes", "get_lora",
     "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",

@@ -493,9 +493,18 @@ suggestion runs, "● n waiting" while unused ones wait until USE, Upload or ×
 discards them). It reads the server's state when the album page opens, when the
 page returns to the foreground, when the editor opens or closes, when a run ends
 and after a discard, never
-by polling, so a second tab or device sees the same run and its time. Playlist entries are
-Share playlist · Upload… · Remove cover (only when a cover is set) ·
-Rename · Delete playlist. The Share row is a 44 px menu row that
+by polling, so a second tab or device sees the same run and its time. The
+playlist menu has five rows: Rename · Cover · Add to… · Share · Delete (red,
+last). Cover and Add to… swap the same popover's content, as the album's Add
+to… does: Cover into Upload… and, once a cover is set, Remove cover; Add to…
+into `AddToPicker`, which offers the other playlists and New playlist…. A
+choice calls `POST /api/playlists/{id}/entries/playlist`, which checks both
+playlists' ownership, appends the source's playable entries to the chosen one
+in order and answers as the album's add does (`AddEntriesToPlaylistResponse`:
+the count added and the songs skipped with a reason; an entry whose song is in the
+trash or whose album the person cannot open is left out, neither added nor counted). Both adds share one
+append in `db/queries/playlists.py`, which locks the takes through `lock_takes`.
+The Share row is a 44 px menu row that
 shows its state ("on"/"off", a link or share icon, `aria-pressed`); it and
 the song and take menus' Share rows all call the one toggle, `createShareToggle` in
 `stores/shareToggle.svelte.ts` (unshare, share and copy the link, toasts, the
@@ -1251,7 +1260,7 @@ The view `backup_required_files(path)`, created by its migration, lists every fi
 
 A take's `created_by` names the user who made it (the job's user), set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
 
-A take's persist locks its job, then its reference recording (`FOR NO KEY UPDATE`), then its song (`FOR NO KEY UPDATE`, a trashed song included) before it numbers and inserts the take, so two takes of one song get consecutive numbers and a save of that song during the render cannot deadlock the persist. Admission locks the song `FOR UPDATE` before it inserts the job; a save of an existing song locks it `FOR UPDATE` before it writes the version, a save that sets a reference locks that reference (`FOR NO KEY UPDATE`) first, in the persist's order, and a carried reference takes only its foreign key's key-share lock; a reference delete takes the reference `FOR UPDATE`, so it waits for a link or wins before it. Purge runs serialize on their own lock; a purge of expired albums and songs locks the songs it listed `FOR UPDATE` at once in id order, a trashed song included, before it deletes anything, then their takes in id order; it leaves a song with a queued or running job for a later run. Every take deletion (those purges, the single and bulk delete, retention's final delete and a version delete with its takes) goes through one owner that locks the takes in id order. Every path that locks several takes (those deletions, a pick and an album's add to a playlist) locks them in id order through `lock_takes`, so none waits on another in a cycle.
+A take's persist locks its job, then its reference recording (`FOR NO KEY UPDATE`), then its song (`FOR NO KEY UPDATE`, a trashed song included) before it numbers and inserts the take, so two takes of one song get consecutive numbers and a save of that song during the render cannot deadlock the persist. Admission locks the song `FOR UPDATE` before it inserts the job; a save of an existing song locks it `FOR UPDATE` before it writes the version, a save that sets a reference locks that reference (`FOR NO KEY UPDATE`) first, in the persist's order, and a carried reference takes only its foreign key's key-share lock; a reference delete takes the reference `FOR UPDATE`, so it waits for a link or wins before it. Purge runs serialize on their own lock; a purge of expired albums and songs locks the songs it listed `FOR UPDATE` at once in id order, a trashed song included, before it deletes anything, then their takes in id order; it leaves a song with a queued or running job for a later run. Every take deletion (those purges, the single and bulk delete, retention's final delete and a version delete with its takes) goes through one owner that locks the takes in id order. Every path that locks several takes (those deletions, a pick and an album's or a playlist's add to a playlist) locks them in id order through `lock_takes`, so none waits on another in a cycle.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 

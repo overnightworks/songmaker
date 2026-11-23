@@ -9,6 +9,8 @@
 		selectedPlaylistId,
 		playlistDetailLoad,
 		loadPlaylistDetail,
+		addPlaylistToPlaylist,
+		toastPlaylistAdd,
 		deletePlaylist,
 		renamePlaylist,
 		removePlaylistEntry,
@@ -174,6 +176,12 @@
 		}
 	}
 
+	function onAddToPlaylist(targetPlaylistId: string): Promise<void> {
+		const sourceId = playlistMeta?.id;
+		if (!sourceId) return Promise.resolve();
+		return toastPlaylistAdd(() => addPlaylistToPlaylist(targetPlaylistId, sourceId));
+	}
+
 	async function onRemoveEntry(entryId: string): Promise<void> {
 		if (!playlistDetail) return;
 		try {
@@ -234,6 +242,7 @@
 				ondelete={() => (showDeleteConfirm = true)}
 				oncover={onCoverAction}
 				onremovecover={onCoverRemove}
+				onaddto={(playlistId) => void onAddToPlaylist(playlistId)}
 			/>
 			<input
 				bind:this={coverInput}

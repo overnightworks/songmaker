@@ -350,16 +350,15 @@ describe('CollectionHeader', () => {
 		]);
 	});
 
-	it('adds Remove cover to a playlist once a cover exists and wires it to onremovecover', async () => {
+	it('offers Remove cover under the Cover row once a playlist has a cover and wires it to onremovecover', async () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, coverUrl: 'https://x/cover.jpg' };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
+		menuRow(menu, words['collectionMenu.cover']).click();
+		await tick();
 		expect(menuRowLabels(menu)).toEqual([
-			words['collectionMenu.playlistShare'],
 			words['collectionMenu.upload'],
-			words['collectionMenu.removeCover'],
-			words['collectionMenu.rename'],
-			words['collectionMenu.playlistDelete']
+			words['collectionMenu.removeCover']
 		]);
 		menuRow(menu, words['collectionMenu.removeCover']).click();
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
@@ -465,14 +464,15 @@ describe('CollectionHeader', () => {
 		}
 	);
 
-	it('lists playlist cover actions alongside its existing actions', async () => {
+	it('lists the playlist rows in their order, Delete last', async () => {
 		const props = { ...baseProps(), kind: 'playlist' as const };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
 		expect(menuRowLabels(menu)).toEqual([
-			words['collectionMenu.playlistShare'],
-			words['collectionMenu.upload'],
 			words['collectionMenu.rename'],
+			words['collectionMenu.cover'],
+			words['collectionMenu.addTo'],
+			words['collectionMenu.playlistShare'],
 			words['collectionMenu.playlistDelete']
 		]);
 	});
