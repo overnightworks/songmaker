@@ -11,6 +11,7 @@ import {
 	reloadLibraryPage,
 	replaceHistoryEntry,
 	standingHistoryEntry,
+	startOnTopOfHistory,
 	watchBack
 } from '#lib/test-utils/library-history.ts';
 import {
@@ -259,7 +260,7 @@ beforeEach(() => {
 	// stale selectedSongId and re-derives openCollection through the
 	// selectedSong subscription in navigation.ts before this line clears it.
 	resetCollectionForTests();
-	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
+	startOnTopOfHistory(LIBRARY_ROUTE_PATH);
 	startFakeRouter();
 	installHistoryController();
 	vi.mocked(goto).mockClear();

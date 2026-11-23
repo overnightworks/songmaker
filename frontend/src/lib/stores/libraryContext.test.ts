@@ -5,11 +5,11 @@ import {
 	mountRouteUnderKeptPage,
 	pressBack,
 	pressForward,
-	pushHistoryEntry,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry,
-	standingHistoryEntry
+	standingHistoryEntry,
+	startOnTopOfHistory
 } from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
@@ -201,9 +201,7 @@ beforeEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
-	// A test that stepped back leaves entries above the one it stands on; a
-	// push drops them, so each test starts on the top of the test browser's history.
-	pushHistoryEntry('/');
+	startOnTopOfHistory('/');
 	vi.mocked(goto).mockClear();
 	vi.mocked(pushState).mockClear();
 	vi.mocked(replaceState).mockClear();
