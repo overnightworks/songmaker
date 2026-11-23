@@ -1103,7 +1103,7 @@ export async function playPlaylistEntryAndShowNowPlaying(
 	playlist: PlaylistDetailItem,
 	index: number
 ): Promise<void> {
-	await playPlaylistEntry(playlist, index);
+	await playRow(playlistEntryRow(playlist, index));
 	openNowPlaying('take');
 }
 
