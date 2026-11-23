@@ -1,0 +1,8 @@
+claim_id = "0e013ba23c5f4b29a3666fdf61cd6edd"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "40170cb8e1999506a5e39b5c1666dcf1ef2a6065"
+branch = "claude/issue-3454-internal-token-from-fixture"
+scope = ["tests/conftest.py", "tests/songmaker_acestep_worker/test_wrapper_fake_training_worker.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_oidc_client_person_token_paths.py", "tests/songmaker_cli/test_scheduler_result_fetch.py", "tests/support/worker_http_peer.py"]
+opened_commit = "9bbc05756b6a3e3efd31ef1ff7f193ddd19d3f9f"
+whole_reason = "One fixture replaces one inline read pattern across its test callers; splitting it per file would leave the pattern half-gone."
