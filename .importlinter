@@ -28,6 +28,10 @@
 #   and agent/mcp.py import its run and MCP machinery, agent/settings.py alone its
 #   `config`, and the route and tool modules only its `tools`,
 #   except conversation_api.py, which also imports its `turn`.
+# pure-core-without-sign-in-and-agents: the code that runs without a server or a
+#   session (the engine packages, scoring and the framework-free leaf modules of
+#   songmaker_cli) imports neither webauth, agents nor agent_runtime_client; a new
+#   leaf module joins the list to join the core.
 [importlinter]
 include_external_packages = True
 root_packages =
@@ -122,3 +126,37 @@ ignore_imports =
     songmaker_cli.agent.tools -> agents
     songmaker_cli.cowriter.tools -> agents
     songmaker_cli.conversation_api -> agents
+
+[importlinter:contract:pure-core-without-sign-in-and-agents]
+name = The pure core does not import the sign-in or agents libraries
+type = forbidden
+source_modules =
+    songmaker_audio_engine
+    songmaker_acestep_engine
+    songmaker_cli.scoring
+    songmaker_cli.acestep_capabilities
+    songmaker_cli.arq_codec
+    songmaker_cli.audio_files
+    songmaker_cli.audio_paths
+    songmaker_cli.constants
+    songmaker_cli.cover_job_errors
+    songmaker_cli.covers
+    songmaker_cli.env_override
+    songmaker_cli.errors
+    songmaker_cli.generate
+    songmaker_cli.generation_params
+    songmaker_cli.health_types
+    songmaker_cli.invariants
+    songmaker_cli.job_payloads
+    songmaker_cli.job_timing
+    songmaker_cli.job_types
+    songmaker_cli.messages
+    songmaker_cli.parser
+    songmaker_cli.theme_types
+    songmaker_cli.timestamps
+    songmaker_cli.whisper_cues
+    songmaker_cli.words
+forbidden_modules =
+    webauth
+    agents
+    agent_runtime_client

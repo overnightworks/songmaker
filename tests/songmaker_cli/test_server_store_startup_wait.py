@@ -87,10 +87,11 @@ def _wait_redis(probe: ScriptedProbe, clock: FakeClock) -> None:
         _server_fatal("the database system is starting up"),
         _server_fatal("the database system is shutting down"),
         _server_fatal("the database system is in recovery mode"),
+        _server_fatal("the database system is not yet accepting connections"),
     ],
     ids=[
         "refused", "name-not-resolved", "timeout", "multiple-attempts", "closed-unexpectedly",
-        "starting-up", "shutting-down", "recovery-mode",
+        "starting-up", "shutting-down", "recovery-mode", "not-yet-accepting",
     ],
 )
 def test_database_that_answers_after_failures_is_waited_for(failure: OperationalError) -> None:
