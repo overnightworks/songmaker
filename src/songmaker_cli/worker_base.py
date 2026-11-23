@@ -57,6 +57,7 @@ from songmaker_cli.worker_liveness import (
 log = logging.getLogger(__name__)
 
 JOB_ENDED_EVENT = "arq_job.ended"
+CRON_ENDED_EVENT = "cron_job.ended"
 JOB_FAILED_REASON = "job_failed"
 JOB_STATUS_UNREADABLE_REASON = "status_unreadable"
 
@@ -96,6 +97,24 @@ def logged_job[Result](
                     elif status is JobStatus.CANCELLED:
                         timer.end_cancelled()
                 return result
+
+    return run
+
+
+def logged_cron[Result](
+    cron_name: str, body: Callable[[], Awaitable[Result]],
+) -> Callable[[], Awaitable[Result]]:
+    """Wrap a cron's body so it writes its one ``cron_job.ended`` line naming the cron.
+
+    A cron runs inside the handling trace of the claiming loop that hands it over: this line
+    opens no trace of its own but nests in that handling's span, so a failure line shares its
+    ``trace_id`` with the loop's lines for the same key.
+    """
+
+    @functools.wraps(body)
+    async def run() -> Result:
+        async with StepTimer(CRON_ENDED_EVENT, log, job_function=cron_name):
+            return await body()
 
     return run
 

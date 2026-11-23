@@ -204,6 +204,15 @@ SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS = 120
 SCORER_TIMEOUT_SECONDS = 120
 TEXT_ACCURACY_TIMEOUT_SECONDS = 300
 
+# The music worker's recurring jobs. A claim holds this long and is extended every third of it
+# while the body runs, so it only bounds how soon a crashed worker's cron runs again; the
+# claiming loop looks for due crons every CRON_EVERY_SECONDS, the most a due time runs late.
+CRON_CLAIM_FOR_SECONDS: Final = 60
+CRON_EVERY_SECONDS: Final = 5
+# A stop cancels the claim's extensions with the body, so the claim lives on for at least two
+# thirds of CRON_CLAIM_FOR_SECONDS; waiting for the body longer would let another worker start it.
+CRON_STOP_WAIT_SECONDS: Final = CRON_CLAIM_FOR_SECONDS * 2 / 3
+
 # arq worker
 ARQ_MUSIC_QUEUE_NAME = "arq:queue:music"
 ARQ_SCORING_QUEUE_NAME = "arq:queue:scoring"
