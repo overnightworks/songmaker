@@ -1456,8 +1456,8 @@ catalogs = [
 
 [[package]]
 name = "overnightworks-logline"
-version = "0.7.0"
-source = { git = "https://github.com/overnightworks/logline?rev=v0.7.0#4897df98b14d3f974a3fc99b65ea596874ac86ba" }
+version = "1.9.0"
+source = { git = "https://github.com/overnightworks/logline?rev=v1.9.0#cca495315f8fb25dae85851592a2c42376052c58" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "structlog" },
@@ -2337,8 +2337,8 @@ requires-dist = [
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.70.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", git = "https://github.com/overnightworks/design?rev=v0.33.1" },
-    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
-    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v0.7.0" },
+    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
+    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
     { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.13.1" },
     { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.13.1" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.44.0" },
