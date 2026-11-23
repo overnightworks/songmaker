@@ -658,13 +658,14 @@ describe('AlbumDetailView song row', () => {
 		);
 	});
 
-	it('carries no play glyph of its own: the box and its ✎ are its only buttons', async () => {
+	it('carries no play glyph of its own: the box, its ✎ and its menu are its only buttons', async () => {
 		const target = await renderSongs();
 		expect(
 			[...rowOf(target, 'Tide').querySelectorAll('button')].map((button) => accessibleName(button))
 		).toEqual([
 			expect.stringMatching(new RegExp(`^Tide\\s+${words['albumPage.songTakes'](2)}$`)),
-			words['songRow.openInEditor']({ title: 'Tide' })
+			words['songRow.openInEditor']({ title: 'Tide' }),
+			words['songMenu.label']
 		]);
 	});
 

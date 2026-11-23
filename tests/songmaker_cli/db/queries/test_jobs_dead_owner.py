@@ -13,6 +13,7 @@ from support.job_owner import an_owner, create_job_of_unstamped_owner
 from support.web_app import (
     arrange_fake_async_redis,
     make_authenticated_user,
+    make_fake_async_redis,
     make_fake_redis,
     seed_user,
     settle_owner_leases,
@@ -37,7 +38,12 @@ from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.worker_liveness import JobOwnerStamp, owner_leases
+from songmaker_cli.worker_liveness import (
+    MUSIC_WORKER_KIND,
+    JobOwnerStamp,
+    owner_leases,
+    worker_kind_leases,
+)
 
 GONE = "owner-gone"
 HERE = "owner-here"
@@ -232,6 +238,7 @@ def test_a_submission_ends_the_job_of_a_dead_owner_instead_of_refusing_for_the_f
         admitted = asyncio.run(create_job_with_rate_limit(
             session, PERSON, JobType.SCORE, redis=make_fake_redis(),
             owner_leases=owner_leases(server),
+            music_leases=worker_kind_leases(make_fake_async_redis(), MUSIC_WORKER_KIND),
         ))
 
         assert (admitted.type, admitted.user_id) == (JobType.SCORE, PERSON.id)
@@ -252,6 +259,7 @@ def test_a_submission_that_cannot_read_owner_liveness_leaves_the_job_and_is_refu
             asyncio.run(create_job_with_rate_limit(
                 session, PERSON, JobType.SCORE, redis=make_fake_redis(),
                 owner_leases=owner_leases(server),
+                music_leases=worker_kind_leases(make_fake_async_redis(), MUSIC_WORKER_KIND),
             ))
 
         assert (refusal.value.status_code, refusal.value.message.key) == (

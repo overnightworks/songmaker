@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,12 @@ def test_script_imports_songmaker_cli_from_its_copied_checkout(
     (queries / "auth.py").write_text("def get_user_by_username(*args):\n    return None\n")
     (database / "models.py").write_text("class Album:\n    pass\n")
 
+    # The stub package is no product code: coverage's subprocess hook (COVERAGE_*) must not
+    # record its files into the run's data, where the report finds no source for them.
+    unmeasured_environment = {
+        name: value for name, value in os.environ.items() if not name.startswith("COVERAGE_")
+    }
+
     result = subprocess.run(
         [
             sys.executable,
@@ -47,6 +54,7 @@ def test_script_imports_songmaker_cli_from_its_copied_checkout(
         check=True,
         capture_output=True,
         cwd=tmp_path,
+        env=unmeasured_environment,
         text=True,
     )
 

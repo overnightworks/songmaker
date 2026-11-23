@@ -17,14 +17,16 @@
 		onselect: (playlistId: string) => void;
 		/** Returns to the menu's own rows. */
 		onback: () => void;
+		/** A playlist's own Add to… leaves that playlist out of the choices. */
+		excludePlaylistId?: string;
 	}
 
-	let { onselect, onback }: Props = $props();
+	let { onselect, onback, excludePlaylistId }: Props = $props();
 
 	let newTitle = $state('');
 	let creating = $state(false);
 
-	const playlists = $derived($playlistList);
+	const playlists = $derived($playlistList.filter((playlist) => playlist.id !== excludePlaylistId));
 	const load = $derived($playlistLoad);
 
 	onMount(() => {

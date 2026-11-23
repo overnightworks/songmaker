@@ -8,15 +8,16 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
 from agents.mcp_wire import PROTOCOL_VERSION
 from agents.mcp_wire import PROTOCOL_VERSION_HEADER as PROTOCOL_HEADER
+from fastapi.testclient import TestClient
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, NAME_BEARING_METHODS
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy.orm import sessionmaker
+from support.generation_job_world import worker_up
 from support.mcp_tool_table import ALICE, BOB
 from support.realm import ADMIN_GROUP, AGENT_GROUP, LOGIN_GROUP, MCP_GROUP
 from support.reference_rows import a_reference
@@ -240,17 +241,9 @@ def build_mcp_world(
 
 
 @contextmanager
-def worker_ready() -> Iterator[None]:
-    """The generation and scoring workers answer healthy."""
-    with (
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
-        patch("songmaker_cli.generation_api.is_music_worker_healthy",
-              AsyncMock(return_value=True)),
-        patch("songmaker_cli.generation_api.is_scoring_worker_healthy",
-              AsyncMock(return_value=True)),
-        patch("songmaker_cli.generation_api._has_online_acestep_worker",
-              AsyncMock(return_value=True)),
-    ):
+def worker_ready(client: TestClient) -> Iterator[None]:
+    """The generation routes admit, as ``worker_up`` arranges."""
+    with worker_up(client):
         yield
 
 

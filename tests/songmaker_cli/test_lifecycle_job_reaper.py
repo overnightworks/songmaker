@@ -12,14 +12,11 @@ import sqlalchemy as sa
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
 from support.object_store import an_object_store
 from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
+from tandem import Roster
 
 import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import (
-    ARQ_MUSIC_HEALTH_KEY,
-    BACKGROUND_LOOP_FAILURE_THRESHOLD,
-    LoraStatus,
-)
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, LoraStatus
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
@@ -28,7 +25,7 @@ from songmaker_cli.job_timing import (
     QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     STALE_JOB_THRESHOLDS,
 )
-from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import (
     JOB_REAPER_LOCK_NAME,
     BackgroundLoopName,
@@ -41,9 +38,11 @@ from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
     MUSIC_LAST_ALIVE_KEY,
+    MUSIC_WORKER_KIND,
     WorkerLiveness,
     acestep_worker_liveness,
-    arq_worker_liveness,
+    music_worker_liveness,
+    worker_kind_leases,
     worker_liveness_by_job_type,
 )
 
@@ -302,12 +301,8 @@ class TestLifecycleReaper:
 
         liveness = worker_liveness_by_job_type(
             acestep=acestep_worker_liveness(ctx.redis, ["ace-1"], now=now),
-            music=arq_worker_liveness(
-                ctx.redis,
-                health_key=ARQ_MUSIC_HEALTH_KEY,
-                last_alive_key=MUSIC_LAST_ALIVE_KEY,
-                signal=WorkerLivenessSignal.MUSIC,
-                now=now,
+            music=music_worker_liveness(
+                ctx.redis, Roster(holders=frozenset(), settled=True), now=now,
             ),
             scoring=WorkerLiveness.UNKNOWN,
         )
@@ -343,6 +338,7 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
             ctx=SimpleNamespace(
                 db=ctx.db,
                 async_redis=tick_lock.async_redis,
+                music_leases=worker_kind_leases(tick_lock.async_redis, MUSIC_WORKER_KIND),
                 redis=SimpleNamespace(
                     exists=lambda *_args, **_kwargs: False,
                     get=lambda *_args, **_kwargs: None,
@@ -376,7 +372,10 @@ def _run_reaper_ticks(
     tick_lock = ScriptedTickLock(JOB_REAPER_LOCK_NAME, lock_results)
     app = SimpleNamespace(
         state=SimpleNamespace(
-            ctx=SimpleNamespace(async_redis=tick_lock.async_redis),
+            ctx=SimpleNamespace(
+                async_redis=tick_lock.async_redis,
+                music_leases=worker_kind_leases(tick_lock.async_redis, MUSIC_WORKER_KIND),
+            ),
             background_loop_registry=registry,
         ),
     )

@@ -65,7 +65,7 @@ def client(tmp_path: Path, pg_factory) -> TestClient:
 
 
 def _queue_via(client: TestClient, path: str, body: dict):
-    with worker_up():
+    with worker_up(client):
         return client.post(f"/api/{path}", json=body)
 
 

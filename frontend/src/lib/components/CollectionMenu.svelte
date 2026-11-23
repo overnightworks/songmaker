@@ -4,12 +4,15 @@
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import AddToPicker from './AddToPicker.svelte';
 	import Icon from './Icon.svelte';
+	import MenuPickerHead from './MenuPickerHead.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import ShareRowContent from './ShareRowContent.svelte';
 	import ShareDialog from './ShareDialog.svelte';
 
 	interface Props {
 		kind: 'album' | 'playlist';
+		/** The playlist's own id, which its Add to… leaves out of the choices. */
+		collectionId: string;
 		title: string;
 		isShared: boolean;
 		shareSlug: string | null | undefined;
@@ -21,14 +24,14 @@
 		onrename?: () => void;
 		ondelete: () => void;
 		onarchive?: () => void;
-		/** Playlist-only: picks a cover file to upload. */
+		/** Playlist-only: picks a cover file to upload, from the Cover rows. */
 		oncover?: () => void;
 		/** Album-only: opens the cover editor, which uploads, suggests and removes. */
 		oncoveredit?: () => void;
 		hasCover?: boolean;
 		/** Playlist-only: removes the cover once one is set. */
 		onremovecover?: () => void;
-		/** Album-only: adds the album's songs to the playlist chosen in the menu. */
+		/** Adds the album's songs, or the playlist's entries, to the playlist chosen in the menu. */
 		onaddto?: (playlistId: string) => void;
 		oncurate?: () => void;
 	}
@@ -48,6 +51,7 @@
 
 	let {
 		kind,
+		collectionId,
 		title,
 		isShared,
 		shareSlug,
@@ -75,7 +79,8 @@
 
 	let popover: MenuPopover | undefined = $state();
 	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
-	let adding = $state(false);
+	/** The rows themselves, or the list that one of them swaps into the same popover. */
+	let view: 'rows' | 'addTo' | 'cover' = $state('rows');
 
 	function addToAndClose(playlistId: string): void {
 		popover?.close();
@@ -122,6 +127,13 @@
 	</button>
 {/snippet}
 
+{#snippet opensListRow(label: string, target: 'addTo' | 'cover', icon: string)}
+	<button class="menu-item opens-list" onclick={() => (view = target)}>
+		<Icon name={icon} size={14} />
+		{label}
+	</button>
+{/snippet}
+
 {#snippet shareRow()}
 	<button
 		class="menu-item"
@@ -146,11 +158,27 @@
 		layer="collection-menu"
 		label={pageText('collectionMenu.label')}
 		closeLabel={pageText('collectionMenu.close')}
-		onclose={() => (adding = false)}
+		onclose={() => (view = 'rows')}
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
-		{#if adding}
-			<AddToPicker onselect={addToAndClose} onback={() => (adding = false)} />
+		{#if view === 'addTo'}
+			<AddToPicker
+				onselect={addToAndClose}
+				onback={() => (view = 'rows')}
+				excludePlaylistId={kind === 'playlist' ? collectionId : undefined}
+			/>
+		{:else if view === 'cover'}
+			<MenuPickerHead
+				label={pageText('collectionMenu.coverBack')}
+				heading={pageText('collectionMenu.cover')}
+				onback={() => (view = 'rows')}
+			/>
+			{#if oncover}
+				{@render actionRow(pageText('collectionMenu.upload'), oncover)}
+			{/if}
+			{#if hasCover && onremovecover}
+				{@render actionRow(pageText('collectionMenu.removeCover'), onremovecover)}
+			{/if}
 		{:else}
 			<p class="menu-heading">{pageText(kindKeys[kind].heading, { title })}</p>
 			{#if kind === 'album'}
@@ -175,26 +203,23 @@
 					{@render actionRow(pageText('collectionMenu.curate'), oncurate, 'spark')}
 				{/if}
 				{#if onaddto}
-					<button class="menu-item opens-list" onclick={() => (adding = true)}>
-						<Icon name="list-plus" size={14} />
-						{pageText('collectionMenu.addTo')}
-					</button>
+					{@render opensListRow(pageText('collectionMenu.addTo'), 'addTo', 'list-plus')}
 				{/if}
 				{@render shareRow()}
 				{#if onarchive}
 					{@render actionRow(pageText('collectionMenu.archive'), onarchive, 'archive')}
 				{/if}
 			{:else}
-				{@render shareRow()}
-				{#if oncover}
-					{@render actionRow(pageText('collectionMenu.upload'), oncover)}
-				{/if}
-				{#if hasCover && onremovecover}
-					{@render actionRow(pageText('collectionMenu.removeCover'), onremovecover)}
-				{/if}
 				{#if onrename}
-					{@render actionRow(pageText('collectionMenu.rename'), onrename)}
+					{@render actionRow(pageText('collectionMenu.rename'), onrename, 'pencil')}
 				{/if}
+				{#if oncover}
+					{@render opensListRow(pageText('collectionMenu.cover'), 'cover', 'image')}
+				{/if}
+				{#if onaddto}
+					{@render opensListRow(pageText('collectionMenu.addTo'), 'addTo', 'list-plus')}
+				{/if}
+				{@render shareRow()}
 			{/if}
 			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 				<Icon name="trash" size={14} />

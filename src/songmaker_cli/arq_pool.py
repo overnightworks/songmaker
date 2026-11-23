@@ -11,12 +11,10 @@ from arq import create_pool
 from arq.connections import ArqRedis
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
-from songmaker_cli.constants import (
-    ARQ_MUSIC_HEALTH_KEY,
-    ARQ_SCORING_HEALTH_KEY,
-)
+from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
+from songmaker_cli.worker_liveness import MUSIC_WORKER_KIND, worker_kind_leases
 
 _pool: ArqRedis | None = None
 _pool_lock = threading.Lock()
@@ -55,10 +53,12 @@ async def close_arq_pool() -> None:
 
 
 async def is_music_worker_healthy() -> bool:
+    """Whether a music worker holds a live lease of its kind; any failed read says no."""
     try:
-        return await get_arq_pool().exists(ARQ_MUSIC_HEALTH_KEY) > 0
+        roster = await worker_kind_leases(get_arq_pool(), MUSIC_WORKER_KIND).live()
     except Exception:
         return False
+    return bool(roster.holders)
 
 
 async def is_scoring_worker_healthy(pool: ArqRedis | None = None) -> bool:

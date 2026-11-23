@@ -56,6 +56,7 @@ export {
 	addGenerationToPlaylist,
 	addSongToPlaylist,
 	addAlbumToPlaylist,
+	addPlaylistToPlaylist,
 	removeFromPlaylist,
 	reorderPlaylistEntry,
 	sharePlaylist,

@@ -43,8 +43,8 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-async function showPicker(): Promise<void> {
-	mounted = mount(AddToPicker, { target, props: { onselect, onback } });
+async function showPicker(excludePlaylistId?: string): Promise<void> {
+	mounted = mount(AddToPicker, { target, props: { onselect, onback, excludePlaylistId } });
 	await tick();
 }
 
@@ -77,6 +77,17 @@ describe('AddToPicker', () => {
 			{ title: 'Night Drive', count: '3' },
 			{ title: 'Morning Run', count: '0' }
 		]);
+	});
+
+	it('leaves out the playlist the host is adding from', async () => {
+		await showPicker('p-night');
+
+		expect(
+			Array.from(
+				target.querySelectorAll('.menu-picker-row .ap-title'),
+				(title) => title.textContent
+			)
+		).toEqual(['Morning Run']);
 	});
 
 	it('says it is loading while no playlist has arrived', async () => {

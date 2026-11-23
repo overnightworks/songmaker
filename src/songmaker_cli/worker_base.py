@@ -46,7 +46,13 @@ from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import message
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
-from songmaker_cli.worker_liveness import JobOwner, keep_owner_lease, owner_leases
+from songmaker_cli.worker_liveness import (
+    JobOwner,
+    keep_kind_lease,
+    keep_owner_lease,
+    owner_leases,
+    worker_kind_leases,
+)
 
 log = logging.getLogger(__name__)
 
@@ -134,6 +140,8 @@ class WorkerBase:
     job_types: ClassVar[tuple[JobType, ...]]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
+    lease_kind: ClassVar[str | None] = None
+    """The worker kind whose lease family this worker renews beside its owner lease, if any."""
     health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 
     def __init__(self, settings: Settings | None = None) -> None:
@@ -279,6 +287,12 @@ class WorkerBase:
             self.owner = await self._lease_stack.enter_async_context(
                 keep_owner_lease(owner_leases(self._owner_redis), self.owner_id),
             )
+            if self.lease_kind is not None:
+                await self._lease_stack.enter_async_context(
+                    keep_kind_lease(
+                        worker_kind_leases(self._owner_redis, self.lease_kind), self.owner_id,
+                    ),
+                )
         except BaseException:
             await self._owner_redis.aclose()
             await self._lease_stack.aclose()

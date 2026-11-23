@@ -171,7 +171,7 @@ def test_a_songs_settings_reach_the_worker_through_the_generate_request(
     )
     client = web_client(app)
     assert client.put("/api/songs/s1", json={"generation_params": settings}).status_code == 200
-    with worker_up():
+    with worker_up(client):
         response = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
     assert response.status_code == 200
     job_id = response.json()["id"]

@@ -289,7 +289,7 @@ fallback. Redis failure returns 503 rather than opening an unbounded poller.
 ### Job streams
 
 `GET /api/jobs/{id}/stream` polls a job's status once per second. The poll
-runs through `asyncio.to_thread()`, so no blocking psycopg2 call sits on the
+runs through `asyncio.to_thread()`, so no blocking psycopg call sits on the
 event loop and an exhausted DB pool cannot stall it, bounded by `asyncio.wait_for()` to the
 stream's remaining lifetime so a poll cannot itself outrun the deadline by
 waiting on an exhausted pool, matching the resource-event stream's

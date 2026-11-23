@@ -20,6 +20,7 @@ from support.request_lines import request_lines
 from support.web_app import (
     BUILT_SHELL,
     TEST_SECRET,
+    hold_a_music_lease,
     make_app_context,
     make_fake_async_redis,
     make_fake_redis,
@@ -31,7 +32,8 @@ from support.web_app import (
 from webauth.cookies import sign_session_id
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Score, Song, User, UserSession, Version
+from songmaker_cli.db.queries.auth import create_session as create_db_session
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.job_types import JobType
@@ -318,8 +320,6 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text(BUILT_SHELL)
 
-    from songmaker_cli.db.queries.auth import create_session as create_db_session
-
     with pg_factory() as session:
         user = User(username="tester")
         session.add(user)
@@ -329,7 +329,6 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
         session.commit()
 
     with pg_factory() as session:
-        from songmaker_cli.db.models import UserSession
         assert session.query(UserSession).count() == 1
 
     ctx = AppContext(
@@ -339,15 +338,16 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
         signing_key=TEST_SECRET,
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
+    hold_a_music_lease(ctx.async_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
         with web_client(app):
             pass
 
-    mock_reap.assert_called_once_with(ctx)
+    handed = [(call.args, call.kwargs["music_roster"].holders) for call in mock_reap.call_args_list]
+    assert handed == [((ctx,), {"music-worker"})]
 
     with pg_factory() as session:
-        from songmaker_cli.db.models import UserSession
         assert session.query(UserSession).count() == 0
 
 

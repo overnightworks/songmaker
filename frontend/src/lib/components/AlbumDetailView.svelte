@@ -37,7 +37,14 @@
 	import { setOpenCollection } from '#lib/stores/collection.ts';
 	import { forgetListenedPlace, readRestoredPlace } from '#lib/stores/libraryOrder.ts';
 	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
-	import { addAlbumToPlaylist } from '#lib/stores/playlists.ts';
+	import { addAlbumToPlaylist, toastPlaylistAdd } from '#lib/stores/playlists.ts';
+	import {
+		addSongToPlaylistWithToast,
+		deleteSongWithUndo,
+		disableSongSharing,
+		enableSongSharing,
+		renameSongTo
+	} from '#lib/stores/songActions.ts';
 	import {
 		coverStanding,
 		discardCoverSuggestions,
@@ -66,6 +73,8 @@
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import SongRow from './SongRow.svelte';
+	import SongDeleteDialog from './SongDeleteDialog.svelte';
+	import SongMenu from './editor/SongMenu.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
 	import NewSongCard from './NewSongCard.svelte';
@@ -77,6 +86,8 @@
 	let { albumId }: Props = $props();
 
 	let showDeleteConfirm = $state(false);
+	let renamingSongId = $state<string | null>(null);
+	let songToDelete = $state<SongItem | null>(null);
 
 	const albums = $derived($albumList);
 	const allSongs = $derived($songList);
@@ -321,24 +332,10 @@
 		}
 	}
 
-	async function onAddToPlaylist(playlistId: string): Promise<void> {
-		if (!currentAlbumId) return;
-		try {
-			const result = await addAlbumToPlaylist(playlistId, currentAlbumId);
-			if (result.skipped.length > 0) {
-				addToast(
-					pageText('albumPage.addedSkipped', {
-						added: String(result.added_count),
-						skipped: String(result.skipped.length)
-					}),
-					'info'
-				);
-			} else {
-				addToast(pageText('albumPage.addedToPlaylist'), 'success');
-			}
-		} catch (e) {
-			addToast(describeFailure(e, pageText('albumPage.addFailed')), 'error');
-		}
+	function onAddToPlaylist(playlistId: string): Promise<void> {
+		const albumId = currentAlbumId;
+		if (!albumId) return Promise.resolve();
+		return toastPlaylistAdd(() => addAlbumToPlaylist(playlistId, albumId));
 	}
 
 	function onCurate(): void {
@@ -431,7 +428,24 @@
 						current={isSongCurrent(s.id)}
 						onclick={() => onSongTap(s)}
 						onedit={() => selectSong(s.id)}
-					/>
+						renaming={renamingSongId === s.id
+							? {
+									onsave: (title) => renameSongTo(s.id, title),
+									onend: () => (renamingSongId = null)
+								}
+							: undefined}
+					>
+						{#snippet menu()}
+							<SongMenu
+								song={s}
+								onrename={() => (renamingSongId = s.id)}
+								onaddto={(playlistId) => void addSongToPlaylistWithToast(s.id, playlistId)}
+								ondelete={() => (songToDelete = s)}
+								onshare={() => enableSongSharing(s.id)}
+								onunshare={() => disableSongSharing(s.id)}
+							/>
+						{/snippet}
+					</SongRow>
 				{/each}
 				{#if newSongOpen}
 					<NewSongCard album={selectedAlbum} oncancel={cancelNewSong} oncreated={foldCreatedSong} />
@@ -451,6 +465,18 @@
 			{/if}
 		</div>
 	</div>
+{/if}
+
+{#if songToDelete}
+	{@const doomed = songToDelete}
+	<SongDeleteDialog
+		song={doomed}
+		onconfirm={() => {
+			void deleteSongWithUndo(doomed.id);
+			songToDelete = null;
+		}}
+		oncancel={() => (songToDelete = null)}
+	/>
 {/if}
 
 {#if showDeleteConfirm && selectedAlbum}

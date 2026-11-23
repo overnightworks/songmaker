@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Callable, Final
 
@@ -19,6 +20,7 @@ from songmaker_cli.db.queries.generations import lock_takes, lock_unarchived_gen
 from songmaker_cli.db.queries.sharing import (
     disable_sharing,
     enable_sharing,
+    is_playable_take,
     presented_take,
 )
 
@@ -28,16 +30,26 @@ PLAYLIST_SKIP_MISSING_AUDIO: Final = "missing_audio"
 
 
 @dataclass(frozen=True)
-class PlaylistAlbumSkip:
+class PlaylistAddSkip:
     song_id: str
     title: str
     reason: str
 
 
 @dataclass(frozen=True)
-class PlaylistAlbumAddResult:
+class PlaylistAddResult:
     entries: list[PlaylistEntry]
-    skipped: list[PlaylistAlbumSkip]
+    skipped: list[PlaylistAddSkip]
+
+
+@dataclass(frozen=True)
+class _Candidate:
+    """One song's take on its way to a playlist: the take to add, or why there is none."""
+
+    song_id: str
+    title: str
+    take: Generation | None
+    skip_reason: str | None
 
 
 def list_playlists(session: Session, user_id: str) -> list[Playlist]:
@@ -207,7 +219,7 @@ def add_album_to_playlist(
     playlist_id: str,
     album_id: str,
     is_readable: Callable[[Generation], bool],
-) -> PlaylistAlbumAddResult:
+) -> PlaylistAddResult:
     album = (
         session.query(Album)
         .options(
@@ -219,41 +231,72 @@ def add_album_to_playlist(
     )
     if not album:
         raise ValueError(f"Album not found: {album_id}")
-    skipped_by_song: dict[str, PlaylistAlbumSkip] = {}
-    chosen: dict[str, Generation] = {}
     songs = sorted(album.songs, key=lambda item: (item.track_number, item.id))
-    for song in songs:
-        playable = presented_take(song.generations)
-        if playable is None:
-            reason = PLAYLIST_SKIP_NO_PLAYABLE
-        elif not is_readable(playable):
-            reason = PLAYLIST_SKIP_MISSING_AUDIO
-        else:
-            chosen[song.id] = playable
-            continue
-        skipped_by_song[song.id] = PlaylistAlbumSkip(
-            song_id=song.id, title=song.title, reason=reason,
-        )
+    return _append_candidates(session, playlist_id, [
+        _candidate(song, presented_take(song.generations), is_readable) for song in songs
+    ])
+
+
+def add_playlist_entries_to_playlist(
+    session: Session,
+    playlist_id: str,
+    source_entries: Sequence[PlaylistEntry],
+    is_readable: Callable[[Generation], bool],
+) -> PlaylistAddResult:
+    """Append the playable takes of the source entries, in their order, to the playlist.
+
+    The caller passes the entries its source view shows; an entry the view hides is neither
+    added nor reported.
+    """
+    return _append_candidates(session, playlist_id, [
+        _entry_candidate(entry, is_readable) for entry in source_entries
+    ])
+
+
+def _entry_candidate(
+    entry: PlaylistEntry, is_readable: Callable[[Generation], bool],
+) -> _Candidate:
+    take = entry.generation
+    return _candidate(take.song, take if is_playable_take(take) else None, is_readable)
+
+
+def _candidate(
+    song: Song, take: Generation | None, is_readable: Callable[[Generation], bool],
+) -> _Candidate:
+    if take is None:
+        return _Candidate(song.id, song.title, None, PLAYLIST_SKIP_NO_PLAYABLE)
+    if not is_readable(take):
+        return _Candidate(song.id, song.title, None, PLAYLIST_SKIP_MISSING_AUDIO)
+    return _Candidate(song.id, song.title, take, None)
+
+
+def _append_candidates(
+    session: Session, playlist_id: str, candidates: Sequence[_Candidate],
+) -> PlaylistAddResult:
+    """Lock the candidates' takes in id order, then append each one still playable, in order.
+
+    A take archived or deleted before its lock is granted is skipped like one that was
+    never playable.
+    """
     locked = {
         gen.id: gen
-        for gen in lock_takes(session, Generation.id.in_([gen.id for gen in chosen.values()]))
+        for gen in lock_takes(
+            session,
+            Generation.id.in_([item.take.id for item in candidates if item.take is not None]),
+        )
     }
     entries: list[PlaylistEntry] = []
-    skipped: list[PlaylistAlbumSkip] = []
-    for song in songs:
-        if song.id in skipped_by_song:
-            skipped.append(skipped_by_song[song.id])
-            continue
-        gen = locked.get(chosen[song.id].id)
+    skipped: list[PlaylistAddSkip] = []
+    for item in candidates:
+        gen = locked.get(item.take.id) if item.take is not None else None
         if gen is None or gen.is_archived:
-            skipped.append(
-                PlaylistAlbumSkip(
-                    song_id=song.id, title=song.title, reason=PLAYLIST_SKIP_NO_PLAYABLE,
-                )
-            )
+            skipped.append(PlaylistAddSkip(
+                song_id=item.song_id, title=item.title,
+                reason=item.skip_reason or PLAYLIST_SKIP_NO_PLAYABLE,
+            ))
             continue
         entries.append(_append_entry(session, playlist_id, gen))
-    return PlaylistAlbumAddResult(entries=entries, skipped=skipped)
+    return PlaylistAddResult(entries=entries, skipped=skipped)
 
 
 def remove_from_playlist(
