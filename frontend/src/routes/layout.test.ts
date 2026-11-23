@@ -18,6 +18,7 @@ import {
 	historyStandsStill,
 	loadHistoryPageForTests,
 	pushEntry,
+	historyComesToRest,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
 } from '#lib/history/historyController.ts';
@@ -246,6 +247,10 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await unmountCurrentLayout();
+	await historyComesToRest();
+	sessionStorage.clear();
+	resetLibraryContextForTests();
+	resetNavigationForTests();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	delete document.documentElement.dataset.transportBar;
