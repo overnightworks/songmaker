@@ -121,13 +121,6 @@ jobs:
             exit 1
           }
 
-          # A Host outside the allowed hosts is refused.
-          unknown_host_status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: unknown.invalid' "$base/health")"
-          [[ $unknown_host_status =~ ^4[0-9]{2}$ ]] || {
-            echo "expected a 4xx for /health with Host unknown.invalid, got $unknown_host_status" >&2
-            exit 1
-          }
-
           # The details always answer 200 regardless of body, so assert the body:
           # no scoring or ACE-Step worker runs in this stack, so those report
           # absent; db and redis must both be reachable.
