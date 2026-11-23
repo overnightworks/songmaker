@@ -41,12 +41,10 @@ export async function openThisTakeFromBar(
 	await openNowPlayingFromBar(page, shell, songTitle);
 	const takeTab = page.getByRole('tab', { name: words['nowPlaying.takeTab'] });
 	if (shell === 'mobile') {
-		const closedSheetTrigger = page
-			.getByRole('dialog', { name: songTitle })
-			.getByRole('button', {
-				name: new RegExp(`${words['nowPlaying.queueTab']}$`),
-				expanded: false
-			});
+		const closedSheetTrigger = page.getByRole('dialog', { name: songTitle }).getByRole('button', {
+			name: new RegExp(`${words['nowPlaying.queueTab']}$`),
+			expanded: false
+		});
 		// The sheet either opens itself on mount or waits behind its trigger.
 		await expect(takeTab.or(closedSheetTrigger)).toBeVisible();
 		if (await closedSheetTrigger.isVisible()) await closedSheetTrigger.click();
