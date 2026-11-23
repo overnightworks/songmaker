@@ -1,0 +1,7 @@
+claim_id = "2a47356ea29a4b0c8015aa76cf0437ee"
+agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+role = "builder"
+base = "40170cb8e1999506a5e39b5c1666dcf1ef2a6065"
+branch = "claude/issue-3447-security-names-platform-live-check"
+scope = ["docs/security.md"]
+opened_commit = "0087676936ba0f35e90900c44ee22fb0f119ab54"
