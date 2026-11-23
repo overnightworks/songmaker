@@ -80,13 +80,15 @@ export function recordRailReveals({
 	for (const [name, value] of Object.entries(standIns)) {
 		Object.defineProperty(HTMLElement.prototype, name, { configurable: true, value });
 	}
+	const setupMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
 	Object.defineProperty(window, 'matchMedia', {
 		configurable: true,
 		value: (query: string) => ({ matches: reducedMotion && query === REDUCED_MOTION_MEDIA })
 	});
 	onTestFinished(() => {
 		for (const name of Object.keys(standIns)) Reflect.deleteProperty(HTMLElement.prototype, name);
-		Reflect.deleteProperty(window, 'matchMedia');
+		if (setupMatchMedia) Object.defineProperty(window, 'matchMedia', setupMatchMedia);
+		else Reflect.deleteProperty(window, 'matchMedia');
 	});
 	return reveals;
 }
