@@ -66,9 +66,13 @@ def cron_deadlines(redis: Redis, *, claim_for: timedelta = CLAIM_FOR) -> Deadlin
     )
 
 
-async def redis_now(redis: Redis) -> datetime:
-    seconds, microseconds = await redis.time()
+def datetime_from_redis_time(seconds: str | int, microseconds: str | int) -> datetime:
+    """The instant of a Redis ``TIME`` reply."""
     return datetime.fromtimestamp(int(seconds), UTC).replace(microsecond=int(microseconds))
+
+
+async def redis_now(redis: Redis) -> datetime:
+    return datetime_from_redis_time(*await redis.time())
 
 
 async def serve_due_crons(

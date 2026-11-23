@@ -11,15 +11,15 @@ from datetime import UTC, datetime, timedelta
 from redis import Redis as SyncRedis
 from redis.asyncio import Redis
 
-from songmaker_cli.cron_schedule import Cron, next_tick, redis_now
+from songmaker_cli.cron_schedule import Cron, datetime_from_redis_time, next_tick, redis_now
 
 POLL_SECONDS = 0.01
 WITHIN_SECONDS = 15
+EPOCH = datetime.fromtimestamp(0, UTC)
 
 
 async def redis_ms(client: Redis) -> int:
-    seconds, microseconds = await client.time()
-    return int(seconds) * 1000 + int(microseconds) // 1000
+    return (await redis_now(client) - EPOCH) // timedelta(milliseconds=1)
 
 
 async def until(condition: Callable[[], bool]) -> None:
@@ -42,8 +42,7 @@ async def until_redis_has_passed(client: Redis, span: timedelta) -> None:
 
 
 def redis_datetime(client: SyncRedis) -> datetime:
-    seconds, microseconds = client.time()
-    return datetime.fromtimestamp(int(seconds), UTC).replace(microsecond=int(microseconds))
+    return datetime_from_redis_time(*client.time())
 
 
 def ticks_between(cron: Cron, start: datetime, end: datetime) -> int:
