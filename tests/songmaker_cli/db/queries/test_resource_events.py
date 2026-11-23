@@ -11,10 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from support.object_store import an_object_store
-from support.web_app import make_fake_async_redis, seed_user
+from support.web_app import make_app_context, seed_user
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import ResourceEventKind, ResourceType
 from songmaker_cli.db.models import (
     Album,
@@ -178,13 +176,8 @@ def test_lifecycle_cleanup_enforces_retention(db_factory, tmp_path: Path) -> Non
         event.created_at = now - timedelta(days=31)
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(),
-        db=db_factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=b"a" * 64,
-        redis=MagicMock(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=db_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=MagicMock(),
     )
     assert cleanup_expired_resource_events(ctx) == 1
     with db_factory() as session:

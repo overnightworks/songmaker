@@ -61,8 +61,8 @@
 "tests/songmaker_cli/test_queue_streams.py" = 1929
 "tests/songmaker_cli/test_resource_event_api.py" = 1103
 "tests/songmaker_cli/test_scheduler.py" = 1278
-"tests/songmaker_cli/test_server.py" = 1749
-"tests/songmaker_cli/test_sharing_api.py" = 2393
+"tests/songmaker_cli/test_server.py" = 1725
+"tests/songmaker_cli/test_sharing_api.py" = 2385
 
 [function_lines."src/songmaker_acestep_worker/__main__.py"]
 "build_deps" = 67
@@ -150,7 +150,7 @@
 [function_lines."tests/songmaker_cli/test_db_postgresql.py"]
 "test_alembic_migrations_on_postgresql" = 114
 "test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql" = 65
-"test_concurrent_lora_reconciliation_claims_one_locked_row" = 82
+"test_concurrent_lora_reconciliation_claims_one_locked_row" = 80
 
 [function_lines."tests/songmaker_cli/test_health_api.py"]
 "prometheus_output_before_refactor" = 114
@@ -159,7 +159,7 @@
 "test_postgresql_failed_reference_write_releases_admission" = 75
 
 [function_lines."tests/songmaker_cli/test_server.py"]
-"test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 74
+"test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 71
 
 [function_lines."tests/songmaker_cli/test_sharing_api.py"]
 "test_shared_audio_authorization_matches_presented_share_selection" = 61

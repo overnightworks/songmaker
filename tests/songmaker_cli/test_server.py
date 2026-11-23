@@ -15,7 +15,6 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from logline.testing import configured
-from support.object_store import an_object_store
 from support.request_lines import request_lines
 from support.web_app import (
     BUILT_SHELL,
@@ -31,7 +30,6 @@ from support.web_app import (
 )
 from webauth.cookies import sign_session_id
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, UserSession, Version
 from songmaker_cli.db.queries.auth import create_session as create_db_session
 from songmaker_cli.db.queries.jobs import create_job
@@ -156,11 +154,8 @@ def _sveltekit_app_client(tmp_path: Path, factory, assets: dict[str, bytes]) -> 
     with factory() as session:
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=factory, audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     return web_client(create_app(audio_dir, data_dir, project_root, ctx=ctx))
 
@@ -224,12 +219,8 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path, pg_factory) -> Non
         session.add(admin)
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -283,12 +274,8 @@ def auth_server_app(tmp_path: Path, pg_factory):
         owner_id = owner.id
         other_id = other.id
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -331,12 +318,8 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
     with pg_factory() as session:
         assert session.query(UserSession).count() == 1
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     hold_a_music_lease(ctx.async_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -520,12 +503,8 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings, pg_
 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com,testserver"}):
         get_settings.cache_clear()
-        ctx = AppContext(
-            object_store=an_object_store(), db=pg_factory,
-            audio_dir=audio_dir,
-            data_dir=data_dir,
-            signing_key=TEST_SECRET,
-            redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+        ctx = make_app_context(
+            db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
         )
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = web_client(app, cookies={})
@@ -666,12 +645,9 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
     from songmaker_cli.server import _lifespan
 
     mock_app = MagicMock(**{"state.mcp_front": None})
-    mock_app.state.ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    mock_app.state.ctx = make_app_context(
+        db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        redis=make_fake_redis(),
     )
 
     slots = MagicMock(release=AsyncMock(return_value=True))
@@ -741,12 +717,9 @@ def test_lifespan_closes_the_client_that_follows_wakes(tmp_path: Path, pg_factor
     wake_redis = make_fake_async_redis()
     wake_redis.aclose = AsyncMock()
     mock_app = MagicMock(**{"state.mcp_front": None})
-    mock_app.state.ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(), wake_redis=wake_redis,
+    mock_app.state.ctx = make_app_context(
+        db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        redis=make_fake_redis(), wake_redis=wake_redis,
     )
 
     async def _run():
@@ -772,12 +745,9 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
     from songmaker_cli.server import _lifespan
 
     mock_app = MagicMock(**{"state.mcp_front": None})
-    mock_app.state.ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    mock_app.state.ctx = make_app_context(
+        db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        redis=make_fake_redis(),
     )
 
     async def _run():
@@ -822,12 +792,9 @@ def test_lifespan_fails_on_redis_unavailable(tmp_path: Path, pg_factory) -> None
     from songmaker_cli.server import _lifespan
 
     mock_app = MagicMock(**{"state.mcp_front": None})
-    mock_app.state.ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    mock_app.state.ctx = make_app_context(
+        db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        redis=make_fake_redis(),
     )
 
     async def _run():
@@ -876,12 +843,8 @@ def test_cors_wildcard_or_list_raises_at_startup(
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text(BUILT_SHELL)
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
 
     with patch.dict("os.environ", {"CORS_ORIGIN": cors_origin}):
@@ -903,12 +866,8 @@ def test_cors_specific_origin(tmp_path: Path, pg_factory, fresh_settings) -> Non
     with factory() as session:
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
@@ -951,12 +910,8 @@ def test_wildcard_allowed_host_raises_at_startup(
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text(BUILT_SHELL)
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": allowed_hosts}):
@@ -1013,12 +968,8 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch, pg_factory, fresh_settin
     with factory() as session:
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1045,12 +996,8 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch, pg_factory
     with pg_factory() as session:
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1082,12 +1029,8 @@ def test_get_audio_other_user_id_denied(tmp_path: Path, pg_factory) -> None:
         session.add(admin)
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -1250,10 +1193,7 @@ def test_health_queue_depth_cap_reached(
         session.commit()
 
     redis = make_fake_redis()
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=redis)
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
 
@@ -1640,10 +1580,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     )
     sync_redis.set(queue_depth_key("acestep-worker-0"), "0")
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=sync_redis, async_redis=make_fake_async_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=sync_redis)
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
     with client:
@@ -1694,10 +1631,7 @@ def test_metrics_endpoint_offline_worker(
     redis = make_fake_redis()
     async_pool = fakeredis.aioredis.FakeRedis()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=redis)
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
     with client:
@@ -1735,12 +1669,8 @@ def _pwa_test_app(tmp_path: Path, factory, *, create_files: bool) -> TestClient:
         (sk_dir / "icon-192.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         (sk_dir / "icon-512.png").write_bytes(b"\x89PNG\r\n\x1a\n")
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     return web_client(app)
