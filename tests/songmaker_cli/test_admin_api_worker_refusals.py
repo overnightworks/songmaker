@@ -9,9 +9,10 @@ from unittest.mock import patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import make_test_app, seed_session, seed_user
+from support.refused_download import hold_a_download
+from support.web_app import SettledFakeAsyncRedis, make_test_app, seed_session, seed_user
 
-from songmaker_cli.acestep_state import download_key, worker_state_key
+from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.db.queries.workers import register_worker
 
@@ -54,16 +55,6 @@ def admin_client(tmp_path: Path, pg_factory) -> TestClient:
 class _WorkerUnreachable(_WorkerAnswering):
     async def post(self, url: str, **_kwargs) -> httpx.Response:
         raise httpx.ConnectError("refused")
-
-
-class _Redis:
-    """The heartbeat and download keys the download route reads."""
-
-    def __init__(self, store: dict[str, str]) -> None:
-        self.store = store
-
-    async def get(self, key: str) -> str | None:
-        return self.store.get(key)
 
 
 def _heartbeat(**state) -> dict[str, str]:
@@ -166,16 +157,16 @@ def test_a_worker_nobody_registered_is_named_on_each_worker_route(
 
 
 @pytest.mark.parametrize(
-    ("mode", "store", "status", "key", "values"),
+    ("mode", "store", "download_holder", "status", "key", "values"),
     [
-        ("bogus", _heartbeat(), 400, "adminRefusal.unknownModelMode", {"mode": "bogus"}),
-        ("sft", {}, 503, "adminRefusal.noOnlineWorkers", {}),
+        ("bogus", _heartbeat(), None, 400, "adminRefusal.unknownModelMode", {"mode": "bogus"}),
+        ("sft", {}, None, 503, "adminRefusal.noOnlineWorkers", {}),
         (
-            "sft", _heartbeat(available_modes=["sft"]), 409,
+            "sft", _heartbeat(available_modes=["sft"]), None, 409,
             "adminRefusal.alreadyDownloaded", {"mode": "sft"},
         ),
         (
-            "xl-base", {**_heartbeat(), download_key("xl-base"): "job-7"}, 409,
+            "xl-base", _heartbeat(), "job-7", 409,
             "adminRefusal.alreadyDownloading", {"mode": "xl-base", "jobId": "job-7"},
         ),
     ],
@@ -184,11 +175,17 @@ def test_a_download_the_registry_cannot_start_names_why(
     admin_client: TestClient,
     mode: str,
     store: dict[str, str],
+    download_holder: str | None,
     status: int,
     key: str,
     values: dict[str, str],
 ) -> None:
-    admin_client.app.dependency_overrides[get_arq_pool_dep] = lambda: _Redis(store)
+    pool = SettledFakeAsyncRedis()
+    for stored_key, value in store.items():
+        pool.store[stored_key] = value
+    if download_holder is not None:
+        hold_a_download(pool, mode, download_holder)
+    admin_client.app.dependency_overrides[get_arq_pool_dep] = lambda: pool
 
     response = admin_client.post(f"/api/admin/registry/{mode}/download")
 

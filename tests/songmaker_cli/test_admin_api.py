@@ -809,6 +809,21 @@ def _make_pool_with_state(
     return pool
 
 
+def _settled_pool_with_an_online_worker(worker_id: str):
+    """A fake Redis whose download lock reads as in operation, with one healthy worker."""
+    import json
+
+    from support.web_app import SettledFakeAsyncRedis
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    pool = SettledFakeAsyncRedis()
+    pool.store[worker_state_key(worker_id)] = json.dumps(
+        {"gpu_healthy": True, "available_modes": []},
+    )
+    return pool
+
+
 def test_download_endpoint_unknown_mode(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
@@ -854,14 +869,19 @@ def test_download_endpoint_already_downloaded(client: TestClient) -> None:
 
 
 def test_download_endpoint_already_in_progress(client: TestClient) -> None:
+    import json
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.acestep_state import download_key
+    from support.refused_download import hold_a_download
+    from support.web_app import SettledFakeAsyncRedis
+
+    from songmaker_cli.acestep_state import worker_state_key
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_pool_with_state({"w1": {"available_modes": []}})
-    pool._store[download_key("xl-base")] = "previous-job-id"
+    pool = SettledFakeAsyncRedis()
+    pool.store[worker_state_key("w1")] = json.dumps({"gpu_healthy": True, "available_modes": []})
+    hold_a_download(pool, "xl-base", "previous-job-id")
     _override_pool(client, pool)
 
     publish = AsyncMock()
@@ -881,7 +901,7 @@ def test_download_endpoint_queues_job_and_wakes_the_music_queue(client: TestClie
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+    _override_pool(client, _settled_pool_with_an_online_worker("w1"))
 
     publish = AsyncMock()
     with patch.object(client.app.state.ctx.wake_channel, "publish", publish):
