@@ -1,0 +1,8 @@
+claim_id = "c92b39a8532246ad9db2b64a0ea350ae"
+agent = "Claude 5b75db08-b076-464c-a5ed-ade1b673a134"
+role = "builder"
+base = "c3c221221921ee28fd35a081f187c83d01684c51"
+branch = "claude/issue-3478-realm-ai-group"
+scope = ["docker/docker-compose.test.yml", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/agent/backend.py", "src/songmaker_cli/agent/settings.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "tests/conftest.py", "tests/songmaker_cli/agent/test_backend_cowriter_agent.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "tests/songmaker_cli/test_cover_runner_through_gateway.py", "tests/songmaker_cli/test_settings.py", "tests/support/app_processes.py", "tests/support/cowriter_gateway.py", "tests/support/mcp_world.py", "tests/support/realm.py", "tests/test_packaging_boundary.py"]
+opened_commit = "37fc2f07977d50c4e4988745ae08852528fce218"
+whole_reason = "One setting moves from the agent section to the realm names; its reader, the test stack, the docs and the tests that set it change together, or one of them names a key nothing reads."
