@@ -236,14 +236,9 @@ rule = "test-layout"
 reason = "proves one behaviour of both worker probes, scripts/arq_healthcheck.py and scripts/music_worker_readiness.py, which no single script owns"
 
 [[layout.allow]]
-path = "tests/test_dockerfile_installs.py"
+path = "tests/test_dockerfiles.py"
 rule = "test-layout"
-reason = "proves the install lines of every Dockerfile, which lie outside every package"
-
-[[layout.allow]]
-path = "tests/test_dockerfile_ownership.py"
-rule = "test-layout"
-reason = "proves the ownership instructions of the Dockerfile final stage, which lies outside every package"
+reason = "proves the instructions of the Dockerfiles, which lie outside every package"
 
 [[layout.allow]]
 path = "tests/test_packaging_boundary.py"
