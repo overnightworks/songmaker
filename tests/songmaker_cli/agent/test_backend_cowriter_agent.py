@@ -53,8 +53,8 @@ def _app(tmp_path, pg_factory) -> FastAPI:
     return app
 
 
-def _agent_settings(directory, origin: str | None = None) -> AgentSettings:
-    gateway = agent_config(directory, origin=origin or closed_port_origin()).gateway
+def _agent_settings(directory) -> AgentSettings:
+    gateway = agent_config(directory, origin=closed_port_origin()).gateway
     return AgentSettings(gateway=gateway)
 
 
@@ -103,20 +103,19 @@ def test_a_set_agent_composes_one_gateway_backend_that_serves_every_turn(tmp_pat
     assert [_problem_frame(first), _problem_frame(second)] == [(503, "unavailable")] * 2
 
 
-_REALM_AI_GROUP = "/services/litellm"
-
-
 @pytest.mark.parametrize(
-    ("groups", "turn_problem", "cover_problem"),
+    ("in_ai_group", "turn_problem", "cover_problem"),
     [
-        ((LOGIN_GROUP, _REALM_AI_GROUP), (503, "unavailable"), None),
-        ((LOGIN_GROUP,), (403, "not_enabled"), AgentProblem.NOT_ENABLED),
+        (True, (503, "unavailable"), None),
+        (False, (403, "not_enabled"), AgentProblem.NOT_ENABLED),
     ],
     ids=["inside-the-realm-ai-group", "outside-the-realm-ai-group"],
 )
 def test_the_group_a_caller_is_checked_against_is_the_realm_ai_group(
-    tmp_path, pg_factory, groups, turn_problem, cover_problem,
+    tmp_path, pg_factory, in_ai_group, turn_problem, cover_problem,
 ):
+    ai_group = "/services/litellm"
+    groups = (LOGIN_GROUP, ai_group) if in_ai_group else (LOGIN_GROUP,)
     client, factory = build_admin_client(
         tmp_path,
         lambda session: session.add(User(id="u-test", username="u-test", role="admin")),
@@ -128,7 +127,7 @@ def test_the_group_a_caller_is_checked_against_is_the_realm_ai_group(
     compose_agent_backend(
         client.app,
         Settings(agent=_agent_settings(tmp_path)),
-        RealmSettings(REALM_AI_GROUP=_REALM_AI_GROUP),
+        RealmSettings(REALM_AI_GROUP=ai_group),
     )
 
     turn = _problem_frame(client.post("/api/chat/turn", json={"message": "hello"}))
