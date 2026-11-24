@@ -66,7 +66,8 @@ LOG_TAIL_BYTES: Final = 4000
 INHERITED_VARIABLES: Final = ("PATH", "HOME", "LANG", "VIRTUAL_ENV")
 INHERITED_PREFIXES: Final = ("COVERAGE_", "AWS_")
 TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
-SCORING_WORKER_SETTINGS: Final = "songmaker_cli.scoring_worker.ScoringWorkerSettings"
+MUSIC_WORKER_COMMAND: Final = ["-m", "songmaker_cli.music_worker"]
+SCORING_WORKER_COMMAND: Final = ["-m", "songmaker_cli.scoring_worker"]
 
 
 def environment_name(settings_class: type[BaseSettings], field_name: str) -> str:
@@ -85,7 +86,7 @@ def die_with_parent(parent_pid: int) -> None:
         os.kill(os.getpid(), signal.SIGKILL)
 
 
-def _free_port() -> int:
+def free_port() -> int:
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
         probe.bind((LOOPBACK, 0))
         return probe.getsockname()[1]
@@ -244,7 +245,7 @@ class WebProcesses:
     def start(self, name: str) -> WebProcess:
         """Start one web process and return it once `/health` answers."""
         worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
-        port = _free_port()
+        port = free_port()
         process, log, log_path = self._launch(
             name,
             [
@@ -264,21 +265,22 @@ class WebProcesses:
 
     def start_music_worker(self, name: str) -> WorkerProcess:
         """Start one music worker and return it once its lease names its owner id."""
-        return self._start_worker(name, ["-m", "songmaker_cli.music_worker"])
+        return self._start_worker(name, MUSIC_WORKER_COMMAND)
 
     def start_scoring_worker(self, name: str) -> WorkerProcess:
         """Start one scoring worker and return it once its lease names its owner id."""
-        return self._start_worker(
-            name, ["-m", "songmaker_cli.arq_worker", SCORING_WORKER_SETTINGS],
-        )
+        return self._start_worker(name, SCORING_WORKER_COMMAND)
+
+    def launch_worker(self, name: str, command: list[str]) -> WorkerProcess:
+        """Start a worker's `python <command>` and return it at once, ready or not."""
+        process, log, log_path = self._launch(name, command, environment={})
+        worker = WorkerProcess(name, process, log, log_path, owner_id="")
+        self._processes.append(worker)
+        return worker
 
     def _start_worker(self, name: str, command: list[str]) -> WorkerProcess:
         def start(has_new_lease: Callable[[], bool]) -> WorkerProcess:
-            process, log, log_path = self._launch(
-                name, command, environment={},
-            )
-            worker = WorkerProcess(name, process, log, log_path, owner_id="")
-            self._processes.append(worker)
+            worker = self.launch_worker(name, command)
             _wait_until_ready(worker, "hold an owner lease", has_new_lease)
             return worker
 

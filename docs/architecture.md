@@ -993,7 +993,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
-| Worker | Job queues in PostgreSQL rows (music + scoring), the music worker's own process and the scoring worker hosted by arq, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
+| Worker | Job queues in PostgreSQL rows (music + scoring), one process per worker kind, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/songmaker_acestep_worker/` (top-level package, separate from `songmaker_cli`) |
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
@@ -1224,7 +1224,7 @@ Inside `songmaker_cli` the `application-layers` contract lists every module (`ex
 
 ```mermaid
 flowchart TB
-    entry["Entry: main, arq_worker"]
+    entry["Entry: main"]
     workers["Workers and server: server, music_worker, scoring_worker"]
     routes["Routes: the *_api modules, api, worker_base"]
     runtime["Runners, lifecycle, jobs"]
@@ -1616,7 +1616,7 @@ SIGKILLed and even the values the run did produce would be lost.
 - `MUSIC_MAX_JOBS` places, 2 by default (concurrent SSE consumers; the actual generation runs on the
   acestep-worker); each job runs within `ARQ_JOB_TIMEOUT`, a LoRA training within
   `LORA_TRAINING_JOB_TIMEOUT`
-- Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`: no arq. The
+- Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`. The
   claiming loop and the crons are the tasks of one `asyncio.TaskGroup`, so a stop signal ends both
   (a running job drains within `ARQ_DRAIN_TIMEOUT`), and one that raises ends the worker
   process loudly while the lease is released.
@@ -1644,15 +1644,19 @@ SIGKILLed and even the values the run did produce would be lost.
 - Owns scorer subprocess (Whisper, AudioBox, audio scorers); calls no provider,
   so the worker holds no provider credential; the subprocess is spawned with
   `SECRET_ENV_KEYS` scrubbed
-- Handles `score` tasks
+- Handles `score` jobs, claimed from their rows ("Queued job lifecycle" below); each runs within
+  `ARQ_JOB_TIMEOUT`, and one still running then ends `failed` with `error_type = "timeout"` and the
+  stored message `jobFailure.tookTooLong`; the scorer thread of that job cannot be cancelled and
+  writes nothing late, because its row has ended
 - Loads Whisper and AudioBox from files pinned by hash in its image
   (`SCORING_WHISPER_MODEL_DIR`, `SCORING_AUDIOBOX_CHECKPOINT`), never from the
   Hugging Face Hub ([security](security.md))
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
-- `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
-- Takes its jobs from PostgreSQL, not from arq ("Queued job lifecycle" below); arq still
-  hosts the process and carries the `score` function. Its lease in the `scoring-worker` family
-  says it lives ("Worker liveness and readiness" below)
+- One place by default, configurable via `SCORING_MAX_JOBS`
+- Started as `python -m songmaker_cli.scoring_worker`, which runs `ScoringWorker().run()`. Its
+  scorer subprocess manager exists before the claiming loop starts and is shut down after the loop
+  has drained, before the lease ends. Its lease in the `scoring-worker` family says it lives
+  ("Worker liveness and readiness" below)
 
 **Shared infrastructure** (`worker_base.py`):
 - DB singleton with thread-safe initialization
@@ -1669,11 +1673,8 @@ SIGKILLed and even the values the run did produce would be lost.
   disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
   recovery below). Queued work remains in its rows for a replacement worker to claim after a
-  deploy. The scoring worker's arq connection retries a refused or lost connection for
-  `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
-  process's arq pool fails fast. A stop signal ends that retry, so a worker
-  stops within seconds during the outage. The music worker has no arq connection: its own
-  client's retry and the loops' next poll ride out an outage.
+  deploy. A worker's own client retries a refused or lost connection, and the loops' next poll
+  rides out a Redis outage; a stop signal ends the worker within seconds during it.
 - Each process follows the wake channel on a client of its own with no `socket_timeout` and with
   TCP keepalive (`create_async_redis(..., follows_wakes=True)`), and publishes on its bounded
   client: a worker follows on `wake_redis` (`WorkerBase`), a web process on `AppContext.wake_redis`,
@@ -1682,9 +1683,12 @@ SIGKILLed and even the values the run did produce would be lost.
   `socket_timeout` and tandem subscribes again (WAKE-30), which would make a running cover's cancel
   listener re-read the job every 2 s; arq keeps songmaker on redis-py 5.3, so the second client stays
   until songmaker leaves arq and tandem's floor reaches 8.2.
-- `WorkerBase.run()` is the ctx-free entry of a worker arq does not host: start (database, lease),
-  serve every task of `servings()` in one `TaskGroup`, then end the lease and the pool.
-  The scoring worker still starts through `on_startup(ctx)`.
+- `WorkerBase.run()` is the entry of every worker process: it installs the stop-signal handlers
+  (SIGINT and SIGTERM) first, so a stop that arrives while `start()` waits for the database or opens
+  the lease ends the worker through `stop()` within seconds, holding no lease; then it starts (readiness
+  file, database, lease), serves every task of `servings()` in one `TaskGroup`, and ends the lease and
+  the pool after the servings have ended. The wait for the database runs in a thread and a stop
+  request ends its pauses.
 - A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
   type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
   the transaction that creates the row, and `jobs.run_after` holds the time a
@@ -1695,8 +1699,7 @@ SIGKILLed and even the values the run did produce would be lost.
   own row and have no payload. A claim moves the row from
   queued to running by one conditional UPDATE that names the worker as owner
   (`claim_next_queued_job`, the statement `claim_next_cover_job` shares), so a job reaches one
-  worker. The arq `score` handler of the previous release (`WorkerBase.claim_job`) claims the same
-  way. A GPU-hold requeue writes the row back to queued, without an owner and with `run_after`;
+  worker. A GPU-hold requeue writes the row back to queued, without an owner and with `run_after`;
   no message is sent, and the next claim after that time runs it.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
@@ -1718,27 +1721,20 @@ admitted never waits behind a whole training run.
    (tandem `WakeChannel`, address `queue/score`, built by `job_queue.app_wake_channel`). A wake that
    cannot be sent is logged and costs nothing but the poll's delay.
 2. The scoring worker's `serve_queue` loop claims one due row at a time while it has a free
-   place (`SCORING_MAX_JOBS`, one capacity the loop and the arq handler below share): `claim_next_queued_job` selects the queued row of the type whose
+   place (`SCORING_MAX_JOBS`): `claim_next_queued_job` selects the queued row of the type whose
    `run_after` has passed, oldest first, with `FOR UPDATE SKIP LOCKED`, and moves it to
    `running` in the same statement, writing the worker's owner id and lease generation
    (`owner_columns`). Two workers never take one row; a cancelled row keeps its `run_after`
-   but is not queued, and a queued score row without a `run_after` (written before rows carried
-   arguments) is left to its arq message; a row of any other type without one has no message and is claimed,
-   and a music row without a payload fails as `setup_error`.
+   but is not queued, and a queued row of any type without a `run_after` (written before rows
+   carried arguments) is claimed, and a row without a payload fails as `setup_error`.
 3. The loop looks for due rows when a wake for `queue/score` arrives, when the subscription
    confirms (the first time and after every reconnect: `on_resync` only sets an event the loop
    task reads), when a job ends, and every `QUEUE_POLL_INTERVAL_SECONDS` as the backstop; a lost wake delays a job
    by at most that interval. A Redis that is down at start leaves the loop polling alone.
 4. It runs the job from the claimed row's payload and writes its one `arq_job.ended` line. A
    claimed row whose payload is not a score payload fails as unexpected. A stop signal ends
-   the claiming at once, not when arq has drained its own jobs (the worker's own handler of the
-   signal cancels the loop), and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
+   the claiming at once and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
    running keeps its row, which the owner lease hands to the reaper.
-
-The worker keeps the arq `score` function for web processes that still enqueue score messages.
-Its handler claims its row by the same compare-and-set as every arq handler, so a row reached by
-a message and by the loop runs once, and it takes a place of the loop's capacity before it claims,
-so the two never run more jobs together than `SCORING_MAX_JOBS`. The function goes when the arq score queue goes.
 
 Recovery judges a score row by its owner stamp like every other row: a `running` row whose
 owner lease is gone fails with the restart verdict. A `running` score row with no owner id (a
@@ -1774,7 +1770,7 @@ generations were stored has an owner without a generation and is judged by its o
 built by `worker_liveness.owner_leases` for every process from the same spans: a lease lasts
 `OWNER_LEASE_TTL_SECONDS` (15 s) and is renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by
 `worker_liveness.keep_owner_lease` (`Leases.kept`), in a web process from the end of start-up to
-the end of `_lifespan`, in a worker from after its database has opened to its `on_shutdown`. A
+the end of `_lifespan`, in a worker from after its database has opened to its `stop()`. A
 web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
 serves everything else. The `owner_gone_reaper` loop of every web process runs
 `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
@@ -1824,7 +1820,7 @@ owner id in a second family of its kind, `music-worker` or `scoring-worker` (the
 last-alive key, read through `worker_liveness.worker_kind_leases(redis, kind)`; a worker class
 names its kind in `lease_kind`, and a signal without a row fails its start). The kind family has
 the spans of the owner family and is renewed by `worker_liveness.keep_kind_lease` right after the
-owner lease. A web process reads the roster of that family, never arq's health key:
+owner lease. A web process reads the roster of that family:
 `arq_pool.is_music_worker_healthy` and `arq_pool.is_scoring_worker_healthy` say whether a kind
 holds a live lease (the health page; the auto-score and the score backfill), and the signal of the
 liveness map reads it too, which also admits a request (a live holder is `alive` and is recorded as
@@ -1838,13 +1834,13 @@ score job. The async callers (`create_job_with_rate_limit` and the generation ro
 `AppContext.kind_leases`, the stale-job reaper loop and the start-up pass) read the rosters
 first (`read_kind_rosters`) and pass them in. The `owner_lapses` loop serves the lapses of every kind's family beside the
 owner family's, so the holders and lapses of ended or expired leases leave Redis. The readiness
-probe `scripts/music_worker_readiness.py` is ready only when this container start's own owner
-lease is live: the worker writes its owner id and PID 1's start ticks (field 22 of `/proc/1/stat`)
-to `MUSIC_WORKER_READINESS_FILE` as the first step of its start, and the probe requires the
+probe `scripts/worker_readiness.py`, the same for both worker images, is ready only when this
+container start's own owner lease is live: `WorkerBase.start()` writes its owner id and PID 1's
+start ticks (field 22 of `/proc/1/stat`) to `WORKER_READINESS_FILE` as the first step of its
+start, and the probe requires the
 ticks to equal the current ones and `owner_leases(...).state({owner_id})` to read `alive`. A file
 left by an earlier start of the container carries other ticks, so the lease of a stopped worker,
-which lives on for its lifespan, never makes a restarting container ready. The scoring probe
-(`scripts/arq_healthcheck.py scoring`) still reads arq's key, the only reader of it.
+which lives on for its lifespan, never makes a restarting container ready.
 
 The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.

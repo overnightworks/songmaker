@@ -75,7 +75,7 @@ RUN --network=none PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= .venv/bin/pyt
 
 COPY --chown=songmaker:songmaker src/ src/
 COPY --chown=root:root alembic.ini ./
-COPY --chown=root:root scripts/arq_healthcheck.py scripts/
+COPY --chown=root:root scripts/worker_readiness.py scripts/
 # uv_cache.json in the project's dist-info holds the install's wall-clock time and is listed in RECORD;
 # uv has no switch to leave it out, and nothing runs `uv sync` in the image again.
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
@@ -93,4 +93,4 @@ RUN chown root:root /app && chown -R root:root src && chmod 755 /app && \
     install -d -o songmaker -g songmaker /app/data/audio
 USER 1000:1000
 
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "songmaker_cli.arq_worker"]
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "songmaker_cli.scoring_worker"]

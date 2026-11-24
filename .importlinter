@@ -74,7 +74,7 @@ containers =
     songmaker_cli
 exhaustive = true
 layers =
-    main | (arq_worker)
+    main
     server | music_worker | scoring_worker
     cron_schedule
     api | worker_base

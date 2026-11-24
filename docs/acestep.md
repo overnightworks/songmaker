@@ -51,7 +51,7 @@ music worker (python -m songmaker_cli.music_worker)
       → auto-enqueue a score job for it (own budget, not the user's
         rate limit — see below)
 
-scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
+scoring worker (songmaker_cli.scoring_worker)
   → on score job:
     → load faster-whisper + AudioBox on demand
     → BPM, silence, spectral, text accuracy, aesthetics

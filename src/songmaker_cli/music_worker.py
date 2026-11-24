@@ -15,7 +15,7 @@ from collections.abc import Coroutine
 from pathlib import Path
 
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
-from songmaker_cli.constants import MUSIC_WORKER_READINESS_FILE
+from songmaker_cli.constants import WORKER_READINESS_FILE
 from songmaker_cli.cron_schedule import Cron, CronBody, serve_due_crons
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
@@ -38,10 +38,6 @@ from songmaker_cli.jobs import (
 )
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_base import WorkerBase, logged_job
-from songmaker_cli.worker_liveness import (
-    pid_one_start_ticks,
-    write_readiness_file,
-)
 
 log = logging.getLogger(__name__)
 
@@ -52,11 +48,8 @@ class MusicWorker(WorkerBase):
     job_types = queue.job_types
     lease_kind = WorkerLivenessSignal.MUSIC
 
-    def __init__(
-        self, settings=None, *, readiness_file: Path = MUSIC_WORKER_READINESS_FILE,
-    ) -> None:
-        super().__init__(settings)
-        self._readiness_file = readiness_file
+    def __init__(self, settings=None, *, readiness_file: Path = WORKER_READINESS_FILE) -> None:
+        super().__init__(settings, readiness_file=readiness_file)
         self._places = asyncio.Semaphore(self._settings.music_max_jobs)
         self._job_context: dict = {}
         self._run_logged = {
@@ -116,7 +109,6 @@ class MusicWorker(WorkerBase):
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
 
     async def start(self) -> None:
-        write_readiness_file(self._readiness_file, self.owner_id, pid_one_start_ticks())
         await super().start()
         self._job_context = {"redis": self._owner_redis}
 

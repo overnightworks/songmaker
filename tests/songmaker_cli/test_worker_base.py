@@ -3,21 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import importlib
 import json
 import logging
 import os
 import signal
 import time
 from collections.abc import Callable, Coroutine, Iterator
-from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from arq.connections import create_pool
-from arq.worker import Worker, func
 from logline.testing import configured
 from support.redis_proxy import redis_proxy
 
@@ -25,14 +20,12 @@ from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS, OWNER_LEASE_TTL_SECONDS
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
-from songmaker_cli.redis_client import build_arq_redis_settings, create_async_redis
-from songmaker_cli.scoring import subprocess_runner
+from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
 from songmaker_cli.worker_liveness import owner_leases
 
-WORKER_SETTINGS_PATHS = ("songmaker_cli.scoring_worker.ScoringWorkerSettings",)
 WORKER_STOP_BOUND_SECONDS = 10
 
 
@@ -40,14 +33,9 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-_ARQ_CTX = {"redis": MagicMock()}
-
-
 class _DummyWorker(WorkerBase):
     service_name = "dummy-worker"
     job_types = ("dummy",)
-    queue_name = "dummy_queue"
-    max_jobs = 1
 
 
 # ── get_db_factory caches per instance ────────────────────────────
@@ -105,11 +93,11 @@ def test_a_worker_writes_its_lines_under_its_own_service_name(
     worker_class: type[WorkerBase],
     service: str,
     redis_url: str,
+    readiness_file: Path,
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
+    installed_scorer_restored: None,
 ) -> None:
-    monkeypatch.setattr(subprocess_runner, "_scorer_process", None)
-    worker = worker_class(settings=_settings_on(redis_url))
+    worker = worker_class(settings=_settings_on(redis_url), readiness_file=readiness_file)
     worker.get_db_factory = MagicMock()
 
     async def start_log_and_stop() -> None:
@@ -134,8 +122,8 @@ def restored_logging() -> Iterator[None]:
         yield
 
 
-def _worker_on(redis_url: str) -> _DummyWorker:
-    worker = _DummyWorker(settings=_settings_on(redis_url))
+def _worker_on(redis_url: str, readiness_file: Path) -> _DummyWorker:
+    worker = _DummyWorker(settings=_settings_on(redis_url), readiness_file=readiness_file)
     worker.get_db_factory = MagicMock()
     return worker
 
@@ -149,26 +137,26 @@ async def _held_leases(redis_url: str) -> set[str]:
 
 
 def test_a_worker_holds_a_lease_from_its_start_until_its_shutdown(
-    restored_logging: None, redis_url: str,
+    restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
-    worker = _worker_on(redis_url)
+    worker = _worker_on(redis_url, readiness_file)
 
     async def start_and_stop() -> tuple[set[str], set[str]]:
-        await worker.on_startup(_ARQ_CTX)
+        await worker.start()
         held_while_running = await _held_leases(redis_url)
-        await worker.on_shutdown({})
+        await worker.stop()
         return held_while_running, await _held_leases(redis_url)
 
     assert _run(start_and_stop()) == ({worker.owner_id}, set())
 
 
 def test_a_worker_names_itself_on_its_jobs_with_the_generation_of_its_lease(
-    restored_logging: None, redis_url: str,
+    restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
-    worker = _worker_on(redis_url)
+    worker = _worker_on(redis_url, readiness_file)
 
     async def read_the_lease_while_running() -> str | None:
-        await worker.on_startup(_ARQ_CTX)
+        await worker.start()
         reader = create_async_redis(redis_url)
         try:
             return (await owner_leases(reader).state([worker.owner_id]))[
@@ -176,7 +164,7 @@ def test_a_worker_names_itself_on_its_jobs_with_the_generation_of_its_lease(
             ].generation
         finally:
             await reader.aclose()
-            await worker.on_shutdown({})
+            await worker.stop()
 
     generation = _run(read_the_lease_while_running())
 
@@ -186,22 +174,25 @@ def test_a_worker_names_itself_on_its_jobs_with_the_generation_of_its_lease(
 class _ServingWorker(_DummyWorker):
     """A worker whose ``run`` serves what its test names."""
 
-    def __init__(self, settings: Settings, *servings: Callable[[], Coroutine[None, None, None]]):
-        super().__init__(settings)
+    def __init__(
+        self, settings: Settings, readiness_file: Path,
+        *servings: Callable[[], Coroutine[None, None, None]],
+    ):
+        super().__init__(settings, readiness_file=readiness_file)
         self._servings = servings
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:
         return tuple(serving() for serving in self._servings)
 
 
-def _serving_worker_on(redis_url: str, *servings) -> _ServingWorker:
-    worker = _ServingWorker(_settings_on(redis_url), *servings)
+def _serving_worker_on(redis_url: str, readiness_file: Path, *servings) -> _ServingWorker:
+    worker = _ServingWorker(_settings_on(redis_url), readiness_file, *servings)
     worker.get_db_factory = MagicMock()
     return worker
 
 
 def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its_servings(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str,
+    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
 ) -> None:
     serving, held_while_stopping = asyncio.Event(), []
 
@@ -213,7 +204,7 @@ def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its
             held_while_stopping.append(await _held_leases(redis_url))
             raise
 
-    worker = _serving_worker_on(redis_url, serves_until_stopped)
+    worker = _serving_worker_on(redis_url, readiness_file, serves_until_stopped)
 
     async def run_and_stop() -> tuple[set[str], set[str]]:
         running = asyncio.create_task(worker.run())
@@ -229,7 +220,7 @@ def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its
 
 
 def test_a_serving_that_fails_ends_the_others_and_run_with_its_error_and_releases_the_lease(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str,
+    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
 ) -> None:
     other_was_cut = asyncio.Event()
 
@@ -244,7 +235,9 @@ def test_a_serving_that_fails_ends_the_others_and_run_with_its_error_and_release
         await asyncio.sleep(0)
         raise RuntimeError("the serving failed")
 
-    worker = _serving_worker_on(redis_url, serves_until_cut, fails_once_the_other_serves)
+    worker = _serving_worker_on(
+        redis_url, readiness_file, serves_until_cut, fails_once_the_other_serves,
+    )
 
     async def run_within_the_stop_bound() -> None:
         async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
@@ -263,68 +256,45 @@ def test_a_serving_that_fails_ends_the_others_and_run_with_its_error_and_release
 
 
 def test_a_worker_whose_database_cannot_open_holds_no_lease(
-    restored_logging: None, redis_url: str,
+    restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
-    worker = _worker_on(redis_url)
+    worker = _worker_on(redis_url, readiness_file)
     worker.get_db_factory = MagicMock(side_effect=OSError("the database is down"))
 
     async def start_and_read_the_leases() -> set[str]:
         with pytest.raises(OSError, match="the database is down"):
-            await worker.on_startup(_ARQ_CTX)
+            await worker.start()
         return await _held_leases(redis_url)
 
     assert _run(start_and_read_the_leases()) == set()
 
 
 def test_a_worker_whose_signal_has_no_worker_kind_fails_its_start_and_holds_no_lease(
-    restored_logging: None, redis_url: str,
+    restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
-    worker = _worker_on(redis_url)
+    worker = _worker_on(redis_url, readiness_file)
     worker.lease_kind = WorkerLivenessSignal.MODEL_EXECUTION
 
     async def start_and_read_the_leases() -> set[str]:
         with pytest.raises(KeyError):
-            await worker.on_startup(_ARQ_CTX)
+            await worker.start()
         return await _held_leases(redis_url)
 
     assert _run(start_and_read_the_leases()) == set()
 
 
 def test_a_shutdown_that_cannot_end_the_lease_still_ends(
-    restored_logging: None, redis_url: str,
+    restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url)
+        worker = _worker_on(proxy.url, readiness_file)
 
         async def start_and_stop_with_redis_cut() -> None:
-            await worker.on_startup(_ARQ_CTX)
+            await worker.start()
             proxy.cut()
-            await worker.on_shutdown({})
+            await worker.stop()
 
         _run(start_and_stop_with_redis_cut())
-
-
-def _arq_worker_of(settings_path: str, worker: _DummyWorker, redis_url: str) -> Worker:
-    """An arq worker with the real settings class's Redis connection, aimed at ``redis_url``."""
-    module_path, _, class_name = settings_path.rpartition(".")
-    settings_class = getattr(importlib.import_module(module_path), class_name)
-    server = build_arq_redis_settings(redis_url)
-    return Worker(
-        functions=[func(_answer, name="answer")],
-        on_startup=worker.on_startup,
-        redis_settings=replace(
-            settings_class.redis_settings,
-            host=server.host, port=server.port, database=server.database,
-            username=server.username, password=server.password,
-        ),
-        queue_name=settings_class.queue_name,
-        handle_signals=False,
-        poll_delay=0.1,
-    )
-
-
-async def _answer(_ctx) -> str:
-    return "answered"
 
 
 async def _lease_generation(redis_url: str, owner_id: str) -> str | None:
@@ -335,72 +305,86 @@ async def _lease_generation(redis_url: str, owner_id: str) -> str | None:
         await reader.aclose()
 
 
-@pytest.mark.parametrize("settings_path", WORKER_SETTINGS_PATHS)
+class _QueueServingWorker(_DummyWorker):
+    """A worker whose serving claims the rows put in its queue, as a claiming loop does."""
+
+    def __init__(self, settings: Settings, readiness_file: Path) -> None:
+        super().__init__(settings, readiness_file=readiness_file)
+        self.queued_rows: list[str] = []
+        self.claimed_rows: list[str] = []
+
+    def servings(self) -> tuple[Coroutine[None, None, None], ...]:
+        return (self._claim_queued_rows(),)
+
+    async def _claim_queued_rows(self) -> None:
+        while True:
+            if self.queued_rows:
+                self.claimed_rows.append(self.queued_rows.pop(0))
+            await asyncio.sleep(0.1)
+
+
+def _queue_serving_worker_on(redis_url: str, readiness_file: Path) -> _QueueServingWorker:
+    worker = _QueueServingWorker(_settings_on(redis_url), readiness_file)
+    worker.get_db_factory = MagicMock()
+    return worker
+
+
 def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
-    restored_logging: None, redis_url: str, settings_path: str,
+    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url)
+        worker = _queue_serving_worker_on(proxy.url, readiness_file)
 
-        async def cut_restore_and_enqueue() -> tuple[str, bool, str | None, str | None]:
-            arq_worker = _arq_worker_of(settings_path, worker, proxy.url)
-            serving = asyncio.create_task(arq_worker.main())
-            while (before := await _lease_generation(redis_url, worker.owner_id)) is None:
-                await asyncio.sleep(0.1)
-            proxy.refuse()
-            await asyncio.sleep(OWNER_LEASE_TTL_SECONDS + 2)
-            proxy.restore()
-            client = await create_pool(
-                build_arq_redis_settings(redis_url), default_queue_name=arq_worker.queue_name,
-            )
+        async def cut_restore_and_queue_a_row() -> tuple[bool, str | None, str | None, list[str]]:
+            running = asyncio.create_task(worker.run())
             try:
-                result = await (await client.enqueue_job("answer")).result(timeout=20)
-                still_serving = not serving.done()
+                while (before := await _lease_generation(redis_url, worker.owner_id)) is None:
+                    await asyncio.sleep(0.1)
+                proxy.refuse()
+                await asyncio.sleep(OWNER_LEASE_TTL_SECONDS + 2)
+                proxy.restore()
+                worker.queued_rows.append("row-after-the-outage")
                 async with asyncio.timeout(OWNER_LEASE_REFRESH_SECONDS * 2):
                     while (after := await _lease_generation(redis_url, worker.owner_id)) in (
                         None, before,
                     ):
                         await asyncio.sleep(0.2)
+                    while not worker.claimed_rows:
+                        await asyncio.sleep(0.1)
+                return not running.done(), before, after, worker.claimed_rows
             finally:
-                await client.aclose()
-                serving.cancel()
-                await asyncio.gather(serving, return_exceptions=True)
-                await worker.on_shutdown({})
-            return result, still_serving, before, after
+                os.kill(os.getpid(), signal.SIGTERM)
+                await asyncio.gather(running, return_exceptions=True)
 
-        result, still_serving, before, after = _run(cut_restore_and_enqueue())
+        still_serving, before, after, claimed = _run(cut_restore_and_queue_a_row())
 
-    assert (result, still_serving) == ("answered", True)
+    assert (still_serving, claimed) == (True, ["row-after-the-outage"])
     assert after != before
 
 
-@pytest.mark.parametrize("settings_path", WORKER_SETTINGS_PATHS)
 def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
-    restored_logging: None, redis_url: str, settings_path: str,
+    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
-        worker = _worker_on(proxy.url)
+        worker = _queue_serving_worker_on(proxy.url, readiness_file)
 
         async def stop_during_the_outage() -> float:
-            arq_worker = _arq_worker_of(settings_path, worker, proxy.url)
-            arq_worker.main_task = asyncio.create_task(arq_worker.main())
+            running = asyncio.create_task(worker.run())
             while await _lease_generation(redis_url, worker.owner_id) is None:
                 await asyncio.sleep(0.1)
             proxy.refuse()
             await asyncio.sleep(1)
             started = time.monotonic()
-            arq_worker.main_task.cancel()
-            await asyncio.gather(arq_worker.main_task, return_exceptions=True)
+            os.kill(os.getpid(), signal.SIGTERM)
             async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
-                with contextlib.suppress(Exception):
-                    await arq_worker.close()
+                await running
             return time.monotonic() - started
 
         assert _run(stop_during_the_outage()) < WORKER_STOP_BOUND_SECONDS
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:
-    _run(_DummyWorker().on_shutdown({}))
+    _run(_DummyWorker().stop())
 
 
 # ── audit_orphaned_files ──────────────────────────────────────────

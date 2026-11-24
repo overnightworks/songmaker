@@ -239,7 +239,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "scripts/music_worker_readiness.py"]
+      test: ["CMD", "/app/.venv/bin/python", "scripts/worker_readiness.py"]
       interval: 30s
       timeout: 5s
       start_period: 600s
@@ -321,13 +321,12 @@ services:
     build:
       context: .
       dockerfile: docker/scoring-worker.Dockerfile
-    command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "scoring"]
+      test: ["CMD", "/app/.venv/bin/python", "scripts/worker_readiness.py"]
       interval: 30s
       timeout: 5s
       start_period: 600s

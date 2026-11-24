@@ -1,4 +1,4 @@
-"""The music worker's readiness file and lease family, and the readers of its roster."""
+"""The workers' readiness file and lease families, and the readers of their rosters."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from logline.testing import configured
 from tandem import StoreError
 
 import songmaker_cli.arq_pool as arq_pool
-from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
+from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import (
     WORKER_KINDS,
@@ -31,18 +31,13 @@ OWNER_ID = "owner-of-this-start"
 THIS_START_TICKS = "4242"
 EARLIER_START_TICKS = "4141"
 Observation = tuple[bool, set[str]]
-"""Whether the worker reads ready, and who holds a music-worker lease."""
+"""Whether the worker reads ready, and who holds a lease of its kind."""
 
 
 @pytest.fixture
 def restored_logging() -> Iterator[None]:
     with configured("restored-after-the-test"):
         yield
-
-
-@pytest.fixture
-def readiness_file(tmp_path: Path) -> Path:
-    return tmp_path / "readiness"
 
 
 def _stat_line(command_name: str, start_ticks: str) -> str:
@@ -120,10 +115,19 @@ def test_a_worker_without_a_readiness_file_is_not_ready(
     assert asyncio.run(read_readiness()) is False
 
 
-def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
-    restored_logging: None, redis_url: str, readiness_file: Path,
+@pytest.mark.parametrize(
+    ("worker_class", "kind"),
+    [
+        (MusicWorker, WorkerLivenessSignal.MUSIC),
+        (ScoringWorker, WorkerLivenessSignal.SCORING),
+    ],
+    ids=["music", "scoring"],
+)
+def test_a_running_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
+    restored_logging: None, installed_scorer_restored: None, redis_url: str,
+    readiness_file: Path, worker_class, kind: WorkerLivenessSignal,
 ) -> None:
-    worker = MusicWorker(
+    worker = worker_class(
         Settings(
             database_url="postgresql://example", redis_url=redis_url,
             session_secret="session-secret", songmaker_internal_token="internal-token",
@@ -139,7 +143,7 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
             ready = await worker_is_ready(
                 owner_leases(reader), readiness_file, pid_one_start_ticks(),
             )
-            roster = await worker_kind_leases(reader, WorkerLivenessSignal.MUSIC).live()
+            roster = await worker_kind_leases(reader, kind).live()
             return ready, set(roster.holders)
 
         try:
@@ -188,18 +192,6 @@ def test_a_live_holder_makes_the_worker_healthy_and_none_does_not(
             await arq_pool.close_arq_pool()
 
     assert asyncio.run(healthy_without_and_with_a_holder()) == (False, True)
-
-
-def test_arqs_health_key_does_not_make_the_scoring_worker_healthy(web_redis: str) -> None:
-    async def healthy_with_only_the_health_key() -> bool:
-        pool = await arq_pool.init_arq_pool()
-        try:
-            await pool.set(ARQ_SCORING_HEALTH_KEY, 1)
-            return await arq_pool.is_scoring_worker_healthy()
-        finally:
-            await arq_pool.close_arq_pool()
-
-    assert asyncio.run(healthy_with_only_the_health_key()) is False
 
 
 def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(

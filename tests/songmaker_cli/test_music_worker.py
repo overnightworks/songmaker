@@ -318,7 +318,7 @@ def test_the_music_worker_has_a_body_for_every_cron() -> None:
 
 
 def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
-    redis_url, tmp_path, stop_signal_handlers,
+    redis_url, readiness_file, stop_signal_handlers,
 ) -> None:
     runs: list[str] = []
 
@@ -331,7 +331,7 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
 
     worker = RecordingMusicWorker(
         _settings().model_copy(update={"redis_url": redis_url}),
-        readiness_file=tmp_path / "readiness",
+        readiness_file=readiness_file,
     )
     worker.get_db_factory = MagicMock()
     worker.claim_next_job = MagicMock(return_value=None)
@@ -358,10 +358,11 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
     assert window.without_the_runs_its_ticks_explain(ran, once_each) == once_each
 
 
-def test_the_music_worker_module_imports_no_arq() -> None:
+@pytest.mark.parametrize("module", ["music_worker", "scoring_worker"])
+def test_a_worker_module_imports_no_arq(module: str) -> None:
     imported = subprocess.run(
         [sys.executable, "-c",
-         "import sys, songmaker_cli.music_worker;"
+         f"import sys, songmaker_cli.{module};"
          " print(sorted(name for name in sys.modules if name.split('.')[0] == 'arq'))"],
         capture_output=True, text=True, check=True,
     )
