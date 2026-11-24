@@ -73,13 +73,12 @@ def test_a_configured_gateway_without_the_ai_group_stops_composition_under_its_k
     tmp_path, pg_factory, monkeypatch,
 ):
     monkeypatch.delenv("REALM_AI_GROUP")
+    app = _app(tmp_path, pg_factory)
+    settings = Settings(agent=_agent_settings(tmp_path))
+    realm = RealmSettings()
 
     with pytest.raises(ValueError, match="REALM_AI_GROUP is required"):
-        compose_agent_backend(
-            _app(tmp_path, pg_factory),
-            Settings(agent=_agent_settings(tmp_path)),
-            RealmSettings(),
-        )
+        compose_agent_backend(app, settings, realm)
 
 
 def test_a_set_agent_composes_one_gateway_backend_that_serves_every_turn(tmp_path, pg_factory):
