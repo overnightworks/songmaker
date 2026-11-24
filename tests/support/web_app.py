@@ -185,16 +185,18 @@ def install_app_context(app, ctx) -> None:
 
 
 def make_app_context(
-    *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis,
+    *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis=None,
     async_redis=None, wake_redis=None, signing_key: bytes = TEST_SECRET,
     object_store: ObjectStore | None = None,
 ) -> AppContext:
-    """A context on fakes for the asyncio side, over the caller's database and sync Redis.
+    """A context on fakes for the asyncio side, over the caller's database and Redis fakes.
 
     ``wake_redis`` is the client that follows wakes; without one it is the ``async_redis`` fake,
     so a wake published on the fake reaches the follower. A test that follows wakes over a real
     server passes a ``follows_wakes`` client.
     """
+    if redis is None:
+        redis = make_fake_redis()
     if async_redis is None:
         async_redis = make_fake_async_redis()
     ctx = AppContext(

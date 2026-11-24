@@ -156,9 +156,7 @@ def _sveltekit_app_client(tmp_path: Path, factory, assets: dict[str, bytes]) -> 
     with factory() as session:
         session.commit()
 
-    ctx = make_app_context(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=factory, audio_dir=audio_dir, data_dir=data_dir)
     return web_client(create_app(audio_dir, data_dir, project_root, ctx=ctx))
 
 
@@ -221,9 +219,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path, pg_factory) -> Non
         session.add(admin)
         session.commit()
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     from support.web_app import seed_session
@@ -276,9 +272,7 @@ def auth_server_app(tmp_path: Path, pg_factory):
         owner_id = owner.id
         other_id = other.id
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     return client, owner_sid, other_sid, DEFAULT_SESSION_COOKIE_NAME, owner_id, other_id
@@ -320,9 +314,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
     with pg_factory() as session:
         assert session.query(UserSession).count() == 1
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
     hold_a_music_lease(ctx.async_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
@@ -505,9 +497,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings, pg_
 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com,testserver"}):
         get_settings.cache_clear()
-        ctx = make_app_context(
-            db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-        )
+        ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = web_client(app, cookies={})
         from support.web_app import seed_session
@@ -861,9 +851,7 @@ def test_cors_wildcard_or_list_raises_at_startup(
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text(BUILT_SHELL)
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
 
     with patch.dict("os.environ", {"CORS_ORIGIN": cors_origin}):
         with pytest.raises(ValueError, match="Invalid CORS_ORIGIN"):
@@ -884,9 +872,7 @@ def test_cors_specific_origin(tmp_path: Path, pg_factory, fresh_settings) -> Non
     with factory() as session:
         session.commit()
 
-    ctx = make_app_context(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=factory, audio_dir=audio_dir, data_dir=data_dir)
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -928,9 +914,7 @@ def test_wildcard_allowed_host_raises_at_startup(
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text(BUILT_SHELL)
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": allowed_hosts}):
         get_settings.cache_clear()
@@ -986,9 +970,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch, pg_factory, fresh_settin
     with factory() as session:
         session.commit()
 
-    ctx = make_app_context(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=factory, audio_dir=audio_dir, data_dir=data_dir)
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
     for _ in range(3):
@@ -1014,9 +996,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch, pg_factory
     with pg_factory() as session:
         session.commit()
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
     for _ in range(5):
@@ -1047,9 +1027,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path, pg_factory) -> None:
         session.add(admin)
         session.commit()
 
-    ctx = make_app_context(
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     from support.web_app import seed_session
@@ -1687,9 +1665,7 @@ def _pwa_test_app(tmp_path: Path, factory, *, create_files: bool) -> TestClient:
         (sk_dir / "icon-192.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         (sk_dir / "icon-512.png").write_bytes(b"\x89PNG\r\n\x1a\n")
 
-    ctx = make_app_context(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
-    )
+    ctx = make_app_context(db=factory, audio_dir=audio_dir, data_dir=data_dir)
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     return web_client(app)
 
