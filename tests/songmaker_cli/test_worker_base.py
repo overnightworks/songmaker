@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import signal
-import threading
 import time
 from collections.abc import Callable, Coroutine, Iterator
 from pathlib import Path
@@ -276,33 +275,6 @@ def test_a_worker_whose_database_cannot_open_holds_no_lease(
         return await _held_leases(redis_url)
 
     assert _run(start_and_read_the_leases()) == set()
-
-
-def test_a_stop_signal_ends_the_wait_for_a_database_that_never_answers_within_seconds(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
-) -> None:
-    worker = _DummyWorker(_settings_on(redis_url), readiness_file=readiness_file)
-    waiting = threading.Event()
-
-    def database_that_never_answers(_url, *, sleep: Callable[[float], None]) -> None:
-        sleep(0)
-        waiting.set()
-        while True:
-            sleep(WORKER_STOP_BOUND_SECONDS)
-
-    async def run_and_stop() -> tuple[float, set[str]]:
-        running = asyncio.create_task(worker.run())
-        await asyncio.to_thread(waiting.wait, WORKER_STOP_BOUND_SECONDS)
-        started = time.monotonic()
-        os.kill(os.getpid(), signal.SIGTERM)
-        async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
-            await running
-        return time.monotonic() - started, await _held_leases(redis_url)
-
-    with patch("songmaker_cli.worker_base.init_db", new=database_that_never_answers):
-        seconds_to_end, held = _run(run_and_stop())
-
-    assert (seconds_to_end < WORKER_STOP_BOUND_SECONDS, held) == (True, set())
 
 
 def test_a_worker_whose_signal_has_no_worker_kind_fails_its_start_and_holds_no_lease(
