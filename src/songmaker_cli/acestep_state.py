@@ -13,19 +13,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import Redis
-from redis.exceptions import RedisError
-from tandem import Liveness, Locks, Script, StoreError
+from tandem import Liveness, LockLost, Locks, Script
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX
-
-log = logging.getLogger(__name__)
 
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
@@ -165,15 +161,44 @@ class DownloadAlreadyRunning(Exception):
         self.job_id = job_id
 
 
-async def read_download_in_progress(pool: Redis, mode: str) -> str | None:
-    """The job that downloads ``mode``, from the label its holder keeps beside the lock.
+# KEYS: the label, then the download locks' epoch, expiry and generation keys; ARGV: the lock span
+# in ms and the mode. Replies {'held', label or nil} while the lock is held, {'unknown'} while a
+# Redis restart may have lost it, else {'free'}.
+READ_DOWNLOAD_STATE_SCRIPT = """
+local keys = {epoch = KEYS[2], expiry = KEYS[3], generation = KEYS[4]}
+local state = tandem.lock_state(keys, ARGV[2], ARGV[1])
+if not state then return {'free'} end
+if state[1] == 'held' then return {'held', redis.call('GET', KEYS[1])} end
+return {'unknown'}
+"""
+_LIVENESS_OF_REPLY = {
+    "held": Liveness.ALIVE, "unknown": Liveness.UNKNOWN, "free": Liveness.GONE,
+}
 
-    A lock names no holder, so the holder writes its job id under ``download_key`` for as long as
-    it extends the lock. The label also reads as in progress for a holder of the previous release,
-    which wrote the same key.
+
+async def _read_download_state(pool: Redis, mode: str) -> tuple[Liveness, str | None]:
+    """The liveness of the mode's lock and, while it is held, the label beside it, in one read."""
+    locks = download_locks(pool)
+    reply = cast(
+        "list[bytes | str | None]",
+        await Script(pool, READ_DOWNLOAD_STATE_SCRIPT).run(
+            [download_key(mode), locks.keys.epoch, locks.keys.expiry, locks.keys.generation],
+            [int(locks.lasts.total_seconds() * 1000), mode],
+        ),
+    )
+    liveness = _LIVENESS_OF_REPLY[cast("str", decode_redis_text(reply[0]))]
+    label = decode_redis_text(reply[1]) if liveness is Liveness.ALIVE else None
+    return liveness, label
+
+
+async def read_download_in_progress(pool: Redis, mode: str) -> str | None:
+    """The job that downloads ``mode``: its holder's label, read only while the lock is held.
+
+    A lock names no holder, so the holder writes its job id under ``download_key`` as the first
+    statement of its hold and deletes it after the hold ends. A label whose lock is free or unknown
+    is a crashed holder's and means nothing; the next holder overwrites it.
     """
-    raw = await pool.get(download_key(mode))
-    return decode_redis_text(raw)
+    return (await _read_download_state(pool, mode))[1]
 
 
 async def _acquire_download_lock(pool: Redis, locks: Locks, mode: str) -> str:
@@ -183,8 +208,9 @@ async def _acquire_download_lock(pool: Redis, locks: Locks, mode: str) -> str:
         generation = await locks.acquire(mode)
         if generation is not None:
             return generation
-        if (await locks.state(mode)).liveness is Liveness.ALIVE:
-            raise DownloadAlreadyRunning(await read_download_in_progress(pool, mode))
+        liveness, label = await _read_download_state(pool, mode)
+        if liveness is Liveness.ALIVE:
+            raise DownloadAlreadyRunning(label)
         await asyncio.sleep(DOWNLOAD_LOCK_POLL_SECONDS)
     raise RuntimeError(f"The download lock of {mode} stayed unsettled after a Redis restart")
 
@@ -195,30 +221,6 @@ class DownloadLockLost(Exception):
     def __init__(self, mode: str) -> None:
         super().__init__(mode)
         self.mode = mode
-
-
-async def _keep_download_lock(
-    pool: Redis, locks: Locks, mode: str, job_id: str, generation: str,
-    on_lost: Callable[[], None],
-) -> None:
-    """Extend the lock and its label until cancelled; once it is lost, call ``on_lost`` every span.
-
-    A cancel can be absorbed by a cancel scope of the block that it races, so the stop repeats
-    until the block ends and cancels this task.
-    """
-    label_seconds = int(DOWNLOAD_LOCK_LASTS.total_seconds())
-    while True:
-        await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
-        try:
-            if not await locks.extend(mode, generation):
-                break
-            await pool.set(download_key(mode), job_id, ex=label_seconds)
-        except (StoreError, RedisError):
-            log.warning("Could not extend the download lock of %s", mode, exc_info=True)
-    log.warning("The download lock of %s was lost during its download", mode)
-    while True:
-        on_lost()
-        await asyncio.sleep(DOWNLOAD_LOCK_EXTEND_EVERY.total_seconds())
 
 
 # Deletes the label only while it still names the job that wrote it.
@@ -232,36 +234,22 @@ return redis.call('DEL', KEYS[1])
 async def single_flight_download(pool: Redis, mode: str, job_id: str) -> AsyncIterator[None]:
     """Hold the download lock of ``mode`` for the block, or raise ``DownloadAlreadyRunning``.
 
-    A block whose lock is lost is cancelled and raises ``DownloadLockLost``, leaving the lock and
-    the label to the job that holds them now. The transfer already running on the ACE-Step worker
-    is not cancelled; the worker joins the next download of the mode to it.
+    tandem keeps the lock while the block runs. A block whose lock is lost is cancelled and raises
+    ``DownloadLockLost``, leaving the lock and the label to the job that holds them now. The
+    transfer already running on the ACE-Step worker is not cancelled; the worker joins the next
+    download of the mode to it.
+
+    The label is written without expiry as the first statement of the hold, so a lock that was
+    lost at the entry leaves none, and deleted after the hold has ended, never inside it: after a
+    loss tandem cancels the block repeatedly until it ends, which could cut a delete inside.
     """
     locks = download_locks(pool)
     generation = await _acquire_download_lock(pool, locks, mode)
-    holder = asyncio.current_task()
-    stops = 0
-
-    def stop_the_download() -> None:
-        nonlocal stops
-        stops += 1
-        holder.cancel()
-
-    keeper = asyncio.create_task(
-        _keep_download_lock(pool, locks, mode, job_id, generation, stop_the_download),
-    )
     try:
-        await pool.set(
-            download_key(mode), job_id, ex=int(DOWNLOAD_LOCK_LASTS.total_seconds()),
-        )
-        yield
-    except asyncio.CancelledError:  # NOSONAR(S7497) Own cancel becomes DownloadLockLost.
-        for _ in range(stops):
-            holder.uncancel()
-        if stops and holder.cancelling() == 0:
-            raise DownloadLockLost(mode) from None
-        raise
+        async with locks.held(mode, generation, every=DOWNLOAD_LOCK_EXTEND_EVERY):
+            await pool.set(download_key(mode), job_id)
+            yield
+    except LockLost:
+        raise DownloadLockLost(mode) from None
     finally:
-        keeper.cancel()
-        await asyncio.gather(keeper, return_exceptions=True)
         await pool.eval(DELETE_DOWNLOAD_LABEL_SCRIPT, 1, download_key(mode), job_id)
-        await locks.release(mode, generation)
