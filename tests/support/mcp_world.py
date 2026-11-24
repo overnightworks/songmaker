@@ -55,7 +55,6 @@ METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
 AGENT_ENVIRONMENT = {
     "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
-    "AGENT__API_GROUP": "/apps/songmaker/api",
 }
 MCP_CLIENT_ENVIRONMENT = {"REALM_MCP_CLIENT_ID": AGENTS_CLIENT, "REALM_MCP_SCOPE": MCP_SCOPE}
 MCP_ENVIRONMENT = {**MCP_CLIENT_ENVIRONMENT, "REALM_AGENT_GROUP": AGENT_GROUP}

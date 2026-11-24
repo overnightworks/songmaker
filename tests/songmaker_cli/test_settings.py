@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-from support.realm import ADMIN_GROUP, AGENT_GROUP, CLIENT_ID, LOGIN_GROUP, MCP_GROUP
+from support.realm import ADMIN_GROUP, AGENT_GROUP, AI_GROUP, CLIENT_ID, LOGIN_GROUP, MCP_GROUP
 from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.api_models.songs import generation_expiry
@@ -281,7 +281,6 @@ def test_a_malformed_public_base_url_fails_loud_and_names_the_value(malformed: s
 _AGENT_ENVIRONMENT = {
     "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
-    "AGENT__API_GROUP": "/apps/songmaker/api",
 }
 
 
@@ -302,14 +301,16 @@ def test_a_fully_set_agent_is_read_from_the_nested_environment(
     agent = Settings(**_required_settings()).agent
 
     assert agent is not None
-    assert (agent.gateway.origin, str(agent.gateway.key_file), agent.api_group) == (
+    assert (agent.gateway.origin, str(agent.gateway.key_file)) == (
         _AGENT_ENVIRONMENT["AGENT__GATEWAY__ORIGIN"],
         _AGENT_ENVIRONMENT["AGENT__GATEWAY__KEY_FILE"],
-        _AGENT_ENVIRONMENT["AGENT__API_GROUP"],
     )
 
 
-_GROUP_KEYS = ("REALM_LOGIN_GROUP", "REALM_ADMIN_GROUP", "REALM_MCP_GROUP", "REALM_AGENT_GROUP")
+_GROUP_KEYS = (
+    "REALM_LOGIN_GROUP", "REALM_ADMIN_GROUP", "REALM_MCP_GROUP", "REALM_AGENT_GROUP",
+    "REALM_AI_GROUP",
+)
 
 
 def test_the_realm_names_are_read_from_the_realm_keys(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -323,7 +324,8 @@ def test_the_realm_names_are_read_from_the_realm_keys(monkeypatch: pytest.Monkey
         str(realm.admin_group),
         str(realm.mcp_group),
         str(realm.agent_group),
-    ) == (CLIENT_ID, LOGIN_GROUP, ADMIN_GROUP, MCP_GROUP, AGENT_GROUP)
+        str(realm.ai_group),
+    ) == (CLIENT_ID, LOGIN_GROUP, ADMIN_GROUP, MCP_GROUP, AGENT_GROUP, AI_GROUP)
 
 
 def test_an_agent_group_without_the_mcp_client_is_unused_and_stays_off(
@@ -389,11 +391,15 @@ def test_an_admin_group_outside_the_login_group_stops_settings_without_echoing_i
     [
         {"AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000"},
         {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__COLOUR": "blue"},
+        {**_AGENT_ENVIRONMENT, "AGENT__API_GROUP": AI_GROUP},
         {name: "" for name in _AGENT_ENVIRONMENT},
         {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__CA_FILE": ""},
         {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__CA_FILE": "/run/secrets/ca.pem"},
     ],
-    ids=["partly-set", "unknown-key", "all-empty", "empty-ca-file", "ca-file-for-http"],
+    ids=[
+        "partly-set", "unknown-key", "leftover-api-group", "all-empty", "empty-ca-file",
+        "ca-file-for-http",
+    ],
 )
 def test_a_malformed_agent_value_stops_startup(
     monkeypatch: pytest.MonkeyPatch, environment: dict[str, str],

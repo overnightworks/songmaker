@@ -357,7 +357,7 @@ def create_app(
     from songmaker_cli.redis_client import RedisHttpMetrics
 
     settings = get_settings()
-    realm = RealmSettings()
+    realm = app.state.realm = RealmSettings()
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     auth = build_web_auth(ctx, settings, realm, script_hashes, issuer_calls, wall_clock)
     app.state.web_auth = auth
@@ -486,7 +486,7 @@ def run_server(
     app = create_app(audio_dir, data_dir, project_root)
     from songmaker_cli.agent.backend import compose_agent_backend
 
-    compose_agent_backend(app, settings)
+    compose_agent_backend(app, settings, app.state.realm)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
 

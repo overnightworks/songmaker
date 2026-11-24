@@ -1024,7 +1024,7 @@ starts no job. The turn then runs as a task of its own through
    user's id, the role is the account's role, and the groups come from a fresh
    refresh grant (`current_groups` through `DatabaseSessionTransaction`). The
    client checks the role against the agent file's `appRoles` and the groups
-   against `AGENT__API_GROUP` before it reads the key file.
+   against `REALM_AI_GROUP` before it reads the key file.
 3. It runs `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    its `model`, `maxDurationSeconds` and `maxToolCalls`) through
@@ -1135,11 +1135,13 @@ describes the Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
 issuer, client id from `REALM_CLIENT_ID`, client secret read from the file `OIDC_CLIENT_SECRET_FILE`,
 redirect addresses from `PUBLIC_BASE_URL`) and
 `build_admission_config` binds its issuer to the login and admin groups from `REALM_LOGIN_GROUP` and
-`REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names. The four group names
-(`REALM_LOGIN_GROUP`, `REALM_ADMIN_GROUP`, `REALM_MCP_GROUP`, `REALM_AGENT_GROUP`) are webauth
-`GroupPath` values; the client ids and the MCP scope are plain strings. `REALM_AGENT_GROUP` is
-parsed and validated even while MCP is off, and required only while it is on. They are built once in
-`server.create_app`, so the workers, which never create the web app, start without the realm's
+`REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names. The five group names
+(`REALM_LOGIN_GROUP`, `REALM_ADMIN_GROUP`, `REALM_MCP_GROUP`, `REALM_AGENT_GROUP`,
+`REALM_AI_GROUP`) are webauth `GroupPath` values; the client ids and the MCP scope are plain
+strings. `REALM_AGENT_GROUP` is parsed and validated even while MCP is off, and required only while
+it is on; `REALM_AI_GROUP` is required only once the AI gateway is configured, when
+`compose_agent_backend` builds the agents library's `AgentConfig` from the gateway and that group.
+They are built once in `server.create_app`, so the workers, which never create the web app, start without the realm's
 settings. The call builds the relying party itself and keeps the handle on `app.state.web_auth`.
 `GET /login/oidc` starts the login; `GET /auth/callback`
 writes the account and the session in one `DatabaseSignInTransaction` entry (a fresh database

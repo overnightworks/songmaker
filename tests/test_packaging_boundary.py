@@ -25,7 +25,7 @@ from support.compose_config import run_compose_config
 from support.dockerfile_stages import dockerfile_instructions, final_stage_instructions
 from support.repository_root import REPOSITORY_ROOT
 
-from songmaker_cli.settings import Settings
+from songmaker_cli.settings import RealmSettings, Settings
 
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"
@@ -759,20 +759,20 @@ def test_the_web_gateway_key_file_is_where_compose_mounts_the_gateway_key(
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
-def test_settings_accept_the_agent_the_web_service_is_rendered_with(
+def test_settings_accept_the_gateway_and_its_group_the_web_service_is_rendered_with(
     compose_files: tuple[str, ...], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     web_environment = _rendered_test_stack_services(compose_files)["songmaker-web"]["environment"]
     for name, value in web_environment.items():
-        if name.startswith("AGENT__"):
+        if name.startswith(("AGENT__", "REALM_")):
             monkeypatch.setenv(name, value)
 
     settings = Settings(
         _env_file=None, database_url="postgresql://x", redis_url="redis://x",
         session_secret="s", songmaker_internal_token="t",
     )
-
     assert settings.agent is not None
+    RealmSettings().require_ai_group()
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())

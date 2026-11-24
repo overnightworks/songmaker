@@ -163,7 +163,6 @@ services:
       # The co-writer's gateway; hal owns these values (its docs/agent-service.md, "An app's side").
       AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
       AGENT__GATEWAY__KEY_FILE: /run/secrets/gateway_key
-      AGENT__API_GROUP: /services/agent-service/api
       # The realm names, under the platform's REALM_ keys; the MCP endpoint stays off without
       # REALM_MCP_CLIENT_ID and REALM_MCP_SCOPE.
       REALM_CLIENT_ID: ${REALM_CLIENT_ID:-songmaker}
@@ -171,6 +170,8 @@ services:
       REALM_ADMIN_GROUP: /apps/songmaker/admin
       REALM_MCP_GROUP: /apps/songmaker/mcp
       REALM_AGENT_GROUP: /agents
+      # The group that admits to the gateway above.
+      REALM_AI_GROUP: /services/agent-service/api
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       TOKEN_CLIENTS: ${TOKEN_CLIENTS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
