@@ -23,6 +23,7 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from support.compose_config import run_compose_config
 from support.dockerfile_stages import dockerfile_instructions, final_stage_instructions
+from support.realm import REALM_ENVIRONMENT
 from support.repository_root import REPOSITORY_ROOT
 
 from songmaker_cli.settings import RealmSettings, Settings
@@ -763,6 +764,8 @@ def test_settings_accept_the_gateway_and_its_group_the_web_service_is_rendered_w
     compose_files: tuple[str, ...], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     web_environment = _rendered_test_stack_services(compose_files)["songmaker-web"]["environment"]
+    for name in REALM_ENVIRONMENT:
+        monkeypatch.delenv(name, raising=False)
     for name, value in web_environment.items():
         if name.startswith(("AGENT__", "REALM_")):
             monkeypatch.setenv(name, value)
