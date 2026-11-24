@@ -13,13 +13,16 @@ from agents.tools import Principal
 from fastapi import FastAPI
 from support.admin_client import build_admin_client
 from support.cowriter_gateway import agent_config, attach_cowriter_gateway, closed_port_origin
-from support.web_app import make_router_ctx
+from support.realm import LOGIN_GROUP
+from support.web_app import make_authenticated_user, make_router_ctx
 
-from songmaker_cli.agent.backend import compose_agent_backend
+from songmaker_cli.agent.backend import TurnCaller, compose_agent_backend, cover_admission
+from songmaker_cli.agent.settings import AgentSettings
 from songmaker_cli.agent.tools import cowriter_hand_tools, cowriter_tool_declarations
+from songmaker_cli.api_models import AgentProblem
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS
 from songmaker_cli.db.models import User
-from songmaker_cli.settings import Settings
+from songmaker_cli.settings import RealmSettings, Settings
 
 _PERSON_FIELDS = ("user", "owner", "created_by", "principal", "sub")
 
@@ -50,12 +53,32 @@ def _app(tmp_path, pg_factory) -> FastAPI:
     return app
 
 
-def test_an_unset_agent_composes_no_backend(tmp_path, pg_factory):
+def _agent_settings(directory) -> AgentSettings:
+    gateway = agent_config(directory, origin=closed_port_origin()).gateway
+    return AgentSettings(gateway=gateway)
+
+
+def test_an_unset_agent_composes_no_backend_and_needs_no_ai_group(
+    tmp_path, pg_factory, monkeypatch,
+):
+    monkeypatch.delenv("REALM_AI_GROUP")
     app = _app(tmp_path, pg_factory)
 
-    compose_agent_backend(app, Settings())
+    compose_agent_backend(app, Settings(), RealmSettings())
 
-    assert app.state.agent_backend is None
+    assert (app.state.agent_backend, app.state.agent_api_group) == (None, None)
+
+
+def test_a_configured_gateway_without_the_ai_group_stops_composition_under_its_key(
+    tmp_path, pg_factory, monkeypatch,
+):
+    monkeypatch.delenv("REALM_AI_GROUP")
+    app = _app(tmp_path, pg_factory)
+    settings = Settings(agent=_agent_settings(tmp_path))
+    realm = RealmSettings()
+
+    with pytest.raises(ValueError, match="REALM_AI_GROUP is required"):
+        compose_agent_backend(app, settings, realm)
 
 
 def test_a_set_agent_composes_one_gateway_backend_that_serves_every_turn(tmp_path, pg_factory):
@@ -68,8 +91,7 @@ def test_a_set_agent_composes_one_gateway_backend_that_serves_every_turn(tmp_pat
     )
     attach_cowriter_gateway(client, factory, tmp_path, "u-test")
     app = client.app
-    agent = agent_config(tmp_path, origin=closed_port_origin())
-    compose_agent_backend(app, Settings(agent=agent))
+    compose_agent_backend(app, Settings(agent=_agent_settings(tmp_path)), RealmSettings())
     composed = app.state.agent_backend
 
     first = client.post("/api/chat/turn", json={"message": "hello"})
@@ -78,6 +100,42 @@ def test_a_set_agent_composes_one_gateway_backend_that_serves_every_turn(tmp_pat
     assert isinstance(composed, GatewayBackend)
     assert app.state.agent_backend is composed
     assert [_problem_frame(first), _problem_frame(second)] == [(503, "unavailable")] * 2
+
+
+@pytest.mark.parametrize(
+    ("in_ai_group", "turn_problem", "cover_problem"),
+    [
+        (True, (503, "unavailable"), None),
+        (False, (403, "not_enabled"), AgentProblem.NOT_ENABLED),
+    ],
+    ids=["inside-the-realm-ai-group", "outside-the-realm-ai-group"],
+)
+def test_the_group_a_caller_is_checked_against_is_the_realm_ai_group(
+    tmp_path, pg_factory, in_ai_group, turn_problem, cover_problem,
+):
+    ai_group = "/services/litellm"
+    groups = (LOGIN_GROUP, ai_group) if in_ai_group else (LOGIN_GROUP,)
+    client, factory = build_admin_client(
+        tmp_path,
+        lambda session: session.add(User(id="u-test", username="u-test", role="admin")),
+        user_id="u-test",
+        username="u-test",
+        factory=pg_factory,
+    )
+    stack = attach_cowriter_gateway(client, factory, tmp_path, "u-test", groups=groups)
+    compose_agent_backend(
+        client.app,
+        Settings(agent=_agent_settings(tmp_path)),
+        RealmSettings(REALM_AI_GROUP=ai_group),
+    )
+
+    turn = _problem_frame(client.post("/api/chat/turn", json={"message": "hello"}))
+    admission = cover_admission(
+        TurnCaller(client.app, stack.session_id, make_authenticated_user("u-test")),
+    )
+
+    assert turn == turn_problem
+    assert getattr(admission, "problem", None) == cover_problem
 
 
 def _problem_frame(response) -> tuple[int, str]:

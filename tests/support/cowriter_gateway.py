@@ -24,35 +24,34 @@ from agents.agent_file import TurnRequest
 from agents.backend import AgentBackend, TurnEvent, TurnPerson, TurnStopped
 from agents.backend.fake_gateway import FakeGateway, Reply, completion
 from agents.backend.gateway import GatewayBackend
-from agents.config import ChatGateway
+from agents.config import AgentConfig, ChatGateway
 from agents.turn_events import AssistantTextEvent, FinalEvent
 from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
+from support.realm import AI_GROUP
 from support.session_ids import a_session_id
 from support.web_app import issued_cookies
 
-from songmaker_cli.agent.settings import AgentSettings
 from songmaker_cli.agent.tools import cowriter_hand_tools
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
-API_GROUP = "/apps/songmaker/api"
 A_REFRESH_TOKEN = "fake-refresh-token"  # noqa: S105
 GATEWAY_ORIGIN = "http://gateway.test:4000"
 _KEY_FILE_NAME = "gateway.key"
 _DUMMY_KEY = "dummy-key-for-tests"
-MEMBER_GROUPS = ("/apps/songmaker", API_GROUP)
+MEMBER_GROUPS = ("/apps/songmaker", AI_GROUP)
 
 Behavior = Callable[[TurnRequest, TurnPerson], AsyncGenerator[TurnEvent, None]]
 
 
-def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentSettings:
-    """The ``agent`` setting for a gateway at ``origin``, its dummy key written in ``directory``."""
+def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentConfig:
+    """The library's config for a gateway at ``origin``, its dummy key written in ``directory``."""
     key_file = directory / _KEY_FILE_NAME
     key_file.write_text(_DUMMY_KEY + "\n", encoding="ascii")
-    return AgentSettings(
+    return AgentConfig(
         gateway=ChatGateway(origin=origin, key_file=key_file),
-        api_group=API_GROUP,
+        api_group=AI_GROUP,
     )
 
 
@@ -181,7 +180,7 @@ class CowriterStack:
     app: object
     issuer: FakeIssuer
     session_id: str
-    config: AgentSettings
+    config: AgentConfig
     turns: list[RecordedTurn] = field(default_factory=list)
     gateways: list[FakeGateway] = field(default_factory=list)
 
