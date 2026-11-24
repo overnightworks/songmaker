@@ -100,7 +100,7 @@ def installed_scorer_restored() -> Iterator[None]:
 
 
 @pytest.fixture
-def scorer_requests(installed_scorer_restored: None) -> Iterator[MagicMock]:
+def scorer_requests(installed_scorer_restored: None) -> MagicMock:
     """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
 
     It answers every request with an empty result; the scorer installed before is back after.
@@ -108,4 +108,4 @@ def scorer_requests(installed_scorer_restored: None) -> Iterator[MagicMock]:
     scorer = MagicMock()
     scorer.score.return_value = SongScores()
     set_scorer_process(scorer)
-    yield scorer.score
+    return scorer.score
