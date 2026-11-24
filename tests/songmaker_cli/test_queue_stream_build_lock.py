@@ -14,8 +14,9 @@ import anyio
 import pytest
 from anyio import from_thread
 from anyio.from_thread import start_blocking_portal
-from support.redis_clock import redis_ms, until, until_redis_ms
+from support.redis_clock import until, until_redis_has_passed
 from support.redis_server import lose_everything, settle_the_real_servers_epoch
+from redis.asyncio import Redis
 from tandem import Locks
 
 from songmaker_cli import queue_stream_build_lock as build_lock_module
@@ -37,9 +38,9 @@ def short_build_lock(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _locks(redis_url: str) -> Locks:
+def _locks(client: Redis) -> Locks:
     return Locks(
-        create_async_redis(redis_url), key_prefix=REDIS_KEY_PREFIX,
+        client, key_prefix=REDIS_KEY_PREFIX,
         family=QUEUE_STREAM_BUILD_LOCK_FAMILY, lasts=SHORT_LOCK_LASTS,
     )
 
@@ -50,16 +51,21 @@ def _run_one_build(redis_url: str, during_build: Callable[[SimpleNamespace, Lock
     ``during_build`` gets the build's context and a second process's locks.
     """
     settle_the_real_servers_epoch(redis_url)
-    ctx = SimpleNamespace(async_redis=create_async_redis(redis_url))
-    second_process, third_process = _locks(redis_url), _locks(redis_url)
+    clients = [create_async_redis(redis_url) for _ in range(3)]
+    ctx = SimpleNamespace(async_redis=clients[0])
+    second_process, third_process = _locks(clients[1]), _locks(clients[2])
 
     def build() -> None:
         with build_lock(ctx, KEY):
             during_build(ctx, second_process)
 
     with start_blocking_portal() as portal:
-        portal.call(anyio.to_thread.run_sync, build)
-        free_after_the_build = portal.call(third_process.acquire, KEY) is not None
+        try:
+            portal.call(anyio.to_thread.run_sync, build)
+            free_after_the_build = portal.call(third_process.acquire, KEY) is not None
+        finally:
+            for client in clients:
+                portal.call(client.aclose)
     return free_after_the_build
 
 
@@ -67,10 +73,7 @@ def test_a_build_longer_than_the_lock_lasts_stays_exclusive(redis_url: str) -> N
     other_process_took_it: list[bool] = []
 
     def build_for_twice_the_span(ctx: SimpleNamespace, second_process: Locks) -> None:
-        end = from_thread.run(redis_ms, ctx.async_redis) + 2 * int(
-            SHORT_LOCK_LASTS.total_seconds() * 1000,
-        )
-        from_thread.run(until_redis_ms, ctx.async_redis, end)
+        from_thread.run(until_redis_has_passed, ctx.async_redis, 2 * SHORT_LOCK_LASTS)
         other_process_took_it.append(from_thread.run(second_process.acquire, KEY) is not None)
 
     free_after_the_build = _run_one_build(redis_url, build_for_twice_the_span)
@@ -106,3 +109,29 @@ def test_a_build_that_fails_raises_its_own_error_and_frees_the_lock(redis_url: s
 
     settle_the_real_servers_epoch(redis_url)
     assert _run_one_build(redis_url, lambda _ctx, _second_process: None)
+
+
+def test_a_build_whose_lock_runs_out_before_its_entry_polls_again(
+    redis_url: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    acquisitions: list[str | None] = []
+    ran: list[bool] = []
+
+    class LockThatRunsOutAfterItsFirstAcquisition(Locks):
+        async def acquire(self, name: str) -> str | None:
+            generation = await super().acquire(name)
+            acquisitions.append(generation)
+            if len(acquisitions) == 1:
+                lose_everything(redis_url)
+                settle_the_real_servers_epoch(redis_url)
+            return generation
+
+    monkeypatch.setattr(build_lock_module, "Locks", LockThatRunsOutAfterItsFirstAcquisition)
+
+    free_after_the_build = _run_one_build(
+        redis_url, lambda _ctx, _second_process: ran.append(True),
+    )
+
+    assert [generation is not None for generation in acquisitions] == [True, True]
+    assert ran == [True]
+    assert free_after_the_build

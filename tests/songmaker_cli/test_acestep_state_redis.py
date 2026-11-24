@@ -11,12 +11,16 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 import pytest
-from support.redis_clock import redis_ms, until_redis_ms
+from redis.asyncio import Redis
+from support.redis_clock import until_redis_has_passed
 from support.redis_server import lose_everything, settle_the_real_servers_epoch
 from support.refused_download import attempt_download_that_must_not_run
+from tandem import Locks
 
 from songmaker_acestep_worker.heartbeat import reserve_gpu_hold
+from songmaker_cli import acestep_state
 from songmaker_cli.acestep_state import (
+    DOWNLOAD_LOCK_FAMILY,
     DownloadAlreadyRunning,
     DownloadLockLost,
     admit_generation,
@@ -27,6 +31,7 @@ from songmaker_cli.acestep_state import (
     read_queue_depth,
     single_flight_download,
 )
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.lifecycle import JOB_REAPER_LOCK_NAME, tick_locks
 from songmaker_cli.redis_client import create_async_redis
 
@@ -142,13 +147,50 @@ def test_a_download_longer_than_its_span_keeps_the_lock(
 
     async def scenario(holder, other_process) -> str | None:
         async with single_flight_download(holder, "sft", "job-1"):
-            await until_redis_ms(
-                holder, await redis_ms(holder) + 2 * int(SHORT_LOCK_LASTS.total_seconds() * 1000),
-            )
+            await until_redis_has_passed(holder, 2 * SHORT_LOCK_LASTS)
             assert await download_locks(other_process).acquire("sft") is None
             return await read_download_in_progress(other_process, "sft")
 
     assert _in_two_processes(redis_url, scenario) == "job-1"
+
+
+def test_a_download_whose_lock_ran_out_before_its_entry_leaves_no_label(
+    redis_url: str, short_download_lock: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settle_the_real_servers_epoch(redis_url)
+
+    class LockThatRunsOutAfterItsAcquisition(Locks):
+        async def acquire(self, name: str) -> str | None:
+            generation = await super().acquire(name)
+            lose_everything(redis_url)
+            return generation
+
+    keys_written: list[str] = []
+
+    class WriteRecordingRedis(Redis):
+        async def set(self, name, value, *args, **kwargs):
+            keys_written.append(name)
+            return await super().set(name, value, *args, **kwargs)
+
+    monkeypatch.setattr(
+        acestep_state, "download_locks",
+        lambda pool: LockThatRunsOutAfterItsAcquisition(
+            pool, key_prefix=REDIS_KEY_PREFIX, family=DOWNLOAD_LOCK_FAMILY,
+            lasts=acestep_state.DOWNLOAD_LOCK_LASTS,
+        ),
+    )
+
+    async def scenario() -> list[str]:
+        holder = WriteRecordingRedis.from_url(redis_url)
+        try:
+            with pytest.raises(DownloadLockLost):
+                async with single_flight_download(holder, "sft", "job-1"):
+                    pytest.fail("the download must not run")
+            return keys_written
+        finally:
+            await holder.aclose()
+
+    assert asyncio.run(scenario()) == []
 
 
 def test_a_download_whose_lock_was_lost_ends_and_leaves_the_new_holders_label(
