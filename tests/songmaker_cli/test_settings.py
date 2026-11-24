@@ -371,6 +371,17 @@ def test_a_malformed_realm_group_stops_settings_under_its_key_without_echoing_it
     assert malformed not in str(refused.value)
 
 
+@pytest.mark.parametrize("key", _GROUP_KEYS)
+def test_an_empty_realm_group_stops_settings_under_its_key(
+    monkeypatch: pytest.MonkeyPatch, key: str,
+) -> None:
+    monkeypatch.setenv("REALM_AGENT_GROUP", AGENT_GROUP)
+    monkeypatch.setenv(key, "")
+
+    with pytest.raises(ValidationError, match=key):
+        RealmSettings()
+
+
 @pytest.mark.parametrize(
     "admin_group", ["/apps/songmaker", "/apps/songmaker2/admin", "/apps/other/admin"],
     ids=["equal", "sibling-prefix", "other-tree"],
