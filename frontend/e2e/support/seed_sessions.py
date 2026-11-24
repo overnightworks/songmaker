@@ -54,7 +54,7 @@ DEFAULT_ROLE = "user"
 UNUSED_DIRECTORY = Path("/nonexistent")
 
 
-def _auth_config(session_factory, async_redis: AsyncRedis) -> WebAuthConfig:
+def _auth_config(session_factory, async_redis: AsyncRedis, wake_redis: AsyncRedis) -> WebAuthConfig:
     settings = get_settings()
     context = AppContext(
         db=session_factory,
@@ -63,6 +63,7 @@ def _auth_config(session_factory, async_redis: AsyncRedis) -> WebAuthConfig:
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=create_redis(settings.redis_url),
         async_redis=async_redis,
+        wake_redis=wake_redis,
         object_store=object_store_of(settings),
     )
     return build_web_auth_config(context, settings)
@@ -107,14 +108,17 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
 def main() -> int:
     request = json.loads(os.environ[REQUEST_ENVIRONMENT_VARIABLE])
     session_factory = connect_db(resolve_database_url())
-    async_redis = create_async_redis(get_settings().redis_url)
+    redis_url = get_settings().redis_url
+    async_redis = create_async_redis(redis_url)
+    wake_redis = create_async_redis(redis_url, follows_wakes=True)
     try:
-        config = _auth_config(session_factory, async_redis)
+        config = _auth_config(session_factory, async_redis, wake_redis)
         with session_factory() as session:
             seeded = [_seed(session, config, entry) for entry in request.get("seed", [])]
             session.commit()
     finally:
         asyncio.run(async_redis.aclose())
+        asyncio.run(wake_redis.aclose())
     print(json.dumps(seeded))
     return 0
 
