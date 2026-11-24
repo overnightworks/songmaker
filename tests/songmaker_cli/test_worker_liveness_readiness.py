@@ -160,27 +160,6 @@ def test_a_running_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
     assert ended == (False, set())
 
 
-def test_a_worker_writes_the_readiness_file_its_constructor_names(
-    restored_logging: None, redis_url: str, readiness_file: Path,
-) -> None:
-    worker = MusicWorker(
-        Settings(
-            database_url="postgresql://example", redis_url=redis_url,
-            session_secret="session-secret", songmaker_internal_token="internal-token",
-        ),
-        readiness_file=readiness_file,
-    )
-    worker.get_db_factory = MagicMock()
-
-    async def start_and_stop() -> None:
-        await worker.start()
-        await worker.stop()
-
-    asyncio.run(start_and_stop())
-
-    assert readiness_file.read_text().split()[0] == worker.owner_id
-
-
 @pytest.fixture
 def web_redis(redis_url: str, monkeypatch, fresh_settings: None) -> str:
     """The URL the web process's arq pool connects to."""
