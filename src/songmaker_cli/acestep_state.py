@@ -16,7 +16,7 @@ import json
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from tandem import Liveness, LockLost, Locks, Script
@@ -179,11 +179,14 @@ _LIVENESS_OF_REPLY = {
 async def _read_download_state(pool: Redis, mode: str) -> tuple[Liveness, str | None]:
     """The liveness of the mode's lock and, while it is held, the label beside it, in one read."""
     locks = download_locks(pool)
-    reply = await Script(pool, READ_DOWNLOAD_STATE_SCRIPT).run(
-        [download_key(mode), locks.keys.epoch, locks.keys.expiry, locks.keys.generation],
-        [int(locks.lasts.total_seconds() * 1000), mode],
+    reply = cast(
+        "list[bytes | str | None]",
+        await Script(pool, READ_DOWNLOAD_STATE_SCRIPT).run(
+            [download_key(mode), locks.keys.epoch, locks.keys.expiry, locks.keys.generation],
+            [int(locks.lasts.total_seconds() * 1000), mode],
+        ),
     )
-    liveness = _LIVENESS_OF_REPLY[decode_redis_text(reply[0])]
+    liveness = _LIVENESS_OF_REPLY[cast("str", decode_redis_text(reply[0]))]
     label = decode_redis_text(reply[1]) if liveness is Liveness.ALIVE else None
     return liveness, label
 

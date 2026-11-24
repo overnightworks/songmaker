@@ -44,7 +44,7 @@ def _locks(redis_url: str) -> Locks:
     )
 
 
-def _build(redis_url: str, during_build: Callable[[SimpleNamespace, Locks], None]) -> bool:
+def _run_one_build(redis_url: str, during_build: Callable[[SimpleNamespace, Locks], None]) -> bool:
     """Run one build in a request's worker thread; whether a third process can take the lock after.
 
     ``during_build`` gets the build's context and a second process's locks.
@@ -73,7 +73,7 @@ def test_a_build_longer_than_the_lock_lasts_stays_exclusive(redis_url: str) -> N
         from_thread.run(until_redis_ms, ctx.async_redis, end)
         other_process_took_it.append(from_thread.run(second_process.acquire, KEY) is not None)
 
-    free_after_the_build = _build(redis_url, build_for_twice_the_span)
+    free_after_the_build = _run_one_build(redis_url, build_for_twice_the_span)
 
     assert other_process_took_it == [False]
     assert free_after_the_build
@@ -91,7 +91,18 @@ def test_a_lock_redis_lost_is_logged_and_the_build_finishes_beside_the_new_holde
         from_thread.run(until, lambda: any(r.message == LOCK_LOST_LINE for r in caplog.records))
 
     with caplog.at_level(logging.WARNING):
-        free_after_the_build = _build(redis_url, build_after_a_redis_restart)
+        free_after_the_build = _run_one_build(redis_url, build_after_a_redis_restart)
 
     assert new_holder_took_it == [True]
     assert not free_after_the_build
+
+
+def test_a_build_that_fails_raises_its_own_error_and_frees_the_lock(redis_url: str) -> None:
+    def failing_build(_ctx: SimpleNamespace, _second_process: Locks) -> None:
+        raise ValueError("the build failed")
+
+    with pytest.raises(ValueError, match="the build failed"):
+        _run_one_build(redis_url, failing_build)
+
+    settle_the_real_servers_epoch(redis_url)
+    assert _run_one_build(redis_url, lambda _ctx, _second_process: None)

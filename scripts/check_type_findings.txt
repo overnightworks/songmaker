@@ -19,9 +19,6 @@ src/songmaker_acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressio
 src/songmaker_acestep_worker/wrapper.py :: nested-any :: dict[str, Any] in `build_state_payload`
 src/songmaker_cli/acestep_state.py :: misc :: Incompatible types in "await" (actual type "Awaitable[str] | str", expected type "Awaitable[Any]")
 src/songmaker_cli/acestep_state.py :: nested-any :: dict[str, Any] in `read_worker_state`
-src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "cancel"
-src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "cancelling"
-src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "uncancel"
 src/songmaker_cli/admin_api.py :: pydantic-orm :: "AdminUserLoraResponse" does not have from_attributes=True
 src/songmaker_cli/admin_api.py :: pydantic-orm :: "JobResponse" does not have from_attributes=True
 src/songmaker_cli/admin_api.py :: pydantic-orm :: "JobResponse" does not have from_attributes=True
