@@ -35,13 +35,13 @@ from songmaker_cli.job_timing import (
     JOB_REAPER_INTERVAL_SECONDS,
     OWNER_GONE_CHECK_INTERVAL_SECONDS,
 )
-from songmaker_cli.job_types import JobType
+from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import (
     JobOwnerStamp,
     WorkerLiveness,
     owner_lease_liveness,
-    read_music_roster,
+    read_kind_rosters,
 )
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
@@ -280,14 +280,14 @@ async def score_backfill_loop(app: FastAPI) -> None:
 
 
 def read_worker_liveness(
-    ctx: AppContext, music_roster: Roster | None,
+    ctx: AppContext, rosters: Mapping[WorkerLivenessSignal, Roster | None],
 ) -> dict[JobType, WorkerLiveness]:
     """Read lifecycle liveness after the database owner supplies the registry."""
     from songmaker_cli.db.queries.workers import list_worker_identities
 
     with ctx.db() as session:
         worker_ids = [worker.id for worker in list_worker_identities(session)]
-    return read_liveness_signals(ctx.redis, worker_ids, music_roster=music_roster)
+    return read_liveness_signals(ctx.redis, worker_ids, rosters=rosters)
 
 
 def reap_stale_jobs(
@@ -295,17 +295,17 @@ def reap_stale_jobs(
     *,
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
-    music_roster: Roster | None = None,
+    rosters: Mapping[WorkerLivenessSignal, Roster | None] | None = None,
 ) -> int:
     """Terminalize every stale job according to the shared type table.
 
-    ``music_roster`` is what the caller read of the music workers' leases, none when it could not;
-    it matters only when ``worker_liveness`` is not given.
+    ``rosters`` is what the caller read of each worker kind's leases (``read_kind_rosters``); it
+    matters only when ``worker_liveness`` is not given.
     """
     from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
 
     if worker_liveness is None:
-        worker_liveness = read_worker_liveness(ctx, music_roster)
+        worker_liveness = read_worker_liveness(ctx, rosters or {})
     with ctx.db() as session:
         recovered = recover_stale_jobs_by_age_and_type(
             session, now=now, worker_liveness=worker_liveness,
@@ -338,13 +338,16 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
 
 
 def _run_stale_job_reaper_tick(
-    ctx: AppContext, *, now: datetime | None = None, music_roster: Roster | None = None,
+    ctx: AppContext,
+    *,
+    now: datetime | None = None,
+    rosters: Mapping[WorkerLivenessSignal, Roster | None] | None = None,
 ) -> tuple[int, int]:
     """Reap all stale jobs, reconcile crashed LoRAs and clean ended covers for one tick.
 
     Returns ``(jobs_recovered, loras_reconciled)``.
     """
-    recovered_jobs = reap_stale_jobs(ctx, now=now, music_roster=music_roster)
+    recovered_jobs = reap_stale_jobs(ctx, now=now, rosters=rosters)
     reconciled_loras = reconcile_crashed_loras(ctx)
     reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
     return recovered_jobs, reconciled_loras
@@ -365,8 +368,8 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             if await locks.acquire(JOB_REAPER_LOCK_NAME) is None:
                 registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
                 continue
-            music_roster = await read_music_roster(ctx.music_leases)
-            await asyncio.to_thread(_run_stale_job_reaper_tick, ctx, music_roster=music_roster)
+            rosters = await read_kind_rosters(ctx.kind_leases)
+            await asyncio.to_thread(_run_stale_job_reaper_tick, ctx, rosters=rosters)
         except Exception as exc:
             registry.record_failure(BackgroundLoopName.STALE_JOB_REAPER, exc)
             log.exception("Stale job reaper tick failed")
@@ -423,8 +426,8 @@ async def owner_lapse_loop(app: FastAPI) -> None:
 
     A lapse is only a trigger: the pass reads liveness again, so the jobs of the lapsed
     generation fail and those an owner that started anew has written since keep running, and
-    a lapse lost with a Redis restart is found by ``owner_gone_reaper_loop``. The lapses of the
-    music workers' family are served beside them, so that family's state ends with its leases.
+    a lapse lost with a Redis restart is found by ``owner_gone_reaper_loop``. The lapses of every
+    worker kind's family are served beside them, so each family's state ends with its leases.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
@@ -440,11 +443,12 @@ async def owner_lapse_loop(app: FastAPI) -> None:
     every = timedelta(seconds=OWNER_GONE_CHECK_INTERVAL_SECONDS)
     async with asyncio.TaskGroup() as serving:
         serving.create_task(ctx.owner_leases.serve_lapses(fail_jobs_of_lapsed_owner, every=every))
-        serving.create_task(ctx.music_leases.serve_lapses(_end_music_worker_lapse, every=every))
+        for leases in ctx.kind_leases.values():
+            serving.create_task(leases.serve_lapses(_end_worker_lapse, every=every))
 
 
-async def _end_music_worker_lapse(_lapse: Lapse) -> None:
-    """Take a music worker's lapse off its queue, which ends the lease's last traces in Redis.
+async def _end_worker_lapse(_lapse: Lapse) -> None:
+    """Take a worker's lapse off its kind's queue, which ends the lease's last traces in Redis.
 
     The jobs of that worker fail through its owner lease, so the lapse needs no pass of its own;
     the sweep and the hand-out clear the family's holders and lapses.

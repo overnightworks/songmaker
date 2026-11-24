@@ -18,12 +18,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 from songmaker_cli.job_queue import app_wake_channel
 from songmaker_cli.redis_client import SlotReleases
-from songmaker_cli.worker_liveness import (
-    MUSIC_WORKER_KIND,
-    JobOwner,
-    owner_leases,
-    worker_kind_leases,
-)
+from songmaker_cli.worker_liveness import JobOwner, every_worker_kind_leases, owner_leases
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -32,6 +27,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis as AsyncRedis
     from tandem import Leases
 
+    from songmaker_cli.job_types import WorkerLivenessSignal
     from songmaker_cli.object_store import ObjectStore
     from songmaker_cli.settings import Settings
 
@@ -50,8 +46,8 @@ class AppContext:
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     """Names this process on the jobs it runs; its lease in Redis says whether it lives."""
     owner_leases: Leases = field(init=False)
-    music_leases: Leases = field(init=False)
-    """The leases of the music workers; their roster says whether one lives."""
+    kind_leases: dict[WorkerLivenessSignal, Leases] = field(init=False)
+    """The leases of the workers of each kind; a kind's roster says whether one of them lives."""
     owner: JobOwner = field(init=False)
     """This process as the owner of its jobs, set once its lease is held."""
     wake_redis: AsyncRedis | None = None
@@ -67,7 +63,7 @@ class AppContext:
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)
-        self.music_leases = worker_kind_leases(self.async_redis, MUSIC_WORKER_KIND)
+        self.kind_leases = every_worker_kind_leases(self.async_redis)
         self.wake_channel = app_wake_channel(self.async_redis)
         self.following_wake_channel = app_wake_channel(self.wake_redis or self.async_redis)
 

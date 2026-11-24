@@ -3,8 +3,8 @@
 Started as a separate process:
     python -m songmaker_cli.arq_worker songmaker_cli.scoring_worker.ScoringWorkerSettings
 
-arq hosts the process (its health key says the worker lives) and carries the ``score``
-function for messages that web processes of the previous release still enqueue.
+arq hosts the process and carries the ``score`` function for messages that web processes of the
+previous release still enqueue. The worker's lease in the ``scoring-worker`` family says it lives.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, SCORING_SERVICE_NAME
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import ClaimedJob, JobQueue
-from songmaker_cli.job_types import JobFunction
+from songmaker_cli.job_types import JobFunction, WorkerLivenessSignal
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
@@ -32,6 +32,7 @@ class ScoringWorker(WorkerBase):
     queue = JobQueue.SCORE
     job_types = queue.job_types
     queue_name = ARQ_SCORING_QUEUE_NAME
+    lease_kind = WorkerLivenessSignal.SCORING
 
     def __init__(self, settings=None) -> None:
         super().__init__(settings)

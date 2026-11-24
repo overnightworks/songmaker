@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import hold_a_music_lease, make_test_app, seed_user
+from support.web_app import hold_a_worker_lease, make_test_app, seed_user
 
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
@@ -330,7 +330,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
         await pool.set(worker_state_key("w1"), payload)
 
     asyncio.run(prepare_pool())
-    hold_a_music_lease(client.app.state.ctx.async_redis)
+    hold_a_worker_lease(client.app.state.ctx.async_redis)
     client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health/details", "/metrics"):

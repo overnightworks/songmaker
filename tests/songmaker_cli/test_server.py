@@ -20,7 +20,7 @@ from support.request_lines import request_lines
 from support.web_app import (
     BUILT_SHELL,
     TEST_SECRET,
-    hold_a_music_lease,
+    hold_a_worker_lease,
     make_app_context,
     make_fake_async_redis,
     make_fake_redis,
@@ -36,7 +36,7 @@ from songmaker_cli.db.models import Album, Generation, Score, Song, User, UserSe
 from songmaker_cli.db.queries.auth import create_session as create_db_session
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.health_api import compute_script_hashes
-from songmaker_cli.job_types import JobType
+from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.server import create_app, run_server
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
@@ -338,14 +338,14 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
         signing_key=TEST_SECRET,
         redis=make_fake_redis(), async_redis=make_fake_async_redis(),
     )
-    hold_a_music_lease(ctx.async_redis)
+    hold_a_worker_lease(ctx.async_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
-        with web_client(app):
-            pass
+    with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap, web_client(app):
+        pass
 
-    handed = [(call.args, call.kwargs["music_roster"].holders) for call in mock_reap.call_args_list]
-    assert handed == [((ctx,), {"music-worker"})]
+    [call] = mock_reap.call_args_list
+    music_roster = call.kwargs["rosters"][WorkerLivenessSignal.MUSIC]
+    assert (call.args, music_roster.holders) == ((ctx,), {"music-worker"})
 
     with pg_factory() as session:
         assert session.query(UserSession).count() == 0

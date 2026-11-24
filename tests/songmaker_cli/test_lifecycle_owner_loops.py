@@ -36,8 +36,9 @@ from songmaker_cli.lifecycle import (
     reconcile_ended_covers,
 )
 from songmaker_cli.worker_liveness import (
-    MUSIC_WORKER_KIND,
+    WORKER_KINDS,
     JobOwner,
+    every_worker_kind_leases,
     keep_kind_lease,
     owner_leases,
     worker_kind_leases,
@@ -58,7 +59,7 @@ def _loop_app(async_redis, db, audio_dir: Path, leases=None) -> SimpleNamespace:
     return SimpleNamespace(state=SimpleNamespace(
         ctx=SimpleNamespace(
             owner_leases=leases or owner_leases(async_redis),
-            music_leases=worker_kind_leases(async_redis, MUSIC_WORKER_KIND),
+            kind_leases=every_worker_kind_leases(async_redis),
             owner_id=OWNER, db=db, audio_dir=audio_dir,
         ),
         background_loop_registry=BackgroundLoopRegistry(tuple(BackgroundLoopName)),
@@ -164,33 +165,32 @@ def test_the_lapse_loop_ends_the_jobs_of_an_owner_whose_lease_ended(
     )
 
 
-def test_the_lapse_loop_leaves_no_trace_of_a_music_worker_whose_lease_ended(
-    pg_factory, tmp_path,
+@pytest.mark.parametrize("kind", WORKER_KINDS, ids=lambda kind: kind.value)
+def test_the_lapse_loop_leaves_no_trace_of_a_worker_whose_lease_ended(
+    pg_factory, tmp_path, kind,
 ) -> None:
     server = make_fake_async_redis()
     app = _loop_app(server, pg_factory, tmp_path)
 
-    async def music_family_keys() -> list[str]:
-        return await server.keys("*:l:music-worker:*")
+    async def family_keys() -> list[str]:
+        return await server.keys(f"*:l:{WORKER_KINDS[kind].lease_family}:*")
 
-    async def end_a_music_workers_lease_and_wait_for_the_loop() -> tuple[list[str], list[str]]:
+    async def end_a_workers_lease_and_wait_for_the_loop() -> tuple[list[str], list[str]]:
         await settle_owner_leases(server)
-        async with keep_kind_lease(worker_kind_leases(server, MUSIC_WORKER_KIND), ANOTHER):
+        async with keep_kind_lease(worker_kind_leases(server, kind), ANOTHER):
             pass
-        left_by_its_end = await music_family_keys()
+        left_by_its_end = await family_keys()
         loop_task = asyncio.ensure_future(owner_lapse_loop(app))
         try:
             async with asyncio.timeout(DEADLINE_SECONDS):
-                while await music_family_keys():
+                while await family_keys():
                     await asyncio.sleep(0.01)
         finally:
             loop_task.cancel()
             await asyncio.gather(loop_task, return_exceptions=True)
-        return left_by_its_end, await music_family_keys()
+        return left_by_its_end, await family_keys()
 
-    left_by_its_end, left_by_the_loop = asyncio.run(
-        end_a_music_workers_lease_and_wait_for_the_loop(),
-    )
+    left_by_its_end, left_by_the_loop = asyncio.run(end_a_workers_lease_and_wait_for_the_loop())
 
     assert (bool(left_by_its_end), left_by_the_loop) == (True, [])
 

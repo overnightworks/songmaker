@@ -25,7 +25,7 @@ from songmaker_cli.job_payloads import (
     LoraTrainingPayload,
 )
 from songmaker_cli.job_queue import ClaimedJob, JobQueue
-from songmaker_cli.job_types import JobFunction, JobType
+from songmaker_cli.job_types import JobFunction, JobType, WorkerLivenessSignal
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
 )
@@ -39,7 +39,6 @@ from songmaker_cli.jobs import (
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_base import WorkerBase, logged_job
 from songmaker_cli.worker_liveness import (
-    MUSIC_WORKER_KIND,
     pid_one_start_ticks,
     write_readiness_file,
 )
@@ -51,7 +50,7 @@ class MusicWorker(WorkerBase):
     service_name = "songmaker-music-worker"
     queue = JobQueue.MUSIC
     job_types = queue.job_types
-    lease_kind = MUSIC_WORKER_KIND
+    lease_kind = WorkerLivenessSignal.MUSIC
 
     def __init__(
         self, settings=None, *, readiness_file: Path = MUSIC_WORKER_READINESS_FILE,

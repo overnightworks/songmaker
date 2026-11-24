@@ -42,7 +42,7 @@ from songmaker_cli.job_queue import (
     app_wake_channel,
     serve_queue,
 )
-from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.messages import message
 from songmaker_cli.redis_client import create_async_redis, stop_retrying
 from songmaker_cli.settings import Settings, get_settings
@@ -156,8 +156,9 @@ class WorkerBase:
     job_types: ClassVar[tuple[JobType, ...]]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
-    lease_kind: ClassVar[str | None] = None
-    """The worker kind whose lease family this worker renews beside its owner lease, if any."""
+    lease_kind: ClassVar[WorkerLivenessSignal | None] = None
+    """The worker kind whose lease family this worker renews beside its owner lease, if any.
+    A kind without a row in ``WORKER_KINDS`` fails the worker's start."""
     health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 
     def __init__(self, settings: Settings | None = None) -> None:

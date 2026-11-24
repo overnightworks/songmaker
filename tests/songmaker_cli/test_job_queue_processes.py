@@ -9,6 +9,7 @@ import pytest
 from redis import Redis
 from support.app_processes import (
     WorkerProcess,
+    kind_lease_holders,
     owners_of,
     poll_until,
     times_cron_ran,
@@ -22,7 +23,7 @@ from songmaker_cli.constants import CRON_EVERY_SECONDS
 from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_queue import QUEUE_POLL_INTERVAL_SECONDS
-from songmaker_cli.job_types import JobStatus
+from songmaker_cli.job_types import JobStatus, WorkerLivenessSignal
 
 JOB_COUNT = 8
 START_MARGIN_SECONDS = 20.0
@@ -40,6 +41,7 @@ class QueueUnderTest:
     start_worker: Callable[..., WorkerProcess]
     queue_job: Callable[..., Job]
     failure_key: str
+    kind: WorkerLivenessSignal
 
     def queue_jobs(self, factory, count: int, *, due_in: float = 0) -> list[str]:
         with factory() as session:
@@ -62,8 +64,11 @@ def queue(request, web_cluster) -> QueueUnderTest:
     if request.param == "score":
         return QueueUnderTest(
             cluster.start_scoring_worker, queued_score_job, MISSING_GENERATION_KEY,
+            WorkerLivenessSignal.SCORING,
         )
-    return QueueUnderTest(cluster.start_music_worker, queued_music_job, MISSING_VOICE_KEY)
+    return QueueUnderTest(
+        cluster.start_music_worker, queued_music_job, MISSING_VOICE_KEY, WorkerLivenessSignal.MUSIC,
+    )
 
 
 @pytest.fixture
@@ -75,6 +80,12 @@ def redis_client(redis_url: str):
 def _subscriptions_confirmed(worker: WorkerProcess) -> int:
     """How often Redis confirmed the worker's wake subscription: once, then once per resync."""
     return worker.log_text().count(SUBSCRIPTION_CONFIRMED_EVENT)
+
+
+def test_a_worker_process_holds_a_lease_of_its_kind(queue, redis_client) -> None:
+    worker = queue.start_worker("worker")
+
+    assert kind_lease_holders(redis_client, queue.kind) == {worker.owner_id}
 
 
 def test_a_queued_job_survives_a_redis_flush_and_runs(queue, web_cluster, redis_client) -> None:

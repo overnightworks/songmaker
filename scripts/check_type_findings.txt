@@ -296,4 +296,3 @@ src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions 
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
-src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
