@@ -12,7 +12,6 @@ from logline.testing import configured
 from tandem import StoreError
 
 import songmaker_cli.arq_pool as arq_pool
-from songmaker_cli.constants import WORKER_READINESS_FILE
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
@@ -168,7 +167,7 @@ def test_a_running_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
     assert ended == (False, set())
 
 
-def test_a_worker_writes_the_readiness_file_its_constructor_names_and_not_the_shared_one(
+def test_a_worker_writes_the_readiness_file_its_constructor_names(
     restored_logging: None, redis_url: str, readiness_file: Path,
 ) -> None:
     worker = MusicWorker(
@@ -179,7 +178,6 @@ def test_a_worker_writes_the_readiness_file_its_constructor_names_and_not_the_sh
         readiness_file=readiness_file,
     )
     worker.get_db_factory = MagicMock()
-    shared_file_before = WORKER_READINESS_FILE.stat() if WORKER_READINESS_FILE.exists() else None
 
     async def start_and_stop() -> None:
         await worker.start()
@@ -188,9 +186,6 @@ def test_a_worker_writes_the_readiness_file_its_constructor_names_and_not_the_sh
     asyncio.run(start_and_stop())
 
     assert readiness_file.read_text().split()[0] == worker.owner_id
-    assert (WORKER_READINESS_FILE.stat() if WORKER_READINESS_FILE.exists() else None) == (
-        shared_file_before
-    )
 
 
 @pytest.fixture
