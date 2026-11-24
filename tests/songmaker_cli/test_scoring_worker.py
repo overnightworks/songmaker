@@ -8,7 +8,7 @@ import os
 import signal
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from logline.testing import configured
@@ -21,7 +21,6 @@ from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobStatus, JobType
-from songmaker_cli.scoring import subprocess_runner
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import get_settings
@@ -38,20 +37,18 @@ def _run(coro):
 
 
 def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease_end(
-    stop_signal_handlers, monkeypatch, redis_url, tmp_path,
+    stop_signal_handlers, installed_scorer_restored, redis_url, tmp_path,
 ) -> None:
-    monkeypatch.setattr(subprocess_runner, "_scorer_process", None)
     job_started, job_may_finish = asyncio.Event(), asyncio.Event()
     ended: list[str | tuple[str, set[str]]] = []
 
     with Redis.from_url(redis_url, decode_responses=True) as reader:
         scorer = MagicMock()
         scorer.shutdown.side_effect = lambda: ended.append(("scorer", leased_owner_ids(reader)))
-        with patch("songmaker_cli.scoring_worker.ScorerProcess", return_value=scorer):
-            worker = ScoringWorker(
-                get_settings().model_copy(update={"redis_url": redis_url}),
-                readiness_file=tmp_path / "readiness",
-            )
+        worker = ScoringWorker(
+            get_settings().model_copy(update={"redis_url": redis_url}),
+            scorer=scorer, readiness_file=tmp_path / "readiness",
+        )
         worker.get_db_factory = MagicMock()
         worker.claim_next_job = MagicMock(
             side_effect=itertools.chain(

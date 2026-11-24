@@ -15,7 +15,6 @@ import songmaker_cli.arq_pool as arq_pool
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
-from songmaker_cli.scoring import subprocess_runner
 from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import (
@@ -130,10 +129,9 @@ def test_a_worker_without_a_readiness_file_is_not_ready(
     ids=["music", "scoring"],
 )
 def test_a_running_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
-    restored_logging: None, redis_url: str, readiness_file: Path,
-    monkeypatch: pytest.MonkeyPatch, worker_class, kind: WorkerLivenessSignal,
+    restored_logging: None, installed_scorer_restored: None, redis_url: str,
+    readiness_file: Path, worker_class, kind: WorkerLivenessSignal,
 ) -> None:
-    monkeypatch.setattr(subprocess_runner, "_scorer_process", None)
     worker = worker_class(
         Settings(
             database_url="postgresql://example", redis_url=redis_url,

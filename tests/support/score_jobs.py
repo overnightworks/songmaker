@@ -89,17 +89,23 @@ def a_scoreable_take(factory, audio_dir: Path) -> str:
 
 
 @pytest.fixture
-def scorer_requests() -> Iterator[MagicMock]:
-    """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
-
-    It answers every request with an empty result; the scorer installed before is back after.
-    """
+def installed_scorer_restored() -> Iterator[None]:
+    """The scorer installed before the test is back after it, whoever installed another."""
     try:
         installed_before = get_scorer_process()
     except RuntimeError:
         installed_before = None
+    yield
+    set_scorer_process(installed_before)
+
+
+@pytest.fixture
+def scorer_requests(installed_scorer_restored: None) -> Iterator[MagicMock]:
+    """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
+
+    It answers every request with an empty result; the scorer installed before is back after.
+    """
     scorer = MagicMock()
     scorer.score.return_value = SongScores()
     set_scorer_process(scorer)
     yield scorer.score
-    set_scorer_process(installed_before)

@@ -21,7 +21,6 @@ from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS, OWNER_LEASE_TT
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
-from songmaker_cli.scoring import subprocess_runner
 from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import WorkerBase
@@ -102,9 +101,8 @@ def test_a_worker_writes_its_lines_under_its_own_service_name(
     redis_url: str,
     readiness_file: Path,
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
+    installed_scorer_restored: None,
 ) -> None:
-    monkeypatch.setattr(subprocess_runner, "_scorer_process", None)
     worker = worker_class(settings=_settings_on(redis_url), readiness_file=readiness_file)
     worker.get_db_factory = MagicMock()
 

@@ -33,10 +33,13 @@ class ScoringWorker(WorkerBase):
     job_types = queue.job_types
     lease_kind = WorkerLivenessSignal.SCORING
 
-    def __init__(self, settings=None, *, readiness_file: Path = WORKER_READINESS_FILE) -> None:
+    def __init__(
+        self, settings=None, *, scorer: ScorerProcess | None = None,
+        readiness_file: Path = WORKER_READINESS_FILE,
+    ) -> None:
         super().__init__(settings, readiness_file=readiness_file)
         self._places = asyncio.Semaphore(self._settings.scoring_max_jobs)
-        self._scorer = ScorerProcess()
+        self._scorer = ScorerProcess() if scorer is None else scorer
         self._run_logged = logged_job(
             JobFunction.SCORE, self._run_payload, status_of=self.job_status,
         )
