@@ -167,7 +167,7 @@ def test_recursive_chown_is_found_after_other_options(instruction: str) -> None:
     assert RECURSIVE_CHOWN.search(instruction)
 
 
-def test_no_final_stage_instruction_changes_ownership_recursively() -> None:
+def test_the_app_images_final_stage_changes_no_ownership_recursively() -> None:
     offenders = [
         instruction
         for instruction in final_stage_instructions(REPOSITORY_ROOT / "Dockerfile")
