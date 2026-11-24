@@ -167,8 +167,7 @@ def test_a_download_whose_lock_ran_out_before_its_entry_leaves_no_label(
         holder.when_lost = lambda: lose_everything(redis_url)
         try:
             with pytest.raises(DownloadLockLost):
-                async with single_flight_download(holder, "sft", "job-1"):
-                    pytest.fail("the download must not run")
+                await attempt_download_that_must_not_run(holder, "sft", "job-1")
             return keys_written
         finally:
             await holder.aclose()
