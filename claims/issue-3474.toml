@@ -1,8 +1,0 @@
-claim_id = "26ed9302155a497c8a50e99a30299644"
-agent = "Claude 5b75db08-b076-464c-a5ed-ade1b673a134"
-role = "builder"
-base = "c3c221221921ee28fd35a081f187c83d01684c51"
-branch = "claude/issue-3474-tandem-held-lock-keepers"
-scope = ["docs/acestep.md", "scripts/check_type_findings.txt", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/queue_stream_build_lock.py", "tests/songmaker_cli/test_acestep_state.py", "tests/songmaker_cli/test_acestep_state_redis.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_admin_api_worker_refusals.py", "tests/songmaker_cli/test_jobs_lock_deferral.py", "tests/songmaker_cli/test_queue_stream_build_lock.py", "tests/support/redis_server.py", "tests/support/redis_that_loses_its_first_lock.py", "tests/support/refused_download.py"]
-opened_commit = "db911cdaeffe3b814138a0f828d9bc1825807394"
-whole_reason = "Both of songmaker's own lock extend loops give way to the one keeper tandem ships, and the download label stops needing a keeper; split, the fleet keeps a second copy of the same loop or the label keeps one of its own."
