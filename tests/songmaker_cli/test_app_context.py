@@ -31,6 +31,7 @@ def ctx(tmp_path: Path, pg_factory) -> AppContext:
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
         async_redis=make_fake_async_redis(),
+        wake_redis=make_fake_async_redis(),
     )
 
 

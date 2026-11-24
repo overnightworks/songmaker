@@ -191,8 +191,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await ctx.slot_releases.drain()
         await close_arq_pool()
         await ctx.async_redis.aclose()
-        if ctx.wake_redis is not None:
-            await ctx.wake_redis.aclose()
+        await ctx.wake_redis.aclose()
 
 
 def audio_path_rejected_handler(

@@ -10,7 +10,7 @@ import pytest
 from anyio.from_thread import BlockingPortal, start_blocking_portal
 from support.object_store import AgedObjectStore, an_aged_object_store
 from support.queue_stream_audio import stub_audio_build
-from support.web_app import TEST_SECRET, SettledFakeAsyncRedis, make_fake_redis
+from support.web_app import SettledFakeAsyncRedis, make_app_context, make_fake_redis
 
 from songmaker_cli import queue_streams
 from songmaker_cli.app_context import AppContext
@@ -52,10 +52,13 @@ def ctx(tmp_path: Path, pg_factory, monkeypatch) -> AppContext:
     audio_dir = tmp_path / "audio"
     (audio_dir / "owner").mkdir(parents=True)
     (audio_dir / "owner" / "take.mp3").write_bytes(b"source")
-    return AppContext(
+    return make_app_context(
         object_store=an_aged_object_store(),
-        db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=SettledFakeAsyncRedis(),
+        db=pg_factory,
+        audio_dir=audio_dir,
+        data_dir=tmp_path / "data",
+        redis=make_fake_redis(),
+        async_redis=SettledFakeAsyncRedis(),
     )
 
 

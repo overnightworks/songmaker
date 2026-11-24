@@ -45,6 +45,8 @@ class AppContext:
     redis: Redis
     async_redis: AsyncRedis
     """The asyncio client of the leases; the sync ``redis`` serves everything else."""
+    wake_redis: AsyncRedis
+    """The client that follows the wake channel, with no socket timeout."""
     object_store: ObjectStore
     """The bucket that holds what more than one web process needs."""
     owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -54,9 +56,6 @@ class AppContext:
     """The leases of the music workers; their roster says whether one lives."""
     owner: JobOwner = field(init=False)
     """This process as the owner of its jobs, set once its lease is held."""
-    wake_redis: AsyncRedis | None = None
-    """The client that follows the wake channel, with no socket timeout; a context built without
-    one follows on ``async_redis``."""
     wake_channel: WakeChannel = field(init=False)
     """The app's wake channel on the bounded client: where a job's cancel, and a queue's due row,
     are published."""
@@ -69,7 +68,7 @@ class AppContext:
         self.owner_leases = owner_leases(self.async_redis)
         self.music_leases = worker_kind_leases(self.async_redis, MUSIC_WORKER_KIND)
         self.wake_channel = app_wake_channel(self.async_redis)
-        self.following_wake_channel = app_wake_channel(self.wake_redis or self.async_redis)
+        self.following_wake_channel = app_wake_channel(self.wake_redis)
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:

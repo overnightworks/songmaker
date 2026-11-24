@@ -21,13 +21,12 @@ from support.cowriter_gateway import MEMBER_GROUPS, HeldGateway
 from support.fake_oidc_issuer import Person
 from support.gateway_server import serve_gateway
 from support.https_issuer import HttpsIssuer, serve_issuer
-from support.object_store import an_object_store
 from support.realm import CLIENT_ID
 from support.redis_proxy import redis_proxy
 from support.session_ids import a_session_id
-from support.web_app import issued_cookies, seed_user
+from support.web_app import issued_cookies, make_app_context, seed_user
 
-from songmaker_cli.app_context import AppContext, build_web_auth_config
+from songmaker_cli.app_context import build_web_auth_config
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 
 SCRIPTED_REPLY = "The reply the gateway stand-in scripted."
@@ -66,13 +65,9 @@ def sign_in_person(
         )
         session.commit()
         session_id, user_id = record.id, person.id
-    context = AppContext(
-        object_store=an_object_store(),
-        db=factory,
-        audio_dir=cluster.audio_dir,
-        data_dir=cluster.root,
-        signing_key=cluster.session_secret.encode(),
-        redis=Redis.from_url(redis_url),
+    context = make_app_context(
+        db=factory, audio_dir=cluster.audio_dir, data_dir=cluster.root,
+        signing_key=cluster.session_secret.encode(), redis=Redis.from_url(redis_url),
         async_redis=AsyncRedis.from_url(redis_url),
     )
     config = build_web_auth_config(context, settings)
