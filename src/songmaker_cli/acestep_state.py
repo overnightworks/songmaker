@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any
 
-from arq.connections import ArqRedis
+from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from tandem import Liveness, Locks, Script, StoreError
 
@@ -58,7 +58,7 @@ def queue_depth_key(worker_id: str) -> str:
     return f"{QUEUE_KEY_PREFIX}:{worker_id}"
 
 
-def gpu_hold_locks(pool: ArqRedis) -> Locks:
+def gpu_hold_locks(pool: Redis) -> Locks:
     """The GPU holds of the workers, one lock per worker id; the worker takes and renews them.
 
     ``songmaker_acestep_worker.heartbeat`` builds the same family.
@@ -68,7 +68,7 @@ def gpu_hold_locks(pool: ArqRedis) -> Locks:
     )
 
 
-async def gpu_hold_is_free(pool: ArqRedis, worker_id: str) -> bool:
+async def gpu_hold_is_free(pool: Redis, worker_id: str) -> bool:
     """Whether no hold is live and none can have been lost to a Redis restart."""
     state = await gpu_hold_locks(pool).state(worker_id)
     return state.liveness is Liveness.GONE
@@ -90,7 +90,7 @@ def decode_redis_text(raw: bytes | str | None) -> str | None:
     return raw
 
 
-async def read_worker_state(pool: ArqRedis, worker_id: str) -> dict[str, Any] | None:
+async def read_worker_state(pool: Redis, worker_id: str) -> dict[str, Any] | None:
     raw = await pool.get(worker_state_key(worker_id))
     text = decode_redis_text(raw)
     if text is None:
@@ -98,7 +98,7 @@ async def read_worker_state(pool: ArqRedis, worker_id: str) -> dict[str, Any] | 
     return json.loads(text)
 
 
-async def worker_lm_failed(pool: ArqRedis, worker_id: str) -> bool:
+async def worker_lm_failed(pool: Redis, worker_id: str) -> bool:
     """Whether the worker's last start failed on the LM; only the key's existence counts."""
     return bool(await pool.exists(lm_failure_key(worker_id)))
 
@@ -126,17 +126,17 @@ def worker_is_online(state: Mapping[str, Any] | None) -> bool:
     return state is not None and state.get("gpu_healthy") is True
 
 
-async def read_queue_depth(pool: ArqRedis, worker_id: str) -> int:
+async def read_queue_depth(pool: Redis, worker_id: str) -> int:
     raw = await pool.get(queue_depth_key(worker_id))
     text = decode_redis_text(raw)
     return int(text) if text is not None else 0
 
 
-async def decr_queue_depth(pool: ArqRedis, worker_id: str) -> int:
+async def decr_queue_depth(pool: Redis, worker_id: str) -> int:
     return await pool.decr(queue_depth_key(worker_id))
 
 
-async def admit_generation(pool: ArqRedis, worker_id: str) -> bool:
+async def admit_generation(pool: Redis, worker_id: str) -> bool:
     locks = gpu_hold_locks(pool)
     result = await Script(pool, ADMIT_GENERATION_SCRIPT).run(
         [
@@ -150,7 +150,7 @@ async def admit_generation(pool: ArqRedis, worker_id: str) -> bool:
     return bool(result)
 
 
-def download_locks(pool: ArqRedis) -> Locks:
+def download_locks(pool: Redis) -> Locks:
     """The single-flight locks of the model downloads, one lock per mode."""
     return Locks(
         pool, key_prefix=REDIS_KEY_PREFIX, family=DOWNLOAD_LOCK_FAMILY, lasts=DOWNLOAD_LOCK_LASTS,
@@ -165,7 +165,7 @@ class DownloadAlreadyRunning(Exception):
         self.job_id = job_id
 
 
-async def read_download_in_progress(pool: ArqRedis, mode: str) -> str | None:
+async def read_download_in_progress(pool: Redis, mode: str) -> str | None:
     """The job that downloads ``mode``, from the label its holder keeps beside the lock.
 
     A lock names no holder, so the holder writes its job id under ``download_key`` for as long as
@@ -176,7 +176,7 @@ async def read_download_in_progress(pool: ArqRedis, mode: str) -> str | None:
     return decode_redis_text(raw)
 
 
-async def _acquire_download_lock(pool: ArqRedis, locks: Locks, mode: str) -> str:
+async def _acquire_download_lock(pool: Redis, locks: Locks, mode: str) -> str:
     """The generation of the lock; a Redis restart is waited out, a live holder is refused."""
     attempts = int(DOWNLOAD_LOCK_LASTS.total_seconds() / DOWNLOAD_LOCK_POLL_SECONDS) + 2
     for _ in range(attempts):
@@ -198,7 +198,7 @@ class DownloadLockLost(Exception):
 
 
 async def _keep_download_lock(
-    pool: ArqRedis, locks: Locks, mode: str, job_id: str, generation: str,
+    pool: Redis, locks: Locks, mode: str, job_id: str, generation: str,
     on_lost: Callable[[], None],
 ) -> None:
     """Extend the lock and its label until cancelled; once it is lost, call ``on_lost`` every span.
@@ -229,7 +229,7 @@ return redis.call('DEL', KEYS[1])
 
 
 @asynccontextmanager
-async def single_flight_download(pool: ArqRedis, mode: str, job_id: str) -> AsyncIterator[None]:
+async def single_flight_download(pool: Redis, mode: str, job_id: str) -> AsyncIterator[None]:
     """Hold the download lock of ``mode`` for the block, or raise ``DownloadAlreadyRunning``.
 
     A block whose lock is lost is cancelled and raises ``DownloadLockLost``, leaving the lock and

@@ -116,4 +116,3 @@ class ScoringWorkerSettings:
     job_timeout = _settings.arq_job_timeout
     job_completion_wait = _settings.arq_drain_timeout
     health_check_interval = ScoringWorker.health_check_interval
-    cron_jobs = []

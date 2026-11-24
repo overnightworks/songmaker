@@ -228,13 +228,17 @@ services:
     build:
       context: .
       dockerfile: docker/music-worker.Dockerfile
-    command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
+    # As the platform runs it: a read-only root with a writable /tmp, so a write elsewhere fails
+    # this stack's boot.
+    read_only: true
+    tmpfs:
+      - /tmp
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "music"]
+      test: ["CMD", "/app/.venv/bin/python", "scripts/music_worker_readiness.py"]
       interval: 30s
       timeout: 5s
       start_period: 600s

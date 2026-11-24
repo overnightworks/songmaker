@@ -586,8 +586,8 @@ def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secre
 
     assert (settings.oidc_issuer, settings.oidc_client_secret_file) == (None, None)
     assert build_arq_redis_settings(settings.redis_url) is not None
-    assert MusicWorker(settings).queue_name
-    assert ScoringWorker(settings).queue_name
+    assert MusicWorker(settings).queue
+    assert ScoringWorker(settings).queue
 
 
 def test_the_secret_is_in_no_log_and_no_response_of_the_sign_in(world: World, caplog) -> None:

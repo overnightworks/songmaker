@@ -28,7 +28,6 @@ from songmaker_cli.worker_liveness import (
 OWNER_ID = "owner-of-this-start"
 THIS_START_TICKS = "4242"
 EARLIER_START_TICKS = "4141"
-ARQ_CONTEXT = {"redis": MagicMock()}
 Observation = tuple[bool, set[str]]
 """Whether the worker reads ready, and who holds a music-worker lease."""
 
@@ -130,8 +129,6 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
         readiness_file=readiness_file,
     )
     worker.get_db_factory = MagicMock()
-    worker.start_serving = MagicMock()
-    worker.serve_queued_jobs = MagicMock()
 
     async def observe_the_start_and_the_end() -> tuple[Observation, Observation]:
         reader = create_async_redis(redis_url)
@@ -144,9 +141,9 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
             return ready, set(roster.holders)
 
         try:
-            await worker.on_startup(ARQ_CONTEXT)
+            await worker.start()
             running = await observation()
-            await worker.on_shutdown({})
+            await worker.stop()
             return running, await observation()
         finally:
             await reader.aclose()
