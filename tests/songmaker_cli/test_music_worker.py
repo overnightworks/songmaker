@@ -358,10 +358,11 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
     assert window.without_the_runs_its_ticks_explain(ran, once_each) == once_each
 
 
-def test_the_music_worker_module_imports_no_arq() -> None:
+@pytest.mark.parametrize("module", ["music_worker", "scoring_worker"])
+def test_a_worker_module_imports_no_arq(module: str) -> None:
     imported = subprocess.run(
         [sys.executable, "-c",
-         "import sys, songmaker_cli.music_worker;"
+         f"import sys, songmaker_cli.{module};"
          " print(sorted(name for name in sys.modules if name.split('.')[0] == 'arq'))"],
         capture_output=True, text=True, check=True,
     )

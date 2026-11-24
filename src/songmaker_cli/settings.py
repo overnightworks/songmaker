@@ -3,10 +3,6 @@
 Reads ``.env`` (project root) automatically via pydantic-settings.
 Constructed lazily via ``get_settings()`` on first call (lru_cached).
 
-Workers that need import-time access (arq's ``WorkerSettings`` class
-inspects ``redis_settings`` / ``max_jobs`` / ``queue_name`` at module
-load) MUST call ``get_settings()`` before defining their settings shim.
-
 Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 ``get_settings()`` (or override the lru_cache).
 """

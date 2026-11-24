@@ -160,8 +160,13 @@ def connect_db(url: URL | str) -> sessionmaker[Session]:
     return sessionmaker(bind=engine)
 
 
-def init_db(url: URL | str) -> sessionmaker[Session]:
-    """Wait for the database, require it at head, and return a session factory."""
-    wait_for_database(url)
+def init_db(
+    url: URL | str, *, sleep: Callable[[float], None] = time.sleep,
+) -> sessionmaker[Session]:
+    """Wait for the database, require it at head, and return a session factory.
+
+    ``sleep`` paces the wait; a caller that must be able to end it passes one that raises.
+    """
+    wait_for_database(url, sleep=sleep)
     require_database_at_head(url)
     return connect_db(url)

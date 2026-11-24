@@ -37,7 +37,7 @@ RUN uv sync --frozen --no-dev --no-install-project \
 
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
-COPY --chown=root:root scripts/music_worker_readiness.py scripts/
+COPY --chown=root:root scripts/worker_readiness.py scripts/
 USER root
 # uv_cache.json in the project's dist-info holds the install's wall-clock time and is listed in RECORD;
 # uv has no switch to leave it out, and nothing runs `uv sync` in the image again.

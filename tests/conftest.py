@@ -161,15 +161,6 @@ def _reset_settings_cache():
     get_worker_settings.cache_clear()
 
 
-@pytest.fixture(autouse=True)
-def _reset_worker_singletons():
-    yield
-    from songmaker_cli import scoring_worker as sw_mod
-
-    sw_mod._scoring_worker._db_factory = None
-    sw_mod._scoring_worker._db_engine = None
-
-
 @pytest.fixture
 def stop_signal_handlers():
     """Leave the process's handlers of the stop signals as the test found them."""

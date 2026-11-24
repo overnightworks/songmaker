@@ -182,11 +182,6 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     return count_queued_jobs(session, JobType.LORA_TRAINING)
 
 
-# A row of these types still has an arq message that runs it from its own arguments; a row of
-# any other type is run only by a claim.
-_TYPES_WITH_QUEUE_MESSAGE: Final = frozenset({JobType.SCORE})
-
-
 def claim_next_cover_job(session: Session, owner: JobOwner) -> Job | None:
     """Atomically move the oldest queued cover job to running, owned by ``owner``."""
     return claim_next_queued_job(session, owner, JobType.COVER)
@@ -197,15 +192,10 @@ def claim_next_queued_job(session: Session, owner: JobOwner, *job_types: JobType
 
     Due means queued with a ``run_after`` that has passed: a cancelled job keeps its
     ``run_after`` and is never due. A queued job without one (written before rows carried
-    their arguments) is due for a type that has no queue message to run it, and its claimer
-    fails it as having no payload; a score job without one is left to its arq message, which
-    runs it from its own arguments. SKIP LOCKED makes competing workers take different rows
-    instead of waiting on each other's.
+    their arguments) is due, and its claimer fails it as having no payload. SKIP LOCKED makes
+    competing workers take different rows instead of waiting on each other's.
     """
-    due = Job.run_after <= utcnow()
-    without_message = [t for t in job_types if t not in _TYPES_WITH_QUEUE_MESSAGE]
-    if without_message:
-        due = or_(due, and_(Job.run_after.is_(None), Job.type.in_(without_message)))
+    due = or_(Job.run_after <= utcnow(), Job.run_after.is_(None))
     candidate_id = (
         session.query(Job.id)
         .filter(Job.type.in_(job_types), Job.status == JobStatus.QUEUED, due)
@@ -216,15 +206,6 @@ def claim_next_queued_job(session: Session, owner: JobOwner, *job_types: JobType
     )
     claimed_id = _claim_queued_row(session, owner, Job.id == candidate_id)
     return None if claimed_id is None else session.get(Job, claimed_id)
-
-
-def claim_queued_job(session: Session, job_id: str, owner: JobOwner) -> bool:
-    """Atomically move the queued job to running, owned by ``owner``; false when it is not queued.
-
-    Of several handlers delivered the same job, one gets true; a job that ended, was cancelled
-    or already runs under another owner gives false, and its handler runs nothing.
-    """
-    return _claim_queued_row(session, owner, Job.id == job_id) is not None
 
 
 def _claim_queued_row(session: Session, owner: JobOwner, *conditions) -> str | None:

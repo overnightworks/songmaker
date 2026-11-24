@@ -8,7 +8,7 @@ from redis.exceptions import RedisError
 from tandem import Roster
 
 from songmaker_cli.acestep_state import worker_state_key
-from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, REDIS_KEY_PREFIX
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.job_timing import worker_restart_grace_seconds
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.worker_liveness import (
@@ -214,16 +214,6 @@ class TestAWorkerKindFollowsItsRoster:
             worker_kind_liveness(fake_redis, kind, EMPTY_SETTLED_ROSTER, now=now)
             is WorkerLiveness.ALIVE
         )
-
-
-def test_arqs_health_key_does_not_make_the_scoring_signal_alive(fake_redis) -> None:
-    fake_redis.set(ARQ_SCORING_HEALTH_KEY, "alive")
-
-    liveness = read_worker_liveness(
-        fake_redis, [], rosters={WorkerLivenessSignal.SCORING: EMPTY_SETTLED_ROSTER},
-    )
-
-    assert liveness[JobType.SCORE] is not WorkerLiveness.ALIVE
 
 
 def test_the_persisted_keys_of_the_worker_kinds_stay_unchanged_across_a_rolling_deploy() -> None:

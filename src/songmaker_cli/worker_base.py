@@ -1,8 +1,8 @@
 """Shared infrastructure for the workers.
 
 Provides the WorkerBase class subclassed by MusicWorker and ScoringWorker.
-Owns DB engine lifecycle, the worker's owner lease, orphan-file audit, the ctx-free
-``run`` of a worker that arq does not host and the arq startup/shutdown hooks of one it does.
+Owns DB engine lifecycle, the worker's owner lease and readiness file, orphan-file audit and
+``run``, the process's whole life from the stop-signal handlers to the end of the lease.
 A web process fails the jobs of a worker whose lease is gone; no worker fails another's jobs.
 """
 
@@ -17,21 +17,19 @@ import uuid
 from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack
 from pathlib import Path
-from types import FrameType
-from typing import ClassVar
+from typing import ClassVar, Final
 
 from logline import StepTimer, configure, unit_trace
 from redis.asyncio import Redis as AsyncRedis
 from tandem import WakeChannel
 
 from songmaker_cli.arq_codec import TRACEPARENT_KWARG
-from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS
+from songmaker_cli.constants import WORKER_READINESS_FILE
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     claim_next_queued_job,
-    claim_queued_job,
     get_job,
     update_job_status,
 )
@@ -43,15 +41,17 @@ from songmaker_cli.job_queue import (
     serve_queue,
 )
 from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
-from songmaker_cli.messages import message
-from songmaker_cli.redis_client import create_async_redis, stop_retrying
+from songmaker_cli.messages import Message, message
+from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.settings import Settings, get_settings
 from songmaker_cli.worker_liveness import (
     JobOwner,
     keep_kind_lease,
     keep_owner_lease,
     owner_leases,
+    pid_one_start_ticks,
     worker_kind_leases,
+    write_readiness_file,
 )
 
 log = logging.getLogger(__name__)
@@ -60,6 +60,11 @@ JOB_ENDED_EVENT = "arq_job.ended"
 CRON_ENDED_EVENT = "cron_job.ended"
 JOB_FAILED_REASON = "job_failed"
 JOB_STATUS_UNREADABLE_REASON = "status_unreadable"
+STOP_SIGNALS: Final = (signal.SIGINT, signal.SIGTERM)
+
+
+class WorkerStopRequested(Exception):
+    """A stop signal arrived while the worker waited for its database."""
 
 
 def logged_job[Result](
@@ -134,12 +139,6 @@ async def _read_status(
         return None
 
 
-def stop_claiming(queue_task: asyncio.Task[None]) -> None:
-    """Cancel the claiming loop once; a second cancel would cut the drain of its running jobs."""
-    if not queue_task.cancelling():
-        queue_task.cancel()
-
-
 class WorkerBase:
     """Base class of the workers that claim their queue's jobs from PostgreSQL.
 
@@ -147,22 +146,21 @@ class WorkerBase:
     ``run_claimed``. The instance owns the DB engine + factory and the process's owner id: its
     jobs carry the id from the moment they run, and its lease says the process lives.
 
-    ``run`` is the entry point of a worker that no arq hosts; a worker that arq still hosts
-    reaches ``start`` and ``stop`` through the ``on_startup`` and ``on_shutdown`` hooks.
+    ``run`` is the entry point of the worker's process.
     """
 
     service_name: ClassVar[str]
     queue: ClassVar[JobQueue]
     job_types: ClassVar[tuple[JobType, ...]]
-    queue_name: ClassVar[str]
-    max_jobs: ClassVar[int]
     lease_kind: ClassVar[WorkerLivenessSignal | None] = None
     """The worker kind whose lease family this worker renews beside its owner lease, if any.
     A kind without a row in ``WORKER_KINDS`` fails the worker's start."""
-    health_check_interval: ClassVar[int] = ARQ_HEALTH_CHECK_INTERVAL_SECONDS
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self, settings: Settings | None = None, *, readiness_file: Path = WORKER_READINESS_FILE,
+    ) -> None:
         self._settings = settings or get_settings()
+        self._readiness_file = readiness_file
         self._db_engine = None
         self._db_factory = None
         self._db_lock = threading.Lock()
@@ -171,7 +169,7 @@ class WorkerBase:
         self._owner_redis: AsyncRedis | None = None
         self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
-        self._queue_task: asyncio.Task[None] | None = None
+        self._stop_requested = threading.Event()
         self._places: asyncio.Semaphore
 
     def worker_name(self) -> str:
@@ -181,9 +179,17 @@ class WorkerBase:
     def get_db_factory(self):
         with self._db_lock:
             if self._db_factory is None:
-                self._db_factory = init_db(connection_url_from_settings(self._settings))
+                self._db_factory = init_db(
+                    connection_url_from_settings(self._settings),
+                    sleep=self._wait_unless_stop_requested,
+                )
                 self._db_engine = self._db_factory.kw["bind"]
         return self._db_factory
+
+    def _wait_unless_stop_requested(self, seconds: float) -> None:
+        """Pause between two tries to reach the database; a stop request ends the wait."""
+        if self._stop_requested.wait(seconds):
+            raise WorkerStopRequested
 
     def audio_dir(self) -> Path:
         return Path(self._settings.audio_dir)
@@ -197,28 +203,18 @@ class WorkerBase:
             job = get_job(session, job_id)
             return None if job is None else JobStatus(job.status)
 
-    def claim_job(self, job_id: str) -> bool:
-        """Claim the job's queued row for this process; false means another delivery owns it.
-
-        A job delivered twice, retried by the queue or already ended finds no queued row, and
-        its handler returns without running it.
-        """
+    def fail_job(self, job_id: str, reason: Message, error_type: str) -> None:
+        """End a claimed job as failed, saying why in the stored message and error type."""
         with self.get_db_factory()() as session:
-            claimed = claim_queued_job(session, job_id, self.owner)
+            update_job_status(session, job_id, JobStatusUpdate(
+                JobStatus.FAILED, error_message=reason, error_type=error_type,
+            ))
             session.commit()
-        if not claimed:
-            log.info("Job %s is not queued; this delivery runs nothing", job_id)
-        return claimed
 
     def fail_job_without_payload(self, job_id: str) -> None:
         """End a claimed job whose row holds no arguments to run it with."""
         log.error("Job %s has no payload to run", job_id)
-        with self.get_db_factory()() as session:
-            update_job_status(session, job_id, JobStatusUpdate(
-                JobStatus.FAILED, error_message=message("jobFailure.unexpected"),
-                error_type="setup_error",
-            ))
-            session.commit()
+        self.fail_job(job_id, message("jobFailure.unexpected"), "setup_error")
 
     def claim_next_job(self) -> ClaimedJob | None:
         """Claim the job of this worker's types that is due first for this process, or none.
@@ -248,58 +244,52 @@ class WorkerBase:
         return (self.serve_queued_jobs(),)
 
     async def run(self) -> None:
-        """Serve without arq: start, serve until a stop signal, then end the lease and the pool.
+        """Serve as a process: handle stop signals, start, serve until stopped, then stop.
 
-        The servings are the tasks of one group: a stop signal cancels each once, which lets a
+        The stop-signal handlers are installed before ``start``, so a signal while the worker
+        waits for its database or opens its lease ends it through ``stop`` like one while it
+        serves. The servings are the tasks of one group: a stop cancels each once, which lets a
         running job drain, and a serving that raises cancels the others and ends the worker with
         its error, since a worker that serves only part of its work while its lease says it lives
         would be a silent failure. The database and the lease end only after every serving has.
         """
+        lifecycle = asyncio.create_task(self._start_serve_and_stop())
+        loop = asyncio.get_running_loop()
+        for stop_signal in STOP_SIGNALS:
+            loop.add_signal_handler(stop_signal, self._request_stop, lifecycle)
+        try:
+            await lifecycle
+        except asyncio.CancelledError:
+            if not self._stop_requested.is_set():
+                raise
+        finally:
+            for stop_signal in STOP_SIGNALS:
+                loop.remove_signal_handler(stop_signal)
+
+    def _request_stop(self, lifecycle: asyncio.Task[None]) -> None:
+        """Cancel the lifecycle once; a second cancel would cut the drain of its running jobs."""
+        self._stop_requested.set()
+        if not lifecycle.cancelling():
+            lifecycle.cancel()
+
+    async def _start_serve_and_stop(self) -> None:
         try:
             await self.start()
             async with asyncio.TaskGroup() as group:
-                serving_tasks = []
                 for serving in self.servings():
-                    serving_tasks.append(group.create_task(serving))
-                self.stop_claiming_on_stop_signal(*serving_tasks)
+                    group.create_task(serving)
         finally:
             await self.stop()
 
-    def start_serving(self, serving: Coroutine[None, None, None]) -> None:
-        """Run the claiming loop beside arq's own work until a stop signal or ``stop_serving``."""
-        self._queue_task = asyncio.create_task(serving)
-        self.stop_claiming_on_stop_signal(self._queue_task)
-
-    async def stop_serving(self) -> None:
-        """End the claiming and wait for its running jobs to finish or be cut at the drain limit."""
-        if self._queue_task is not None:
-            stop_claiming(self._queue_task)
-            await asyncio.gather(self._queue_task, return_exceptions=True)
-
-    def stop_claiming_on_stop_signal(self, *serving_tasks: asyncio.Task[None]) -> None:
-        """End the servings when a stop signal arrives, not when arq has drained its own jobs.
-
-        Under arq, which stops picking its messages at the signal but runs on_shutdown only after
-        they ended or ``job_completion_wait`` passed, the loop would go on starting jobs until
-        then; ``run`` has no arq and relies on this alone. The event loop reads signals from its
-        wakeup descriptor, so arq's handler still runs beside this one.
-        """
-        loop = asyncio.get_running_loop()
-
-        def stop(_signal_number: int, _frame: FrameType | None) -> None:
-            for serving_task in serving_tasks:
-                loop.call_soon_threadsafe(stop_claiming, serving_task)
-
-        for stop_signal in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(stop_signal, stop)
-
     async def start(self) -> None:
-        """Open the database, then say this process lives."""
+        """Say which start this worker is, open the database, then say this process lives."""
         configure(self.service_name)
 
         log.info("%s worker starting up...", self.worker_name())
-        # Opening the database may wait for it to start; the lease says "alive" only after.
-        self.get_db_factory()
+        write_readiness_file(self._readiness_file, self.owner_id, pid_one_start_ticks())
+        # Opening the database may wait for it to start, in a thread so that a stop signal
+        # reaches the loop; the lease says "alive" only after.
+        await asyncio.to_thread(self.get_db_factory)
         await self._start_owner_lease()
         log.info("%s worker ready", self.worker_name())
 
@@ -311,16 +301,8 @@ class WorkerBase:
             self._db_engine.dispose()
             log.info("Database connection pool disposed")
 
-    async def on_startup(self, ctx) -> None:
-        # arq runs on_startup inside the task a stop signal cancels, so its end marks the stop.
-        asyncio.current_task().add_done_callback(lambda _stopped: stop_retrying(ctx["redis"]))
-        await self.start()
-
-    async def on_shutdown(self, _ctx) -> None:
-        await self.stop()
-
     async def _start_owner_lease(self) -> None:
-        """Say this process lives, on a client of its own: arq's has no retry and no timeouts.
+        """Say this process lives, on a client of its own with retries and timeouts.
 
         The wake channel gets a second client: its quiet subscription must not end on the
         owner client's socket timeout.

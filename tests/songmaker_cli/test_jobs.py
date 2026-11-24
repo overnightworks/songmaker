@@ -27,7 +27,7 @@ from songmaker_acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
-from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, INTERNAL_TOKEN_HEADER
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.models import (
     Generation,
     Job,
@@ -1070,7 +1070,6 @@ def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path
         assert score_job.status == "queued"
         assert score_job.payload == ScorePayload(gen_id=gen.id)
 
-    assert ARQ_SCORING_QUEUE_NAME not in redis.store
     assert redis.woken_queues() == [JobQueue.SCORE]
 
 
