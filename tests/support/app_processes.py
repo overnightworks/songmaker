@@ -45,10 +45,11 @@ from songmaker_acestep_worker.settings import WorkerSettings
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import Job
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_base import CRON_ENDED_EVENT, JOB_ENDED_EVENT
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_liveness import owner_leases, worker_kind_leases
 
 T = TypeVar("T")
 
@@ -386,6 +387,16 @@ def leased_owner_ids(redis: Redis) -> set[str]:
         return set((await leases.live()).holders)
 
     return _on_the_owner_leases(redis, read_roster)
+
+
+def kind_lease_holders(redis: Redis, kind: WorkerLivenessSignal) -> set[str]:
+    """The holders of ``kind``'s lease family, as the production roster reads them."""
+
+    async def read_roster() -> set[str]:
+        async with _on_the_same_server(redis) as client:
+            return set((await worker_kind_leases(client, kind).live()).holders)
+
+    return asyncio.run(read_roster())
 
 
 def owner_lease_generation(redis: Redis, owner_id: str) -> str | None:

@@ -73,7 +73,7 @@ from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_payloads import JobPayload
-from songmaker_cli.job_types import JobType
+from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
@@ -81,7 +81,7 @@ from songmaker_cli.worker_liveness import (
     JobOwnerStamp,
     WorkerLiveness,
     owner_lease_liveness,
-    read_music_roster,
+    read_kind_rosters,
     read_worker_liveness,
 )
 
@@ -296,7 +296,7 @@ async def create_job_with_rate_limit(
     payload: JobPayload | None = None,
     redis: Redis,
     owner_leases: Leases,
-    music_leases: Leases,
+    kind_leases: Mapping[WorkerLivenessSignal, Leases],
 ) -> Job:
     """Atomically check rate limits and create a job under an advisory lock.
 
@@ -315,7 +315,7 @@ async def create_job_with_rate_limit(
     require_no_uncommitted_mutations(session, "create_job_with_rate_limit")
     worker_ids = [worker.id for worker in list_worker_identities(session)]
     worker_liveness = read_worker_liveness(
-        redis, worker_ids, music_roster=await read_music_roster(music_leases),
+        redis, worker_ids, rosters=await read_kind_rosters(kind_leases),
     )
     owner_liveness = await _read_owner_liveness_or_unknown(
         owner_leases, active_job_owner_stamps(session),

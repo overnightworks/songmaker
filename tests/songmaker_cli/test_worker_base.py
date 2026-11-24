@@ -23,6 +23,7 @@ from support.redis_proxy import redis_proxy
 
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.job_timing import OWNER_LEASE_REFRESH_SECONDS, OWNER_LEASE_TTL_SECONDS
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import build_arq_redis_settings, create_async_redis
 from songmaker_cli.scoring import subprocess_runner
@@ -269,6 +270,20 @@ def test_a_worker_whose_database_cannot_open_holds_no_lease(
 
     async def start_and_read_the_leases() -> set[str]:
         with pytest.raises(OSError, match="the database is down"):
+            await worker.on_startup(_ARQ_CTX)
+        return await _held_leases(redis_url)
+
+    assert _run(start_and_read_the_leases()) == set()
+
+
+def test_a_worker_whose_signal_has_no_worker_kind_fails_its_start_and_holds_no_lease(
+    restored_logging: None, redis_url: str,
+) -> None:
+    worker = _worker_on(redis_url)
+    worker.lease_kind = WorkerLivenessSignal.MODEL_EXECUTION
+
+    async def start_and_read_the_leases() -> set[str]:
+        with pytest.raises(KeyError):
             await worker.on_startup(_ARQ_CTX)
         return await _held_leases(redis_url)
 
