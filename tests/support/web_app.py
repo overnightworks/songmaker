@@ -22,9 +22,10 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
-from songmaker_cli.worker_liveness import MUSIC_WORKER_KIND, worker_kind_leases
+from songmaker_cli.worker_liveness import WORKER_KINDS, worker_kind_leases
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -109,11 +110,14 @@ def arrange_fake_async_redis(
     asyncio.run(arrange_and_disconnect())
 
 
-def hold_a_music_lease(async_redis: fakeredis.FakeAsyncRedis) -> None:
-    """Make a music worker hold a live lease on the fake, as its process would."""
+def hold_a_worker_lease(
+    async_redis: fakeredis.FakeAsyncRedis,
+    kind: WorkerLivenessSignal = WorkerLivenessSignal.MUSIC,
+) -> None:
+    """Make a worker of ``kind``, a music worker by default, hold a live lease on the fake."""
     arrange_fake_async_redis(
         async_redis,
-        lambda redis: worker_kind_leases(redis, MUSIC_WORKER_KIND).renew("music-worker"),
+        lambda redis: worker_kind_leases(redis, kind).renew(WORKER_KINDS[kind].lease_family),
     )
 
 

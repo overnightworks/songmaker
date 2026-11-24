@@ -89,7 +89,7 @@ from songmaker_cli.request_policies import (
 )
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, RealmSettings, Settings, get_settings
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.worker_liveness import keep_owner_lease, read_music_roster
+from songmaker_cli.worker_liveness import keep_owner_lease, read_kind_rosters
 
 WEB_SERVICE_NAME = "songmaker-web"
 
@@ -165,7 +165,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     await fail_jobs_of_dead_owners(ctx)
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
-    reap_stale_jobs(ctx, music_roster=await read_music_roster(ctx.music_leases))
+    reap_stale_jobs(ctx, rosters=await read_kind_rosters(ctx.kind_leases))
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
 

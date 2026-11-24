@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,14 +12,16 @@ from logline.testing import configured
 from tandem import StoreError
 
 import songmaker_cli.arq_pool as arq_pool
+from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import (
-    MUSIC_WORKER_KIND,
+    WORKER_KINDS,
     owner_leases,
     pid_one_start_ticks,
-    read_music_roster,
+    read_kind_roster,
     worker_is_ready,
     worker_kind_leases,
     write_readiness_file,
@@ -137,7 +139,7 @@ def test_a_running_music_worker_is_ready_and_listed_and_is_neither_after_its_shu
             ready = await worker_is_ready(
                 owner_leases(reader), readiness_file, pid_one_start_ticks(),
             )
-            roster = await worker_kind_leases(reader, MUSIC_WORKER_KIND).live()
+            roster = await worker_kind_leases(reader, WorkerLivenessSignal.MUSIC).live()
             return ready, set(roster.holders)
 
         try:
@@ -161,41 +163,71 @@ def web_redis(redis_url: str, monkeypatch, fresh_settings: None) -> str:
     return redis_url
 
 
-def test_a_live_music_holder_makes_the_worker_healthy_and_none_does_not(
-    web_redis: str,
+@pytest.fixture(params=WORKER_KINDS, ids=lambda kind: kind.value)
+def kind_and_health(request) -> tuple[WorkerLivenessSignal, Callable[[], Awaitable[bool]]]:
+    """A worker kind and the question whether a worker of that kind is healthy."""
+    health = {
+        WorkerLivenessSignal.MUSIC: arq_pool.is_music_worker_healthy,
+        WorkerLivenessSignal.SCORING: arq_pool.is_scoring_worker_healthy,
+    }
+    return request.param, health[request.param]
+
+
+def test_a_live_holder_makes_the_worker_healthy_and_none_does_not(
+    web_redis: str, kind_and_health,
 ) -> None:
+    kind, is_healthy = kind_and_health
+
     async def healthy_without_and_with_a_holder() -> tuple[bool, bool]:
         pool = await arq_pool.init_arq_pool()
         try:
-            without = await arq_pool.is_music_worker_healthy()
-            await worker_kind_leases(pool, MUSIC_WORKER_KIND).renew(OWNER_ID)
-            return without, await arq_pool.is_music_worker_healthy()
+            without = await is_healthy()
+            await worker_kind_leases(pool, kind).renew(OWNER_ID)
+            return without, await is_healthy()
         finally:
             await arq_pool.close_arq_pool()
 
     assert asyncio.run(healthy_without_and_with_a_holder()) == (False, True)
 
 
+def test_arqs_health_key_does_not_make_the_scoring_worker_healthy(web_redis: str) -> None:
+    async def healthy_with_only_the_health_key() -> bool:
+        pool = await arq_pool.init_arq_pool()
+        try:
+            await pool.set(ARQ_SCORING_HEALTH_KEY, 1)
+            return await arq_pool.is_scoring_worker_healthy()
+        finally:
+            await arq_pool.close_arq_pool()
+
+    assert asyncio.run(healthy_with_only_the_health_key()) is False
+
+
 def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(
-    web_redis: str,
+    web_redis: str, kind_and_health,
 ) -> None:
+    _, is_healthy = kind_and_health
+
     async def healthy_with_an_owner() -> bool:
         pool = await arq_pool.init_arq_pool()
         try:
             await owner_leases(pool).renew(OWNER_ID)
-            return await arq_pool.is_music_worker_healthy()
+            return await is_healthy()
         finally:
             await arq_pool.close_arq_pool()
 
     assert asyncio.run(healthy_with_an_owner()) is False
 
 
-def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(web_redis: str) -> None:
+def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(
+    web_redis: str, kind_and_health,
+) -> None:
+    kind, is_healthy = kind_and_health
+
     async def healthy_once_the_pool_is_closed() -> bool:
         await arq_pool.init_arq_pool()
-        await worker_kind_leases(arq_pool.get_arq_pool(), MUSIC_WORKER_KIND).renew(OWNER_ID)
+        await worker_kind_leases(arq_pool.get_arq_pool(), kind).renew(OWNER_ID)
         await arq_pool.close_arq_pool()
-        return await arq_pool.is_music_worker_healthy()
+        return await is_healthy()
 
     assert asyncio.run(healthy_once_the_pool_is_closed()) is False
 
@@ -203,4 +235,4 @@ def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(web_redis: str) -> 
 def test_a_roster_that_cannot_be_read_reads_as_none() -> None:
     leases = MagicMock(live=AsyncMock(side_effect=StoreError("down")))
 
-    assert asyncio.run(read_music_roster(leases)) is None
+    assert asyncio.run(read_kind_roster(WorkerLivenessSignal.MUSIC, leases)) is None
