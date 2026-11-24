@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from support.refused_download import hold_a_download, settled_pool_with_an_online_worker
 from support.web_app import hold_a_worker_lease, make_test_app, seed_user
 
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
@@ -856,12 +857,10 @@ def test_download_endpoint_already_downloaded(client: TestClient) -> None:
 def test_download_endpoint_already_in_progress(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.acestep_state import download_key
-
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_pool_with_state({"w1": {"available_modes": []}})
-    pool._store[download_key("xl-base")] = "previous-job-id"
+    pool = settled_pool_with_an_online_worker("w1")
+    hold_a_download(pool, "xl-base", "previous-job-id")
     _override_pool(client, pool)
 
     publish = AsyncMock()
@@ -881,7 +880,7 @@ def test_download_endpoint_queues_job_and_wakes_the_music_queue(client: TestClie
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+    _override_pool(client, settled_pool_with_an_online_worker("w1"))
 
     publish = AsyncMock()
     with patch.object(client.app.state.ctx.wake_channel, "publish", publish):
