@@ -246,7 +246,7 @@ def pid_one_start_ticks(stat_file: Path = PID_ONE_STAT_FILE) -> str:
 
 def write_readiness_file(readiness_file: Path, owner_id: str, start_ticks: str) -> None:
     """Record this start's owner id and PID 1's start ticks in one atomic write."""
-    pending = readiness_file.with_name(readiness_file.name + ".pending")
+    pending = readiness_file.with_name(f"{readiness_file.name}.{os.getpid()}.pending")
     pending.write_text(f"{owner_id} {start_ticks}")
     os.replace(pending, readiness_file)
 

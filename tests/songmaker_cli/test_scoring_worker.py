@@ -28,7 +28,7 @@ from songmaker_cli.settings import get_settings
 STOP_WITHIN_SECONDS = 10
 SHUTDOWN_HOLD_SECONDS = 0.5
 SCORER_WAIT_SECONDS = 10
-TIME_LIMIT_SECONDS = 1
+TIME_LIMIT_SECONDS = 3
 TOOK_TOO_LONG_KEY = "jobFailure.tookTooLong"
 
 
