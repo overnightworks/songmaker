@@ -1,7 +1,7 @@
-"""Rules every Dockerfile follows.
+"""Rules the Dockerfiles follow.
 
 Installs come from a lock: frozen syncs, hashed or own-project pip installs.
-No image changes ownership of its tree recursively in its final stage.
+The app image's final stage changes no ownership recursively.
 """
 
 from __future__ import annotations
