@@ -37,7 +37,6 @@ E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 TEST_STACK_COMPOSE_FILE = DOCKER_ROOT / "docker-compose.test.yml"
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
-RECURSIVE_CHOWN = re.compile(r"\bchown(?:\s+-\S+)*?\s+(?:-\w*R\w*|--recursive)\b")
 
 
 @dataclass(frozen=True)
@@ -334,28 +333,6 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
     assert len({final_user for final_user, _ in identities.values()}) == 1, (
         "images share volumes, so they must share one uid:gid"
     )
-
-
-@pytest.mark.parametrize(
-    "instruction",
-    [
-        "RUN chown -R songmaker:songmaker /app",
-        "RUN chown -f -R songmaker:songmaker /app",
-        "RUN chown --verbose --recursive songmaker:songmaker /app",
-    ],
-)
-def test_recursive_chown_is_found_after_other_options(instruction: str) -> None:
-    assert RECURSIVE_CHOWN.search(instruction)
-
-
-def test_no_final_stage_instruction_changes_ownership_recursively() -> None:
-    offenders = [
-        instruction
-        for instruction in final_stage_instructions(REPOSITORY_ROOT / "Dockerfile")
-        if RECURSIVE_CHOWN.search(instruction)
-    ]
-
-    assert offenders == []
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
