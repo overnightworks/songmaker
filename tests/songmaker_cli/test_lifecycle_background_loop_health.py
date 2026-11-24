@@ -15,11 +15,10 @@ from unittest.mock import AsyncMock
 import fakeredis
 import pytest
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
-from support.object_store import an_object_store
 from support.web_app import (
-    TEST_SECRET,
     arrange_fake_async_redis,
     hold_a_worker_lease,
+    make_app_context,
     make_fake_redis,
     make_test_app,
 )
@@ -28,7 +27,6 @@ from tandem.testing import aged_epoch
 import songmaker_cli.cover_runner as cover_runner
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
     REDIS_KEY_PREFIX,
@@ -298,11 +296,9 @@ class _TickingProcess:
         self._monkeypatch = monkeypatch
         self._factory = factory
         self._work_numbers = work_numbers
-        self._ctx = AppContext(
-            object_store=an_object_store(),
+        self._ctx = make_app_context(
             db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-            signing_key=TEST_SECRET, redis=make_fake_redis(),
-            async_redis=fakeredis.FakeAsyncRedis(server=server),
+            redis=make_fake_redis(), async_redis=fakeredis.FakeAsyncRedis(server=server),
         )
         self._app = SimpleNamespace(
             state=SimpleNamespace(background_loop_registry=self.registry, ctx=self._ctx),

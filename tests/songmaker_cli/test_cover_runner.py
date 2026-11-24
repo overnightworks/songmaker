@@ -19,9 +19,8 @@ from support.cowriter_gateway import (
     attach_cowriter_gateway,
     raises,
 )
-from support.object_store import an_object_store
 from support.web_app import (
-    TEST_SECRET,
+    make_app_context,
     make_authenticated_user,
     make_fake_redis,
     make_router_app,
@@ -31,7 +30,6 @@ from support.web_app import (
 from tandem import Liveness
 
 import songmaker_cli.cover_runner as cover_runner
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import COVER_PROMPT_MAX_CHARS, COVER_PROMPT_SONG_FIELD_MAX_CHARS
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.albums import soft_delete_album
@@ -427,10 +425,9 @@ def test_a_running_cover_s_cancel_listener_subscribes_once_while_the_channel_is_
             return pg_factory()
 
         wake_redis = create_async_redis(redis_url, follows_wakes=True)
-        ctx = AppContext(
-            db=counting_db, audio_dir=tmp_path, data_dir=tmp_path, signing_key=TEST_SECRET,
-            redis=make_fake_redis(), async_redis=create_async_redis(redis_url),
-            wake_redis=wake_redis, object_store=an_object_store(),
+        ctx = make_app_context(
+            db=counting_db, audio_dir=tmp_path, data_dir=tmp_path, redis=make_fake_redis(),
+            async_redis=create_async_redis(redis_url), wake_redis=wake_redis,
         )
         try:
             work = await cover_runner.run_until_cancelled(

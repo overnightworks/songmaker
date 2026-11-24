@@ -14,12 +14,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from support.library_rows import a_song, a_take, a_version, an_album
-from support.object_store import an_object_store
 from support.web_app import (
     BUILT_SHELL,
     TEST_ORIGIN,
-    TEST_SECRET,
-    make_fake_async_redis,
+    make_app_context,
     make_fake_redis,
     make_test_app,
     seed_session,
@@ -29,7 +27,6 @@ from support.web_app import (
 
 from songmaker_cli.api_models.playlists import SharedPlaylistEntryResponse
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.covers import (
     COVER_DIRNAME,
     PLAYLIST_COVER_DIRNAME,
@@ -1911,12 +1908,9 @@ def _shared_app_with_small_budget(client: TestClient, tmp_path: Path):
     try:
         audio_dir = client.app.state.ctx.audio_dir
         data_dir = client.app.state.ctx.data_dir
-        ctx = AppContext(
-            object_store=an_object_store(), db=client.app.state.ctx.db, audio_dir=audio_dir,
-            data_dir=data_dir,
-            signing_key=TEST_SECRET,
+        ctx = make_app_context(
+            db=client.app.state.ctx.db, audio_dir=audio_dir, data_dir=data_dir,
             redis=make_fake_redis(),
-            async_redis=make_fake_async_redis(),
         )
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
         yield app
@@ -1995,10 +1989,8 @@ def test_share_album_ownership_enforced(tmp_path: Path, pg_factory) -> None:
         create_album(session, "owners_album", "Owners Album", created_by=owner.id)
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
     from songmaker_cli.server import create_app
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
