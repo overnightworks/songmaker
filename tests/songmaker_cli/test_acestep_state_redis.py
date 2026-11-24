@@ -8,37 +8,40 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 
 import pytest
-from redis import Redis
+from support.redis_clock import redis_ms, until_redis_ms
+from support.redis_server import lose_everything, settle_the_real_servers_epoch
 from support.refused_download import attempt_download_that_must_not_run
-from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import reserve_gpu_hold
 from songmaker_cli.acestep_state import (
     DownloadAlreadyRunning,
+    DownloadLockLost,
     admit_generation,
+    download_key,
+    download_locks,
     gpu_hold_is_free,
+    read_download_in_progress,
     read_queue_depth,
     single_flight_download,
 )
-from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.lifecycle import JOB_REAPER_LOCK_NAME, tick_locks
 from songmaker_cli.redis_client import create_async_redis
 
 WORKER = "acestep-worker-0"
+SHORT_LOCK_LASTS = timedelta(seconds=3)
+SHORT_EXTEND_EVERY = timedelta(milliseconds=500)
+DOWNLOAD_LOST_WITHIN_SECONDS = 15
 
 
-def _settle_the_real_servers_epoch(redis_url: str) -> None:
-    """Date the epoch as on a Redis that has run longer than any lock lasts."""
-    with Redis.from_url(redis_url) as server:
-        server.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
-
-
-def _lose_everything(redis_url: str) -> None:
-    """What a Redis restart does to the keys."""
-    with Redis.from_url(redis_url) as server:
-        server.flushdb()
+@pytest.fixture
+def short_download_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("songmaker_cli.acestep_state.DOWNLOAD_LOCK_LASTS", SHORT_LOCK_LASTS)
+    monkeypatch.setattr(
+        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", SHORT_EXTEND_EVERY,
+    )
 
 
 def _in_two_processes(
@@ -56,7 +59,7 @@ def _in_two_processes(
 
 
 def test_one_of_two_processes_takes_a_tick_lock(redis_url: str) -> None:
-    _settle_the_real_servers_epoch(redis_url)
+    settle_the_real_servers_epoch(redis_url)
 
     async def scenario(first, second) -> list[bool]:
         return [
@@ -68,7 +71,7 @@ def test_one_of_two_processes_takes_a_tick_lock(redis_url: str) -> None:
 
 
 def test_a_download_of_a_mode_runs_in_one_of_two_processes(redis_url: str) -> None:
-    _settle_the_real_servers_epoch(redis_url)
+    settle_the_real_servers_epoch(redis_url)
 
     async def scenario(first, second) -> str | None:
         async with single_flight_download(first, "sft", "job-1"):
@@ -80,7 +83,7 @@ def test_a_download_of_a_mode_runs_in_one_of_two_processes(redis_url: str) -> No
 
 
 def test_the_worker_reserve_and_the_web_admission_cannot_both_win(redis_url: str) -> None:
-    _settle_the_real_servers_epoch(redis_url)
+    settle_the_real_servers_epoch(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, int]:
         reserved = await reserve_gpu_hold(worker, WORKER) is not None
@@ -91,7 +94,7 @@ def test_the_worker_reserve_and_the_web_admission_cannot_both_win(redis_url: str
 
 
 def test_the_web_admission_wins_against_a_later_worker_reserve(redis_url: str) -> None:
-    _settle_the_real_servers_epoch(redis_url)
+    settle_the_real_servers_epoch(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, int]:
         admitted = await admit_generation(web, WORKER)
@@ -102,8 +105,8 @@ def test_the_web_admission_wins_against_a_later_worker_reserve(redis_url: str) -
 
 
 def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: str) -> None:
-    _settle_the_real_servers_epoch(redis_url)
-    _lose_everything(redis_url)
+    settle_the_real_servers_epoch(redis_url)
+    lose_everything(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, bool]:
         return (
@@ -114,9 +117,58 @@ def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: 
 
     assert _in_two_processes(redis_url, scenario) == (False, False, False)
 
-    _settle_the_real_servers_epoch(redis_url)
+    settle_the_real_servers_epoch(redis_url)
 
     async def after_the_span(worker, web) -> tuple[bool, bool]:
         return await gpu_hold_is_free(web, WORKER), await admit_generation(web, WORKER)
 
     assert _in_two_processes(redis_url, after_the_span) == (True, True)
+
+
+def test_a_label_whose_lock_is_free_reads_as_no_download_in_progress(redis_url: str) -> None:
+    settle_the_real_servers_epoch(redis_url)
+
+    async def scenario(crashed_holder, reader) -> str | None:
+        await crashed_holder.set(download_key("sft"), "job-1")
+        return await read_download_in_progress(reader, "sft")
+
+    assert _in_two_processes(redis_url, scenario) is None
+
+
+def test_a_download_longer_than_its_span_keeps_the_lock(
+    redis_url: str, short_download_lock: None,
+) -> None:
+    settle_the_real_servers_epoch(redis_url)
+
+    async def scenario(holder, other_process) -> str | None:
+        async with single_flight_download(holder, "sft", "job-1"):
+            await until_redis_ms(
+                holder, await redis_ms(holder) + 2 * int(SHORT_LOCK_LASTS.total_seconds() * 1000),
+            )
+            assert await download_locks(other_process).acquire("sft") is None
+            return await read_download_in_progress(other_process, "sft")
+
+    assert _in_two_processes(redis_url, scenario) == "job-1"
+
+
+def test_a_download_whose_lock_was_lost_ends_and_leaves_the_new_holders_label(
+    redis_url: str, short_download_lock: None,
+) -> None:
+    settle_the_real_servers_epoch(redis_url)
+
+    async def scenario(first, new_holder) -> str | None:
+        async def download_until_the_lock_is_lost() -> None:
+            async with single_flight_download(first, "sft", "job-1"):
+                lose_everything(redis_url)
+                settle_the_real_servers_epoch(redis_url)
+                assert await download_locks(new_holder).acquire("sft") is not None
+                await new_holder.set(download_key("sft"), "job-2")
+                async with asyncio.timeout(DOWNLOAD_LOST_WITHIN_SECONDS):
+                    await asyncio.Event().wait()
+
+        with pytest.raises(DownloadLockLost) as lost:
+            await download_until_the_lock_is_lost()
+        assert lost.value.mode == "sft"
+        return await read_download_in_progress(new_holder, "sft")
+
+    assert _in_two_processes(redis_url, scenario) == "job-2"

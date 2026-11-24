@@ -19,6 +19,7 @@ from songmaker_cli.app_context import AppContext
 QUEUE_STREAM_BUILD_POLL_SECONDS: Final = 0.25
 QUEUE_STREAM_BUILD_LOCK_LASTS: Final = timedelta(seconds=15)
 RENEWALS_PER_LOCK_SPAN: Final = 3
+QUEUE_STREAM_BUILD_LOCK_EXTEND_EVERY: Final = timedelta(seconds=5)
 QUEUE_STREAM_BUILD_LOCK_FAMILY: Final = "queue-stream-build"
 LOST_LOCK_WARNING: Final = (
     "Queue stream build lock lost while building; another process may build the same stream"
