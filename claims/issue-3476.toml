@@ -1,5 +1,5 @@
 claim_id = "887b1d6eceae4b139d7d9e9433437985"
-agent = "Claude c2ed2bec-79bc-4692-a216-f229a0397de8"
+agent = "Claude 5b75db08-b076-464c-a5ed-ade1b673a134"
 role = "builder"
 base = "0c705f524c9234a25c15fb3629d4fe369535aa71"
 branch = "claude/issue-3476-wake-client-required"
