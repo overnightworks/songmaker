@@ -17,6 +17,7 @@ from anyio.from_thread import start_blocking_portal
 from redis.asyncio import Redis
 from support.redis_clock import until, until_redis_has_passed
 from support.redis_server import lose_everything, settle_the_real_servers_epoch
+from support.redis_that_loses_its_first_lock import RedisThatLosesItsFirstLock
 from tandem import Locks
 
 from songmaker_cli import queue_stream_build_lock as build_lock_module
@@ -111,27 +112,30 @@ def test_a_build_that_fails_raises_its_own_error_and_frees_the_lock(redis_url: s
     assert _run_one_build(redis_url, lambda _ctx, _second_process: None)
 
 
-def test_a_build_whose_lock_runs_out_before_its_entry_polls_again(
-    redis_url: str, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    acquisitions: list[str | None] = []
+def test_a_build_whose_lock_runs_out_before_its_entry_polls_again(redis_url: str) -> None:
     ran: list[bool] = []
 
-    class LockThatRunsOutAfterItsFirstAcquisition(Locks):
-        async def acquire(self, name: str) -> str | None:
-            generation = await super().acquire(name)
-            acquisitions.append(generation)
-            if len(acquisitions) == 1:
-                lose_everything(redis_url)
-                settle_the_real_servers_epoch(redis_url)
-            return generation
+    def server_forgets_the_lock() -> None:
+        lose_everything(redis_url)
+        settle_the_real_servers_epoch(redis_url)
 
-    monkeypatch.setattr(build_lock_module, "Locks", LockThatRunsOutAfterItsFirstAcquisition)
+    settle_the_real_servers_epoch(redis_url)
+    forgetful = RedisThatLosesItsFirstLock.from_url(redis_url)
+    forgetful.when_lost = server_forgets_the_lock
+    third_process = create_async_redis(redis_url)
 
-    free_after_the_build = _run_one_build(
-        redis_url, lambda _ctx, _second_process: ran.append(True),
-    )
+    def build() -> None:
+        with build_lock(SimpleNamespace(async_redis=forgetful), KEY):
+            ran.append(True)
 
-    assert [generation is not None for generation in acquisitions] == [True, True]
+    with start_blocking_portal() as portal:
+        try:
+            portal.call(anyio.to_thread.run_sync, build)
+            free_after_the_build = portal.call(_locks(third_process).acquire, KEY) is not None
+        finally:
+            portal.call(forgetful.aclose)
+            portal.call(third_process.aclose)
+
+    assert forgetful.lost
     assert ran == [True]
     assert free_after_the_build
