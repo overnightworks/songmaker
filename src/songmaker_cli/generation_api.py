@@ -612,7 +612,7 @@ def api_unshare_generation(
 
 async def _worker_kind_is_up(ctx: AppContext, kind: WorkerLivenessSignal) -> bool:
     """Whether the kind's signal is alive: a live lease holder, or a restart inside its grace."""
-    roster = await read_kind_roster(ctx.kind_leases[kind])
+    roster = await read_kind_roster(kind, ctx.kind_leases[kind])
     return worker_kind_liveness(ctx.redis, kind, roster, now=utcnow()) is WorkerLiveness.ALIVE
 
 

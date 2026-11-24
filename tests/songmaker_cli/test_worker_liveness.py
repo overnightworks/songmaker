@@ -226,7 +226,7 @@ def test_arqs_health_key_does_not_make_the_scoring_signal_alive(fake_redis) -> N
     assert liveness[JobType.SCORE] is not WorkerLiveness.ALIVE
 
 
-def test_the_persisted_keys_of_the_worker_kinds_match_those_of_the_release_before() -> None:
+def test_the_persisted_keys_of_the_worker_kinds_stay_unchanged_across_a_rolling_deploy() -> None:
     """A rolling deploy in either direction reads the observation the other release wrote."""
     assert {
         kind: (row.lease_family, row.last_alive_key) for kind, row in WORKER_KINDS.items()

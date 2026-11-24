@@ -99,12 +99,12 @@ def every_worker_kind_leases(redis: Client) -> dict[WorkerLivenessSignal, Leases
     return {kind: worker_kind_leases(redis, kind) for kind in WORKER_KINDS}
 
 
-async def read_kind_roster(leases: Leases) -> Roster | None:
+async def read_kind_roster(kind: WorkerLivenessSignal, leases: Leases) -> Roster | None:
     """The live workers of one kind, or none when Redis cannot be read."""
     try:
         return await leases.live()
     except StoreError:
-        log.warning("Could not read a worker roster", exc_info=True)
+        log.warning("Could not read the %s worker roster", kind, exc_info=True)
         return None
 
 
@@ -112,7 +112,7 @@ async def read_kind_rosters(
     kind_leases: Mapping[WorkerLivenessSignal, Leases],
 ) -> dict[WorkerLivenessSignal, Roster | None]:
     """The roster of every kind in ``kind_leases``; none for a kind whose read failed."""
-    return {kind: await read_kind_roster(leases) for kind, leases in kind_leases.items()}
+    return {kind: await read_kind_roster(kind, leases) for kind, leases in kind_leases.items()}
 
 
 class JobOwnerStamp(NamedTuple):

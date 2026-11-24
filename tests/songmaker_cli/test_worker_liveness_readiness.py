@@ -235,4 +235,4 @@ def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(
 def test_a_roster_that_cannot_be_read_reads_as_none() -> None:
     leases = MagicMock(live=AsyncMock(side_effect=StoreError("down")))
 
-    assert asyncio.run(read_kind_roster(leases)) is None
+    assert asyncio.run(read_kind_roster(WorkerLivenessSignal.MUSIC, leases)) is None
