@@ -14,9 +14,9 @@ import anyio
 import pytest
 from anyio import from_thread
 from anyio.from_thread import start_blocking_portal
+from redis.asyncio import Redis
 from support.redis_clock import until, until_redis_has_passed
 from support.redis_server import lose_everything, settle_the_real_servers_epoch
-from redis.asyncio import Redis
 from tandem import Locks
 
 from songmaker_cli import queue_stream_build_lock as build_lock_module
