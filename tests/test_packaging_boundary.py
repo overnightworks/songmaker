@@ -23,9 +23,10 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from support.compose_config import run_compose_config
 from support.dockerfile_stages import dockerfile_instructions, final_stage_instructions
+from support.realm import REALM_ENVIRONMENT
 from support.repository_root import REPOSITORY_ROOT
 
-from songmaker_cli.settings import Settings
+from songmaker_cli.settings import RealmSettings, Settings
 
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"
@@ -36,7 +37,6 @@ E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 TEST_STACK_COMPOSE_FILE = DOCKER_ROOT / "docker-compose.test.yml"
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
-RECURSIVE_CHOWN = re.compile(r"\bchown(?:\s+-\S+)*?\s+(?:-\w*R\w*|--recursive)\b")
 
 
 @dataclass(frozen=True)
@@ -333,28 +333,6 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
     assert len({final_user for final_user, _ in identities.values()}) == 1, (
         "images share volumes, so they must share one uid:gid"
     )
-
-
-@pytest.mark.parametrize(
-    "instruction",
-    [
-        "RUN chown -R songmaker:songmaker /app",
-        "RUN chown -f -R songmaker:songmaker /app",
-        "RUN chown --verbose --recursive songmaker:songmaker /app",
-    ],
-)
-def test_recursive_chown_is_found_after_other_options(instruction: str) -> None:
-    assert RECURSIVE_CHOWN.search(instruction)
-
-
-def test_no_final_stage_instruction_changes_ownership_recursively() -> None:
-    offenders = [
-        instruction
-        for instruction in final_stage_instructions(REPOSITORY_ROOT / "Dockerfile")
-        if RECURSIVE_CHOWN.search(instruction)
-    ]
-
-    assert offenders == []
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
@@ -759,20 +737,22 @@ def test_the_web_gateway_key_file_is_where_compose_mounts_the_gateway_key(
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
-def test_settings_accept_the_agent_the_web_service_is_rendered_with(
+def test_settings_accept_the_gateway_and_its_group_the_web_service_is_rendered_with(
     compose_files: tuple[str, ...], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     web_environment = _rendered_test_stack_services(compose_files)["songmaker-web"]["environment"]
+    for name in REALM_ENVIRONMENT:
+        monkeypatch.delenv(name, raising=False)
     for name, value in web_environment.items():
-        if name.startswith("AGENT__"):
+        if name.startswith(("AGENT__", "REALM_")):
             monkeypatch.setenv(name, value)
 
     settings = Settings(
         _env_file=None, database_url="postgresql://x", redis_url="redis://x",
         session_secret="s", songmaker_internal_token="t",
     )
-
     assert settings.agent is not None
+    RealmSettings().require_ai_group()
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())

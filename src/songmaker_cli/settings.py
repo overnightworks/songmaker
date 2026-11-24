@@ -162,11 +162,13 @@ class RealmSettings(BaseSettings):
     """The platform's realm names for the web app, read from its ``REALM_`` keys.
 
     The one owner of these names: the client the sign-in uses, the groups that admit, administer
-    and reach the MCP endpoint, and the person's own agent's client, scope and group. The
-    environment is the only source, so ``.env`` never feeds it. Only the web reads it, so the
-    workers start without the keys. ``REALM_MCP_CLIENT_ID`` and ``REALM_MCP_SCOPE`` are set
-    together or not at all and turn the MCP endpoint on; ``REALM_AGENT_GROUP`` is always parsed
-    and validated, and required while it is on. A refusal names its key and never echoes the value.
+    and reach the MCP endpoint, the person's own agent's client, scope and group, and the group
+    that admits to the AI gateway. The environment is the only source, so ``.env`` never feeds
+    it. Only the web reads it, so the workers start without the keys. ``REALM_MCP_CLIENT_ID`` and
+    ``REALM_MCP_SCOPE`` are set together or not at all and turn the MCP endpoint on;
+    ``REALM_AGENT_GROUP`` is always parsed and validated, and required while it is on, and
+    ``REALM_AI_GROUP`` likewise, required through ``require_ai_group`` once the gateway is
+    configured. A refusal names its key and never echoes the value.
     """
 
     model_config = SettingsConfigDict(hide_input_in_errors=True)
@@ -177,6 +179,7 @@ class RealmSettings(BaseSettings):
     mcp_group: _RealmGroup = Field(validation_alias="REALM_MCP_GROUP")
     mcp_scope: str | None = Field(None, min_length=1, validation_alias="REALM_MCP_SCOPE")
     agent_group: _OptionalRealmGroup = Field(None, validation_alias="REALM_AGENT_GROUP")
+    ai_group: _OptionalRealmGroup = Field(None, validation_alias="REALM_AI_GROUP")
     mcp_client_id: str | None = Field(None, min_length=1, validation_alias="REALM_MCP_CLIENT_ID")
 
     @model_validator(mode="after")
@@ -190,6 +193,12 @@ class RealmSettings(BaseSettings):
         if self.mcp_client_id is not None and self.agent_group is None:
             raise ValueError("REALM_AGENT_GROUP is required while the MCP endpoint is on")
         return self
+
+    def require_ai_group(self) -> GroupPath:
+        """The group that admits to the AI gateway, which the web needs once it is configured."""
+        if self.ai_group is None:
+            raise ValueError("REALM_AI_GROUP is required while the AI gateway is configured")
+        return self.ai_group
 
 
 class Settings(BaseSettings):
@@ -359,8 +368,8 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_client_secret_file: Path | None = None
     # The co-writer's gateway, read as AGENT__GATEWAY__ORIGIN, AGENT__GATEWAY__KEY_FILE,
-    # AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP. Unset leaves the co-writer unavailable; a
-    # partly set value stops startup.
+    # AGENT__GATEWAY__CA_FILE; its group is `RealmSettings.ai_group`. Unset leaves the co-writer
+    # unavailable; a partly set value stops startup.
     agent: AgentSettings | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
