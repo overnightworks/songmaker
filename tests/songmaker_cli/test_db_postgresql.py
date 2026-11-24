@@ -13,14 +13,16 @@ from sqlalchemy import create_engine, event, insert, inspect, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from support.object_store import an_object_store
 from support.postgresql import upgrade_to_head
 from support.repository_root import REPOSITORY_ROOT
-from support.web_app import make_authenticated_user, make_fake_async_redis, seed_user
+from support.web_app import (
+    make_app_context,
+    make_authenticated_user,
+    seed_user,
+)
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_models import UserLoraCreateRequest
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, LoraStatus, SongWorkKind
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.database_url import database_url_with_password
@@ -430,11 +432,9 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
         ))
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(), db=pg_factory, audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=b"test",
-        redis=None, async_redis=make_fake_async_redis(),  # type: ignore[arg-type]
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        signing_key=b"test", redis=None,
     )
     ctx.audio_dir.mkdir()
     from songmaker_cli.jobs import lora_training
