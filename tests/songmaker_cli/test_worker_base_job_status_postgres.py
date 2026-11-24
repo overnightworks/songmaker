@@ -6,7 +6,6 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from support.job_owner import an_owner
 
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.job_payloads import LoraTrainingPayload, ScorePayload
@@ -18,12 +17,8 @@ from songmaker_cli.worker_base import JOB_ENDED_EVENT
 
 
 @pytest.fixture
-def job_rows(pg_factory, monkeypatch):
-    """Workers read this test's database and hold an owner; the helper stores a job."""
-    for worker_class in (MusicWorker, ScoringWorker):
-        monkeypatch.setattr(worker_class, "get_db_factory", lambda self: pg_factory)
-        monkeypatch.setattr(worker_class, "owner", an_owner("worker"), raising=False)
-
+def job_rows(pg_factory, workers_on_db):
+    """The helper stores a job on this test's database."""
     def store(status: JobStatus) -> str:
         with pg_factory() as session:
             job = create_job(session, JobType.GENERATE)

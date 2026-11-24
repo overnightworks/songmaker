@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from support.job_owner import an_owner
 from support.score_jobs import a_scoreable_take, queued_score_job
 
 from songmaker_cli.db.queries.jobs import (
@@ -18,14 +17,6 @@ from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import get_settings
-
-
-@pytest.fixture
-def workers_on_db(pg_factory, monkeypatch) -> None:
-    """Workers read this test's database and hold an owner."""
-    for worker_class in (MusicWorker, ScoringWorker):
-        monkeypatch.setattr(worker_class, "get_db_factory", lambda self: pg_factory)
-        monkeypatch.setattr(worker_class, "owner", an_owner("worker"), raising=False)
 
 
 @pytest.fixture

@@ -38,12 +38,6 @@ class _DummyWorker(WorkerBase):
     job_types = ("dummy",)
 
 
-@pytest.fixture
-def readiness_file(tmp_path: Path) -> Path:
-    """The file a test's workers write their readiness to, instead of the shared path."""
-    return tmp_path / "readiness"
-
-
 # ── get_db_factory caches per instance ────────────────────────────
 
 

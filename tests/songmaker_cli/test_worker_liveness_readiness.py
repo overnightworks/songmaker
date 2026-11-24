@@ -40,11 +40,6 @@ def restored_logging() -> Iterator[None]:
         yield
 
 
-@pytest.fixture
-def readiness_file(tmp_path: Path) -> Path:
-    return tmp_path / "readiness"
-
-
 def _stat_line(command_name: str, start_ticks: str) -> str:
     fields_between_state_and_start_ticks = ["0"] * 18
     return " ".join(["1", f"({command_name})", "S", *fields_between_state_and_start_ticks,

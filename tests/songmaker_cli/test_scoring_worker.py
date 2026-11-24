@@ -14,7 +14,6 @@ import pytest
 from logline.testing import configured
 from redis import Redis
 from support.app_processes import leased_owner_ids
-from support.job_owner import an_owner
 from support.score_jobs import a_scoreable_take, queued_score_job
 
 from songmaker_cli.db.queries.jobs import get_job
@@ -37,7 +36,7 @@ def _run(coro):
 
 
 def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease_end(
-    stop_signal_handlers, installed_scorer_restored, redis_url, tmp_path,
+    stop_signal_handlers, installed_scorer_restored, redis_url, readiness_file,
 ) -> None:
     job_started, job_may_finish = asyncio.Event(), asyncio.Event()
     ended: list[str | tuple[str, set[str]]] = []
@@ -47,7 +46,7 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease
         scorer.shutdown.side_effect = lambda: ended.append(("scorer", leased_owner_ids(reader)))
         worker = ScoringWorker(
             get_settings().model_copy(update={"redis_url": redis_url}),
-            scorer=scorer, readiness_file=tmp_path / "readiness",
+            scorer=scorer, readiness_file=readiness_file,
         )
         worker.get_db_factory = MagicMock()
         worker.claim_next_job = MagicMock(
@@ -85,14 +84,12 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease
 
 
 @pytest.fixture
-def scoring_worker_on_pg(pg_factory, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """A scoring worker with a time limit of a second, on this test's database."""
-    monkeypatch.setattr(ScoringWorker, "get_db_factory", lambda self: pg_factory)
-    monkeypatch.setattr(ScoringWorker, "owner", an_owner("worker"), raising=False)
+def scoring_worker_on_pg(workers_on_db, readiness_file: Path, tmp_path: Path):
+    """A scoring worker with a short time limit, on this test's database."""
     settings = get_settings().model_copy(
         update={"audio_dir": str(tmp_path), "arq_job_timeout": TIME_LIMIT_SECONDS},
     )
-    return ScoringWorker(settings, readiness_file=tmp_path / "readiness")
+    return ScoringWorker(settings, readiness_file=readiness_file)
 
 
 def test_a_score_job_outlasting_its_time_limit_fails_as_too_slow_and_frees_the_worker(

@@ -318,7 +318,7 @@ def test_the_music_worker_has_a_body_for_every_cron() -> None:
 
 
 def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
-    redis_url, tmp_path, stop_signal_handlers,
+    redis_url, readiness_file, stop_signal_handlers,
 ) -> None:
     runs: list[str] = []
 
@@ -331,7 +331,7 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
 
     worker = RecordingMusicWorker(
         _settings().model_copy(update={"redis_url": redis_url}),
-        readiness_file=tmp_path / "readiness",
+        readiness_file=readiness_file,
     )
     worker.get_db_factory = MagicMock()
     worker.claim_next_job = MagicMock(return_value=None)

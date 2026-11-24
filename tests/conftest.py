@@ -413,6 +413,25 @@ def pg_factory(postgresql_url):
 
 
 @pytest.fixture
+def workers_on_db(pg_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Workers read this test's database and hold an owner."""
+    from support.job_owner import an_owner
+
+    from songmaker_cli.music_worker import MusicWorker
+    from songmaker_cli.scoring_worker import ScoringWorker
+
+    for worker_class in (MusicWorker, ScoringWorker):
+        monkeypatch.setattr(worker_class, "get_db_factory", lambda self: pg_factory)
+        monkeypatch.setattr(worker_class, "owner", an_owner("worker"), raising=False)
+
+
+@pytest.fixture
+def readiness_file(tmp_path: Path) -> Path:
+    """The file a test's workers write their readiness to, instead of the shared path."""
+    return tmp_path / "readiness"
+
+
+@pytest.fixture
 def extra_pg_factory(postgresql_databases):
     """Builds session factories on additional migrated databases; each call makes a new one.
 
