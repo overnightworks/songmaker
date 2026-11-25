@@ -12,11 +12,12 @@ from typing import Any
 import fakeredis
 import pytest
 from fastapi.testclient import TestClient
-from support.owner_lease_epoch import settled_epoch
 from support.wrapper_deps import INTERNAL_HEADERS, make_deps
+from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import GPU_HOLD_LASTS, gpu_hold_locks
 from songmaker_acestep_worker.wrapper import create_app
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 _LOWERED_TTL_SECONDS = 3
 _BOUND_SECONDS = 5
@@ -139,7 +140,7 @@ def test_a_worker_answers_busy_until_a_redis_restart_is_settled_and_fails_nothin
 
         reserved = client.post("/gpu_hold/reserve")
         generated = client.post("/generate", json=generation)
-        restarted_redis.set(*settled_epoch())
+        restarted_redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
         reserved_when_settled = client.post("/gpu_hold/reserve")
 
     assert reserved.status_code == 409

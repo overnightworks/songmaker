@@ -37,7 +37,7 @@ the worker container and talks to the upstream ACE-Step subprocess on
 port — see `ACESTEP_INNER_PORT` below).
 
 ```
-music worker (songmaker_cli.music_worker.MusicWorkerSettings)
+music worker (python -m songmaker_cli.music_worker)
   → on a claimed generate job: scheduler dispatches the admitted worker
     → POST /load_model on worker (if needed)
     → POST /generate on worker → task_id
@@ -51,7 +51,7 @@ music worker (songmaker_cli.music_worker.MusicWorkerSettings)
       → auto-enqueue a score job for it (own budget, not the user's
         rate limit — see below)
 
-scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
+scoring worker (songmaker_cli.scoring_worker)
   → on score job:
     → load faster-whisper + AudioBox on demand
     → BPM, silence, spectral, text accuracy, aesthetics
@@ -125,7 +125,7 @@ LM models (text planner):
 
 The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it queues a `download_model_on_worker` job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds. With no worker online, a row's download state is `unknown_no_worker`, not `not_downloaded` — nobody is available to answer the question, so there is no Download button either.
 
-Concurrency guard: the mode's download lock (family `download`, see [Locks in Redis](#locks-in-redis)) prevents two concurrent download jobs of the same mode. The job takes it before it calls the worker and releases it when it ends, with its label `songmaker:acestep:download:{mode}`; both run out 15 seconds after a crashed job. The ACE-Step worker also runs one transfer per mode: a request for a mode already downloading returns the running task.
+Concurrency guard: the mode's download lock (family `download`, see [Locks in Redis](#locks-in-redis)) prevents two concurrent download jobs of the same mode. The job takes it before it calls the worker and releases it when it ends, and tandem keeps it while the job runs. The job writes its label `songmaker:acestep:download:{mode}` once, without expiry, as the first statement of the hold, and deletes it after the hold ends. The lock runs out 15 seconds after a crashed job; a label means something only while the lock is held, and a lock that is free or unknown makes it read as no download. The ACE-Step worker also runs one transfer per mode: a request for a mode already downloading returns the running task.
 
 For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hatch instead: `bash scripts/download_models.sh` calls `huggingface_hub.snapshot_download` directly into `vendor/acestep/checkpoints/`. Requires `HF_TOKEN` exported in the host shell.
 
@@ -200,7 +200,7 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 | `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, the health routes, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `training_hold_seconds`, `last_heartbeat_at` |
 | `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
 | `songmaker:acestep:lm-failure:{worker_id}` | `acestep-worker` when a load comes up without its LM | `acestep-worker` at start, the health routes (existence only) | none | The mode whose LM failed to initialise; the restarted worker loads it before registering, then clears the key |
-| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | 15 s, renewed every 5 s | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does |
+| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | none; read only while the lock is held; deleted after the hold ends | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does. A crashed holder's label stays, unread, until the next holder overwrites it |
 
 The Worker Pool panel mirrors a live hold as Training with the remaining hold lease; this projection never owns, renews, or releases the hold.
 
@@ -211,7 +211,7 @@ Three single-flights are [tandem](https://github.com/overnightworks/tandem) `Loc
 | Family | Name | Holder | Lasts | Purpose |
 |---|---|---|---|---|
 | `gpu` | worker id | the worker's `/gpu_hold/*` endpoints, which hold it for a LoRA training | 15 s, extended every 5 s | Keeps generation off a GPU a training uses |
-| `download` | mode | `download_model_on_worker` | 15 s, extended every 5 s | One download per mode |
+| `download` | mode | `download_model_on_worker` | 15 s, extended every 5 s by tandem's `held` | One download per mode |
 | `tick` | `job-reaper`, `score-backfill` | the web process that runs the tick | 60 s, never released | Throttles each periodic tick to one web process |
 
 The generation of a lock is its token. A reserve reads the queue depth, takes the lock, reads the depth again and gives the lock back when a generation was admitted in between; the reserve's generation is the token that `renew`, `release` and `handover` carry. The scheduler admits a generation with a script that reads the lock (`tandem.lock_state`) and raises the depth in one step, and `pick_worker` reads the lock with `Locks.state`. There is no forced release: a worker that starts ends the hold it finds, with the generation it reads, and a crashed holder's lock runs out after its span.
@@ -229,7 +229,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml exec redi
 docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:download:xl-base'
 ```
 
-If a download appears stuck, check the `download:{mode}` key. It is only the label of the download lock (the job_id of the holder); deleting it releases nothing. A lock and its label run out within 15 seconds of a holder that stopped extending them, so a download whose holder crashed can be started again after that.
+If a download appears stuck, check the `download:{mode}` key. It is only the label of the download lock (the job_id of the holder); deleting it releases nothing, and it reads only while the lock is held. The lock runs out within 15 seconds of a holder that stopped extending it, so a download whose holder crashed can be started again after that; its label then reads as no download.
 
 ### Worker startup procedure
 
@@ -318,7 +318,7 @@ Terminal (no retry) failure modes:
 - `NoCapacityError` — no online workers — `error_type=no_workers`.
 - Unknown mode — `error_type=invalid_mode`.
 
-The mode's download lock (family `download`, see [Locks in Redis](#locks-in-redis)) is held across all retry attempts while the job extends it — concurrent admin clicks for the same mode are still rejected with 409 during the retry window. The lock is released and the label key (`songmaker:acestep:download:{mode}`) deleted exactly once when the job ends, regardless of which attempt succeeded or whether the retry budget was exhausted; a crashed music worker's lock and label run out within 15 seconds.
+The mode's download lock (family `download`, see [Locks in Redis](#locks-in-redis)) is held across all retry attempts while tandem extends it for the job — concurrent admin clicks for the same mode are still rejected with 409 during the retry window. The lock is released and the label key (`songmaker:acestep:download:{mode}`) deleted exactly once when the job ends, regardless of which attempt succeeded or whether the retry budget was exhausted; a crashed music worker's lock runs out within 15 seconds, and its label then reads as no download.
 
 ### Troubleshooting playbooks
 
@@ -337,7 +337,7 @@ On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.rese
 
 **"Jobs fail with an init error"** — a child without its LM no longer stays up serving that error: the worker exits with code 75 and retries the failed load when the platform restarts it (see [Restart procedure](#restart-procedure)). If takes keep failing, the LM cannot initialise (VRAM held by another process, a missing LM checkpoint): read `acestep_reason` in `GET /health/details` first (`lm_init_failed` means this loop), then check the key with `redis-cli GET 'songmaker:acestep:lm-failure:{worker_id}'`, the restart count above and the container log's last lines, fix the cause, and the next restart comes online by itself.
 
-**"Download stalls"** — check the download label: `docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. A lock and its label run out within 15 seconds of a holder that stopped extending them, so nothing needs deleting by hand.
+**"Download stalls"** — check the download label: `docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. A label reads only while the lock is held, and the lock runs out within 15 seconds of a holder that stopped extending it, so nothing needs deleting by hand; a label without a live lock means nothing.
 
 **"Load fails with CapacityError"** — two distinct messages, both actionable. If the worker has models loaded, the message names the loaded/pinned/in-use sets and how much VRAM is already in use (measured or, without a reader, estimated from declared sizes); if the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. If the worker has **nothing** loaded and still can't fit the request, the message says so explicitly — VRAM outside this cache's tracking (a stray process, an unreleased subprocess) is holding the GPU; check `nvidia-smi` on the worker host before retrying. The Worker Pool card's per-mode buttons make the first case directly actionable; the second needs a host-level check.
 

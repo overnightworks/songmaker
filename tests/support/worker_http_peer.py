@@ -26,8 +26,9 @@ from support.wrapper_deps import settled_fake_redis
 
 from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache
 from songmaker_acestep_worker.wrapper import create_app
-from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY
 from songmaker_cli.db.queries.workers import register_worker
+from songmaker_cli.job_types import WorkerLivenessSignal
+from songmaker_cli.worker_liveness import worker_kind_leases
 
 PEER_DEADLINE_SECONDS = 15
 PEER_CLEANUP_DEADLINE_SECONDS = 3
@@ -166,7 +167,7 @@ async def unload_peer_model(model: LoadedModel) -> None:
 class GenerationWorkerPeer:
     def __init__(self, tmp_path: Path, internal_token: str, scenario: WorkerScenario) -> None:
         self.phase = "startup"
-        self.redis = settled_fake_redis(ARQ_SCORING_HEALTH_KEY)
+        self.redis = settled_fake_redis()
         self.audio_dir = tmp_path / "audio"
         self.data_dir = tmp_path / "data"
         self.data_dir.mkdir(exist_ok=True)
@@ -314,6 +315,7 @@ async def open_generation_worker_peer(
     startup_deadline_seconds: float = PEER_DEADLINE_SECONDS,
 ) -> AsyncIterator[GenerationWorkerPeer]:
     peer = GenerationWorkerPeer(tmp_path, internal_token, scenario)
+    await worker_kind_leases(peer.redis, WorkerLivenessSignal.SCORING).renew("scoring-worker")
     stack = AsyncExitStack()
     stalled_phase = None
 

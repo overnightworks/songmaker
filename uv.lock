@@ -1465,8 +1465,8 @@ dependencies = [
 
 [[package]]
 name = "overnightworks-tandem"
-version = "0.16.0"
-source = { git = "https://github.com/overnightworks/tandem?rev=v0.16.0#3beddfceadadc85b9467846d90198e5f25e6d699" }
+version = "0.17.0"
+source = { git = "https://github.com/overnightworks/tandem?rev=v0.17.0#d260f21a34be98b5a2c9bbba0dd4122f7cc455d6" }
 dependencies = [
     { name = "overnightworks-logline" },
     { name = "redis" },
@@ -2355,8 +2355,8 @@ requires-dist = [
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", git = "https://github.com/overnightworks/design?rev=v0.33.1" },
     { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
     { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
-    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.16.0" },
-    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.16.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.17.0" },
+    { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.17.0" },
     { name = "overnightworks-webauth", extras = ["postgres", "redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.46.0" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },

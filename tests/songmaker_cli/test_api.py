@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from support.job_owner import an_owner, stored_payload
 from support.library_rows import a_song, a_take, a_version, an_album
 from support.web_app import (
-    hold_a_music_lease,
+    hold_a_worker_lease,
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
@@ -42,7 +42,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.job_types import JobStatus
+from songmaker_cli.job_types import JobStatus, WorkerLivenessSignal
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.messages import Message, message
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
@@ -1147,21 +1147,19 @@ def test_generate_refused_without_lyrics_or_prompt(client: TestClient, lyrics: s
 
 
 def _mock_worker(client: TestClient, mock_pool=None):
-    """Mocks arq pool and worker health for enqueue tests; a music worker holds its lease."""
+    """Mocks arq pool and worker health for enqueue tests; a music and a scoring worker hold
+    their leases."""
     from contextlib import contextmanager
     from unittest.mock import AsyncMock, patch
 
     mock_pool = AsyncMock() if mock_pool is None else mock_pool
-    hold_a_music_lease(client.app.state.ctx.async_redis)
+    hold_a_worker_lease(client.app.state.ctx.async_redis)
+    hold_a_worker_lease(client.app.state.ctx.async_redis, WorkerLivenessSignal.SCORING)
 
     @contextmanager
     def _ctx():
         with (
             patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
-            patch(
-                "songmaker_cli.generation_api.is_scoring_worker_healthy",
-                AsyncMock(return_value=True),
-            ),
             patch(
                 "songmaker_cli.generation_api._has_online_acestep_worker",
                 AsyncMock(return_value=True),
@@ -1182,17 +1180,12 @@ def _mock_worker_process_health(client: TestClient, mock_pool=None, *, music_hea
     if mock_pool is None:
         mock_pool = AsyncMock()
     if music_healthy:
-        hold_a_music_lease(client.app.state.ctx.async_redis)
+        hold_a_worker_lease(client.app.state.ctx.async_redis)
+    hold_a_worker_lease(client.app.state.ctx.async_redis, WorkerLivenessSignal.SCORING)
 
     @contextmanager
     def _ctx():
-        with (
-            patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
-            patch(
-                "songmaker_cli.generation_api.is_scoring_worker_healthy",
-                AsyncMock(return_value=True),
-            ),
-        ):
+        with patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool):
             yield mock_pool
 
     return _ctx()
@@ -2087,28 +2080,9 @@ def test_a_score_job_is_queued_though_its_wake_cannot_be_sent(client: TestClient
     mock_pool.enqueue_job.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("path", "payload", "health_check"),
-    [
-        pytest.param(
-            "/api/generations/g1/score",
-            {},
-            "is_scoring_worker_healthy",
-            id="score",
-        ),
-    ],
-)
-def test_worker_preflight_reports_an_unavailable_worker(
-    client: TestClient,
-    path: str,
-    payload: dict,
-    health_check: str,
-) -> None:
+def test_score_reports_an_unavailable_worker_and_leaves_no_row(client: TestClient) -> None:
     """S6-E: score keeps "Worker not running", and no row a live worker could claim is left."""
-    from unittest.mock import AsyncMock, patch
-
-    with patch(f"songmaker_cli.generation_api.{health_check}", AsyncMock(return_value=False)):
-        response = client.post(path, json=payload)
+    response = client.post("/api/generations/g1/score", json={})
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Worker not running"

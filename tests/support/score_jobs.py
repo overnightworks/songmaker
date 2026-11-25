@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
@@ -10,17 +11,18 @@ from unittest.mock import MagicMock
 import fakeredis
 import pytest
 from support.web_app import SettledFakeAsyncRedis
-from tandem.keys import wake_channel
+from tandem import wake_channel
 
-from songmaker_cli.constants import ARQ_SCORING_HEALTH_KEY, REDIS_KEY_PREFIX
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import JobQueue
-from songmaker_cli.job_types import JobType
+from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.subprocess_runner import get_scorer_process, set_scorer_process
 from songmaker_cli.timestamps import utcnow
+from songmaker_cli.worker_liveness import worker_kind_leases
 
 SUBSCRIBED_WITHIN_SECONDS = 5
 A_TAKE_THAT_DOES_NOT_EXIST = ScorePayload(gen_id="no-such-take")
@@ -45,14 +47,15 @@ def queued_score_job(
 class ScoringRedis(SettledFakeAsyncRedis):
     """The Redis a generation job dispatches an auto-score job through.
 
-    The scoring worker's health key is set while it runs; ``woken_queues`` reads what was
+    A scoring worker holds its lease while it runs; ``woken_queues`` reads what was
     published on the app's wake channel since this Redis was made.
     """
 
     def __init__(self, *, worker_running: bool = True) -> None:
         super().__init__()
         if worker_running:
-            self.store[ARQ_SCORING_HEALTH_KEY] = "1"
+            scoring_leases = worker_kind_leases(self, WorkerLivenessSignal.SCORING)
+            asyncio.run(scoring_leases.renew("scoring-worker"))
         self._listener = fakeredis.FakeRedis(server=self.server).pubsub(
             ignore_subscribe_messages=False,
         )
@@ -86,17 +89,23 @@ def a_scoreable_take(factory, audio_dir: Path) -> str:
 
 
 @pytest.fixture
-def scorer_requests() -> Iterator[MagicMock]:
-    """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
-
-    It answers every request with an empty result; the scorer installed before is back after.
-    """
+def installed_scorer_restored() -> Iterator[None]:
+    """The scorer installed before the test is back after it, whoever installed another."""
     try:
         installed_before = get_scorer_process()
     except RuntimeError:
         installed_before = None
+    yield
+    set_scorer_process(installed_before)
+
+
+@pytest.fixture
+def scorer_requests(installed_scorer_restored: None) -> MagicMock:
+    """The ``score`` of the scorer the worker hands its audio to, in place of the child process.
+
+    It answers every request with an empty result; the scorer installed before is back after.
+    """
     scorer = MagicMock()
     scorer.score.return_value = SongScores()
     set_scorer_process(scorer)
-    yield scorer.score
-    set_scorer_process(installed_before)
+    return scorer.score

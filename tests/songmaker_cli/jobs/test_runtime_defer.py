@@ -9,7 +9,6 @@ from support.job_owner import an_owner
 
 from songmaker_cli.db.queries.jobs import (
     claim_next_queued_job,
-    claim_queued_job,
     create_job,
     get_job,
 )
@@ -36,7 +35,7 @@ def _request_for(job_id: str, payload: GeneratePayload, tmp_path: Path) -> Gener
 def test_a_deferred_job_is_queued_without_an_owner_and_names_why_it_waits(pg_factory) -> None:
     with pg_factory() as session:
         job_id = create_job(session, JobType.GENERATE).id
-        claim_queued_job(session, job_id, WORKER)
+        claim_next_queued_job(session, WORKER, JobType.GENERATE)
         session.commit()
 
     _defer_job(pg_factory, job_id, REASON)
@@ -65,12 +64,15 @@ def test_a_deferred_job_waits_one_poll_interval_from_now(pg_factory) -> None:
 def test_a_deferred_job_can_be_claimed_again(pg_factory) -> None:
     with pg_factory() as session:
         job_id = create_job(session, JobType.GENERATE).id
-        claim_queued_job(session, job_id, WORKER)
+        claim_next_queued_job(session, WORKER, JobType.GENERATE)
         session.commit()
     _defer_job(pg_factory, job_id, REASON)
 
     with pg_factory() as session:
-        assert claim_queued_job(session, job_id, WORKER) is True
+        get_job(session, job_id).run_after = utcnow()
+        session.flush()
+
+        assert claim_next_queued_job(session, WORKER, JobType.GENERATE).id == job_id
 
 
 def test_a_new_job_may_be_claimed_from_the_moment_it_is_created(pg_factory) -> None:
@@ -93,7 +95,7 @@ def test_a_generation_requeued_after_some_takes_stores_the_takes_it_has_left(
     )
     with pg_factory() as session:
         job_id = create_job(session, JobType.GENERATE, payload=payload).id
-        claim_queued_job(session, job_id, WORKER)
+        claim_next_queued_job(session, WORKER, JobType.GENERATE)
         session.commit()
     request = _request_for(job_id, payload, tmp_path)
 
@@ -113,7 +115,7 @@ def test_a_generation_the_gpu_hold_requeued_is_not_claimed_before_its_wait_ends(
     )
     with pg_factory() as session:
         job_id = create_job(session, JobType.GENERATE, payload=payload).id
-        claim_queued_job(session, job_id, WORKER)
+        claim_next_queued_job(session, WORKER, JobType.GENERATE)
         session.commit()
     request = _request_for(job_id, payload, tmp_path)
 

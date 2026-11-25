@@ -10,8 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 import sqlalchemy as sa
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
-from support.object_store import an_object_store
-from support.web_app import TEST_SECRET, make_fake_async_redis, make_fake_redis
+from support.web_app import make_app_context, make_fake_redis
 from tandem import Roster
 
 import songmaker_cli.cover_runner as cover_runner
@@ -24,8 +23,9 @@ from songmaker_cli.job_timing import (
     JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     STALE_JOB_THRESHOLDS,
+    WORKER_RESTART_GRACE_SECONDS,
 )
-from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.lifecycle import (
     JOB_REAPER_LOCK_NAME,
     BackgroundLoopName,
@@ -35,14 +35,14 @@ from songmaker_cli.lifecycle import (
 )
 from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
-    MUSIC_LAST_ALIVE_KEY,
-    MUSIC_WORKER_KIND,
+    WORKER_KINDS,
     WorkerLiveness,
     acestep_worker_liveness,
-    music_worker_liveness,
-    worker_kind_leases,
+    every_worker_kind_leases,
+    worker_kind_liveness,
     worker_liveness_by_job_type,
 )
 
@@ -51,10 +51,11 @@ from songmaker_cli.worker_liveness import (
 def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    return AppContext(
-        object_store=an_object_store(),
-        db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    return make_app_context(
+        db=pg_factory,
+        audio_dir=audio_dir,
+        data_dir=tmp_path / "data",
+        redis=make_fake_redis(),
     )
 
 
@@ -216,6 +217,37 @@ class TestLifecycleReaper:
             assert job.error_type == "no_worker_alive"
             assert job.error_message == message("jobFailure.noWorkerAlive")
 
+    @pytest.mark.parametrize(
+        ("seconds_since_alive", "expected_status"),
+        [
+            pytest.param(5, JobStatus.QUEUED, id="inside the restart grace"),
+            pytest.param(WORKER_RESTART_GRACE_SECONDS + 60, JobStatus.FAILED, id="past it"),
+        ],
+    )
+    def test_a_queued_score_job_follows_the_scoring_roster(
+        self, ctx, monkeypatch, seconds_since_alive: int, expected_status: str,
+    ) -> None:
+        now = utcnow()
+        monkeypatch.setattr(
+            "songmaker_cli.worker_liveness._PROCESS_STARTED_AT",
+            now - timedelta(seconds=2 * WORKER_RESTART_GRACE_SECONDS),
+        )
+        ctx.redis.set(
+            WORKER_KINDS[WorkerLivenessSignal.SCORING].last_alive_key,
+            (now - timedelta(seconds=seconds_since_alive)).isoformat(),
+        )
+        _add_job(
+            ctx, job_id="queued-score", job_type=JobType.SCORE,
+            status=JobStatus.QUEUED, started_at=now, heartbeat_at=now,
+        )
+
+        reap_stale_jobs(
+            ctx, now=now,
+            rosters={WorkerLivenessSignal.SCORING: Roster(holders=frozenset(), settled=True)},
+        )
+
+        assert _job_status(ctx, "queued-score") == expected_status
+
     @pytest.mark.parametrize("job_type", tuple(JobType))
     def test_unknown_queued_age_guard_applies_for_every_job_type(
         self, ctx, job_type: JobType,
@@ -297,12 +329,13 @@ class TestLifecycleReaper:
             started_at=now - timedelta(seconds=1101), heartbeat_at=now,
         )
         ctx.redis.set(ACESTEP_LAST_ALIVE_KEY, now.isoformat())
-        ctx.redis.set(MUSIC_LAST_ALIVE_KEY, now.isoformat())
+        ctx.redis.set(WORKER_KINDS[WorkerLivenessSignal.MUSIC].last_alive_key, now.isoformat())
 
         liveness = worker_liveness_by_job_type(
             acestep=acestep_worker_liveness(ctx.redis, ["ace-1"], now=now),
-            music=music_worker_liveness(
-                ctx.redis, Roster(holders=frozenset(), settled=True), now=now,
+            music=worker_kind_liveness(
+                ctx.redis, WorkerLivenessSignal.MUSIC,
+                Roster(holders=frozenset(), settled=True), now=now,
             ),
             scoring=WorkerLiveness.UNKNOWN,
         )
@@ -338,7 +371,7 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
             ctx=SimpleNamespace(
                 db=ctx.db,
                 async_redis=tick_lock.async_redis,
-                music_leases=worker_kind_leases(tick_lock.async_redis, MUSIC_WORKER_KIND),
+                kind_leases=every_worker_kind_leases(tick_lock.async_redis),
                 redis=SimpleNamespace(
                     exists=lambda *_args, **_kwargs: False,
                     get=lambda *_args, **_kwargs: None,
@@ -374,7 +407,7 @@ def _run_reaper_ticks(
         state=SimpleNamespace(
             ctx=SimpleNamespace(
                 async_redis=tick_lock.async_redis,
-                music_leases=worker_kind_leases(tick_lock.async_redis, MUSIC_WORKER_KIND),
+                kind_leases=every_worker_kind_leases(tick_lock.async_redis),
             ),
             background_loop_registry=registry,
         ),

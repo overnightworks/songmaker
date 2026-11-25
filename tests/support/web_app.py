@@ -16,20 +16,22 @@ from sqlalchemy.orm import Session, sessionmaker
 from support.fake_oidc_issuer import IssuerSlot
 from support.job_owner import an_owner
 from support.object_store import an_object_store
-from support.owner_lease_epoch import settled_epoch
 from support.session_ids import a_session_id
-from tandem.testing import settle_epoch
+from tandem.testing import aged_epoch, settle_epoch
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
-from songmaker_cli.worker_liveness import MUSIC_WORKER_KIND, worker_kind_leases
+from songmaker_cli.worker_liveness import WORKER_KINDS, worker_kind_leases
 
 if TYPE_CHECKING:
     from redis import Redis
     from support.fake_oidc_issuer import FakeIssuer
+
+    from songmaker_cli.object_store import ObjectStore
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
@@ -67,7 +69,7 @@ class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
         self.server = fakeredis.FakeServer()
         super().__init__(server=self.server)
         self.store = _KeyView(self.server)
-        epoch_key, epoch_ms = settled_epoch()
+        epoch_key, epoch_ms = aged_epoch(key_prefix=REDIS_KEY_PREFIX)
         self.store[epoch_key] = str(epoch_ms)
 
     def another_process(self) -> fakeredis.FakeAsyncRedis:
@@ -108,11 +110,14 @@ def arrange_fake_async_redis(
     asyncio.run(arrange_and_disconnect())
 
 
-def hold_a_music_lease(async_redis: fakeredis.FakeAsyncRedis) -> None:
-    """Make a music worker hold a live lease on the fake, as its process would."""
+def hold_a_worker_lease(
+    async_redis: fakeredis.FakeAsyncRedis,
+    kind: WorkerLivenessSignal = WorkerLivenessSignal.MUSIC,
+) -> None:
+    """Make a worker of ``kind``, a music worker by default, hold a live lease on the fake."""
     arrange_fake_async_redis(
         async_redis,
-        lambda redis: worker_kind_leases(redis, MUSIC_WORKER_KIND).renew("music-worker"),
+        lambda redis: worker_kind_leases(redis, kind).renew(WORKER_KINDS[kind].lease_family),
     )
 
 
@@ -184,13 +189,24 @@ def install_app_context(app, ctx) -> None:
 
 
 def make_app_context(
-    *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis,
+    *, db: sessionmaker[Session], audio_dir: Path, data_dir: Path, redis=None,
+    async_redis=None, wake_redis=None, signing_key: bytes = TEST_SECRET,
+    object_store: ObjectStore | None = None,
 ) -> AppContext:
-    """A context on fakes for the asyncio side, over the caller's database and sync Redis."""
+    """A context on fakes for the asyncio side, over the caller's database and Redis fakes.
+
+    ``wake_redis`` is the client that follows wakes; without one it is the ``async_redis`` fake,
+    so a wake published on the fake reaches the follower. A test that follows wakes over a real
+    server passes a ``follows_wakes`` client.
+    """
+    if redis is None:
+        redis = make_fake_redis()
+    if async_redis is None:
+        async_redis = make_fake_async_redis()
     ctx = AppContext(
-        object_store=an_object_store(),
-        db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
-        async_redis=make_fake_async_redis(),
+        object_store=an_object_store() if object_store is None else object_store,
+        db=db, audio_dir=audio_dir, data_dir=data_dir, signing_key=signing_key, redis=redis,
+        async_redis=async_redis, wake_redis=async_redis if wake_redis is None else wake_redis,
     )
     ctx.owner = an_owner(ctx.owner_id)
     return ctx
@@ -205,15 +221,9 @@ def make_router_ctx(
     """Build a router context on the required ``db``, committing seed data.
 
     The caller passes its database; no default builds one."""
-    ctx = AppContext(
-        object_store=an_object_store(),
-        db=db,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(), async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=make_fake_redis(),
     )
-    ctx.owner = an_owner(ctx.owner_id)
     if seed_db is not None:
         with ctx.db() as session:
             seed_db(session)
@@ -293,11 +303,9 @@ def make_test_app(
             seed_db(session)
         session.commit()
 
-    ctx = AppContext(
-        object_store=an_object_store(),
+    ctx = make_app_context(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=make_fake_redis() if redis is None else redis,
-        async_redis=SettledFakeAsyncRedis(),
+        redis=make_fake_redis() if redis is None else redis, async_redis=SettledFakeAsyncRedis(),
     )
     slot = IssuerSlot()
     app = create_app(

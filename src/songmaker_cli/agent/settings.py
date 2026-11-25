@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
-from agents.config import AgentConfig
+from agents.config import ChatGateway
+from pydantic import BaseModel, ConfigDict
 
-# The client's agent section as songmaker reads it; this leaf is the one settings module that
-# imports the agents library.
-AgentSettings = AgentConfig
+
+class AgentSettings(BaseModel):
+    """The gateway the co-writer talks to; its group is the realm's ``REALM_AI_GROUP``.
+
+    An unknown key stops startup.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    gateway: ChatGateway

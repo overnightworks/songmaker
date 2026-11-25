@@ -15,7 +15,7 @@ from anyio import from_thread
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from tandem.slots import Slots
+from tandem import Slots
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.agent.mcp import Exclusion, exclude_route

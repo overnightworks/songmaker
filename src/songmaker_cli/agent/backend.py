@@ -28,6 +28,7 @@ from agents.backend import (
     TurnStopped,
 )
 from agents.backend.gateway import GatewayBackend
+from agents.config import AgentConfig
 from agents.tools import Principal
 from agents.turn import StopOutcome, TurnMessage, TurnRole
 from webauth.config import installed_web_auth_config
@@ -42,7 +43,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.auth_stores import DatabaseSessionTransaction
 from songmaker_cli.oidc_client import normalised_oidc_issuer
-from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.settings import RealmSettings, Settings, get_settings
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -89,15 +90,19 @@ class _GroupsRefusedError(Exception):
         self.refusal = refusal
 
 
-def compose_agent_backend(app: FastAPI, settings: Settings) -> None:
-    """Hold the gateway backend and its API group on the app's state; no ``agent`` holds none."""
+def compose_agent_backend(app: FastAPI, settings: Settings, realm: RealmSettings) -> None:
+    """Hold the gateway backend and its API group on the app's state; no ``agent`` holds none.
+
+    The group is the realm's ``REALM_AI_GROUP``, which a configured gateway requires.
+    """
     agent = settings.agent
     app.state.agent_backend = None
     app.state.agent_api_group = None
     if agent is not None:
+        config = AgentConfig(gateway=agent.gateway, api_group=str(realm.require_ai_group()))
         tools = cowriter_hand_tools(app.state.ctx.db)
-        app.state.agent_backend = GatewayBackend(agent, tools=tools)
-        app.state.agent_api_group = agent.api_group
+        app.state.agent_backend = GatewayBackend(config, tools=tools)
+        app.state.agent_api_group = config.api_group
 
 
 @functools.cache

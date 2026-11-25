@@ -5,14 +5,16 @@ from __future__ import annotations
 import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
 import pytest
 from redis import Redis
-from support.owner_lease_epoch import aged_epoch, settled_epoch
 from support.web_cluster_world import WebProcess
+from tandem.testing import aged_epoch
 
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.db.models import Album, Generation, Song, User, Version
 
 ALBUM_SLUG = "open-windows"
@@ -77,15 +79,15 @@ def _ask_for_the_stream(process: WebProcess) -> httpx.Response:
 
 
 @pytest.mark.parametrize(
-    "epoch", [settled_epoch, lambda: aged_epoch(MINUTE_OLD_REDIS_SECONDS)],
+    "ran_for", [None, timedelta(seconds=MINUTE_OLD_REDIS_SECONDS)],
     ids=["settled-redis", "redis-a-minute-old"],
 )
 def test_a_queue_stream_asked_for_at_once_is_built_once_and_both_processes_serve_it(
     web_cluster, redis_url: str, locked_ffmpeg: Path, tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch, epoch,
+    monkeypatch: pytest.MonkeyPatch, ran_for: timedelta | None,
 ) -> None:
     cluster, factory = web_cluster
-    Redis.from_url(redis_url).set(*epoch())
+    Redis.from_url(redis_url).set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX, ran_for=ran_for))
     builds = tmp_path / "builds.txt"
     builds.touch()
     monkeypatch.setenv(

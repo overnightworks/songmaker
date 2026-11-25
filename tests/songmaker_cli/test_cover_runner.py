@@ -19,7 +19,14 @@ from support.cowriter_gateway import (
     attach_cowriter_gateway,
     raises,
 )
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.web_app import (
+    make_app_context,
+    make_authenticated_user,
+    make_fake_redis,
+    make_router_app,
+    make_router_ctx,
+    web_client,
+)
 from tandem import Liveness
 
 import songmaker_cli.cover_runner as cover_runner
@@ -33,6 +40,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import JobOwnerStamp
 
@@ -401,3 +409,34 @@ def test_a_job_or_album_gone_at_the_start_refuses_the_start(
 
     with pytest.raises(cover_runner.CoverSuggestionJobError):
         cover_runner._load_cover_start(factory, job_id)
+
+
+def test_a_running_cover_s_cancel_listener_subscribes_once_while_the_channel_is_quiet(
+    tmp_path: Path, pg_factory, redis_url: str,
+) -> None:
+    quiet_for = 5  # several of the bounded client's 2 s socket timeouts
+
+    async def follow_while_quiet() -> tuple[int, bool]:
+        reads_of_the_job = 0
+
+        def counting_db():
+            nonlocal reads_of_the_job
+            reads_of_the_job += 1
+            return pg_factory()
+
+        wake_redis = create_async_redis(redis_url, follows_wakes=True)
+        ctx = make_app_context(
+            db=counting_db, audio_dir=tmp_path, data_dir=tmp_path, redis=make_fake_redis(),
+            async_redis=create_async_redis(redis_url), wake_redis=wake_redis,
+        )
+        try:
+            work = await cover_runner.run_until_cancelled(
+                ctx, "job", lambda: asyncio.sleep(quiet_for),
+            )
+        finally:
+            await ctx.async_redis.aclose()
+            await wake_redis.aclose()
+        return reads_of_the_job, work.cancelled()
+
+    # Each subscription's confirmation makes the listener read the job again; the first is one.
+    assert asyncio.run(follow_while_quiet()) == (1, False)

@@ -81,7 +81,7 @@ post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
 
-Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app (through webauth's `front=`) and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id` (a cron job has none), `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
+Every application process (web, music-worker, scoring-worker and the ACE-Step worker) writes only [logline](https://github.com/overnightworks/logline)'s JSON lines to stdout (`ts`, `level`, `service`, `version`, `logger`, `event`, `trace_id`), under the service names `songmaker-web`, `songmaker-music-worker`, `songmaker-scoring-worker` and `songmaker-acestep-worker`; `LOG_LEVEL` and `SERVICE_VERSION` are its only settings. The web app (through webauth's `front=`) and the ACE-Step worker add logline's `RequestLineMiddleware`, which writes one `request.ended` line per HTTP request with its route template, never the path, and the signed-in person's `sub`. Every arq job runs in its enqueuer's trace (the `traceparent` rides in the job's kwargs, `arq_codec`) and ends with one `arq_job.ended` line carrying `job_function`, `job_id`, `duration_ms` and `outcome`: `failed` or `cancelled` when the job's row ends so, not only when the function raises; when the status read fails, the line says `outcome=failed` with `reason=status_unreadable` at WARNING for a job that finished, so an alert on failed jobs can tell it apart. A cron run is no arq job and carries no `job_id`: it ends with its own `cron_job.ended` line, carrying `job_function` (the cron's name), `duration_ms` and `outcome`, inside tandem's handling trace of its due key, so an alert on a failed cron reads that line (a failing cron also leaves tandem's `deadline_handling.ended` and `deadline_handler.failed`). The scorer child process configures logline too, so a crash or a scorer failure is one JSON line with its traceback under `exception`. logline drops a field named like its deny list (`user_id`, a `_seconds` suffix), so a line names a person by `sub` and a duration by `duration_ms`. `scheduler.worker_request_headers()` sends the trace to the ACE-Step worker. Docker retains five 10 MB files per service so operational history remains bounded.
 
 ## Job Routing
 
@@ -993,7 +993,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
-| Worker | Job queues in PostgreSQL rows (music + scoring), hosted by arq processes, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
+| Worker | Job queues in PostgreSQL rows (music + scoring), one process per worker kind, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/songmaker_acestep_worker/` (top-level package, separate from `songmaker_cli`) |
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
@@ -1024,7 +1024,7 @@ starts no job. The turn then runs as a task of its own through
    user's id, the role is the account's role, and the groups come from a fresh
    refresh grant (`current_groups` through `DatabaseSessionTransaction`). The
    client checks the role against the agent file's `appRoles` and the groups
-   against `AGENT__API_GROUP` before it reads the key file.
+   against `REALM_AI_GROUP` before it reads the key file.
 3. It runs `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    its `model`, `maxDurationSeconds` and `maxToolCalls`) through
@@ -1135,12 +1135,16 @@ describes the Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
 issuer, client id from `REALM_CLIENT_ID`, client secret read from the file `OIDC_CLIENT_SECRET_FILE`,
 redirect addresses from `PUBLIC_BASE_URL`) and
 `build_admission_config` binds its issuer to the login and admin groups from `REALM_LOGIN_GROUP` and
-`REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names. The four group names
-(`REALM_LOGIN_GROUP`, `REALM_ADMIN_GROUP`, `REALM_MCP_GROUP`, `REALM_AGENT_GROUP`) are webauth
-`GroupPath` values; the client ids and the MCP scope are plain strings. `REALM_AGENT_GROUP` is
-parsed and validated even while MCP is off, and required only while it is on. They are built once in
-`server.create_app`, so the workers, which never create the web app, start without the realm's
-settings. The call builds the relying party itself and keeps the handle on `app.state.web_auth`.
+`REALM_ADMIN_GROUP`. `settings.RealmSettings` owns these names. The five group names
+(`REALM_LOGIN_GROUP`, `REALM_ADMIN_GROUP`, `REALM_MCP_GROUP`, `REALM_AGENT_GROUP`, `REALM_AI_GROUP`)
+are webauth `GroupPath` values; the client ids and the MCP scope are plain strings.
+`REALM_AGENT_GROUP` is parsed and validated even while MCP is off, and required only while it is on;
+`REALM_AI_GROUP` is required only once the AI gateway is configured, when `compose_agent_backend`
+builds the agents library's `AgentConfig` from the gateway and that group. songmaker's agent section
+holds the gateway only and forbids unknown keys, so a leftover `AGENT__API_GROUP` stops the web at
+startup (`docs/security.md` owns the detail). The realm names are built once in `server.create_app`,
+so the workers, which never create the web app, start without the realm's settings. The call builds
+the relying party itself and keeps the handle on `app.state.web_auth`.
 `GET /login/oidc` starts the login; `GET /auth/callback`
 writes the account and the session in one `DatabaseSignInTransaction` entry (a fresh database
 session under `DatabaseWriteLock`, committed on a clean exit, rolled back when the block raises)
@@ -1220,7 +1224,7 @@ Inside `songmaker_cli` the `application-layers` contract lists every module (`ex
 
 ```mermaid
 flowchart TB
-    entry["Entry: main, arq_worker"]
+    entry["Entry: main"]
     workers["Workers and server: server, music_worker, scoring_worker"]
     routes["Routes: the *_api modules, api, worker_base"]
     runtime["Runners, lifecycle, jobs"]
@@ -1541,7 +1545,7 @@ and the worker stores what came back; no scoring run makes a coherence verdict.
 ```
 POST /api/generations/{id}/score
   → ownership check
-  → scoring worker health check (503 before any row exists: a committed row is claimable at once)
+  → scoring signal check (503 before any row exists: a committed row is claimable at once)
   → rate limit check (per-user, advisory lock)
   → create Job record (with its payload) + audit log entry, committed
   → publish a wake on `queue/score` (no job travels in it)
@@ -1612,11 +1616,26 @@ SIGKILLed and even the values the run did produce would be lost.
 - `MUSIC_MAX_JOBS` places, 2 by default (concurrent SSE consumers; the actual generation runs on the
   acestep-worker); each job runs within `ARQ_JOB_TIMEOUT`, a LoRA training within
   `LORA_TRAINING_JOB_TIMEOUT`
-- Cron: audits orphaned audio files and applies file-expiry cleanup; once a day
-  (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
+- Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`. The
+  claiming loop and the crons are the tasks of one `asyncio.TaskGroup`, so a stop signal ends both
+  (a running job drains within `ARQ_DRAIN_TIMEOUT`), and one that raises ends the worker
+  process loudly while the lease is released.
+- Crons: audits orphaned audio files and applies file-expiry cleanup every even minute; once a
+  day (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed (arq hosts these crons). A web process fails a stopped worker's running jobs through the
+  has passed. The four are keys of one tandem `Deadlines` of kind `worker-crons`
+  (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
+  once across all workers, extends the claim while the body runs and calls `done` after it. Redis
+  TIME is the only clock: a run ends with `recur`, which arms the key for the next tick
+  (`next_tick`) computed from it. Each round arms every cron absent from Redis due now, so a
+  missed tick runs once after a restart and a Redis that lost its data costs one more run of
+  the idempotent bodies, never a skipped day; a due key of no known cron is cancelled with a
+  warning. A body that raises is recurred like one that returns and waits for its next tick. A
+  stop gives a running body `CRON_STOP_WAIT_SECONDS` (two thirds of `CRON_CLAIM_FOR_SECONDS`,
+  the part of its claim a stop leaves) before it is cut, so no other worker starts a body that
+  still runs here; a body cut is not recurred and runs again on another worker when its claim
+  runs out. A due time runs up to `CRON_EVERY_SECONDS` late. A web process fails a stopped worker's running jobs through the
   owner lease; see "Owner liveness". Whether a music worker lives is read from the lease family
   `music-worker` and its readiness from its own owner lease; see "Owner liveness".
 - Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
@@ -1625,14 +1644,19 @@ SIGKILLed and even the values the run did produce would be lost.
 - Owns scorer subprocess (Whisper, AudioBox, audio scorers); calls no provider,
   so the worker holds no provider credential; the subprocess is spawned with
   `SECRET_ENV_KEYS` scrubbed
-- Handles `score` tasks
+- Handles `score` jobs, claimed from their rows ("Queued job lifecycle" below); each runs within
+  `ARQ_JOB_TIMEOUT`, and one still running then ends `failed` with `error_type = "timeout"` and the
+  stored message `jobFailure.tookTooLong`; the scorer thread of that job cannot be cancelled and
+  writes nothing late, because its row has ended
 - Loads Whisper and AudioBox from files pinned by hash in its image
   (`SCORING_WHISPER_MODEL_DIR`, `SCORING_AUDIOBOX_CHECKPOINT`), never from the
   Hugging Face Hub ([security](security.md))
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
-- `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
-- Takes its jobs from PostgreSQL, not from arq ("Queued job lifecycle" below); arq still
-  hosts the process, writes its health key and carries the `score` function
+- One place by default, configurable via `SCORING_MAX_JOBS`
+- Started as `python -m songmaker_cli.scoring_worker`, which runs `ScoringWorker().run()`. Its
+  scorer subprocess manager exists before the claiming loop starts and is shut down after the loop
+  has drained, before the lease ends. Its lease in the `scoring-worker` family says it lives
+  ("Worker liveness and readiness" below)
 
 **Shared infrastructure** (`worker_base.py`):
 - DB singleton with thread-safe initialization
@@ -1649,10 +1673,22 @@ SIGKILLed and even the values the run did produce would be lost.
   disposed. A worker fails no job at start or stop; a web
   process fails the `RUNNING` jobs of an owner whose lease is gone (stale-job
   recovery below). Queued work remains in its rows for a replacement worker to claim after a
-  deploy. A worker's arq connection retries a refused or lost connection for
-  `STORE_STARTUP_WAIT_SECONDS`, so its poll loop outlives a Redis outage; the web
-  process's arq pool fails fast. A stop signal ends that retry, so a worker
-  stops within seconds during the outage.
+  deploy. A worker's own client retries a refused or lost connection, and the loops' next poll
+  rides out a Redis outage; a stop signal ends the worker within seconds during it.
+- Each process follows the wake channel on a client of its own with no `socket_timeout` and with
+  TCP keepalive (`create_async_redis(..., follows_wakes=True)`), and publishes on its bounded
+  client: a worker follows on `wake_redis` (`WorkerBase`), a web process on `AppContext.wake_redis`,
+  closed at shutdown, through `AppContext.following_wake_channel`; `AppContext.wake_channel`
+  publishes on `async_redis`. Below redis-py 8.2 a quiet subscription ends at its client's
+  `socket_timeout` and tandem subscribes again (WAKE-30), which would make a running cover's cancel
+  listener re-read the job every 2 s; arq keeps songmaker on redis-py 5.3, so the second client stays
+  until songmaker leaves arq and tandem's floor reaches 8.2.
+- `WorkerBase.run()` is the entry of every worker process: it installs the stop-signal handlers
+  (SIGINT and SIGTERM) first, so a stop that arrives while `start()` waits for the database or opens
+  the lease ends the worker through `stop()` within seconds, holding no lease; then it starts (readiness
+  file, database, lease), serves every task of `servings()` in one `TaskGroup`, and ends the lease and
+  the pool after the servings have ended. The wait for the database runs in a thread and a stop
+  request ends its pauses.
 - A job row carries its arguments: `jobs.payload` (binary JSON) holds the typed record of its job
   type (`job_payloads.py`, read and written through `JobPayloadColumn`), stored by `create_job` in
   the transaction that creates the row, and `jobs.run_after` holds the time a
@@ -1663,8 +1699,7 @@ SIGKILLed and even the values the run did produce would be lost.
   own row and have no payload. A claim moves the row from
   queued to running by one conditional UPDATE that names the worker as owner
   (`claim_next_queued_job`, the statement `claim_next_cover_job` shares), so a job reaches one
-  worker. The arq `score` handler of the previous release (`WorkerBase.claim_job`) claims the same
-  way. A GPU-hold requeue writes the row back to queued, without an owner and with `run_after`;
+  worker. A GPU-hold requeue writes the row back to queued, without an owner and with `run_after`;
   no message is sent, and the next claim after that time runs it.
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
@@ -1679,33 +1714,27 @@ worker claims it before the refusal; one loop claims the four types, oldest `run
 generation that is queued or claimed and has not started a take, so a generation claimed but not yet
 admitted never waits behind a whole training run.
 
-1. The web process (or the music worker, for an auto-score) first checks that the scoring worker
-   lives (a committed row is claimable at once, so a refusal never follows it), then commits the
+1. The web process first checks that the scoring signal is `alive`, the restart grace included
+   (the music worker, for an auto-score, and the score backfill ask whether the roster has a live
+   holder right now). A committed row is claimable at once, so a refusal never follows it. It then commits the
    `queued` row with its `ScorePayload` and `run_after = now`, then publishes a wake on the app's wake channel
    (tandem `WakeChannel`, address `queue/score`, built by `job_queue.app_wake_channel`). A wake that
    cannot be sent is logged and costs nothing but the poll's delay.
 2. The scoring worker's `serve_queue` loop claims one due row at a time while it has a free
-   place (`SCORING_MAX_JOBS`, one capacity the loop and the arq handler below share): `claim_next_queued_job` selects the queued row of the type whose
+   place (`SCORING_MAX_JOBS`): `claim_next_queued_job` selects the queued row of the type whose
    `run_after` has passed, oldest first, with `FOR UPDATE SKIP LOCKED`, and moves it to
    `running` in the same statement, writing the worker's owner id and lease generation
    (`owner_columns`). Two workers never take one row; a cancelled row keeps its `run_after`
-   but is not queued, and a queued score row without a `run_after` (written before rows carried
-   arguments) is left to its arq message; a row of any other type without one has no message and is claimed,
-   and a music row without a payload fails as `setup_error`.
+   but is not queued, and a queued row of any type without a `run_after` (written before rows
+   carried arguments) is claimed, and a row without a payload fails as `setup_error`.
 3. The loop looks for due rows when a wake for `queue/score` arrives, when the subscription
    confirms (the first time and after every reconnect: `on_resync` only sets an event the loop
    task reads), when a job ends, and every `QUEUE_POLL_INTERVAL_SECONDS` as the backstop; a lost wake delays a job
    by at most that interval. A Redis that is down at start leaves the loop polling alone.
 4. It runs the job from the claimed row's payload and writes its one `arq_job.ended` line. A
    claimed row whose payload is not a score payload fails as unexpected. A stop signal ends
-   the claiming at once, not when arq has drained its own jobs (the worker's own handler of the
-   signal cancels the loop), and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
+   the claiming at once and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
    running keeps its row, which the owner lease hands to the reaper.
-
-The worker keeps the arq `score` function for web processes that still enqueue score messages.
-Its handler claims its row by the same compare-and-set as every arq handler, so a row reached by
-a message and by the loop runs once, and it takes a place of the loop's capacity before it claims,
-so the two never run more jobs together than `SCORING_MAX_JOBS`. The function goes when the arq score queue goes.
 
 Recovery judges a score row by its owner stamp like every other row: a `running` row whose
 owner lease is gone fails with the restart verdict. A `running` score row with no owner id (a
@@ -1741,7 +1770,7 @@ generations were stored has an owner without a generation and is judged by its o
 built by `worker_liveness.owner_leases` for every process from the same spans: a lease lasts
 `OWNER_LEASE_TTL_SECONDS` (15 s) and is renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by
 `worker_liveness.keep_owner_lease` (`Leases.kept`), in a web process from the end of start-up to
-the end of `_lifespan`, in a worker from after its database has opened to its `on_shutdown`. A
+the end of `_lifespan`, in a worker from after its database has opened to its `stop()`. A
 web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
 serves everything else. The `owner_gone_reaper` loop of every web process runs
 `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
@@ -1784,28 +1813,34 @@ the stored job status still fences every write to a job that was failed. A cover
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in
 training until the next stale-job reaper tick reconciles it.
 
-**Music worker liveness and readiness.** The owner family holds the bare ids of web processes
-too, so its roster cannot say that a music worker lives. A music worker therefore also renews its
-owner id in a second family, `music-worker` (`worker_liveness.worker_kind_leases(redis, "music")`,
-the spans of the owner family, renewed by `worker_liveness.keep_kind_lease` right after the owner
-lease). A web process reads the roster of that family, never arq's health key:
-`arq_pool.is_music_worker_healthy` says whether it holds a live lease (the health page), and the
-music signal of the liveness map reads it too, which also admits a generation (a live holder is
-`alive` and is recorded as the last observation;
-an empty roster Redis may have lost with a restart is `unknown`; an empty roster that is complete
-falls to the last observation and the restart grace below; a roster that cannot be read is
-`unknown`; a generation is admitted only while the signal is `alive`, so a restart inside the
-grace refuses nothing). The async callers (`create_job_with_rate_limit` and the generation routes
-through `AppContext.music_leases`, the stale-job reaper loop and the start-up pass) read the
-roster first and pass it in. The `owner_lapses` loop serves the lapses of this family beside the
+**Worker liveness and readiness.** The owner family holds the bare ids of web processes
+too, so its roster cannot say that a worker lives. A worker therefore also renews its
+owner id in a second family of its kind, `music-worker` or `scoring-worker` (the table
+`worker_liveness.WORKER_KINDS`, keyed by `WorkerLivenessSignal`: each kind's lease family and
+last-alive key, read through `worker_liveness.worker_kind_leases(redis, kind)`; a worker class
+names its kind in `lease_kind`, and a signal without a row fails its start). The kind family has
+the spans of the owner family and is renewed by `worker_liveness.keep_kind_lease` right after the
+owner lease. A web process reads the roster of that family:
+`arq_pool.is_music_worker_healthy` and `arq_pool.is_scoring_worker_healthy` say whether a kind
+holds a live lease (the health page; the auto-score and the score backfill), and the signal of the
+liveness map reads it too, which also admits a request (a live holder is `alive` and is recorded as
+the last observation; an empty roster Redis may have lost with a restart is `unknown`; an empty
+roster that is complete falls to the last observation and the restart grace below; a roster that
+cannot be read is `unknown`). A generation and a score request are admitted only while the
+signal of their worker is `alive`, so a restart inside the grace refuses nothing: a score request
+during a scoring-worker restart queues its row, which runs when the worker is back. Past the grace
+the request is refused with `generationRefusal.workerNotRunning`, and the reaper fails a waiting
+score job. The async callers (`create_job_with_rate_limit` and the generation routes through
+`AppContext.kind_leases`, the stale-job reaper loop and the start-up pass) read the rosters
+first (`read_kind_rosters`) and pass them in. The `owner_lapses` loop serves the lapses of every kind's family beside the
 owner family's, so the holders and lapses of ended or expired leases leave Redis. The readiness
-probe `scripts/arq_healthcheck.py music` is ready only when this container start's own owner
-lease is live: the worker writes its owner id and PID 1's start ticks (field 22 of `/proc/1/stat`)
-to `MUSIC_WORKER_READINESS_FILE` as the first step of its start, and the probe requires the
+probe `scripts/worker_readiness.py`, the same for both worker images, is ready only when this
+container start's own owner lease is live: `WorkerBase.start()` writes its owner id and PID 1's
+start ticks (field 22 of `/proc/1/stat`) to `WORKER_READINESS_FILE` as the first step of its
+start, and the probe requires the
 ticks to equal the current ones and `owner_leases(...).state({owner_id})` to read `alive`. A file
 left by an earlier start of the container carries other ticks, so the lease of a stopped worker,
-which lives on for its lifespan, never makes a restarting container ready. The scoring probe
-still reads arq's key.
+which lives on for its lifespan, never makes a restarting container ready.
 
 The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.
@@ -1829,8 +1864,8 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   makes its current state disappear; it is not the restart grace. `dead` is
   only declared after the observing web process itself has run longer than the
   grace, measured from the observer process start time.
-- `lora_training` uses the music worker signal (the `music-worker` roster, "Owner
-  liveness"), and `score` uses the scoring arq worker health key. A live ACE-Step signal does not prove the
+- `lora_training` uses the music worker signal (the `music-worker` roster, "Worker
+  liveness and readiness"), and `score` uses the scoring worker signal (the `scoring-worker` roster). A live ACE-Step signal does not prove the
   MusicWorker is live; that case remains `unknown` and uses the appropriate
   age/full-queue guard.
 - `chat` runs in the web process rather than a worker queue, so it has no

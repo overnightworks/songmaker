@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final, cast
 
-from arq.connections import ArqRedis
+from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_acestep_engine.models import AceStepConfig
@@ -632,7 +632,7 @@ def _create_auto_score_job(
 
 
 async def _auto_score_generation(
-    redis: ArqRedis,
+    redis: Redis,
     db_factory: sessionmaker[Session],
     gen_id: str,
     song_id: str,
@@ -782,7 +782,7 @@ async def run_generation_job(
     audio_dir: Path,
     data_dir: Path,
     owner: JobOwner,
-    redis: ArqRedis,
+    redis: Redis,
     seed: int | None = None,
     task_params: RepaintTaskParams | CoverTaskParams | None = None,
 ) -> None:
@@ -854,7 +854,7 @@ async def run_generation_job(
 
 async def _admit_generation_worker_or_requeue(
     request: GenerationJobRequest,
-    redis: ArqRedis,
+    redis: Redis,
     db_factory: sessionmaker[Session],
 ):
     if _job_is_terminal(db_factory, request.job_id):
@@ -938,7 +938,7 @@ def _remove_temporary_generation_audio(paths: list[str]) -> None:
 
 async def _generate_variants(
     admitted_worker,
-    redis: ArqRedis,
+    redis: Redis,
     db_factory: sessionmaker[Session],
     request: GenerationJobRequest,
     ctx: GenerationContext,

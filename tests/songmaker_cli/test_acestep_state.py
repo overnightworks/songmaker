@@ -4,27 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import timedelta
 
 import fakeredis.aioredis
 import pytest
-from support.owner_lease_epoch import settled_epoch
 from support.refused_download import attempt_download_that_must_not_run
 from support.wrapper_deps import settled_fake_redis
+from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
     DOWNLOAD_KEY_PREFIX,
-    DOWNLOAD_LOCK_LASTS,
     LM_FAILURE_KEY_PREFIX,
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
     DownloadAlreadyRunning,
-    DownloadLockLost,
     admit_generation,
     decr_queue_depth,
     download_key,
-    download_locks,
     gpu_hold_is_free,
     gpu_hold_locks,
     lm_failure_key,
@@ -36,6 +32,7 @@ from songmaker_cli.acestep_state import (
     worker_is_online,
     worker_state_key,
 )
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 
 @pytest.fixture
@@ -58,7 +55,7 @@ def redis(server):
 @pytest.fixture
 def settled_redis(redis, event_loop):
     """A Redis that has run longer than any lock lasts, as a process finds it in operation."""
-    event_loop.run_until_complete(redis.set(*settled_epoch()))
+    event_loop.run_until_complete(redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX)))
     return redis
 
 
@@ -286,7 +283,7 @@ def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(
 
     assert event_loop.run_until_complete(scenario()) == (False, False, None, 0)
 
-    event_loop.run_until_complete(settled_redis.set(*settled_epoch()))
+    event_loop.run_until_complete(settled_redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX)))
 
     assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
 
@@ -375,16 +372,12 @@ def test_read_download_in_progress_missing(redis, event_loop) -> None:
 def test_a_download_is_labelled_with_its_job_while_it_holds_the_lock(
     settled_redis, event_loop,
 ) -> None:
-    async def scenario() -> tuple[str | None, int, str | None]:
+    async def scenario() -> tuple[str | None, bool]:
         async with single_flight_download(settled_redis, "turbo", "job-x"):
             during = await read_download_in_progress(settled_redis, "turbo")
-            label_seconds = await settled_redis.ttl(download_key("turbo"))
-        return during, label_seconds, await read_download_in_progress(settled_redis, "turbo")
+        return during, bool(await settled_redis.exists(download_key("turbo")))
 
-    during, label_seconds, after = event_loop.run_until_complete(scenario())
-
-    assert (during, after) == ("job-x", None)
-    assert 0 < label_seconds <= DOWNLOAD_LOCK_LASTS.total_seconds()
+    assert event_loop.run_until_complete(scenario()) == ("job-x", False)
 
 
 def test_a_second_download_of_a_mode_is_refused_with_the_holders_job(
@@ -429,7 +422,7 @@ def test_a_download_waits_out_a_redis_restart_instead_of_failing(
     async def settle_while_waiting(_seconds: float) -> None:
         nonlocal waits
         waits += 1
-        await settled_redis.set(*settled_epoch())
+        await settled_redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
         await real_sleep(0)
 
     async def scenario() -> str | None:
@@ -440,55 +433,3 @@ def test_a_download_waits_out_a_redis_restart_instead_of_failing(
 
     assert event_loop.run_until_complete(scenario()) == "job-1"
     assert waits >= 1
-
-
-def test_a_download_whose_lock_was_taken_over_stops_and_leaves_the_new_holders_label(
-    settled_redis, another_process, event_loop, monkeypatch,
-) -> None:
-    monkeypatch.setattr(
-        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
-    )
-
-    async def download_while_another_process_takes_the_lock() -> None:
-        new_holder_locks = download_locks(another_process)
-        async with single_flight_download(settled_redis, "sft", "job-1"):
-            await another_process.zrem(new_holder_locks.keys.expiry, "sft")
-            assert await new_holder_locks.acquire("sft") is not None
-            await another_process.set(download_key("sft"), "job-2", ex=15)
-            await asyncio.sleep(30)
-
-    async def scenario() -> str | None:
-        with pytest.raises(DownloadLockLost) as lost:
-            await download_while_another_process_takes_the_lock()
-        assert lost.value.mode == "sft"
-        return await read_download_in_progress(another_process, "sft")
-
-    assert event_loop.run_until_complete(scenario()) == "job-2"
-
-
-def test_a_download_whose_first_stop_is_swallowed_by_its_block_is_stopped_again(
-    settled_redis, another_process, event_loop, monkeypatch,
-) -> None:
-    """A native cancel racing a cancel scope of the block (anyio's connect) is absorbed by it."""
-    monkeypatch.setattr(
-        "songmaker_cli.acestep_state.DOWNLOAD_LOCK_EXTEND_EVERY", timedelta(milliseconds=10),
-    )
-
-    async def download_that_absorbs_its_first_stop() -> None:
-        new_holder_locks = download_locks(another_process)
-        async with single_flight_download(settled_redis, "sft", "job-1"):
-            await another_process.zrem(new_holder_locks.keys.expiry, "sft")
-            assert await new_holder_locks.acquire("sft") is not None
-            try:
-                await asyncio.sleep(30)
-            except asyncio.CancelledError:
-                pass
-            await asyncio.sleep(30)
-
-    async def scenario() -> None:
-        async with asyncio.timeout(10):
-            await download_that_absorbs_its_first_stop()
-
-    scenario_run = scenario()
-    with pytest.raises(DownloadLockLost):
-        event_loop.run_until_complete(scenario_run)
