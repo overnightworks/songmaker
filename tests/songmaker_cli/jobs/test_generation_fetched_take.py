@@ -25,13 +25,15 @@ from songmaker_cli.scheduler import WorkerTaskFailed
 
 def _run_fetch_job(
     seeded_db, tmp_path: Path, dispatch, *, count: int, post_process_hook=None,
+    redis: ScoringRedis | None = None,
 ) -> None:
     hook = {} if post_process_hook is None else {"post_process": post_process_hook}
     dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch, **hook)
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
             "j1", "s1", "v1", count, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data", redis=ScoringRedis(worker_running=False),
+            data_dir=tmp_path / "data",
+            redis=ScoringRedis(worker_running=False) if redis is None else redis,
             target_model="sft",
             owner=an_owner("o1"),
         ))
@@ -110,7 +112,7 @@ def test_a_take_whose_job_is_cancelled_during_its_write_leaves_no_file_and_no_ro
 
     _run_fetch_job(
         seeded_db, tmp_path, AsyncMock(return_value=make_generation_dto(audio_path=str(fetched))),
-        count=1, post_process_hook=cancel_then_write,
+        count=1, post_process_hook=cancel_then_write, redis=ScoringRedis(),
     )
 
     assert len(written_paths) >= 3
@@ -139,7 +141,7 @@ def test_a_take_deleted_before_its_score_job_is_created_gets_no_score_job(
 
     _run_fetch_job(
         seeded_db, tmp_path, AsyncMock(return_value=make_generation_dto(audio_path=str(fetched))),
-        count=1, post_process_hook=write_then_delete_take,
+        count=1, post_process_hook=write_then_delete_take, redis=ScoringRedis(),
     )
 
     with seeded_db() as session:
