@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from support.generation_job_world import (
     make_generation_dto,
@@ -13,6 +13,7 @@ from support.generation_job_world import (
     worker_up,
 )
 from support.job_owner import an_owner
+from support.score_jobs import ScoringRedis
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import Generation, Job, Version
@@ -30,7 +31,8 @@ def _run_fetch_job(
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
             "j1", "s1", "v1", count, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data", redis=MagicMock(), target_model="sft",
+            data_dir=tmp_path / "data", redis=ScoringRedis(worker_running=False),
+            target_model="sft",
             owner=an_owner("o1"),
         ))
 
@@ -184,7 +186,8 @@ def test_a_songs_settings_reach_the_worker_through_the_generate_request(
         run_async(run_generation_job(
             job_id, queued.song_id, queued.version_id, queued.count, queued.user_id,
             db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-            redis=MagicMock(), seed=queued.seed, target_model=queued.target_model,
+            redis=ScoringRedis(worker_running=False),
+            seed=queued.seed, target_model=queued.target_model,
             owner=an_owner("o1"),
         ))
 
@@ -200,7 +203,8 @@ def test_a_saved_take_records_the_seed_the_worker_reported(seeded_db, tmp_path: 
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
             "j1", "s1", "v1", 1, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data", redis=MagicMock(), seed=5, target_model="sft",
+            data_dir=tmp_path / "data", redis=ScoringRedis(worker_running=False),
+            seed=5, target_model="sft",
             owner=an_owner("o1"),
         ))
 
