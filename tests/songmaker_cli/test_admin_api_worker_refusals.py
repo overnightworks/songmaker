@@ -9,9 +9,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from support.refused_download import hold_a_download
-from support.web_app import SettledFakeAsyncRedis, make_test_app, seed_session, seed_user
+from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.db.queries.workers import register_worker
@@ -180,12 +179,11 @@ def test_a_download_the_registry_cannot_start_names_why(
     key: str,
     values: dict[str, str],
 ) -> None:
-    pool = SettledFakeAsyncRedis()
+    redis = admin_client.app.state.ctx.async_redis
     for stored_key, value in store.items():
-        pool.store[stored_key] = value
+        redis.store[stored_key] = value
     if download_holder is not None:
-        hold_a_download(pool, mode, download_holder)
-    admin_client.app.dependency_overrides[get_arq_pool_dep] = lambda: pool
+        hold_a_download(redis, mode, download_holder)
 
     response = admin_client.post(f"/api/admin/registry/{mode}/download")
 

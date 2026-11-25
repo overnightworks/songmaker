@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
-from support.web_app import make_test_app
+from support.web_app import hold_a_worker_lease, make_test_app
 
 from songmaker_cli.health_api import PROM_CONTENT_TYPE
+from songmaker_cli.worker_liveness import WORKER_KINDS
 
 CONFIGURED_MONITORING_TOKEN = "scratch-monitoring-token"
 
@@ -83,13 +82,12 @@ def test_metrics_serves_prometheus_text_to_the_monitoring_token(
 
 
 @pytest.fixture
-def workers_running(request):
+def workers_running(request, metrics_client):
     running = request.param
-    with (
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=running)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=running)),
-    ):
-        yield running
+    if running:
+        for kind in WORKER_KINDS:
+            hold_a_worker_lease(metrics_client, kind)
+    return running
 
 
 @pytest.mark.parametrize(

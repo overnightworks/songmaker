@@ -26,6 +26,7 @@ from support.web_app import (
     make_fake_async_redis,
     make_fake_redis,
     make_test_app,
+    publish_worker_heartbeat,
     seed_session,
     seed_user,
     web_client,
@@ -39,6 +40,7 @@ from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.server import create_app, run_server
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
+from songmaker_cli.worker_liveness import WORKER_KINDS
 
 _ADMIN_ID = "admin-user-id"
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -659,14 +661,6 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
                 raise
 
         with (
-            patch(
-                "songmaker_cli.arq_pool.init_arq_pool",
-                new_callable=AsyncMock,
-            ) as mock_get,
-            patch(
-                "songmaker_cli.arq_pool.close_arq_pool",
-                new_callable=AsyncMock,
-            ) as mock_close,
             patch("songmaker_cli.server.cleanup_expired_resource_events") as cleanup,
             patch(
                 "songmaker_cli.server.resource_event_cleanup_loop",
@@ -675,8 +669,6 @@ def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg
         ):
             async with _lifespan(mock_app):
                 await asyncio.wait_for(cleanup_started.wait(), timeout=1)
-        mock_get.assert_called_once()
-        mock_close.assert_called_once()
         cleanup.assert_called_once_with(mock_app.state.ctx)
         cleanup_loop.assert_awaited_once_with(mock_app)
         assert cleanup_cancelled.is_set()
@@ -719,28 +711,28 @@ def test_default_context_follows_wakes_through_a_quiet_channel_on_one_subscripti
     assert asyncio.run(subscriptions_while_quiet()) == 1
 
 
-def test_lifespan_closes_the_client_that_follows_wakes(tmp_path: Path, pg_factory) -> None:
+def test_lifespan_closes_the_clients_the_context_holds(tmp_path: Path, pg_factory) -> None:
     from songmaker_cli.server import _lifespan
 
+    async_redis = make_fake_async_redis()
     wake_redis = make_fake_async_redis()
+    async_redis.aclose = AsyncMock()
     wake_redis.aclose = AsyncMock()
     mock_app = MagicMock(**{"state.mcp_front": None})
     mock_app.state.ctx = make_app_context(
         db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        redis=make_fake_redis(), wake_redis=wake_redis,
+        redis=make_fake_redis(), async_redis=async_redis, wake_redis=wake_redis,
     )
 
     async def _run():
-        with (
-            patch("songmaker_cli.arq_pool.init_arq_pool", new_callable=AsyncMock),
-            patch("songmaker_cli.arq_pool.close_arq_pool", new_callable=AsyncMock),
-            patch("songmaker_cli.server._start_background_loops", return_value=[]),
-        ):
+        with patch("songmaker_cli.server._start_background_loops", return_value=[]):
             async with _lifespan(mock_app):
+                async_redis.aclose.assert_not_awaited()
                 wake_redis.aclose.assert_not_awaited()
 
     asyncio.run(_run())
 
+    async_redis.aclose.assert_awaited_once()
     wake_redis.aclose.assert_awaited_once()
 
 
@@ -771,14 +763,6 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
                 raise
 
         with (
-            patch(
-                "songmaker_cli.arq_pool.init_arq_pool",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "songmaker_cli.arq_pool.close_arq_pool",
-                new_callable=AsyncMock,
-            ),
             patch("songmaker_cli.server.resource_event_cleanup_loop", new=AsyncMock()),
             patch("songmaker_cli.server.score_backfill_loop", new=AsyncMock()),
             patch("songmaker_cli.server.session_cleanup_loop", new=AsyncMock()),
@@ -792,30 +776,6 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
                 mock_app.state.background_loop_tasks = {}
         reaper_loop.assert_awaited_once_with(mock_app)
         assert reaper_cancelled.is_set()
-
-    asyncio.run(_run())
-
-
-def test_lifespan_fails_on_redis_unavailable(tmp_path: Path, pg_factory) -> None:
-    from songmaker_cli.server import _lifespan
-
-    mock_app = MagicMock(**{"state.mcp_front": None})
-    mock_app.state.ctx = make_app_context(
-        db=pg_factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        redis=make_fake_redis(),
-    )
-
-    async def _run():
-        with patch(
-            "songmaker_cli.arq_pool.init_arq_pool",
-            new_callable=AsyncMock,
-            side_effect=ConnectionError("no redis"),
-        ), patch(
-            "songmaker_cli.arq_pool.close_arq_pool",
-            new_callable=AsyncMock,
-        ), pytest.raises(ConnectionError):
-            async with _lifespan(mock_app):
-                pass
 
     asyncio.run(_run())
 
@@ -1073,11 +1033,7 @@ def test_health_details_idle(tmp_path: Path, monitoring_headers, pg_factory) -> 
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
 
-    with (
-        client,
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-    ):
+    with client:
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -1118,11 +1074,9 @@ def test_health_with_worker_running(
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
 
-    with (
-        client,
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-    ):
+    with client:
+        for kind in WORKER_KINDS:
+            hold_a_worker_lease(client, kind)
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -1157,11 +1111,7 @@ def test_health_degraded_no_worker(
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
 
-    with (
-        client,
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-    ):
+    with client:
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     assert resp.json()["status"] == "degraded"
@@ -1193,12 +1143,9 @@ def test_health_queue_depth_cap_reached(
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
 
-    with (
-        client,
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.settings.get_settings") as mock_settings,
-    ):
+    with client, patch("songmaker_cli.settings.get_settings") as mock_settings:
+        for kind in WORKER_KINDS:
+            hold_a_worker_lease(client, kind)
         mock_settings.return_value.configure_mock(
             max_queue_depth=2, release_tag=UNRELEASED_TAG, songmaker_commit=UNKNOWN_COMMIT,
             songmaker_monitoring_token=MagicMock(
@@ -1512,30 +1459,9 @@ def test_metrics_format_prometheus_acestep_no_workers() -> None:
     assert "# TYPE songmaker_acestep_worker_queue_depth gauge" in body
 
 
-def _override_arq_pool(pool_obj) -> object:
-    import songmaker_cli.arq_pool as arq_mod
-    saved = arq_mod._pool
-    arq_mod._pool = pool_obj
-    return saved
-
-
-def _restore_arq_pool(saved) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-    arq_mod._pool = saved
-
-
 def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
-    import json
-
-    import fakeredis
-    import fakeredis.aioredis
-
-    from songmaker_cli.acestep_state import (
-        queue_depth_key,
-        worker_state_key,
-    )
     from songmaker_cli.db.queries.workers import register_worker
 
     audio_dir = tmp_path / "audio"
@@ -1558,33 +1484,27 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
         )
         session.commit()
 
-    server = fakeredis.FakeServer()
-    sync_redis = fakeredis.FakeRedis(server=server, decode_responses=True)
-    async_pool = fakeredis.aioredis.FakeRedis(server=server)
-
-    sync_redis.set(
-        worker_state_key("acestep-worker-0"),
-        json.dumps({
-            "loaded": [{"mode": "sft", "size_gb": 0}, {"mode": "xl-sft", "size_gb": 0}],
-            "target_loading": None,
-            "queue_depth": 0,
-            "vram_used_gb": 18.0,
-            "vram_total_gb": 24.0,
-            "available_modes": ["sft", "xl-sft"],
-            "gpu_healthy": True,
-        }),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=make_fake_redis(),
     )
-    sync_redis.set(queue_depth_key("acestep-worker-0"), "0")
-
-    ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=sync_redis)
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
     with client:
-        saved = _override_arq_pool(async_pool)
-        try:
-            resp = client.get("/metrics", headers=monitoring_headers)
-        finally:
-            _restore_arq_pool(saved)
+        publish_worker_heartbeat(
+            client,
+            "acestep-worker-0",
+            {
+                "loaded": [{"mode": "sft", "size_gb": 0}, {"mode": "xl-sft", "size_gb": 0}],
+                "target_loading": None,
+                "queue_depth": 0,
+                "vram_used_gb": 18.0,
+                "vram_total_gb": 24.0,
+                "available_modes": ["sft", "xl-sft"],
+                "gpu_healthy": True,
+            },
+            queue_depth=0,
+        )
+        resp = client.get("/metrics", headers=monitoring_headers)
 
     body = resp.text
     assert resp.status_code == 200
@@ -1600,8 +1520,6 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
 def test_metrics_endpoint_offline_worker(
     tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
-    import fakeredis.aioredis
-
     from songmaker_cli.db.queries.workers import register_worker
 
     audio_dir = tmp_path / "audio"
@@ -1625,17 +1543,12 @@ def test_metrics_endpoint_offline_worker(
         session.commit()
 
     redis = make_fake_redis()
-    async_pool = fakeredis.aioredis.FakeRedis()
 
     ctx = make_app_context(db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=redis)
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
     with client:
-        saved = _override_arq_pool(async_pool)
-        try:
-            resp = client.get("/metrics", headers=monitoring_headers)
-        finally:
-            _restore_arq_pool(saved)
+        resp = client.get("/metrics", headers=monitoring_headers)
 
     body = resp.text
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body

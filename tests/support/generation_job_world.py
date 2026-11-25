@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from contextlib import ExitStack, contextmanager
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import hold_a_worker_lease
+from sqlalchemy.orm import Session, sessionmaker
+from support.web_app import hold_a_worker_lease, publish_worker_heartbeat
 
-from songmaker_cli.db.models import Album, Job, Song, User, Version
+from songmaker_cli.db.models import AceStepWorker, Album, Job, Song, User, Version
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.jobs import _persist_generation_row
 from songmaker_cli.scheduler import FetchedGeneration
+
+ONLINE_GPU_WORKER_ID = "online-gpu-worker"
 
 
 def run_async(coro):
@@ -174,19 +178,23 @@ def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_
     )
 
 
-def worker_up(client: TestClient) -> ExitStack:
+def register_online_gpu_worker(factory: sessionmaker[Session]) -> None:
+    """Register the GPU worker ``worker_up`` makes heartbeat; a registered one stays as it is."""
+    with factory() as session:
+        if session.get(AceStepWorker, ONLINE_GPU_WORKER_ID) is None:
+            register_worker(
+                session, worker_id=ONLINE_GPU_WORKER_ID, host=ONLINE_GPU_WORKER_ID, port=8001,
+                gpu_id=0, vram_total_gb=24.0,
+            )
+            session.commit()
+
+
+@contextmanager
+def worker_up(client: TestClient) -> Iterator[None]:
     """The generation routes admit: a music and a scoring worker hold their leases on the app's
-    Redis, and the arq pool and a GPU worker answer."""
+    Redis, and a registered GPU worker heartbeats there."""
     for kind in (WorkerLivenessSignal.MUSIC, WorkerLivenessSignal.SCORING):
-        hold_a_worker_lease(client.app.state.ctx.async_redis, kind)
-    stack = ExitStack()
-    stack.enter_context(
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
-    )
-    stack.enter_context(
-        patch(
-            "songmaker_cli.generation_api._has_online_acestep_worker",
-            AsyncMock(return_value=True),
-        ),
-    )
-    return stack
+        hold_a_worker_lease(client, kind)
+    register_online_gpu_worker(client.app.state.ctx.db)
+    publish_worker_heartbeat(client, ONLINE_GPU_WORKER_ID, {"gpu_healthy": True, "loaded": []})
+    yield

@@ -19,7 +19,6 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import (
     RedisHttpMetrics,
-    build_arq_redis_settings,
     create_async_redis,
     create_redis,
     redis_health,
@@ -48,19 +47,6 @@ def test_the_async_client_replays_a_command_whose_reply_the_line_lost(redis_url:
                 await client.aclose()
 
         assert asyncio.run(read_after_a_lost_reply()) == b"value"
-
-
-def test_the_sync_client_and_arq_settings_connect_to_the_same_url() -> None:
-    url = "redis://cache.internal:6391/4"
-
-    client_kwargs = create_redis(url).connection_pool.connection_kwargs
-    arq_settings = build_arq_redis_settings(url)
-
-    assert (client_kwargs["host"], client_kwargs["port"], client_kwargs["db"]) == (
-        arq_settings.host,
-        arq_settings.port,
-        arq_settings.database,
-    )
 
 
 def test_redis_health_returns_true(fake_redis) -> None:
@@ -135,11 +121,7 @@ def test_health_reports_redis_ok(
 ) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    with (
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", return_value=False),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", return_value=False),
-        web_client(app) as client,
-    ):
+    with web_client(app) as client:
         resp = client.get("/health/details", headers=monitoring_headers)
     data = resp.json()
     assert data["redis"] == "ok"

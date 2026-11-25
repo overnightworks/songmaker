@@ -12,7 +12,7 @@ from sqlalchemy.exc import OperationalError
 
 from songmaker_cli.constants import STORE_STARTUP_WAIT_SECONDS
 from songmaker_cli.db.engine import wait_for_database
-from songmaker_cli.redis_client import build_arq_redis_settings, wait_for_redis
+from songmaker_cli.redis_client import wait_for_redis
 
 SECRET_URL = "postgresql://user:hunter2@db.example:5432/songs"
 
@@ -230,9 +230,3 @@ def test_redis_wait_logs_one_line_at_start_and_one_on_answer(
 
     assert len(caplog.records) == 2
 
-
-def test_arq_connect_retry_window_covers_the_startup_bound() -> None:
-    settings = build_arq_redis_settings("redis://redis:6379/0")
-
-    assert isinstance(settings.conn_retry_delay, int)
-    assert settings.conn_retries * settings.conn_retry_delay >= STORE_STARTUP_WAIT_SECONDS

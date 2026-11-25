@@ -367,6 +367,10 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
 
+async def _worker_kind_is_running(ctx: AppContext, kind: WorkerLivenessSignal) -> bool:
+    return await kind_has_a_live_holder(kind, ctx.kind_leases[kind])
+
+
 async def _read_health_signals(request: Request) -> HealthSignals:
     ctx: AppContext = request.app.state.ctx
     redis = ctx.async_redis
@@ -377,12 +381,8 @@ async def _read_health_signals(request: Request) -> HealthSignals:
 
     db_ok = _check_db(ctx)
 
-    music_running = await kind_has_a_live_holder(
-        WorkerLivenessSignal.MUSIC, ctx.kind_leases[WorkerLivenessSignal.MUSIC],
-    )
-    scoring_running = await kind_has_a_live_holder(
-        WorkerLivenessSignal.SCORING, ctx.kind_leases[WorkerLivenessSignal.SCORING],
-    )
+    music_running = await _worker_kind_is_running(ctx, WorkerLivenessSignal.MUSIC)
+    scoring_running = await _worker_kind_is_running(ctx, WorkerLivenessSignal.SCORING)
 
     config = settings.get_settings()
     acestep_workers = []

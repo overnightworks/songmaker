@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -284,11 +283,7 @@ def test_health_endpoint_is_not_exempt_from_ip_rate_limit(
     """/health is the priciest anonymous endpoint (DB + ~5 Redis round trips)
     and must share the same budget as every other request -- an anonymous
     caller must not be able to hammer it for free (see rate_limit.py)."""
-    with (
-        ip_limited_client,
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
-    ):
+    with ip_limited_client:
         for _ in range(2):
             ip_limited_client.get("/health")
         resp = ip_limited_client.get("/health")

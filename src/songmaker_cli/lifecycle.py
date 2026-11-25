@@ -177,7 +177,7 @@ async def _exhausted_backfill_ids(redis: AsyncRedis, gen_ids: list[str]) -> set[
     }
 
 
-async def _clear_resolved_backfill_attempts(ctx: AppContext) -> None:
+async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: AsyncRedis) -> None:
     """Drop attempt-tracking for a tracked generation that now has a score.
 
     Covers both a backfill dispatch that eventually succeeded and a
@@ -187,8 +187,6 @@ async def _clear_resolved_backfill_attempts(ctx: AppContext) -> None:
     immediately if it were ever to regress.
     """
     from songmaker_cli.constants import SCORE_BACKFILL_TRACKED_SET_KEY
-
-    redis = ctx.async_redis
     tracked_raw = await redis.smembers(SCORE_BACKFILL_TRACKED_SET_KEY)
     if not tracked_raw:
         return
@@ -208,7 +206,10 @@ class BackfillResult:
     first_error: Exception | None
 
 
-async def backfill_unscored_generations(ctx: AppContext) -> BackfillResult:
+async def backfill_unscored_generations(
+    ctx: AppContext,
+    redis: AsyncRedis,
+) -> BackfillResult:
     """Auto-score one throttled batch of generations that still have no score.
 
     Covers both a generation that predates auto-scoring and one an earlier
@@ -225,8 +226,7 @@ async def backfill_unscored_generations(ctx: AppContext) -> BackfillResult:
     )
     from songmaker_cli.jobs import _auto_score_generation
 
-    redis = ctx.async_redis
-    await _clear_resolved_backfill_attempts(ctx)
+    await _clear_resolved_backfill_attempts(ctx, redis)
 
     with ctx.db() as session:
         candidates = _pick_unscored_generations(session, SCORE_BACKFILL_CANDIDATE_POOL_SIZE)
@@ -266,7 +266,7 @@ async def score_backfill_loop(app: FastAPI) -> None:
             if await locks.acquire(SCORE_BACKFILL_LOCK_NAME) is None:
                 registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
                 continue
-            result = await backfill_unscored_generations(ctx)
+            result = await backfill_unscored_generations(ctx, ctx.async_redis)
             if result.first_error is not None:
                 registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, result.first_error)
             else:

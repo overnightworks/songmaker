@@ -183,7 +183,7 @@ def test_health_preserves_response_bytes(
             health_client, "acestep-worker-0", {"loaded": [], "gpu_healthy": True},
         )
     for kind in WORKER_KINDS:
-        hold_a_worker_lease(client, kind)
+        hold_a_worker_lease(health_client, kind)
     with health_client.app.state.ctx.db() as session:
         for _ in range(2):
             create_job(session, JobType.SCORE)
