@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -17,12 +15,11 @@ from support.web_app import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
+    publish_worker_heartbeat,
     settle_owner_leases,
     web_client,
 )
 
-from songmaker_cli import arq_pool
-from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, User, Version
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.job_timing import WORKER_RESTART_GRACE_SECONDS
@@ -34,6 +31,7 @@ OWNER_ID = "owner"
 GENERATE = "/api/songs/song/generate"
 SCORE = "/api/generations/take/score"
 GPU_WORKER_ID = "gpu-worker"
+GPU_HEARTBEAT = {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": True}
 
 
 def _seed_song_and_gpu_worker(session: Session) -> None:
@@ -65,24 +63,9 @@ def client(tmp_path: Path, pg_factory) -> TestClient:
 
 
 @pytest.fixture
-def online_gpu_worker(
-    client: TestClient, redis_url: str, monkeypatch, fresh_settings: None,
-) -> Iterator[None]:
-    """The arq pool the app starts with, on the configured Redis, holds the GPU worker's heartbeat.
-
-    The pool starts on the loop that serves the requests, which a Redis connection stays on.
-    """
-    monkeypatch.setenv("REDIS_URL", redis_url)
-    gpu_heartbeat = {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": True}
-
-    async def start_the_pool_with_a_heartbeat() -> None:
-        pool = await arq_pool.init_arq_pool()
-        await pool.set(worker_state_key(GPU_WORKER_ID), json.dumps(gpu_heartbeat))
-
-    with client:
-        client.portal.call(start_the_pool_with_a_heartbeat)
-        yield
-        client.portal.call(arq_pool.close_arq_pool)
+def online_gpu_worker(client: TestClient) -> None:
+    """The GPU worker publishes its heartbeat on the app's Redis."""
+    publish_worker_heartbeat(client, GPU_WORKER_ID, GPU_HEARTBEAT)
 
 
 @pytest.mark.parametrize(
@@ -102,6 +85,23 @@ def test_generation_follows_the_music_signal_while_no_music_worker_holds_a_lease
         ctx.redis.set(WORKER_KINDS[WorkerLivenessSignal.MUSIC].last_alive_key, seen_at.isoformat())
 
     with patch.object(ctx.wake_channel, "publish", AsyncMock()):
+        response = client.post(GENERATE, json={"count": 1, "model": "sft"})
+
+    assert response.status_code == expected_status
+
+
+@pytest.mark.parametrize(
+    ("heartbeats", "expected_status"),
+    [pytest.param(True, 200, id="a GPU worker heartbeats"), pytest.param(False, 503, id="none")],
+)
+def test_generation_is_admitted_only_while_a_gpu_worker_heartbeats_on_the_apps_redis(
+    client: TestClient, heartbeats: bool, expected_status: int,
+) -> None:
+    hold_a_worker_lease(client)
+    if heartbeats:
+        publish_worker_heartbeat(client, GPU_WORKER_ID, GPU_HEARTBEAT)
+
+    with patch.object(client.app.state.ctx.wake_channel, "publish", AsyncMock()):
         response = client.post(GENERATE, json={"count": 1, "model": "sft"})
 
     assert response.status_code == expected_status

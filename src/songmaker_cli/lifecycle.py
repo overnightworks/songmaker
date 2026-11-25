@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
 
-from arq.connections import ArqRedis
 from fastapi import FastAPI
+from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.orm import Session
 from tandem import Client, Lapse, Liveness, Locks, Roster, StoreError
 
@@ -140,7 +140,7 @@ def _backfill_attempt_key(gen_id: str) -> str:
     return f"{SCORE_BACKFILL_ATTEMPTS_KEY_PREFIX}:{gen_id}"
 
 
-async def _record_backfill_attempt(redis: ArqRedis, gen_id: str) -> None:
+async def _record_backfill_attempt(redis: AsyncRedis, gen_id: str) -> None:
     """Bump ``gen_id``'s backfill attempt counter and refresh its TTL.
 
     Tracking only covers attempts the backfill loop itself makes — the
@@ -157,7 +157,7 @@ async def _record_backfill_attempt(redis: ArqRedis, gen_id: str) -> None:
     await redis.sadd(SCORE_BACKFILL_TRACKED_SET_KEY, gen_id)
 
 
-async def _exhausted_backfill_ids(redis: ArqRedis, gen_ids: list[str]) -> set[str]:
+async def _exhausted_backfill_ids(redis: AsyncRedis, gen_ids: list[str]) -> set[str]:
     """Ids that already hit ``SCORE_BACKFILL_MAX_ATTEMPTS``.
 
     These are skipped until their attempt counter's TTL lapses, so a
@@ -177,7 +177,7 @@ async def _exhausted_backfill_ids(redis: ArqRedis, gen_ids: list[str]) -> set[st
     }
 
 
-async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: ArqRedis) -> None:
+async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: AsyncRedis) -> None:
     """Drop attempt-tracking for a tracked generation that now has a score.
 
     Covers both a backfill dispatch that eventually succeeded and a
@@ -208,7 +208,7 @@ class BackfillResult:
 
 async def backfill_unscored_generations(
     ctx: AppContext,
-    redis: ArqRedis,
+    redis: AsyncRedis,
 ) -> BackfillResult:
     """Auto-score one throttled batch of generations that still have no score.
 
@@ -255,7 +255,6 @@ async def score_backfill_loop(app: FastAPI) -> None:
 
     Uses a tandem lock so only one web replica dispatches a given tick's batch.
     """
-    from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import SCORE_BACKFILL_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
@@ -267,7 +266,7 @@ async def score_backfill_loop(app: FastAPI) -> None:
             if await locks.acquire(SCORE_BACKFILL_LOCK_NAME) is None:
                 registry.record_success(BackgroundLoopName.SCORE_BACKFILL)
                 continue
-            result = await backfill_unscored_generations(ctx, get_arq_pool())
+            result = await backfill_unscored_generations(ctx, ctx.async_redis)
             if result.first_error is not None:
                 registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, result.first_error)
             else:

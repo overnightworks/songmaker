@@ -115,6 +115,12 @@ async def read_kind_rosters(
     return {kind: await read_kind_roster(kind, leases) for kind, leases in kind_leases.items()}
 
 
+async def kind_has_a_live_holder(kind: WorkerLivenessSignal, leases: Leases) -> bool:
+    """Whether a worker of ``kind`` holds a live lease in ``leases``; a failed read says no."""
+    roster = await read_kind_roster(kind, leases)
+    return roster is not None and bool(roster.holders)
+
+
 class JobOwnerStamp(NamedTuple):
     """What a job row stores of its owner: the process and the lease generation it held."""
 

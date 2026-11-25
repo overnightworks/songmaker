@@ -993,7 +993,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
-| Worker | Job queues in PostgreSQL rows (music + scoring), one process per worker kind, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
+| Worker | Job queues in PostgreSQL rows (music + scoring), one process per worker kind, scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/songmaker_acestep_worker/` (top-level package, separate from `songmaker_cli`) |
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
@@ -1771,8 +1771,11 @@ built by `worker_liveness.owner_leases` for every process from the same spans: a
 `OWNER_LEASE_TTL_SECONDS` (15 s) and is renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by
 `worker_liveness.keep_owner_lease` (`Leases.kept`), in a web process from the end of start-up to
 the end of `_lifespan`, in a worker from after its database has opened to its `stop()`. A
-web process holds an asyncio client for the leases (`AppContext.async_redis`); the sync client
-serves everything else. The `owner_gone_reaper` loop of every web process runs
+web process holds one bounded asyncio client (`AppContext.async_redis`), which serves the leases,
+the wake publishing, the tick locks, the stream slots and every Redis read of the web (the GPU
+workers' heartbeats, queue depths and failure markers, the score backfill's attempt counters), so
+each of those reads ends in `REDIS_SOCKET_TIMEOUT_SECONDS` and retries a lost connection; the
+sync client serves everything else. The `owner_gone_reaper` loop of every web process runs
 `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
 (5 s) and once at start: it reads the owner stamps of active jobs (`active_job_owner_stamps`: owner and generation) first,
 then their leases through `Leases.state` (`worker_liveness.owner_lease_liveness`)
@@ -1821,8 +1824,8 @@ last-alive key, read through `worker_liveness.worker_kind_leases(redis, kind)`; 
 names its kind in `lease_kind`, and a signal without a row fails its start). The kind family has
 the spans of the owner family and is renewed by `worker_liveness.keep_kind_lease` right after the
 owner lease. A web process reads the roster of that family:
-`arq_pool.is_music_worker_healthy` and `arq_pool.is_scoring_worker_healthy` say whether a kind
-holds a live lease (the health page; the auto-score and the score backfill), and the signal of the
+`worker_liveness.kind_has_a_live_holder(kind, leases)` says whether a kind holds a live lease, a
+failed read saying no (the health page; the auto-score and the score backfill), and the signal of the
 liveness map reads it too, which also admits a request (a live holder is `alive` and is recorded as
 the last observation; an empty roster Redis may have lost with a restart is `unknown`; an empty
 roster that is complete falls to the last observation and the restart grace below; a roster that

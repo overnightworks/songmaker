@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import fakeredis
 import pytest
 from fastapi.testclient import TestClient
 from support.generation_job_world import worker_up
@@ -21,7 +20,6 @@ from support.web_app import (
 
 from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, User, Version
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora
@@ -162,10 +160,10 @@ def test_loading_a_model_on_a_worker_stores_its_arguments(admin_client: TestClie
 def test_downloading_a_model_stores_its_arguments(admin_client: TestClient) -> None:
     ctx = admin_client.app.state.ctx
     _register_worker(ctx)
-    pool = fakeredis.FakeAsyncRedis(decode_responses=True)
     heartbeat = json.dumps({"available_modes": [], "gpu_healthy": True})
-    arrange_fake_async_redis(pool, lambda redis: redis.set(worker_state_key(WORKER_ID), heartbeat))
-    admin_client.app.dependency_overrides[get_arq_pool_dep] = lambda: pool
+    arrange_fake_async_redis(
+        ctx.async_redis, lambda redis: redis.set(worker_state_key(WORKER_ID), heartbeat),
+    )
 
     response = admin_client.post(f"/api/admin/registry/{MODE}/download")
 

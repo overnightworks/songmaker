@@ -43,7 +43,7 @@ Coverage exclusions are intentionally narrower and identical in `.github/workflo
 CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` for files
 - A database test gets its worker's own PostgreSQL database, reset to its migrated state after the test (see [Database Tests](#database-tests))
-- `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
+- A test that needs a running worker arranges real leases on the app's fake asyncio Redis (`hold_a_worker_lease`) and a GPU worker's heartbeat there (`publish_worker_heartbeat`), never a patch of a liveness helper
 - The `_reset_settings_cache` autouse fixture clears `Settings` per-test state
 - Settings singletons are reset by fixtures; scorer model caches live in subprocesses
 - Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; the BPM, silence, and spectral scorers are measured because CI installs the `signal` extra (see `.github/workflows/coveragerc-ci.ini`)

@@ -39,7 +39,6 @@ from collections.abc import Mapping, Sequence  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
-from unittest.mock import patch  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
@@ -169,34 +168,6 @@ def stop_signal_handlers():
     yield
     for number, handler in before.items():
         signal.signal(number, handler)
-
-
-@pytest.fixture
-def mock_arq_pool():
-    """Prevent lifespan from connecting to real Redis via arq."""
-    from unittest.mock import AsyncMock
-
-    import songmaker_cli.arq_pool as arq_mod
-
-    saved = arq_mod._pool
-
-    async def _fake_init():
-        arq_mod._pool = AsyncMock(
-            zcard=AsyncMock(return_value=0), keys=AsyncMock(return_value=[]),
-            get=AsyncMock(return_value=None), exists=AsyncMock(return_value=0),
-            aclose=AsyncMock(),
-        )
-        return arq_mod._pool
-
-    async def _fake_close():
-        arq_mod._pool = None
-
-    with (
-        patch("songmaker_cli.arq_pool.init_arq_pool", side_effect=_fake_init),
-        patch("songmaker_cli.arq_pool.close_arq_pool", side_effect=_fake_close),
-    ):
-        yield
-    arq_mod._pool = saved
 
 
 @pytest.fixture
