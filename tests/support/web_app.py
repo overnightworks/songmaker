@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Awaitable, Callable
+import json
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -20,6 +21,7 @@ from support.session_ids import a_session_id
 from tandem.testing import aged_epoch, settle_epoch
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key, worker_state_key
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.job_types import WorkerLivenessSignal
@@ -93,31 +95,78 @@ def make_fake_async_redis() -> fakeredis.FakeAsyncRedis:
 
 
 def arrange_fake_async_redis(
-    async_redis: fakeredis.FakeAsyncRedis,
+    target: fakeredis.FakeAsyncRedis | TestClient,
     arrangement: Callable[[fakeredis.FakeAsyncRedis], Awaitable[object]],
 ) -> None:
-    """Run ``arrangement`` in its own event loop and free the fake's connection of that loop.
+    """Run ``arrangement`` on a fake, or on the app's fake of a client that is entered.
 
-    A connection a fake keeps after the loop ended cannot serve the next loop.
+    A fake takes ``arrangement`` in its own event loop and frees its connection of that loop: a
+    connection a fake keeps after the loop ended cannot serve the next loop. An entered client's
+    app runs it on the loop that serves its requests, which the app's connections stay on.
     """
+    if isinstance(target, TestClient):
+        async_redis = target.app.state.ctx.async_redis
+        if target.portal is not None:
+            target.portal.call(arrangement, async_redis)
+            return
+        target = async_redis
 
     async def arrange_and_disconnect() -> None:
         try:
-            await arrangement(async_redis)
+            await arrangement(target)
         finally:
-            await async_redis.connection_pool.disconnect()
+            await target.connection_pool.disconnect()
 
     asyncio.run(arrange_and_disconnect())
 
 
 def hold_a_worker_lease(
-    async_redis: fakeredis.FakeAsyncRedis,
+    target: fakeredis.FakeAsyncRedis | TestClient,
     kind: WorkerLivenessSignal = WorkerLivenessSignal.MUSIC,
 ) -> None:
     """Make a worker of ``kind``, a music worker by default, hold a live lease on the fake."""
     arrange_fake_async_redis(
-        async_redis,
+        target,
         lambda redis: worker_kind_leases(redis, kind).renew(WORKER_KINDS[kind].lease_family),
+    )
+
+
+def publish_worker_heartbeat(
+    target: fakeredis.FakeAsyncRedis | TestClient,
+    worker_id: str,
+    state: Mapping[str, object] | None,
+    *,
+    queue_depth: int | None = None,
+) -> None:
+    """Make the GPU worker ``worker_id`` publish ``state`` as its heartbeat on the fake.
+
+    No state means the worker publishes none: a heartbeat it published earlier is gone.
+    """
+
+    async def publish(redis: fakeredis.FakeAsyncRedis) -> None:
+        if state is None:
+            await redis.delete(worker_state_key(worker_id))
+        else:
+            await redis.set(worker_state_key(worker_id), json.dumps(dict(state)))
+        if queue_depth is not None:
+            await redis.set(queue_depth_key(worker_id), queue_depth)
+
+    arrange_fake_async_redis(target, publish)
+
+
+def record_lm_failure(
+    target: fakeredis.FakeAsyncRedis | TestClient, worker_id: str, value: bytes | None = b"sft",
+) -> None:
+    """Make the GPU worker ``worker_id`` leave ``value`` as its LM-failure marker on the fake.
+
+    No value means the marker is gone.
+    """
+    arrange_fake_async_redis(
+        target,
+        lambda redis: (
+            redis.delete(lm_failure_key(worker_id)) if value is None
+            else redis.set(lm_failure_key(worker_id), value)
+        ),
     )
 
 

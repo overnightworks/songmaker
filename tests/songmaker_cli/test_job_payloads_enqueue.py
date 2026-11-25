@@ -8,6 +8,7 @@ from pathlib import Path
 import fakeredis
 import pytest
 from fastapi.testclient import TestClient
+from songmaker_cli.arq_pool import get_arq_pool_dep
 from support.generation_job_world import worker_up
 from support.job_owner import stored_payload
 from support.lora_api_world import USER_A
@@ -21,7 +22,6 @@ from support.web_app import (
 
 from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, User, Version
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora

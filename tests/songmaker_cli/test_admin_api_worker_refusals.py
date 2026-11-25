@@ -9,11 +9,11 @@ from unittest.mock import patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from songmaker_cli.arq_pool import get_arq_pool_dep
 from support.refused_download import hold_a_download
 from support.web_app import SettledFakeAsyncRedis, make_test_app, seed_session, seed_user
 
 from songmaker_cli.acestep_state import worker_state_key
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.db.queries.workers import register_worker
 
 WORKER_ID = "w1"

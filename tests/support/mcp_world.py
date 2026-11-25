@@ -247,7 +247,7 @@ def worker_ready(client: TestClient) -> Iterator[None]:
 
 
 @pytest.fixture
-def lifespans(mock_arq_pool) -> Iterator[ExitStack]:
+def lifespans() -> Iterator[ExitStack]:
     """Owns the app lifespans a world enters, so each ends with its test."""
     with ExitStack() as stack:
         yield stack

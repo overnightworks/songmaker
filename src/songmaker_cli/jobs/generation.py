@@ -26,7 +26,6 @@ from songmaker_cli.api_models import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
-from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import audio_file_path, build_ace_config, resolve_model_mode
 from songmaker_cli.constants import (
     WORKER_SHARED_TMP_DIRNAME,
@@ -49,7 +48,7 @@ from songmaker_cli.generation_params import BaseGenerationParams, stored_config_
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import JobQueue, app_wake_channel, publish_queue_wake
-from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
+from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.messages import message
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
@@ -60,7 +59,7 @@ from songmaker_cli.scheduler import (
     WorkerHeld,
     WorkerTaskFailed,
 )
-from songmaker_cli.worker_liveness import JobOwner
+from songmaker_cli.worker_liveness import JobOwner, kind_has_a_live_holder, worker_kind_leases
 
 from ._runtime import (
     REFERENCE_AUDIO_NOT_FOUND,
@@ -650,12 +649,11 @@ async def _auto_score_generation(
     generation still has no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
     once a worker comes back.
 
-    Health is checked via the passed-in ``redis`` connection, not the
-    process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
-    this runs inside the music worker process, which never calls
-    ``init_arq_pool()``.
+    The scoring kind's leases are read through the passed-in ``redis`` connection.
     """
-    if not await is_scoring_worker_healthy(redis):
+    if not await kind_has_a_live_holder(
+        WorkerLivenessSignal.SCORING, worker_kind_leases(redis, WorkerLivenessSignal.SCORING),
+    ):
         log.warning("Scoring worker not running; generation %s is left to the backfill", gen_id)
         return
     try:

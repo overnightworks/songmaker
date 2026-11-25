@@ -14,10 +14,9 @@ import json
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from fnmatch import fnmatchcase
 from pathlib import Path
 from types import MappingProxyType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import psycopg
 import pytest
@@ -28,10 +27,13 @@ from redis.retry import Retry
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
-from support.web_app import make_test_app
+from support.web_app import (
+    hold_a_worker_lease,
+    make_test_app,
+    publish_worker_heartbeat,
+    record_lm_failure,
+)
 
-from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import AceStepWorker, Job
 from songmaker_cli.db.queries.jobs import create_job
@@ -43,10 +45,11 @@ from songmaker_cli.health_api import (
 from songmaker_cli.health_types import BackgroundLoopName
 from songmaker_cli.job_types import AgentProblem, JobStatus, JobType
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
+from songmaker_cli.worker_liveness import WORKER_KINDS, every_worker_kind_leases
 
 
 def test_health_and_metrics_report_background_loop_health(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     client, _ = make_test_app(tmp_path, factory=pg_factory)
@@ -104,11 +107,6 @@ _EMPTY_HEARTBEAT: Mapping[str, object] = MappingProxyType({"loaded": []})
 _LM_FAILED = {"acestep-worker-0": b"sft"}
 
 
-async def _async_iter(items):
-    for item in items:
-        yield item
-
-
 def _get_health(
     client,
     monitoring_headers: dict[str, str],
@@ -119,45 +117,23 @@ def _get_health(
 ) -> dict:
     """``heartbeat=None`` means the worker publishes no heartbeat at all;
     ``lm_failure_values`` maps a worker id to the value stored at its failure key."""
-    import songmaker_cli.arq_pool as arq_mod
-
     state = None if heartbeat is None else dict(heartbeat)
     if state is not None and gpu_healthy is not None:
         state["gpu_healthy"] = gpu_healthy
-    heartbeat_bytes = None if state is None else json.dumps(state).encode()
-    failure_values = {
-        lm_failure_key(worker_id): value
-        for worker_id, value in (lm_failure_values or {}).items()
-    }
-    def text(key: str | bytes) -> str:
-        return key.decode() if isinstance(key, bytes) else key
+    failures = {"acestep-worker-0": None, **(lm_failure_values or {})}
+    publish_worker_heartbeat(client, "acestep-worker-0", state)
+    for worker_id, value in failures.items():
+        record_lm_failure(client, worker_id, value)
+    for kind in WORKER_KINDS:
+        hold_a_worker_lease(client, kind)
 
-    arq_mod._pool.get = AsyncMock(
-        side_effect=lambda key: failure_values.get(text(key), heartbeat_bytes)
-    )
-    arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(text(key) in failure_values))
-    arq_mod._pool.keys = AsyncMock(
-        side_effect=lambda pattern: [
-            key.encode() for key in failure_values if fnmatchcase(key, pattern)
-        ]
-    )
-    arq_mod._pool.scan_iter = MagicMock(
-        side_effect=lambda match=None, **_: _async_iter(
-            key.encode() for key in failure_values if match is None or fnmatchcase(key, match)
-        )
-    )
-
-    with (
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
-    ):
-        resp = client.get("/health/details", headers=monitoring_headers)
+    resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     return resp.json()
 
 
 @pytest.fixture
-def health_client(tmp_path, mock_arq_pool, pg_factory):
+def health_client(tmp_path, pg_factory):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_one_worker)
     with client:
         yield client
@@ -196,18 +172,18 @@ def test_health_preserves_response_bytes(
     monitoring_headers,
 ) -> None:
     # defect:#1590 — health exposes only current service signals.
-    import songmaker_cli.arq_pool as arq_mod
-
     monkeypatch.delenv("SERVICE_VERSION", raising=False)
     monkeypatch.delenv("SONGMAKER_COMMIT", raising=False)
     get_settings.cache_clear()
 
     now = datetime(2026, 9, 20, tzinfo=timezone.utc)
     health_client.app.state.startup_time = now - timedelta(seconds=123)
-    arq_mod._pool.get = AsyncMock(
-        return_value=json.dumps({"loaded": [], "gpu_healthy": True}).encode()
-        if worker_online else None,
-    )
+    if worker_online:
+        publish_worker_heartbeat(
+            health_client, "acestep-worker-0", {"loaded": [], "gpu_healthy": True},
+        )
+    for kind in WORKER_KINDS:
+        hold_a_worker_lease(client, kind)
     with health_client.app.state.ctx.db() as session:
         for _ in range(2):
             create_job(session, JobType.SCORE)
@@ -219,11 +195,7 @@ def test_health_preserves_response_bytes(
     for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
         registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
 
-    with (
-        patch("songmaker_cli.health_api.utcnow", return_value=now),
-        patch.object(arq_mod, "is_music_worker_healthy", AsyncMock(return_value=True)),
-        patch.object(arq_mod, "is_scoring_worker_healthy", AsyncMock(return_value=True)),
-    ):
+    with patch("songmaker_cli.health_api.utcnow", return_value=now):
         response = health_client.get("/health/details", headers=monitoring_headers)
 
     expected = (
@@ -241,7 +213,7 @@ def test_health_answers_ready_while_serving_without_an_acestep_worker(health_cli
 
 
 def test_health_answers_unavailable_while_the_database_refuses_connections(
-    tmp_path, mock_arq_pool, postgresql_url, refused_port,
+    tmp_path, postgresql_url, refused_port,
 ) -> None:
     served_url = make_url(postgresql_url).set(drivername="postgresql")
     refused_url = served_url.set(host="127.0.0.1", port=refused_port)
@@ -266,7 +238,7 @@ def test_health_answers_unavailable_while_the_database_refuses_connections(
 
 
 def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
-    tmp_path, mock_arq_pool, pg_factory, refused_port, monitoring_headers,
+    tmp_path, pg_factory, refused_port, monitoring_headers,
 ) -> None:
     retry_never = Retry(NoBackoff(), 0)
     refused = {"host": "127.0.0.1", "port": refused_port, "retry": retry_never}
@@ -274,12 +246,15 @@ def test_health_details_names_redis_unavailable_while_redis_refuses_connections(
         tmp_path, factory=pg_factory, seed_db=_seed_one_worker, redis=redis.Redis(**refused),
     )
 
-    client.app.dependency_overrides[get_arq_pool_dep] = lambda: redis.asyncio.Redis(**refused)
     with client:
+        ctx = client.app.state.ctx
+        ctx.async_redis = redis.asyncio.Redis(**refused)
+        ctx.kind_leases = every_worker_kind_leases(ctx.async_redis)
         response = client.get("/health/details", headers=monitoring_headers)
 
     assert response.status_code == 200
     assert response.json()["redis"] == "error"
+    assert response.json()["music_worker"] != "running"
 
 
 @pytest.mark.parametrize(
@@ -367,12 +342,9 @@ def test_lm_failure_key_of_an_unregistered_worker_is_ignored(
 
 
 def test_reason_carries_neither_worker_id_nor_key_value(health_client, monitoring_headers) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-
     body = _get_health(
         health_client, monitoring_headers, heartbeat=None, lm_failure_values=_LM_FAILED,
     )
-    arq_mod._pool.exists.assert_awaited()
     assert body["acestep_reason"] == "lm_init_failed"
     serialized = json.dumps(body)
     assert "acestep-worker-0" not in serialized
@@ -426,12 +398,10 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(
     """The #333 alert (`songmaker_acestep_workers_total{status="online"} == 0`)
     reads this exact metric — a GPU-broken worker still counted as "online"
     here is the original incident in new clothes."""
-    import songmaker_cli.arq_pool as arq_mod
-
-    arq_mod._pool.get = AsyncMock(
-        return_value=json.dumps({"loaded": [], "gpu_healthy": False}).encode(),
+    publish_worker_heartbeat(
+        health_client, "acestep-worker-0",
+        {"loaded": [], "gpu_healthy": False},
     )
-    arq_mod._pool.zcard = AsyncMock(return_value=0)
 
     resp = health_client.get("/metrics", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -448,16 +418,11 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(
 def test_metrics_counts_a_worker_loading_a_model_as_loading_not_online(
     health_client, monitoring_headers, target_loading, loading, online,
 ) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-
-    heartbeat = json.dumps(
+    publish_worker_heartbeat(
+        health_client, "acestep-worker-0",
         {"loaded": [], "gpu_healthy": True, "target_loading": target_loading},
-    ).encode()
-    depth_key = queue_depth_key("acestep-worker-0")
-    arq_mod._pool.get = AsyncMock(
-        side_effect=lambda key: b"0" if key == depth_key else heartbeat,
+        queue_depth=0,
     )
-    arq_mod._pool.zcard = AsyncMock(return_value=0)
 
     body = health_client.get("/metrics", headers=monitoring_headers).text
 
@@ -492,7 +457,7 @@ def prometheus_output_before_refactor(without_probes) -> bytes:
             b'songmaker_last_job_failure_timestamp_seconds 1756000000.0\n'
             b'# HELP songmaker_job_duration_seconds Job duration statistics for completed jobs.\n'
             b'# TYPE songmaker_job_duration_seconds gauge\n'
-            b'# HELP songmaker_queue_depth Number of jobs waiting per arq queue.\n'
+            b'# HELP songmaker_queue_depth Number of jobs waiting per queue.\n'
             b'# TYPE songmaker_queue_depth gauge\n'
             b'songmaker_queue_depth{queue="music"} 7\n'
             b'songmaker_queue_depth{queue="scoring"} 2\n'
@@ -543,7 +508,7 @@ def prometheus_output_before_refactor(without_probes) -> bytes:
         b'songmaker_job_duration_seconds{quantile="avg"} 12.3\n'
         b'songmaker_job_duration_seconds{quantile="min"} 1.0\n'
         b'songmaker_job_duration_seconds{quantile="max"} 45.6\n'
-        b'# HELP songmaker_queue_depth Number of jobs waiting per arq queue.\n'
+        b'# HELP songmaker_queue_depth Number of jobs waiting per queue.\n'
         b'# TYPE songmaker_queue_depth gauge\n'
         b'songmaker_queue_depth{queue="music"} 7\n'
         b'songmaker_queue_depth{queue="scoring"} 2\n'

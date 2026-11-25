@@ -279,7 +279,7 @@ def test_exempt_static_paths_bypass_ip_rate_limit(ip_limited_client: TestClient,
 
 
 def test_health_endpoint_is_not_exempt_from_ip_rate_limit(
-    ip_limited_client: TestClient, mock_arq_pool,
+    ip_limited_client: TestClient,
 ) -> None:
     """/health is the priciest anonymous endpoint (DB + ~5 Redis round trips)
     and must share the same budget as every other request -- an anonymous

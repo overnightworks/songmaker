@@ -299,16 +299,17 @@ def test_last_error_worker_list_requires_admin(client: TestClient, role: str) ->
 
 
 def test_last_error_stays_out_of_public_and_musician_paths(
-    client: TestClient, mock_arq_pool, monitoring_headers,
+    client: TestClient, monitoring_headers,
 ) -> None:
     """S15-06: Last error stays out of public and musician paths."""
     import asyncio
     import json
     from unittest.mock import AsyncMock
 
+    from songmaker_cli.arq_pool import init_arq_pool
+
     from songmaker_acestep_worker.clock import utcnow
     from songmaker_cli.acestep_state import worker_state_key
-    from songmaker_cli.arq_pool import init_arq_pool
     from songmaker_cli.db.queries.albums import create_album
     from songmaker_cli.db.queries.auth import get_user_by_username
     from songmaker_cli.db.queries.songs import create_song

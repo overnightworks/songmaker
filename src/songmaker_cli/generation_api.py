@@ -10,6 +10,7 @@ from typing import Final
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import ObjectDeletedError
 from webauth.ports import AuthenticatedUser
@@ -45,7 +46,6 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import get_arq_pool
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     MODEL_AVAILABLE_MODES,
@@ -131,12 +131,11 @@ def _check_version_lora_ready(
     check_lora_ready_for_generation(session, params.user_lora_id, user)
 
 
-async def _has_online_acestep_worker(session: Session) -> bool:
+async def _has_online_acestep_worker(session: Session, redis: AsyncRedis) -> bool:
     from songmaker_cli.db.queries.workers import list_worker_identities
 
-    pool = get_arq_pool()
     for w in list_worker_identities(session):
-        if worker_is_online(await read_worker_state(pool, w.id)):
+        if worker_is_online(await read_worker_state(redis, w.id)):
             return True
     return False
 
@@ -623,7 +622,7 @@ async def _capacity_shortfall(session: Session, ctx: AppContext) -> NoCapacityEr
     """
     if not await _worker_kind_is_up(ctx, WorkerLivenessSignal.MUSIC):
         return NoCapacityError(WORKER_NOT_RUNNING_DETAIL)
-    if not await _has_online_acestep_worker(session):
+    if not await _has_online_acestep_worker(session, ctx.async_redis):
         return NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     return None
 

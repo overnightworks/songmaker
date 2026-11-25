@@ -13,19 +13,17 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Final
 
-from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.exceptions import RedisError
 from sqlalchemy import text
 
-from songmaker_cli import acestep_state, arq_pool, redis_client, settings
+from songmaker_cli import acestep_state, redis_client, settings
 from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_models.health import HealthResponse, HealthSignals, HealthStatusResponse
 from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.db.queries.auth import count_active_sessions
 from songmaker_cli.db.queries.jobs import (
     count_queued_jobs,
@@ -36,8 +34,10 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.job_queue import JobQueue
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.request_policies import HEALTH_DETAILS_PATH
 from songmaker_cli.timestamps import utcnow
+from songmaker_cli.worker_liveness import kind_has_a_live_holder
 
 PROM_HTTP_REQUESTS_TOTAL: Final[str] = "songmaker_http_requests_total"
 PROM_HTTP_REQUEST_DURATION_MS: Final[str] = "songmaker_http_request_duration_milliseconds_total"
@@ -59,11 +59,8 @@ PROM_LAST_JOB_FAILURE_TIMESTAMP: Final[str] = "songmaker_last_job_failure_timest
 # without the series ever having to be absent.
 PROM_NEVER_FAILED_TIMESTAMP: Final[float] = 0.0
 PROM_JOB_DURATION_SECONDS: Final[str] = "songmaker_job_duration_seconds"
-# Labeled by queue ("music"/"scoring"), the arq queue names the workers
-# actually run on. Renders as songmaker_queue_depth{queue="music"} etc.
-# A single unlabeled value would read the arq client library's own default
-# queue key, which nothing in this codebase ever enqueues to, so it would
-# always be 0.
+# Labeled by queue ("music"/"scoring"), the job queues the workers run on.
+# Renders as songmaker_queue_depth{queue="music"} etc.
 PROM_QUEUE_DEPTH: Final[str] = "songmaker_queue_depth"
 PROM_ACESTEP_WORKERS_TOTAL: Final[str] = "songmaker_acestep_workers_total"
 PROM_ACESTEP_WORKER_LOADED_MODELS: Final[str] = "songmaker_acestep_worker_loaded_models"
@@ -213,7 +210,7 @@ def _format_prometheus(metrics: _PrometheusMetrics) -> str:
         ),
     ))
     lines.extend(_labelled_gauge(
-        PROM_QUEUE_DEPTH, "Number of jobs waiting per arq queue.",
+        PROM_QUEUE_DEPTH, "Number of jobs waiting per queue.",
         ((f'queue="{queue}"', depth) for queue, depth in (
             ("music", metrics.music_queue_depth), ("scoring", metrics.scoring_queue_depth),
         )),
@@ -312,7 +309,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         music_queue_depth = count_queued_jobs(session, *JobQueue.MUSIC.job_types)
         scoring_queue_depth = count_queued_jobs(session, *JobQueue.SCORE.job_types)
 
-    pool = arq_pool.get_arq_pool()
+    redis = ctx.async_redis
     background_loop_metrics = request.app.state.background_loop_registry.loop_health()
     workers_online = 0
     workers_loading = 0
@@ -322,7 +319,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     vram_used_gb: dict[str, float] = {}
     vram_total_gb: dict[str, float] = {}
     for w in acestep_workers:
-        state = await acestep_state.read_worker_state(pool, w.id)
+        state = await acestep_state.read_worker_state(redis, w.id)
         if not acestep_state.worker_is_online(state):
             workers_offline += 1
             loaded_counts[w.id] = 0
@@ -333,7 +330,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         else:
             workers_online += 1
         loaded_counts[w.id] = len(state.get("loaded", []))
-        queue_depths[w.id] = await acestep_state.read_queue_depth(pool, w.id)
+        queue_depths[w.id] = await acestep_state.read_queue_depth(redis, w.id)
         if state.get("vram_used_gb") is not None:
             vram_used_gb[w.id] = state["vram_used_gb"]
         if state.get("vram_total_gb") is not None:
@@ -370,8 +367,9 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
 
-async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignals:
+async def _read_health_signals(request: Request) -> HealthSignals:
     ctx: AppContext = request.app.state.ctx
+    redis = ctx.async_redis
     startup_time: datetime = getattr(
         request.app.state, "startup_time", utcnow(),
     )
@@ -379,8 +377,12 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
 
     db_ok = _check_db(ctx)
 
-    music_running = await arq_pool.is_music_worker_healthy()
-    scoring_running = await arq_pool.is_scoring_worker_healthy()
+    music_running = await kind_has_a_live_holder(
+        WorkerLivenessSignal.MUSIC, ctx.kind_leases[WorkerLivenessSignal.MUSIC],
+    )
+    scoring_running = await kind_has_a_live_holder(
+        WorkerLivenessSignal.SCORING, ctx.kind_leases[WorkerLivenessSignal.SCORING],
+    )
 
     config = settings.get_settings()
     acestep_workers = []
@@ -400,10 +402,10 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
     workers_lm_failed = False
     try:
         for w in acestep_workers:
-            state = await acestep_state.read_worker_state(pool, w.id)
+            state = await acestep_state.read_worker_state(redis, w.id)
             if acestep_state.worker_is_online(state):
                 workers_online += 1
-            workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
+            workers_lm_failed |= await acestep_state.worker_lm_failed(redis, w.id)
     except (RedisError, OSError):
         # Redis is down: no worker state is readable, and `redis_ok` below names the outage.
         workers_online = 0
@@ -431,10 +433,9 @@ async def _read_health_signals(request: Request, pool: ArqRedis) -> HealthSignal
 async def health_check(
     request: Request,
     response: Response,
-    pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
 ) -> HealthStatusResponse:
     """The readiness probe's route: 503 while this process cannot serve, 200 otherwise."""
-    signals = await _read_health_signals(request, pool)
+    signals = await _read_health_signals(request)
     if not signals.ready:
         response.status_code = HTTPStatus.SERVICE_UNAVAILABLE
     return HealthStatusResponse.from_signals(signals)
@@ -445,7 +446,5 @@ async def health_check(
     dependencies=[Depends(require_monitoring_token)],
     openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION),
 )
-async def health_details(
-    request: Request, pool: Annotated[ArqRedis, Depends(get_arq_pool_dep)],
-) -> HealthResponse:
-    return HealthResponse.from_signals(await _read_health_signals(request, pool))
+async def health_details(request: Request) -> HealthResponse:
+    return HealthResponse.from_signals(await _read_health_signals(request))

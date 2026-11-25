@@ -26,7 +26,7 @@ _RETIRED_ROUTES = [
 @pytest.mark.parametrize("role", ["admin", "user"])
 @pytest.mark.parametrize(("method", "path"), _RETIRED_ROUTES)
 def test_retired_route_answers_like_an_unknown_path(
-    tmp_path, mock_arq_pool, pg_factory, method, path, role
+    tmp_path, pg_factory, method, path, role
 ):
     client = make_test_app(tmp_path, factory=pg_factory)[0]
     client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(

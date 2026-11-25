@@ -292,7 +292,7 @@ def test_get_audio_other_users_files_denied(auth_server_app) -> None:
     assert resp.status_code == 404
 
 
-def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_factory) -> None:
+def test_startup_cleans_expired_sessions(tmp_path: Path, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1053,7 +1053,7 @@ def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
 # ── health endpoint ──────────────────────────────────────────────
 
 
-def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory) -> None:
+def test_health_details_idle(tmp_path: Path, monitoring_headers, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1094,7 +1094,7 @@ def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers, 
 
 
 def test_health_with_worker_running(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1136,7 +1136,7 @@ def test_health_with_worker_running(
 
 
 def test_health_degraded_no_worker(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1168,7 +1168,7 @@ def test_health_degraded_no_worker(
 
 
 def test_health_queue_depth_cap_reached(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     from songmaker_cli.db.models import Job
 
@@ -1213,7 +1213,7 @@ def test_health_queue_depth_cap_reached(
 # ── /metrics endpoint ────────────────────────────────────────────
 
 
-def _make_metrics_client(tmp_path: Path, factory, mock_arq_pool=None) -> TestClient:
+def _make_metrics_client(tmp_path: Path, factory) -> TestClient:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1236,7 +1236,7 @@ def _make_metrics_client(tmp_path: Path, factory, mock_arq_pool=None) -> TestCli
 
 
 def test_metrics_serves_prometheus_text(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     from songmaker_cli.health_api import PROM_CONTENT_TYPE
     client = _make_metrics_client(tmp_path, pg_factory)
@@ -1253,7 +1253,7 @@ def test_metrics_serves_prometheus_text(
 
 
 def test_metrics_reflects_http_traffic(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     client = _make_metrics_client(tmp_path, pg_factory)
     with client:
@@ -1264,7 +1264,7 @@ def test_metrics_reflects_http_traffic(
     assert 'songmaker_http_requests_total{method="GET",status="200"}' in body
 
 
-def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory) -> None:
+def test_metrics_with_jobs(tmp_path: Path, monitoring_headers, pg_factory) -> None:
     from songmaker_cli.db.models import Job
 
     audio_dir = tmp_path / "audio"
@@ -1299,7 +1299,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers, pg
 
 
 def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     """S9-F: The failure sample excludes newer timestamped PARTIAL jobs.
 
@@ -1331,7 +1331,7 @@ def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
 
 
 def test_metrics_last_job_failure_timestamp_is_epoch_when_nothing_ever_failed(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     client = _make_metrics_client(tmp_path, pg_factory)
 
@@ -1525,7 +1525,7 @@ def _restore_arq_pool(saved) -> None:
 
 
 def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     import json
 
@@ -1598,7 +1598,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
 
 
 def test_metrics_endpoint_offline_worker(
-    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, monitoring_headers, pg_factory,
 ) -> None:
     import fakeredis.aioredis
 

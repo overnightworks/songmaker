@@ -103,7 +103,6 @@ src/songmaker_cli/api_models/songs.py :: pydantic-orm :: "GenerationResponse" do
 src/songmaker_cli/api_models/songs.py :: pydantic-orm :: "ReferenceResponse" does not have from_attributes=True
 src/songmaker_cli/api_models/songs.py :: pydantic-orm :: "SongSummaryResponse" does not have from_attributes=True
 src/songmaker_cli/api_models/songs.py :: union-attr :: Item "None" of "Rating | None" has no attribute "rating"
-src/songmaker_cli/arq_codec.py :: dict-item :: Unpacked dict entry 0 has incompatible type "object"; expected "SupportsKeysAndGetItem[str, str]"
 src/songmaker_cli/config.py :: arg-type :: Argument 1 to "AceStepConfig" has incompatible type "**dict[str, object]"; expected "bool"
 src/songmaker_cli/config.py :: arg-type :: Argument 1 to "AceStepConfig" has incompatible type "**dict[str, object]"; expected "float"
 src/songmaker_cli/config.py :: arg-type :: Argument 1 to "AceStepConfig" has incompatible type "**dict[str, object]"; expected "int | None"

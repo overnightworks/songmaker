@@ -386,7 +386,7 @@ def test_a_tick_waits_out_a_redis_restart_without_a_failure_and_runs_once_it_set
 
 
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(
-    tmp_path, monkeypatch, mock_arq_pool, caplog,
+    tmp_path, monkeypatch, caplog,
     monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
@@ -405,7 +405,7 @@ def test_finished_lifecycle_loop_is_dead_outside_shutdown(
 
 
 def test_failed_lifecycle_loop_logs_its_exception(
-    tmp_path, monkeypatch, mock_arq_pool, caplog,
+    tmp_path, monkeypatch, caplog,
     monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
@@ -427,7 +427,7 @@ def test_failed_lifecycle_loop_logs_its_exception(
 
 
 def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
-    tmp_path, monkeypatch, mock_arq_pool,
+    tmp_path, monkeypatch,
     monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
@@ -472,7 +472,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
 
 
 def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
-    tmp_path, mock_arq_pool, pg_factory,
+    tmp_path, pg_factory,
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
@@ -485,7 +485,7 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
 
 
 def test_web_cover_runner_is_visible_in_lifecycle_health(
-    tmp_path, monkeypatch, mock_arq_pool,
+    tmp_path, monkeypatch,
     monitoring_headers, pg_factory,
 ) -> None:
     started = threading.Event()
@@ -507,7 +507,7 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 
 
 def test_a_web_start_removes_the_suggestion_file_and_staging_directory_a_failed_cover_left(
-    tmp_path, mock_arq_pool, pg_factory,
+    tmp_path, pg_factory,
 ) -> None:
     audio_dir = tmp_path / "audio"
     png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
@@ -542,7 +542,7 @@ def test_a_web_start_removes_the_suggestion_file_and_staging_directory_a_failed_
 
 
 def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
-    tmp_path, monkeypatch, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path, monkeypatch, monitoring_headers, pg_factory,
 ) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
