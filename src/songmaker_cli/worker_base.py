@@ -74,7 +74,7 @@ def logged_job[Result](
     *,
     status_of: Callable[[str], JobStatus | None] | None = None,
 ) -> Callable[[str, JobPayload | None], Awaitable[Result]]:
-    """Wrap a claimed job so it runs in a trace of its own and writes its one ``queued_job.ended`` line.
+    """Wrap a claimed job so it runs in a trace of its own and writes one ``queued_job.ended`` line.
 
     The trace ends with the job, so a failed job leaves nothing for the next one.
 

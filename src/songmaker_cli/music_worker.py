@@ -69,6 +69,8 @@ class MusicWorker(WorkerBase):
         return self._settings.arq_job_timeout
 
     async def _run_payload(self, job_id: str, payload: JobPayload | None) -> None:
+        redis = self._owner_redis
+        assert redis is not None  # noqa: S101 - jobs run only after start
         match payload:
             case GeneratePayload():
                 await run_generation_job(
@@ -80,7 +82,7 @@ class MusicWorker(WorkerBase):
                     seed=payload.seed,
                     task_params=payload.task_params,
                     target_model=payload.target_model,
-                    redis=self._owner_redis,
+                    redis=redis,
                 )
             case LoraTrainingPayload():
                 await run_lora_training_job(
@@ -88,7 +90,7 @@ class MusicWorker(WorkerBase):
                     db_factory=self.get_db_factory(),
                     audio_dir=self.audio_dir(),
                     owner=self.owner,
-                    redis=self._owner_redis,
+                    redis=redis,
                     target_mode=payload.target_mode,
                     training_config=self._settings.lora_training_config,
                 )
@@ -101,7 +103,7 @@ class MusicWorker(WorkerBase):
                 await _download_model_on_worker_impl(
                     job_id, payload.mode,
                     db_factory=self.get_db_factory(), owner=self.owner,
-                    redis=self._owner_redis,
+                    redis=redis,
                 )
             case _:
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
