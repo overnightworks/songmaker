@@ -70,7 +70,6 @@ class MusicWorker(WorkerBase):
 
     async def _run_payload(self, job_id: str, payload: JobPayload | None) -> None:
         redis = self._owner_redis
-        assert redis is not None  # noqa: S101 - jobs run only after start
         match payload:
             case GeneratePayload():
                 await run_generation_job(
@@ -109,7 +108,6 @@ class MusicWorker(WorkerBase):
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:
-        assert self._owner_redis is not None  # noqa: S101 - run serves only after start
         crons = serve_due_crons(self._owner_redis, self.cron_bodies())
         return (*super().servings(), crons)
 

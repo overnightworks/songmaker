@@ -164,7 +164,7 @@ class WorkerBase:
         self._db_lock = threading.Lock()
         self.owner_id = str(uuid.uuid4())
         self.owner: JobOwner
-        self._owner_redis: AsyncRedis | None = None
+        self._owner_redis: AsyncRedis
         self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
         self._stop_requested = threading.Event()
