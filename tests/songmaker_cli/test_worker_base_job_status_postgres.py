@@ -124,10 +124,10 @@ def test_a_claimed_job_ends_with_one_line_carrying_its_id_and_outcome(
 ) -> None:
     job_id = job_rows(row_status)
     worker = ScriptedScoringWorker(run)
-    claim = a_score_claim(job_id)
+    claimed_run = worker.run_claimed(a_score_claim(job_id))
 
     with caplog.at_level("INFO"), raises:
-        asyncio.run(worker.run_claimed(claim))
+        asyncio.run(claimed_run)
 
     (ended,) = ended_lines(caplog)
     assert (ended.job_id, ended.job_function, ended.outcome, getattr(ended, "reason", None)) == (
