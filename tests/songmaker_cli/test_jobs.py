@@ -16,7 +16,7 @@ from support.generation_job_world import (
     persist_via_post_process,
     run_async,
 )
-from support.job_owner import an_owner
+from support.job_owner import an_owner, given_owner_redis
 from support.score_jobs import ScoringRedis
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
@@ -270,7 +270,7 @@ def test_a_generation_the_hold_requeues_twice_keeps_the_arguments_of_its_row(
         session.commit()
     worker = MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._owner_redis = MagicMock()
+    given_owner_redis(worker, MagicMock())
     with (
         patch.object(worker, "get_db_factory", return_value=seeded_db),
         patch.object(worker, "audio_dir", return_value=tmp_path / "audio"),

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
 
 import pytest
+from support.job_owner import given_owner_redis
 from support.score_jobs import a_scoreable_take, queued_score_job
 
 from songmaker_cli.db.queries.jobs import (
@@ -120,8 +120,7 @@ def test_a_claimed_job_without_a_payload_fails_with_a_setup_error(
             job.run_after = None
         session.commit()
         job_id = job.id
-    worker = worker_class()
-    worker._owner_redis = AsyncMock()
+    worker = given_owner_redis(worker_class())
 
     asyncio.run(worker.run_claimed(worker.claim_next_job()))
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from unittest.mock import AsyncMock
 
 import pytest
 from logline import current_traceparent
+from support.job_owner import given_owner_redis
 
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.job_payloads import LoraTrainingPayload, ScorePayload
@@ -65,8 +65,7 @@ def test_a_music_job_ends_its_line_failed_when_its_run_failed_the_row(job_rows, 
         job_id, JobType.LORA_TRAINING,
         LoraTrainingPayload(lora_id="missing-voice", user_id="user", target_mode="turbo"),
     )
-    worker = MusicWorker()
-    worker._owner_redis = AsyncMock()
+    worker = given_owner_redis(MusicWorker())
 
     with caplog.at_level("INFO"):
         asyncio.run(worker.run_claimed(claimed))

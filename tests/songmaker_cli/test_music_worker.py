@@ -14,15 +14,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from logline.testing import configured
-from support.job_owner import an_owner
+from support.job_owner import an_owner, given_owner_redis
 from support.redis_clock import Window, until
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
+from songmaker_cli.acestep_state import download_locks
 from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.cron_schedule import Cron, CronBody
 from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
+from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
     GeneratePayload,
@@ -48,7 +50,7 @@ def _make_worker(worker: MusicWorker | None = None) -> MusicWorker:
     """A worker with DB / dirs stubbed and the Redis client a started worker owns."""
     worker = worker or MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._owner_redis = AsyncMock()
+    given_owner_redis(worker)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
@@ -119,13 +121,35 @@ def test_a_claimed_generation_runs_with_the_arguments_of_its_row() -> None:
     )
 
 
-def test_a_claimed_download_runs_with_the_workers_redis_client() -> None:
-    worker = _make_worker()
+def test_a_claimed_download_holds_its_modes_download_lock_on_the_workers_redis_client(
+    pg_factory, workers_on_db, redis_url,
+) -> None:
+    mode = A_MODEL_DOWNLOAD.mode
+    with pg_factory() as session:
+        job_id = create_job(session, JobType.DOWNLOAD_MODEL_ON_WORKER).id
+        session.commit()
+    seen = {}
 
-    work = _run_claimed(worker, _claimed(A_MODEL_DOWNLOAD))
+    async def run() -> None:
+        client = create_async_redis(redis_url)
+        try:
+            async def download_step(factory, redis, job_id, mode) -> None:
+                second_taker = await download_locks(client).acquire(mode)
+                seen["a_second_taker_is_refused"] = second_taker is None
 
-    assert work.await_args.args == ("j1", "turbo")
-    assert work.await_args.kwargs["redis"] is worker._owner_redis
+            with patch(
+                "songmaker_cli.jobs.model_lifecycle._download_with_retries", download_step,
+            ):
+                await given_owner_redis(MusicWorker(), client).run_claimed(
+                    _claimed(A_MODEL_DOWNLOAD, job_id),
+                )
+            seen["the_lock_is_free_after"] = await download_locks(client).acquire(mode) is not None
+        finally:
+            await client.aclose()
+
+    _run(run())
+
+    assert seen == {"a_second_taker_is_refused": True, "the_lock_is_free_after": True}
 
 
 def test_a_claimed_repaint_runs_with_the_task_of_its_row() -> None:
