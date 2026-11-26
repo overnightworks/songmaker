@@ -124,9 +124,10 @@ def test_a_claimed_job_ends_with_one_line_carrying_its_id_and_outcome(
 ) -> None:
     job_id = job_rows(row_status)
     worker = ScriptedScoringWorker(run)
+    claim = a_score_claim(job_id)
 
     with caplog.at_level("INFO"), raises:
-        asyncio.run(worker.run_claimed(a_score_claim(job_id)))
+        asyncio.run(worker.run_claimed(claim))
 
     (ended,) = ended_lines(caplog)
     assert (ended.job_id, ended.job_function, ended.outcome, getattr(ended, "reason", None)) == (
@@ -175,8 +176,9 @@ def test_each_job_runs_in_a_trace_of_its_own_and_none_outlives_a_failed_job(
 
     async def run_both() -> None:
         worker = ScriptedScoringWorker(run)
+        failing_claim = a_score_claim(job_rows(JobStatus.RUNNING))
         with pytest.raises(ValueError, match="deliberate failure"):
-            await worker.run_claimed(a_score_claim(job_rows(JobStatus.RUNNING)))
+            await worker.run_claimed(failing_claim)
         assert current_traceparent() is None
         await worker.run_claimed(a_score_claim(job_rows(JobStatus.COMPLETED)))
         assert current_traceparent() is None
