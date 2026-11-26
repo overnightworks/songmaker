@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -10,16 +11,19 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from functools import partial
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from logline.testing import configured
 from support.job_owner import an_owner, given_owner_redis
 from support.redis_clock import Window, until
+from support.redis_server import settle_the_real_servers_epoch
 from support.reference_rows import a_reference
+from support.worker_http_peer import WorkerScenario
 
 import songmaker_cli.music_worker as mw_mod
-from songmaker_cli.acestep_state import download_locks
+from songmaker_cli.acestep_state import download_locks, worker_state_key
 from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.cron_schedule import Cron, CronBody
@@ -122,24 +126,29 @@ def test_a_claimed_generation_runs_with_the_arguments_of_its_row() -> None:
 
 
 def test_a_claimed_download_holds_its_modes_download_lock_on_the_workers_redis_client(
-    pg_factory, workers_on_db, redis_url,
+    seeded_db, workers_on_db, redis_url, generation_worker_peer,
 ) -> None:
     mode = A_MODEL_DOWNLOAD.mode
-    with pg_factory() as session:
+    with seeded_db() as session:
         job_id = create_job(session, JobType.DOWNLOAD_MODEL_ON_WORKER).id
         session.commit()
     seen = {}
+    settle_the_real_servers_epoch(redis_url)
 
     async def run() -> None:
         client = create_async_redis(redis_url)
         try:
-            async def download_step(factory, redis, job_id, mode) -> None:
-                second_taker = await download_locks(client).acquire(mode)
-                seen["a_second_taker_is_refused"] = second_taker is None
+            async with generation_worker_peer(WorkerScenario(), db_factory=seeded_db) as peer:
+                await client.set(
+                    worker_state_key(peer.settings.worker_id),
+                    json.dumps({"loaded": [], "gpu_healthy": True}),
+                )
 
-            with patch(
-                "songmaker_cli.jobs.model_lifecycle._download_with_retries", download_step,
-            ):
+                async def transfer(repo_id: str, local_dir: Path) -> None:
+                    second_taker = await download_locks(client).acquire(mode)
+                    seen["a_second_taker_is_refused"] = second_taker is None
+
+                peer.deps.download_fn = transfer
                 await given_owner_redis(MusicWorker(), client).run_claimed(
                     _claimed(A_MODEL_DOWNLOAD, job_id),
                 )
