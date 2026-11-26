@@ -7,6 +7,9 @@ DELETE endpoints used to.
 
 Also runs generation retention: archives expired unpicked/unkept
 generations and hard-deletes archived generations after a second window.
+
+run_audit_log_retention deletes audit-log entries older than the audit-log
+retention period.
 """
 
 from __future__ import annotations
