@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 from support.score_jobs import a_scoreable_take, queued_score_job
@@ -120,6 +121,7 @@ def test_a_claimed_job_without_a_payload_fails_with_a_setup_error(
         session.commit()
         job_id = job.id
     worker = worker_class()
+    worker._owner_redis = AsyncMock()
 
     asyncio.run(worker.run_claimed(worker.claim_next_job()))
 
