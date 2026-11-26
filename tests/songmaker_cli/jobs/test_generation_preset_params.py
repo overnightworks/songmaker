@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from support.generation_job_world import (
@@ -12,6 +11,7 @@ from support.generation_job_world import (
     run_async,
 )
 from support.job_owner import an_owner
+from support.score_jobs import ScoringRedis
 
 from songmaker_cli.config import get_builtin_defaults
 from songmaker_cli.db.models import GenerationPreset, User
@@ -52,7 +52,7 @@ def _steps_sent_to_worker(seeded_db, tmp_path: Path, *, user_id: str = "u1") -> 
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
+                redis=ScoringRedis(worker_running=False),
                 target_model="sft",
                 owner=an_owner("o1"),
             )

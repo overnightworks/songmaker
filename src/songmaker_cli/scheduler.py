@@ -1,6 +1,6 @@
 """Scheduler — routes generation jobs to ACE-Step workers.
 
-Stateless picker that lives inside the music-worker arq job. Reads worker
+Stateless picker that lives inside the music worker's generation job. Reads worker
 identity from PG and ephemeral state from Redis, picks the worker with the
 lowest queue_depth, then dispatches via HTTP/SSE to the chosen worker. The
 generation admission Lua script atomically rejects a LoRA hold and increments

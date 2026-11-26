@@ -44,15 +44,11 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _mock_ctx():
-    return {"redis": AsyncMock()}
-
-
 def _make_worker(worker: MusicWorker | None = None) -> MusicWorker:
-    """A worker with DB / dirs stubbed and the context a started worker's jobs run with."""
+    """A worker with DB / dirs stubbed and the Redis client a started worker owns."""
     worker = worker or MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._job_context = _mock_ctx()
+    worker._owner_redis = AsyncMock()
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
@@ -119,8 +115,17 @@ def test_a_claimed_generation_runs_with_the_arguments_of_its_row() -> None:
     assert work.await_args.args == ("j1", "s1", "v1", 2, "u1")
     kwargs = work.await_args.kwargs
     assert (kwargs["seed"], kwargs["target_model"], kwargs["redis"]) == (
-        42, "xl-sft", worker._job_context["redis"],
+        42, "xl-sft", worker._owner_redis,
     )
+
+
+def test_a_claimed_download_runs_with_the_workers_redis_client() -> None:
+    worker = _make_worker()
+
+    work = _run_claimed(worker, _claimed(A_MODEL_DOWNLOAD))
+
+    assert work.await_args.args == ("j1", "turbo")
+    assert work.await_args.kwargs["redis"] is worker._owner_redis
 
 
 def test_a_claimed_repaint_runs_with_the_task_of_its_row() -> None:
@@ -138,7 +143,7 @@ def test_a_claimed_voice_training_runs_with_its_configuration_and_target_mode() 
 
     work = _run_claimed(worker, _claimed(A_LORA_TRAINING))
 
-    assert work.await_args.args[1:] == ("j1", "l1", "u1")
+    assert work.await_args.args == ("j1", "l1", "u1")
     assert work.await_args.kwargs["training_config"] == worker._settings.lora_training_config
     assert work.await_args.kwargs["target_mode"] == "turbo"
 

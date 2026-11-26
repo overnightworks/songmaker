@@ -51,7 +51,6 @@ class MusicWorker(WorkerBase):
     def __init__(self, settings=None, *, readiness_file: Path = WORKER_READINESS_FILE) -> None:
         super().__init__(settings, readiness_file=readiness_file)
         self._places = asyncio.Semaphore(self._settings.music_max_jobs)
-        self._job_context: dict = {}
         self._run_logged = {
             job_type: logged_job(
                 JobFunction(job_type), self._run_payload, status_of=self.job_status,
@@ -62,16 +61,14 @@ class MusicWorker(WorkerBase):
     async def run_claimed(self, claimed: ClaimedJob) -> None:
         """Run the claimed row within its type's time limit."""
         async with asyncio.timeout(self._timeout_seconds(claimed.job_type)):
-            await self._run_logged[claimed.job_type](
-                self._job_context, claimed.job_id, claimed.payload,
-            )
+            await self._run_logged[claimed.job_type](claimed.job_id, claimed.payload)
 
     def _timeout_seconds(self, job_type: JobType) -> int:
         if job_type is JobType.LORA_TRAINING:
             return self._settings.lora_training_job_timeout
         return self._settings.arq_job_timeout
 
-    async def _run_payload(self, ctx, job_id: str, payload: JobPayload | None) -> None:
+    async def _run_payload(self, job_id: str, payload: JobPayload | None) -> None:
         match payload:
             case GeneratePayload():
                 await run_generation_job(
@@ -83,34 +80,31 @@ class MusicWorker(WorkerBase):
                     seed=payload.seed,
                     task_params=payload.task_params,
                     target_model=payload.target_model,
-                    redis=ctx["redis"],
+                    redis=self._owner_redis,
                 )
             case LoraTrainingPayload():
                 await run_lora_training_job(
-                    ctx, job_id, payload.lora_id, payload.user_id,
+                    job_id, payload.lora_id, payload.user_id,
                     db_factory=self.get_db_factory(),
                     audio_dir=self.audio_dir(),
                     owner=self.owner,
-                    redis=ctx["redis"],
+                    redis=self._owner_redis,
                     target_mode=payload.target_mode,
                     training_config=self._settings.lora_training_config,
                 )
             case LoadModelPayload():
                 await _load_model_on_worker_impl(
-                    ctx, job_id, payload.worker_id, payload.mode,
+                    job_id, payload.worker_id, payload.mode,
                     db_factory=self.get_db_factory(), owner=self.owner,
                 )
             case DownloadModelPayload():
                 await _download_model_on_worker_impl(
-                    ctx, job_id, payload.mode,
+                    job_id, payload.mode,
                     db_factory=self.get_db_factory(), owner=self.owner,
+                    redis=self._owner_redis,
                 )
             case _:
                 await asyncio.to_thread(self.fail_job_without_payload, job_id)
-
-    async def start(self) -> None:
-        await super().start()
-        self._job_context = {"redis": self._owner_redis}
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:
         assert self._owner_redis is not None  # noqa: S101 - run serves only after start
