@@ -1,0 +1,8 @@
+claim_id = "3fb9e50dc63b4a90aae33edee45503aa"
+agent = "Claude 6c37e6a6-75aa-459f-a727-4aa48d1d7262"
+role = "builder"
+base = "614850b5a17f8aa56df5eb96c5b999650dc8cc44"
+branch = "claude/issue-3490-logline-v1-11-0"
+scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/scheduler.py", "tests/songmaker_acestep_worker/test_main.py", "tests/songmaker_cli/test_object_store.py", "uv.lock"]
+opened_commit = "7c083af6aa9f6a5b523babaa52781547f3e5c1ba"
+whole_reason = "One carrier removal in one function, the pin raise with its lock, the one sentence naming it, and two tests: the worker trace test rewritten and one traced Garage case."
