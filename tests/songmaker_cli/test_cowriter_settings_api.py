@@ -344,7 +344,7 @@ def _leftover_judge_rows(factory) -> dict[str, str | None]:
         }
 
 
-def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool, pg_factory):
+def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, pg_factory):
     client, factory = make_test_app(tmp_path, factory=pg_factory)
 
     with client:
@@ -354,7 +354,7 @@ def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool
 
 
 def test_startup_and_settings_reads_leave_stored_judge_rows_unchanged(
-    tmp_path, mock_arq_pool, pg_factory,
+    tmp_path, pg_factory,
 ):
     def seed_leftover_rows(session) -> None:
         for key, value in _LEFTOVER_JUDGE_ROWS.items():

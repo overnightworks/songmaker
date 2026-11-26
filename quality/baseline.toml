@@ -49,15 +49,15 @@
 "frontend/src/routes/layout.test.ts" = 1395
 "frontend/src/routes/settings/users/+page.svelte" = 918
 "src/songmaker_acestep_worker/wrapper.py" = 1057
-"src/songmaker_cli/jobs/generation.py" = 1038
+"src/songmaker_cli/jobs/generation.py" = 1036
 "src/songmaker_cli/jobs/lora_training.py" = 1472
 "src/songmaker_cli/queue_streams.py" = 825
 "tests/songmaker_acestep_engine/test_client.py" = 818
 "tests/songmaker_acestep_worker/test_wrapper.py" = 1496
 "tests/songmaker_acestep_worker/test_wrapper_train_lora.py" = 1177
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1821
-"tests/songmaker_cli/test_admin_api.py" = 964
-"tests/songmaker_cli/test_api.py" = 4394
+"tests/songmaker_cli/test_admin_api.py" = 908
+"tests/songmaker_cli/test_api.py" = 4343
 "tests/songmaker_cli/test_db.py" = 2404
 "tests/songmaker_cli/test_db_postgresql.py" = 831
 "tests/songmaker_cli/test_jobs.py" = 3023
@@ -67,7 +67,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 1929
 "tests/songmaker_cli/test_resource_event_api.py" = 1103
 "tests/songmaker_cli/test_scheduler.py" = 1278
-"tests/songmaker_cli/test_server.py" = 1719
+"tests/songmaker_cli/test_server.py" = 1632
 "tests/songmaker_cli/test_sharing_api.py" = 2385
 
 [function_lines."frontend/e2e/helpers.ts"]
@@ -181,9 +181,6 @@
 [function_lines."tests/songmaker_cli/jobs/test_lora_training_worker_auth.py"]
 "test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 66
 
-[function_lines."tests/songmaker_cli/test_admin_api.py"]
-"test_list_workers_last_error_transport" = 60
-
 [function_lines."tests/songmaker_cli/test_api.py"]
 "test_s8_live_stream_during_second_take" = 93
 "test_s8_live_stream_during_second_take.drive" = 68
@@ -205,9 +202,6 @@
 
 [function_lines."tests/songmaker_cli/test_reference_audio_quota.py"]
 "test_postgresql_failed_reference_write_releases_admission" = 75
-
-[function_lines."tests/songmaker_cli/test_server.py"]
-"test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 71
 
 [function_lines."tests/songmaker_cli/test_sharing_api.py"]
 "test_shared_audio_authorization_matches_presented_share_selection" = 61

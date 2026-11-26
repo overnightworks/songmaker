@@ -149,7 +149,6 @@ def _start_background_loops(
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries.auth import delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
@@ -169,9 +168,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
 
-    await init_arq_pool()
-    log.info("arq pool connected")
-
     app.state.startup_time = utcnow()
     try:
         async with keep_owner_lease(
@@ -189,7 +185,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
     finally:
         await ctx.slot_releases.drain()
-        await close_arq_pool()
         await ctx.async_redis.aclose()
         await ctx.wake_redis.aclose()
 

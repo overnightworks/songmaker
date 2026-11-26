@@ -6,7 +6,7 @@ import wave
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -19,6 +19,7 @@ from support.generation_job_world import (
 )
 from support.job_owner import an_owner
 from support.reference_rows import a_reference
+from support.score_jobs import ScoringRedis
 
 from songmaker_cli.api_models import (
     CoverTaskParams,
@@ -75,7 +76,7 @@ def _run_job(
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
-                redis=MagicMock(),
+                redis=ScoringRedis(worker_running=False),
                 target_model="sft",
                 **task,
                 owner=an_owner("o1"),

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import socket
 import time
 from collections.abc import Callable
@@ -23,7 +22,6 @@ from songmaker_cli.constants import (
 )
 
 if TYPE_CHECKING:
-    from arq.connections import RedisSettings
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
     from tandem import Slots
@@ -89,18 +87,6 @@ def create_async_redis(url: str, *, follows_wakes: bool = False) -> AsyncRedis:
         socket_keepalive=follows_wakes,
         socket_keepalive_options=_WAKE_KEEPALIVE_OPTIONS if follows_wakes else None,
     )
-
-
-def build_arq_redis_settings(url: str) -> RedisSettings:
-    """arq's pool-creation retry covers at least ``STORE_STARTUP_WAIT_SECONDS``."""
-    from arq.connections import RedisSettings
-
-    settings = RedisSettings.from_dsn(url)
-    settings.conn_retry_delay = STORE_STARTUP_RETRY_DELAY_SECONDS
-    settings.conn_retries = math.ceil(
-        STORE_STARTUP_WAIT_SECONDS / STORE_STARTUP_RETRY_DELAY_SECONDS,
-    )
-    return settings
 
 
 def redis_health(r: Redis) -> bool:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -11,7 +11,6 @@ import pytest
 from logline.testing import configured
 from tandem import StoreError
 
-import songmaker_cli.arq_pool as arq_pool
 from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
@@ -19,6 +18,7 @@ from songmaker_cli.scoring_worker import ScoringWorker
 from songmaker_cli.settings import Settings
 from songmaker_cli.worker_liveness import (
     WORKER_KINDS,
+    kind_has_a_live_holder,
     owner_leases,
     pid_one_start_ticks,
     read_kind_roster,
@@ -160,68 +160,52 @@ def test_a_running_worker_is_ready_and_listed_and_is_neither_after_its_shutdown(
     assert ended == (False, set())
 
 
-@pytest.fixture
-def web_redis(redis_url: str, monkeypatch, fresh_settings: None) -> str:
-    """The URL the web process's arq pool connects to."""
-    monkeypatch.setenv("REDIS_URL", redis_url)
-    return redis_url
-
-
 @pytest.fixture(params=WORKER_KINDS, ids=lambda kind: kind.value)
-def kind_and_health(request) -> tuple[WorkerLivenessSignal, Callable[[], Awaitable[bool]]]:
-    """A worker kind and the question whether a worker of that kind is healthy."""
-    health = {
-        WorkerLivenessSignal.MUSIC: arq_pool.is_music_worker_healthy,
-        WorkerLivenessSignal.SCORING: arq_pool.is_scoring_worker_healthy,
-    }
-    return request.param, health[request.param]
+def kind(request) -> WorkerLivenessSignal:
+    return request.param
 
 
 def test_a_live_holder_makes_the_worker_healthy_and_none_does_not(
-    web_redis: str, kind_and_health,
+    redis_url: str, kind: WorkerLivenessSignal,
 ) -> None:
-    kind, is_healthy = kind_and_health
-
     async def healthy_without_and_with_a_holder() -> tuple[bool, bool]:
-        pool = await arq_pool.init_arq_pool()
+        redis = create_async_redis(redis_url)
         try:
-            without = await is_healthy()
-            await worker_kind_leases(pool, kind).renew(OWNER_ID)
-            return without, await is_healthy()
+            leases = worker_kind_leases(redis, kind)
+            without = await kind_has_a_live_holder(kind, leases)
+            await leases.renew(OWNER_ID)
+            return without, await kind_has_a_live_holder(kind, leases)
         finally:
-            await arq_pool.close_arq_pool()
+            await redis.aclose()
 
     assert asyncio.run(healthy_without_and_with_a_holder()) == (False, True)
 
 
 def test_a_holder_of_the_owner_family_alone_does_not_make_the_worker_healthy(
-    web_redis: str, kind_and_health,
+    redis_url: str, kind: WorkerLivenessSignal,
 ) -> None:
-    _, is_healthy = kind_and_health
-
     async def healthy_with_an_owner() -> bool:
-        pool = await arq_pool.init_arq_pool()
+        redis = create_async_redis(redis_url)
         try:
-            await owner_leases(pool).renew(OWNER_ID)
-            return await is_healthy()
+            await owner_leases(redis).renew(OWNER_ID)
+            return await kind_has_a_live_holder(kind, worker_kind_leases(redis, kind))
         finally:
-            await arq_pool.close_arq_pool()
+            await redis.aclose()
 
     assert asyncio.run(healthy_with_an_owner()) is False
 
 
 def test_a_worker_whose_roster_cannot_be_read_is_not_healthy(
-    web_redis: str, kind_and_health,
+    refused_port: int, kind: WorkerLivenessSignal,
 ) -> None:
-    kind, is_healthy = kind_and_health
+    async def healthy_while_redis_refuses() -> bool:
+        redis = create_async_redis(f"redis://127.0.0.1:{refused_port}/0")
+        try:
+            return await kind_has_a_live_holder(kind, worker_kind_leases(redis, kind))
+        finally:
+            await redis.aclose()
 
-    async def healthy_once_the_pool_is_closed() -> bool:
-        await arq_pool.init_arq_pool()
-        await worker_kind_leases(arq_pool.get_arq_pool(), kind).renew(OWNER_ID)
-        await arq_pool.close_arq_pool()
-        return await is_healthy()
-
-    assert asyncio.run(healthy_once_the_pool_is_closed()) is False
+    assert asyncio.run(healthy_while_redis_refuses()) is False
 
 
 def test_a_roster_that_cannot_be_read_reads_as_none() -> None:

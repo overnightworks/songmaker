@@ -49,6 +49,7 @@ from songmaker_cli.lifecycle import (
     BackfillResult,
     BackgroundLoopName,
 )
+from songmaker_cli.worker_liveness import WORKER_KINDS
 
 
 async def _failing_loop_tick(registry: BackgroundLoopRegistry) -> None:
@@ -140,7 +141,6 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
     monkeypatch.setattr(lifecycle, "_pick_unscored_generations", lambda *_args: [("g1", "s1")])
     monkeypatch.setattr(lifecycle, "_exhausted_backfill_ids", AsyncMock(return_value=set()))
     monkeypatch.setattr(lifecycle, "_record_backfill_attempt", AsyncMock())
-    monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
     monkeypatch.setattr("songmaker_cli.jobs._auto_score_generation", failing_auto_score)
 
     loop = lifecycle.score_backfill_loop(app)
@@ -169,7 +169,6 @@ def _run_score_backfill_ticks(
         ),
     )
     monkeypatch.setattr(lifecycle, "backfill_unscored_generations", backfill)
-    monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
     return run_ticks_observing_status(
         monkeypatch, lifecycle.score_backfill_loop(app), registry,
         BackgroundLoopName.SCORE_BACKFILL, len(lock_results), before_tick=tick_lock.before_tick,
@@ -308,14 +307,7 @@ class _TickingProcess:
         add_work, work_was_done = self._WORK[self.loop_name]
         number = next(self._work_numbers)
         add_work(self._factory, number)
-        scoring_worker_redis = fakeredis.FakeServer()
-        hold_a_worker_lease(
-            fakeredis.FakeAsyncRedis(server=scoring_worker_redis), WorkerLivenessSignal.SCORING,
-        )
-        self._monkeypatch.setattr(
-            "songmaker_cli.arq_pool.get_arq_pool",
-            lambda: fakeredis.FakeAsyncRedis(server=scoring_worker_redis, decode_responses=True),
-        )
+        hold_a_worker_lease(self._ctx.async_redis, WorkerLivenessSignal.SCORING)
         run_ticks_observing_status(
             self._monkeypatch, self._LOOPS[self.loop_name](self._app), self.registry,
             self.loop_name, 1,
@@ -386,7 +378,7 @@ def test_a_tick_waits_out_a_redis_restart_without_a_failure_and_runs_once_it_set
 
 
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(
-    tmp_path, monkeypatch, mock_arq_pool, caplog,
+    tmp_path, monkeypatch, caplog,
     monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
@@ -405,7 +397,7 @@ def test_finished_lifecycle_loop_is_dead_outside_shutdown(
 
 
 def test_failed_lifecycle_loop_logs_its_exception(
-    tmp_path, monkeypatch, mock_arq_pool, caplog,
+    tmp_path, monkeypatch, caplog,
     monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
@@ -427,16 +419,14 @@ def test_failed_lifecycle_loop_logs_its_exception(
 
 
 def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
-    tmp_path, monkeypatch, mock_arq_pool,
+    tmp_path, monkeypatch,
     monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
-    import songmaker_cli.arq_pool as arq_pool
-
-    monkeypatch.setattr(arq_pool, "is_music_worker_healthy", AsyncMock(return_value=True))
-    monkeypatch.setattr(arq_pool, "is_scoring_worker_healthy", AsyncMock(return_value=True))
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
+        for kind in WORKER_KINDS:
+            hold_a_worker_lease(client, kind)
         before_cancellation = client.get("/health/details", headers=monitoring_headers)
         assert before_cancellation.status_code == 200
         assert before_cancellation.json()["status"] == "ok"
@@ -472,7 +462,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
 
 
 def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
-    tmp_path, mock_arq_pool, pg_factory,
+    tmp_path, pg_factory,
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
@@ -485,7 +475,7 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
 
 
 def test_web_cover_runner_is_visible_in_lifecycle_health(
-    tmp_path, monkeypatch, mock_arq_pool,
+    tmp_path, monkeypatch,
     monitoring_headers, pg_factory,
 ) -> None:
     started = threading.Event()
@@ -507,7 +497,7 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 
 
 def test_a_web_start_removes_the_suggestion_file_and_staging_directory_a_failed_cover_left(
-    tmp_path, mock_arq_pool, pg_factory,
+    tmp_path, pg_factory,
 ) -> None:
     audio_dir = tmp_path / "audio"
     png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
@@ -542,7 +532,7 @@ def test_a_web_start_removes_the_suggestion_file_and_staging_directory_a_failed_
 
 
 def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
-    tmp_path, monkeypatch, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path, monkeypatch, monitoring_headers, pg_factory,
 ) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

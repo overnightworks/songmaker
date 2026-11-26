@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from support.generation_job_world import (
     make_generation_dto,
@@ -13,6 +13,7 @@ from support.generation_job_world import (
     worker_up,
 )
 from support.job_owner import an_owner
+from support.score_jobs import ScoringRedis
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import Generation, Job, Version
@@ -24,13 +25,16 @@ from songmaker_cli.scheduler import WorkerTaskFailed
 
 def _run_fetch_job(
     seeded_db, tmp_path: Path, dispatch, *, count: int, post_process_hook=None,
+    redis: ScoringRedis | None = None,
 ) -> None:
     hook = {} if post_process_hook is None else {"post_process": post_process_hook}
     dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch, **hook)
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
             "j1", "s1", "v1", count, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data", redis=MagicMock(), target_model="sft",
+            data_dir=tmp_path / "data",
+            redis=ScoringRedis(worker_running=False) if redis is None else redis,
+            target_model="sft",
             owner=an_owner("o1"),
         ))
 
@@ -108,7 +112,7 @@ def test_a_take_whose_job_is_cancelled_during_its_write_leaves_no_file_and_no_ro
 
     _run_fetch_job(
         seeded_db, tmp_path, AsyncMock(return_value=make_generation_dto(audio_path=str(fetched))),
-        count=1, post_process_hook=cancel_then_write,
+        count=1, post_process_hook=cancel_then_write, redis=ScoringRedis(),
     )
 
     assert len(written_paths) >= 3
@@ -137,7 +141,7 @@ def test_a_take_deleted_before_its_score_job_is_created_gets_no_score_job(
 
     _run_fetch_job(
         seeded_db, tmp_path, AsyncMock(return_value=make_generation_dto(audio_path=str(fetched))),
-        count=1, post_process_hook=write_then_delete_take,
+        count=1, post_process_hook=write_then_delete_take, redis=ScoringRedis(),
     )
 
     with seeded_db() as session:
@@ -184,7 +188,8 @@ def test_a_songs_settings_reach_the_worker_through_the_generate_request(
         run_async(run_generation_job(
             job_id, queued.song_id, queued.version_id, queued.count, queued.user_id,
             db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-            redis=MagicMock(), seed=queued.seed, target_model=queued.target_model,
+            redis=ScoringRedis(worker_running=False),
+            seed=queued.seed, target_model=queued.target_model,
             owner=an_owner("o1"),
         ))
 
@@ -200,7 +205,8 @@ def test_a_saved_take_records_the_seed_the_worker_reported(seeded_db, tmp_path: 
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
             "j1", "s1", "v1", 1, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data", redis=MagicMock(), seed=5, target_model="sft",
+            data_dir=tmp_path / "data", redis=ScoringRedis(worker_running=False),
+            seed=5, target_model="sft",
             owner=an_owner("o1"),
         ))
 
