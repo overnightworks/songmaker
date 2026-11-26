@@ -507,6 +507,11 @@ class Settings(BaseSettings):
         default=30, ge=1, alias="FINAL_DELETION_DAYS",
     )
 
+    # Days until an audit-log entry is deleted.
+    audit_log_retention_days: int = Field(
+        default=90, ge=1, alias="AUDIT_LOG_RETENTION_DAYS",
+    )
+
     # ── Generation retention ──────────────────────────────────────────
     # Generations that are neither picked nor kept are auto-archived
     # after `generation_retention_days`.

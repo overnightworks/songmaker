@@ -28,6 +28,7 @@ from songmaker_cli.db.queries.generations import (
     list_generations_expired_for_delete,
     lock_songs,
 )
+from songmaker_cli.db.queries.auth import delete_audit_entries_before
 from songmaker_cli.db.queries.jobs import ActiveJobError
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
@@ -232,3 +233,11 @@ def run_generation_retention(
             report.archived_count, report.deleted_count,
         )
     return report
+
+
+def run_audit_log_retention(db_factory, *, days: int, now: datetime) -> int:
+    """Delete the audit-log entries created before ``now`` minus ``days``; returns their count."""
+    with db_factory() as session:
+        deleted = delete_audit_entries_before(session, now - timedelta(days=days))
+        session.commit()
+    return deleted

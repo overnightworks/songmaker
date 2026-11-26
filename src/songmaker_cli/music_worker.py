@@ -3,7 +3,7 @@
 Started as a separate process:
     python -m songmaker_cli.music_worker
 
-The jobs of the music queue come from PostgreSQL, claimed by ``serve_queue``; the four crons
+The jobs of the music queue come from PostgreSQL, claimed by ``serve_queue``; the crons
 are tandem Deadlines, claimed by ``serve_due_crons``.
 """
 
@@ -119,6 +119,7 @@ class MusicWorker(WorkerBase):
 
     def cron_bodies(self) -> dict[Cron, CronBody]:
         return {
+            Cron.AUDIT_LOG_RETENTION: self.audit_log_retention_cron,
             Cron.CLEANUP_FILES: self.cleanup_files_cron,
             Cron.GENERATION_RETENTION: self.generation_retention_cron,
             Cron.REFERENCE_REMNANT: self.reference_remnant_cron,
@@ -131,6 +132,14 @@ class MusicWorker(WorkerBase):
         await asyncio.to_thread(self.audit_orphaned_files)
         await asyncio.to_thread(
             run_cleanup_expired, self.get_db_factory(), self.audio_dir(),
+        )
+
+    async def audit_log_retention_cron(self) -> int:
+        from songmaker_cli.cleanup import run_audit_log_retention
+
+        return await asyncio.to_thread(
+            run_audit_log_retention, self.get_db_factory(),
+            days=self._settings.audit_log_retention_days, now=utcnow(),
         )
 
     async def generation_retention_cron(self) -> int:
