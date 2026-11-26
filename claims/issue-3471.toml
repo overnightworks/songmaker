@@ -1,5 +1,5 @@
 claim_id = "23b4fd4193ef4d42a3e5afec0103685e"
-agent = "Claude 88ea0131-41be-41f8-b72b-713bcf8a53f5"
+agent = "Claude 6c37e6a6-75aa-459f-a727-4aa48d1d7262"
 role = "builder"
 base = "bcd20cbb51defdd6314a6a9200b5a08e563c4e7c"
 branch = "claude/issue-3471-judging-card-every-surface"
