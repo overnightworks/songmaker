@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from unittest.mock import AsyncMock
 
 import pytest
@@ -103,27 +104,29 @@ def raise_private_content(_run_number: int) -> None:
 
 
 @pytest.mark.parametrize(
-    ("row_status", "run", "outcome", "reason"),
+    ("row_status", "run", "raises", "outcome", "reason"),
     [
-        (JobStatus.COMPLETED, None, "ok", None),
-        (JobStatus.RUNNING, raise_private_content, "failed", None),
-        (JobStatus.FAILED, None, "failed", "job_failed"),
-        (JobStatus.CANCELLED, None, "cancelled", None),
+        (JobStatus.COMPLETED, None, contextlib.nullcontext(), "ok", None),
+        (
+            JobStatus.RUNNING,
+            raise_private_content,
+            pytest.raises(ValueError, match="private content"),
+            "failed",
+            None,
+        ),
+        (JobStatus.FAILED, None, contextlib.nullcontext(), "failed", "job_failed"),
+        (JobStatus.CANCELLED, None, contextlib.nullcontext(), "cancelled", None),
     ],
     ids=["row-completed", "job-raised", "row-failed", "row-cancelled"],
 )
 def test_a_claimed_job_ends_with_one_line_carrying_its_id_and_outcome(
-    row_status, run, outcome, reason, job_rows, caplog
+    row_status, run, raises, outcome, reason, job_rows, caplog
 ) -> None:
     job_id = job_rows(row_status)
     worker = ScriptedScoringWorker(run)
 
-    with caplog.at_level("INFO"):
-        if run is None:
-            asyncio.run(worker.run_claimed(a_score_claim(job_id)))
-        else:
-            with pytest.raises(ValueError, match="private content"):
-                asyncio.run(worker.run_claimed(a_score_claim(job_id)))
+    with caplog.at_level("INFO"), raises:
+        asyncio.run(worker.run_claimed(a_score_claim(job_id)))
 
     (ended,) = ended_lines(caplog)
     assert (ended.job_id, ended.job_function, ended.outcome, getattr(ended, "reason", None)) == (
