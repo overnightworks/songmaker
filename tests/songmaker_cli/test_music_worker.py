@@ -323,7 +323,7 @@ def test_the_audit_log_retention_cron_deletes_the_entries_older_than_the_setting
             session.add(AuditLog(
                 id=entry_id, action="login", resource_type="session", created_at=now - age,
             ))
-        session.add(User(id="old-person", username="old-person", created_at=now - timedelta(days=800)))
+        session.add(User(id="old", username="old", created_at=now - timedelta(days=800)))
         session.commit()
     worker = MusicWorker(_settings().model_copy(update={"audit_log_retention_days": 7}))
     worker.get_db_factory = MagicMock(return_value=pg_factory)

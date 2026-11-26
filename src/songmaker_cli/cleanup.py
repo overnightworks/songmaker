@@ -21,6 +21,7 @@ from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_fil
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
+from songmaker_cli.db.queries.auth import delete_audit_entries_before
 from songmaker_cli.db.queries.generations import (
     archive_generation,
     delete_expired_generation,
@@ -28,7 +29,6 @@ from songmaker_cli.db.queries.generations import (
     list_generations_expired_for_delete,
     lock_songs,
 )
-from songmaker_cli.db.queries.auth import delete_audit_entries_before
 from songmaker_cli.db.queries.jobs import ActiveJobError
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums

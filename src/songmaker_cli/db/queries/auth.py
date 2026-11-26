@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import (
@@ -227,7 +227,9 @@ def record_audit(
 
 
 def delete_audit_entries_before(session: Session, cutoff: datetime) -> int:
-    result = session.execute(delete(AuditLog).where(AuditLog.created_at < cutoff))
+    deleted = session.query(AuditLog).filter(AuditLog.created_at < cutoff).delete(
+        synchronize_session=False,
+    )
     session.flush()
-    return result.rowcount or 0
+    return deleted
 
