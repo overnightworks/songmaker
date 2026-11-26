@@ -682,6 +682,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
 - **Read access**: none over HTTP — `GET /api/admin/audit-log` answers 404 because no admin surface shows the trail; the rows stay in the database and are read there.
+- **Retention**: rows older than `AUDIT_LOG_RETENTION_DAYS` (default 90) are deleted by the daily audit-log retention cron.
 
 ## Deployment
 
