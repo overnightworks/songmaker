@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
+from http.client import HTTPConnection
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from botocore.exceptions import ClientError
+from logline import unit_trace
+from logline.testing import configured
 from pydantic import ValidationError
 
 from songmaker_cli import object_store as object_store_module
@@ -21,6 +27,24 @@ from songmaker_cli.object_store import (
 from songmaker_cli.settings import Settings
 
 PAYLOAD = bytes(range(256)) * 40
+
+
+@contextmanager
+def _recorded_header_names() -> Iterator[list[str]]:
+    """The header names every `http.client` connection writes, lowercased, in order.
+
+    Entered inside `configured`, after logline's hooks: patched earlier, logline would wrap the
+    recorder and the undo would remove logline's own header hook from the class for the process.
+    """
+    names: list[str] = []
+    original = HTTPConnection.putheader
+
+    def record(self: HTTPConnection, header: str | bytes, *values: str) -> None:
+        names.append((header.decode() if isinstance(header, bytes) else header).lower())
+        original(self, header, *values)
+
+    with patch.object(HTTPConnection, "putheader", record):
+        yield names
 
 
 @pytest.fixture
@@ -48,6 +72,22 @@ def test_bytes_put_to_the_store_read_back(object_store: ObjectStore, prefix: str
     object_store.put_bytes(f"{prefix}record.json", b'{"a": 1}', content_type="application/json")
 
     assert object_store.get_bytes(f"{prefix}record.json") == b'{"a": 1}'
+
+
+def test_every_store_call_inside_a_trace_is_accepted_and_carries_the_trace(
+    object_store: ObjectStore, prefix: str,
+) -> None:
+    key = f"{prefix}record.json"
+
+    with configured("songmaker-web"), unit_trace(None), _recorded_header_names() as names:
+        object_store.put_bytes(key, PAYLOAD, content_type="application/octet-stream")
+        whole = object_store.get_bytes(key)
+        ranged = b"".join(object_store.open(key, "bytes=10-19").chunks())
+        listed = [entry.key for entry in object_store.list(prefix)]
+        object_store.delete([key])
+
+    assert (whole, ranged, listed) == (PAYLOAD, PAYLOAD[10:20], [key])
+    assert names.count("traceparent") == names.count("authorization") > 0
 
 
 def test_listing_a_prefix_names_its_objects_with_size_and_age_and_no_others(
