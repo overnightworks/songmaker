@@ -44,13 +44,19 @@ test('the judging card stands in the take column with no Save button', async ({
 	await expect(card.getByRole('button', { name: /save/i })).toHaveCount(0);
 });
 
-test('the judging card stays in the docked panel', async ({ page }, testInfo) => {
+test('the judging card stands in the docked panel and stays when it is expanded', async ({
+	page
+}, testInfo) => {
 	test.skip(shellOf(testInfo) !== 'desktop', 'the phone has no docked panel');
 	const card = await openJudgingCard(page, 'desktop');
 
-	await page.getByRole('button', { name: words['nowPlaying.collapse'], exact: true }).click();
+	await expect(
+		page.getByRole('complementary').getByRole('region', { name: words['nowPlayingJudging.label'] })
+	).toBeVisible();
 
-	await expect(page.getByRole('complementary')).toBeVisible();
+	await page.getByRole('button', { name: words['nowPlaying.expand'], exact: true }).click();
+
+	await expect(page.getByRole('complementary')).toHaveCount(0);
 	await expect(card).toBeVisible();
 });
 
