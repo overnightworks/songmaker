@@ -57,7 +57,6 @@
 		text-align: left;
 	}
 	.title-row :global(.cover-title) {
-		font-size: 1.15rem;
 		overflow-wrap: anywhere;
 	}
 	/* The words take what the rest leaves and scroll inside it; below the floor
