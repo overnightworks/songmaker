@@ -5174,7 +5174,7 @@ msgid "Selected voice is unavailable for this generation"
 msgstr ""
 
 msgctxt "jobFailure.generationCancelled"
-msgid "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"
+msgid "Job cancelled: it ran past the time limit or the worker shut down."
 msgstr ""
 
 msgctxt "jobFailure.partialTakes"

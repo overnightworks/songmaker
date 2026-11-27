@@ -160,7 +160,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **FFmpeg is a system dependency of the ACE-Step worker image.** The `gpu-torch-base` stage installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
-The Python settings and the test stack (`docker/docker-compose.test.yml`) both default `ARQ_JOB_TIMEOUT` to
+The Python settings and the test stack (`docker/docker-compose.test.yml`) both default `WORKER_JOB_TIMEOUT` to
 1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` is a separate setting, 540
 seconds in the Python default and in the platform's `apps/songmaker/acestep-worker.yaml`: a load now
 includes the eager DiT and LM init, which takes 5-8 minutes for a cold xl-turbo
@@ -200,7 +200,7 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 | `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, the health routes, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `training_hold_seconds`, `last_heartbeat_at` |
 | `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
 | `songmaker:acestep:lm-failure:{worker_id}` | `acestep-worker` when a load comes up without its LM | `acestep-worker` at start, the health routes (existence only) | none | The mode whose LM failed to initialise; the restarted worker loads it before registering, then clears the key |
-| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | none; read only while the lock is held; deleted after the hold ends | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does. A crashed holder's label stays, unread, until the next holder overwrites it |
+| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | none; read only while the lock is held; deleted after the hold ends | The label of the download lock: the job_id of the job that holds it. It excludes nothing; the lock does. A crashed holder's label stays, unread, until the next holder overwrites it |
 
 The Worker Pool panel mirrors a live hold as Training with the remaining hold lease; this projection never owns, renews, or releases the hold.
 
