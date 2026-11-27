@@ -3,7 +3,7 @@
 // Both shells walk the flow; the desktop also walks the docked panel.
 
 import { expect, test, type Page, type Request } from './coverage-test';
-import { FlowGuard, shellOf } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, shellOf } from './helpers';
 import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
@@ -47,21 +47,24 @@ test('the judging card stands in the take column with no Save button', async ({
 	}
 });
 
-test('the judging card stands in the docked panel and stays when it is expanded', async ({
-	page
-}, testInfo) => {
-	test.skip(shellOf(testInfo) !== 'desktop', 'the phone has no docked panel');
-	const card = await openJudgingCard(page, 'desktop');
+test(
+	'the judging card stands in the docked panel and stays when it is expanded',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const card = await openJudgingCard(page, 'desktop');
 
-	await expect(
-		page.getByRole('complementary').getByRole('region', { name: words['nowPlayingJudging.label'] })
-	).toBeVisible();
+		await expect(
+			page
+				.getByRole('complementary')
+				.getByRole('region', { name: words['nowPlayingJudging.label'] })
+		).toBeVisible();
 
-	await page.getByRole('button', { name: words['nowPlaying.expand'], exact: true }).click();
+		await page.getByRole('button', { name: words['nowPlaying.expand'], exact: true }).click();
 
-	await expect(page.getByRole('complementary')).toHaveCount(0);
-	await expect(card).toBeVisible();
-});
+		await expect(page.getByRole('complementary')).toHaveCount(0);
+		await expect(card).toBeVisible();
+	}
+);
 
 test('releasing the slider saves the rating without a toast', async ({ page }, testInfo) => {
 	const card = await openJudgingCard(page, shellOf(testInfo));
