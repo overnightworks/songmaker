@@ -2,8 +2,7 @@
 
 The music worker runs it as a cron. Reuses the existing delete_album/delete_song
 query functions (which already collect mp3/wav paths before ORM cascade
-fires) so file unlinks happen post-commit, exactly like the synchronous
-DELETE endpoints used to.
+fires) so file unlinks happen post-commit.
 
 Also runs generation retention: archives expired unpicked/unkept
 generations and hard-deletes archived generations after a second window.
