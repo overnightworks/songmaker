@@ -30,7 +30,16 @@ import { songList } from '#lib/stores/libraryData.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { words } from '#lib/words/en.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
-import { rate, rescore, rescoringTakeIds, restoreTake, setKeep, setPick } from './takeActions';
+import {
+	rate,
+	rescore,
+	rescoringTakeIds,
+	restoreTake,
+	setKeep,
+	setPick,
+	toggleKeep,
+	togglePick
+} from './takeActions';
 
 const unreachableServer = () =>
 	new NetworkError('/api/generations/g1', new TypeError('Failed to fetch'));
@@ -191,17 +200,50 @@ describe('restoreTake', () => {
 	});
 });
 
+describe.each([
+	{
+		name: 'togglePick',
+		toggle: togglePick,
+		field: 'is_picked',
+		on: pickGeneration,
+		off: unpickGeneration
+	},
+	{
+		name: 'toggleKeep',
+		toggle: toggleKeep,
+		field: 'is_kept',
+		on: keepGeneration,
+		off: unkeepGeneration
+	}
+] as const)('$name', ({ toggle, field, on, off }) => {
+	it('sets a take that is not yet set', async () => {
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
+
+		await toggle('s1', generation({ [field]: false }));
+
+		expect(on).toHaveBeenCalledWith('g1');
+		expect(off).not.toHaveBeenCalled();
+	});
+
+	it('clears a take that is already set', async () => {
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
+
+		await toggle('s1', generation({ [field]: true }));
+
+		expect(off).toHaveBeenCalledWith('g1');
+		expect(on).not.toHaveBeenCalled();
+	});
+});
+
 describe('rate', () => {
-	it('rates a generation, refreshes songList, and confirms via toast', async () => {
+	it('rates a generation and refreshes songList without a success toast', async () => {
 		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
 
 		await rate('s1', 'g1', 80, 'great take');
 
 		expect(rateGeneration).toHaveBeenCalledWith('g1', 80, 'great take');
 		expect(get(songList)).toEqual([song(actionSongDefaults())]);
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: words['takeActions.ratingSaved'], type: 'success' })
-		]);
+		expect(get(toasts)).toEqual([]);
 	});
 
 	it('defaults notes to an empty string', async () => {

@@ -71,6 +71,7 @@
 		// redacts `lyrics`, so the text comes from the share payload.
 		lyricsText = null,
 		rightPanel,
+		judging,
 		collectionHead,
 		songs
 	}: {
@@ -140,6 +141,7 @@
 		// The queue or take panel; a single shared song has none, so it shows
 		// neither the column nor the phone's sheet trigger.
 		rightPanel?: Snippet;
+		judging?: Snippet;
 	} = $props();
 
 	const frequentHitbox = `min-width: ${HITBOX_FREQUENT_PX}px; min-height: ${HITBOX_FREQUENT_PX}px`;
@@ -165,9 +167,8 @@
 		audioPlayer.current === null ? (info.generation.audio_duration_sec ?? 0) : audioPlayer.duration
 	);
 	const currentTime = $derived(ended ? duration : audioPlayer.currentTime);
-	// The words follow the take the player holds, and no line is sung before
-	// it holds one or once the caller's playback ended — where the player
-	// itself already stands back at 0:00 and would light the opening line.
+	// The words follow the take the player holds; no line is sung before it
+	// holds one or once playback ended (the player stands back at 0:00 then).
 	const sungAt = $derived(ended || audioPlayer.current === null ? null : audioPlayer.currentTime);
 	const transport = $derived(audioPlayer.transport);
 	const notice = $derived(unplayableNotice ?? transportWaitingNotice(transport));
@@ -180,11 +181,9 @@
 				$sheetOpen = false;
 				return;
 			}
-			// Seed the sheet open state from the requested panel exactly once per
-			// mount — a caller that wants to land the listener straight in the
-			// sheet (rightPanelOpenOnMount) should do so the same way it opens on
-			// desktop. Later stacked/unstacked toggles (resize, pointer-type
-			// change) must not reopen it.
+			// The requested panel (rightPanelOpenOnMount) seeds the sheet once per
+			// mount; later stacked/unstacked toggles (resize, pointer-type change)
+			// must not reopen it.
 			if (!mobilePanelSeeded) {
 				mobilePanelSeeded = true;
 				if (rightPanelOpenOnMount) $sheetOpen = true;
@@ -433,11 +432,11 @@
 					{@render coverArt()}
 					{@render coverMeta()}
 					<!-- The docked panel has no transport of its own: the bar beside it
-						stays visible and keeps carrying seek, shuffle, prev/next and play. -->
-					{#if !isDocked}
-						{@render progress()}
-						{@render transportControls()}
-					{/if}
+						stays visible and keeps carrying seek, shuffle, prev/next and play.
+						The phone's card stands above the progress bar, the wide surfaces' below the transport. -->
+					{#if stacked}{@render judging?.()}{/if}
+					{#if !isDocked}{@render progress()}{@render transportControls()}{/if}
+					{#if !stacked}{@render judging?.()}{/if}
 				</section>
 
 				<section class="np-lyrics-col">

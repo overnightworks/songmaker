@@ -51,9 +51,9 @@ import { laidOutSeekLine, pointerOnSeekLine } from '#lib/test-utils/seek-line.ts
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import nowPlayingFrameSource from './NowPlayingFrame.svelte?raw';
 
-// setPick/setKeep stay mocked so a key press asserts the call it makes,
-// not the network + song-refresh chain behind it — takeActions.test.ts and
-// NowPlayingTake.test.ts already cover that chain.
+// togglePick/toggleKeep stay mocked so a key press asserts the call it makes,
+// not the network + song-refresh chain behind it — takeActions.test.ts covers
+// that chain.
 // Stands in for the router the way the real one behaves for this app (issue
 // #275): a song selection can now cross from the wall's `/` into the song's
 // own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
@@ -65,11 +65,11 @@ vi.mock('$app/navigation', async () =>
 
 vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/stores/takeActions.ts')>()),
-	setPick: vi.fn().mockResolvedValue(undefined),
-	setKeep: vi.fn().mockResolvedValue(undefined)
+	togglePick: vi.fn().mockResolvedValue(undefined),
+	toggleKeep: vi.fn().mockResolvedValue(undefined)
 }));
 
-import { setKeep, setPick } from '#lib/stores/takeActions.ts';
+import { toggleKeep, togglePick } from '#lib/stores/takeActions.ts';
 import NowPlaying from './NowPlaying.svelte';
 import { queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { words } from '#lib/words/en.ts';
@@ -938,39 +938,36 @@ describe('NowPlaying P and K keys', () => {
 			key: 'p',
 			picked: false,
 			kept: false,
-			action: setPick,
-			expected: true
+			action: togglePick
 		},
 		{
 			name: 'P on the picked take unpicks it',
 			key: 'p',
 			picked: true,
 			kept: false,
-			action: setPick,
-			expected: false
+			action: togglePick
 		},
 		{
 			name: 'K keeps the playing take and stays on the song',
 			key: 'K',
 			picked: false,
 			kept: false,
-			action: setKeep,
-			expected: true
+			action: toggleKeep
 		},
 		{
 			name: 'K on the kept take unkeeps it',
 			key: 'k',
 			picked: false,
 			kept: true,
-			action: setKeep,
-			expected: false
+			action: toggleKeep
 		}
-	])('$name', async ({ key, picked, kept, action, expected }) => {
+	])('$name', async ({ key, picked, kept, action }) => {
 		await renderSurface(playingTake(picked, kept));
 
 		press(key);
 
-		await vi.waitFor(() => expect(action).toHaveBeenCalledWith('s1', 'g1', expected));
+		const take = expect.objectContaining({ is_picked: picked, is_kept: kept });
+		await vi.waitFor(() => expect(action).toHaveBeenCalledWith('s1', take));
 		expect(queueIndex()).toBe(0);
 	});
 
@@ -980,7 +977,9 @@ describe('NowPlaying P and K keys', () => {
 
 		press('p');
 
-		await vi.waitFor(() => expect(setPick).toHaveBeenCalledWith('s1', 'g1', true));
+		await vi.waitFor(() =>
+			expect(togglePick).toHaveBeenCalledWith('s1', expect.objectContaining({ id: 'g1' }))
+		);
 	});
 
 	it.each([
@@ -993,8 +992,8 @@ describe('NowPlaying P and K keys', () => {
 		await tick();
 
 		expect(queueIndex()).toBe(0);
-		expect(setPick).not.toHaveBeenCalled();
-		expect(setKeep).not.toHaveBeenCalled();
+		expect(togglePick).not.toHaveBeenCalled();
+		expect(toggleKeep).not.toHaveBeenCalled();
 	});
 
 	it('ignores the keys while a text field has focus', async () => {
@@ -1006,6 +1005,6 @@ describe('NowPlaying P and K keys', () => {
 		textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
 		await tick();
 
-		expect(setPick).not.toHaveBeenCalled();
+		expect(togglePick).not.toHaveBeenCalled();
 	});
 });
