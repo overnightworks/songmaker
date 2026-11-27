@@ -140,7 +140,7 @@ describe('NowPlayingJudging', () => {
 
 		typeNote('Typed then gone');
 		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS - 1);
-		await unmount(mounted!);
+		if (mounted) await unmount(mounted);
 		mounted = undefined;
 
 		expect(rate).toHaveBeenCalledExactlyOnceWith('s1', 'g1', 70, 'Typed then gone');
