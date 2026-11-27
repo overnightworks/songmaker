@@ -75,18 +75,21 @@ def test_bytes_put_to_the_store_read_back(object_store: ObjectStore, prefix: str
 
 
 def test_every_store_call_inside_a_trace_is_accepted_and_carries_the_trace(
-    object_store: ObjectStore, prefix: str,
+    object_store: ObjectStore, prefix: str, tmp_path: Path,
 ) -> None:
     key = f"{prefix}record.json"
+    source = tmp_path / "audio.mp3"
+    source.write_bytes(PAYLOAD)
 
     with configured("songmaker-web"), unit_trace(None), _recorded_header_names() as names:
         object_store.put_bytes(key, PAYLOAD, content_type="application/octet-stream")
+        object_store.put_file(f"{prefix}audio.mp3", source, content_type="audio/mpeg")
         whole = object_store.get_bytes(key)
         ranged = b"".join(object_store.open(key, "bytes=10-19").chunks())
         listed = [entry.key for entry in object_store.list(prefix)]
-        object_store.delete([key])
+        object_store.delete([key, f"{prefix}audio.mp3"])
 
-    assert (whole, ranged, listed) == (PAYLOAD, PAYLOAD[10:20], [key])
+    assert (whole, ranged, sorted(listed)) == (PAYLOAD, PAYLOAD[10:20], [f"{prefix}audio.mp3", key])
     assert names.count("traceparent") == names.count("authorization") > 0
 
 
