@@ -1,8 +1,0 @@
-claim_id = "310c431a2a2d464e950028e98348afd8"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "7a2c70966f5b9b6bc99cc32977d0353c056c8413"
-branch = "claude/issue-3497-logline-v1-14-0"
-scope = ["docs/architecture.md", "pyproject.toml", "tests/songmaker_cli/test_object_store.py", "uv.lock"]
-opened_commit = "54489eafbd44b0b8ddaa9e842fe457810beb94d7"
-whole_reason = "One dependency pin with its lock, the one test that proves the new trace on put_file and the document line that names it."
