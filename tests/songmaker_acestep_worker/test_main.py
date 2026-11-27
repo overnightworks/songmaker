@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from logline import RequestLineMiddleware
@@ -174,11 +175,15 @@ def _served_worker_client(tmp_path: Path) -> TestClient:
     return TestClient(build_app(deps))
 
 
-def _web_app_sending_to_the_worker() -> Starlette:
-    async def headers_for_the_worker(_: Request) -> JSONResponse:
-        return JSONResponse(worker_request_headers())
+def _web_app_calling_the_worker(worker_app: Starlette) -> Starlette:
+    async def call_the_worker(_: Request) -> JSONResponse:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=worker_app), base_url="http://worker",
+        ) as client:
+            response = await client.get("/health", headers=worker_request_headers())
+        return JSONResponse({"status": response.status_code})
 
-    app = Starlette(routes=[Route("/headers", headers_for_the_worker)])
+    app = Starlette(routes=[Route("/call", call_the_worker)])
     app.add_middleware(RequestLineMiddleware)
     return app
 
@@ -201,20 +206,14 @@ def test_a_request_to_the_worker_writes_its_request_line_in_the_callers_trace(
 def test_a_trace_the_web_process_started_continues_in_the_worker(
     tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
+    deps, _ = make_deps(tmp_path)
+
     with configured("songmaker-web"):
-        web_response = TestClient(_web_app_sending_to_the_worker()).get("/headers")
-    (web_line,) = request_lines(capsys.readouterr().out)
+        web_response = TestClient(_web_app_calling_the_worker(build_app(deps))).get("/call")
 
-    with configured(SERVICE_NAME):
-        worker_response = _served_worker_client(tmp_path).get(
-            "/health", headers=web_response.json(),
-        )
-    (worker_line,) = request_lines(capsys.readouterr().out)
-
-    sent_trace_id = web_response.json()["traceparent"].split("-")[1]
-    assert web_line["trace_id"] == sent_trace_id
-    assert worker_line["trace_id"] == sent_trace_id
-    assert worker_line["status"] == worker_response.status_code
+    worker_line, web_line = request_lines(capsys.readouterr().out)
+    assert worker_line["status"] == web_response.json()["status"]
+    assert worker_line["trace_id"] == web_line["trace_id"]
 
 
 def _settings(*, init_llm: bool = True, budget_gb: float = 24.0) -> WorkerSettings:
