@@ -2873,16 +2873,8 @@ msgctxt "nowPlayingJudging.pick"
 msgid "Pick"
 msgstr ""
 
-msgctxt "nowPlayingJudging.unpick"
-msgid "Unpick"
-msgstr ""
-
 msgctxt "nowPlayingJudging.keep"
 msgid "Keep"
-msgstr ""
-
-msgctxt "nowPlayingJudging.unkeep"
-msgid "Unkeep"
 msgstr ""
 
 msgctxt "nowPlayingTake.scores"

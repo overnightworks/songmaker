@@ -2966,17 +2966,9 @@ msgctxt "nowPlayingJudging.pick"
 msgid "Pick"
 msgstr "Fürs Album"
 
-msgctxt "nowPlayingJudging.unpick"
-msgid "Unpick"
-msgstr "Nicht fürs Album"
-
 msgctxt "nowPlayingJudging.keep"
 msgid "Keep"
 msgstr "Behalten"
-
-msgctxt "nowPlayingJudging.unkeep"
-msgid "Unkeep"
-msgstr "Nicht behalten"
 
 msgctxt "nowPlayingTake.scores"
 msgid "Scores"

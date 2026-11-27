@@ -890,9 +890,7 @@ const translated = {
     "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => "v" + gaps.number + " öffnen",
     "nowPlayingJudging.label": "Diesen Take bewerten",
     "nowPlayingJudging.pick": "Fürs Album",
-    "nowPlayingJudging.unpick": "Nicht fürs Album",
     "nowPlayingJudging.keep": "Behalten",
-    "nowPlayingJudging.unkeep": "Nicht behalten",
     "nowPlayingTake.scores": "Scores",
     "nowPlayingTake.scoresEmpty": "Noch keine Scores",
     "nowPlayingTake.scoreRating": "Bewertung",
@@ -1707,5 +1705,5 @@ const translated = {
     "logoutPage.logOut": "Abmelden",
 } satisfies Words;
 // A translation that leaves out a gap of its source fails here.
-({} as Words) satisfies typeof translated;
+({}) as Words satisfies typeof translated;
 export const words: Words = translated;

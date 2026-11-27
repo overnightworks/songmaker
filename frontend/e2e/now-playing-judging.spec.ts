@@ -1,8 +1,9 @@
 // Spec: REQ-PLAYER-04 -- in the signed-in player's Now Playing, a judging card in the take column holds Pick, Keep, the rating slider and the note on every surface; they save without a Save button, the rating when the slider is released and the note after a pause in typing and when the field is left.
 //
-// Both shells walk the flow; the desktop also walks the docked panel.
+// Both shells walk the flow; the desktop also walks the docked panel and the full surface's card geometry.
 
 import { expect, test, type Page, type Request } from './coverage-test';
+import { contrastRatio, expectEmulatedTheme, paintedRgb } from './contrast';
 import { FlowGuard, ONLY_IN_SHELL, shellOf } from './helpers';
 import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { readSeededLibrary } from './seed';
@@ -100,3 +101,93 @@ test('a pause in typing saves the note and leaving the field saves the rest', as
 	});
 	await expect(note).toHaveValue('Loved the bridge and the end');
 });
+
+test('a pressed pill keeps its label as its name and says its state only in aria-pressed', async ({
+	page
+}, testInfo) => {
+	const card = await openJudgingCard(page, shellOf(testInfo));
+
+	for (const word of ['pick', 'keep'] as const) {
+		const name = words[`nowPlayingJudging.${word}`];
+		const pill = card.getByRole('button', { name, exact: true });
+		const wasPressed = (await pill.getAttribute('aria-pressed')) === 'true';
+
+		await pill.click();
+
+		await expect(pill).toHaveAttribute('aria-pressed', String(!wasPressed));
+		await expect(
+			card.getByRole('button', { name, pressed: !wasPressed, exact: true })
+		).toBeVisible();
+		await expect(pill).toHaveAccessibleName(name);
+	}
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+	test(`the pressed pill labels and the note placeholder read at 4.5:1 in the ${colorScheme} theme`, async ({
+		page
+	}, testInfo) => {
+		await page.emulateMedia({ colorScheme });
+		const card = await openJudgingCard(page, shellOf(testInfo));
+		await expectEmulatedTheme(page, colorScheme);
+
+		for (const word of ['pick', 'keep'] as const) {
+			const pill = card.getByRole('button', {
+				name: words[`nowPlayingJudging.${word}`],
+				exact: true
+			});
+			if ((await pill.getAttribute('aria-pressed')) !== 'true') await pill.click();
+			await expect(pill).toHaveAttribute('aria-pressed', 'true');
+			const { ink, fill } = await pill.evaluate((element) => ({
+				ink: getComputedStyle(element).color,
+				fill: getComputedStyle(element).backgroundColor
+			}));
+			expect(
+				contrastRatio(await paintedRgb(page, ink), await paintedRgb(page, fill))
+			).toBeGreaterThanOrEqual(4.5);
+		}
+
+		const note = card.getByRole('textbox', { name: words['nowPlayingJudging.ratingNotes'] });
+		const { placeholder, field } = await note.evaluate((element) => ({
+			placeholder: getComputedStyle(element, '::placeholder').color,
+			field: getComputedStyle(element).backgroundColor
+		}));
+		expect(
+			contrastRatio(await paintedRgb(page, placeholder), await paintedRgb(page, field))
+		).toBeGreaterThanOrEqual(4.5);
+	});
+}
+
+test(
+	'a fine pointer keeps the pills above the compact hitbox height',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const card = await openJudgingCard(page, 'desktop');
+		const compact = await page.evaluate(() =>
+			Number.parseFloat(
+				getComputedStyle(document.documentElement).getPropertyValue('--hitbox-compact')
+			)
+		);
+
+		for (const word of ['pick', 'keep'] as const) {
+			const box = await card
+				.getByRole('button', { name: words[`nowPlayingJudging.${word}`], exact: true })
+				.boundingBox();
+			expect(box?.height).toBeGreaterThan(compact);
+		}
+	}
+);
+
+test(
+	'the full desktop card shares the cover column left edge and width',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const card = await openJudgingCard(page, 'desktop');
+		await page.getByRole('button', { name: words['nowPlaying.expand'], exact: true }).click();
+
+		const cardBox = await card.boundingBox();
+		const coverBox = await page.locator('.cover-art').boundingBox();
+		if (!cardBox || !coverBox) throw new Error('Expected a laid out card and cover');
+		expect(cardBox.x).toBeCloseTo(coverBox.x, 0);
+		expect(cardBox.width).toBeCloseTo(coverBox.width, 0);
+	}
+);

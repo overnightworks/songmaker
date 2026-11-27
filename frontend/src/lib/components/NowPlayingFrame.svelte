@@ -30,6 +30,7 @@
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import NowPlayingLyrics from './NowPlayingLyrics.svelte';
+	import NowPlayingPhoneBody from './NowPlayingPhoneBody.svelte';
 	import SeekSlider from './SeekSlider.svelte';
 
 	let {
@@ -229,7 +230,11 @@
 
 {#snippet coverMeta()}
 	<div class="cover-meta">
-		<svelte:element this={isPage ? 'h1' : 'span'} class="cover-title">
+		<svelte:element
+			this={isPage ? 'h1' : 'h2'}
+			id={isPage ? undefined : 'now-playing-title'}
+			class="cover-title"
+		>
 			{info.songTitle}
 		</svelte:element>
 		{#if stacked && source}
@@ -408,10 +413,7 @@
 			</div>
 		{:else}
 			<header class="np-header">
-				<div class="np-heading">
-					<p class="np-kicker">{pageText('nowPlaying.kicker')}</p>
-					<h2 id="now-playing-title" class="np-title">{info.songTitle}</h2>
-				</div>
+				<p class="np-kicker">{pageText('nowPlaying.kicker')}</p>
 				<div class="np-header-actions">
 					{#if stacked}{@render goToSongButton()}{/if}
 					{#if isDocked && onExpand}
@@ -427,29 +429,38 @@
 				</div>
 			</header>
 
-			<div class="np-body">
-				<section class="np-cover-col">
-					{@render coverArt()}
-					{@render coverMeta()}
-					<!-- The docked panel has no transport of its own: the bar beside it
-						stays visible and keeps carrying seek, shuffle, prev/next and play.
-						The phone's card stands above the progress bar, the wide surfaces' below the transport. -->
-					{#if stacked}{@render judging?.()}{/if}
-					{#if !isDocked}{@render progress()}{@render transportControls()}{/if}
-					{#if !stacked}{@render judging?.()}{/if}
-				</section>
-
-				<section class="np-lyrics-col">
-					{@render lyrics()}
-					{#if !stacked}{@render goToSongButton()}{/if}
-				</section>
-
-				{#if rightPanel && !stacked}
-					<section class="np-right-col">
-						{@render rightPanel()}
+			{#if stacked}
+				<NowPlayingPhoneBody
+					cover={coverArt}
+					meta={coverMeta}
+					{lyrics}
+					{judging}
+					{progress}
+					transport={transportControls}
+				/>
+			{:else}
+				<div class="np-body">
+					<section class="np-cover-col">
+						{@render coverArt()}
+						{@render coverMeta()}
+						<!-- The docked panel has no transport of its own: the bar beside it
+							stays visible and keeps carrying seek, shuffle, prev/next and play. -->
+						{#if !isDocked}{@render progress()}{@render transportControls()}{/if}
+						{@render judging?.()}
 					</section>
-				{/if}
-			</div>
+
+					<section class="np-lyrics-col">
+						{@render lyrics()}
+						{@render goToSongButton()}
+					</section>
+
+					{#if rightPanel}
+						<section class="np-right-col">
+							{@render rightPanel()}
+						</section>
+					{/if}
+				</div>
+			{/if}
 
 			{#if rightPanel && stacked}
 				<button
@@ -537,12 +548,6 @@
 		color: var(--text);
 		background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 	}
-	.np-heading {
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-	}
 	.np-kicker {
 		margin: 0;
 		font-family: var(--font-display);
@@ -550,15 +555,6 @@
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--text-muted);
-	}
-	.np-title {
-		margin: 0;
-		font-family: var(--font-display);
-		font-size: 1.05rem;
-		color: var(--text);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		overflow-wrap: anywhere;
 	}
 	.icon-btn {
 		flex-shrink: 0;
@@ -603,9 +599,15 @@
 		justify-content: center;
 		gap: 1.2rem;
 		min-width: 0;
+		/* The cover, the card and the progress bar share one column edge. */
+		--cover-width: min(320px, 80%);
+	}
+	.now-playing:not(.docked) .np-cover-col > :global(.judging) {
+		width: var(--cover-width);
+		align-self: center;
 	}
 	.cover-art {
-		width: min(320px, 80%);
+		width: var(--cover-width, min(320px, 80%));
 		aspect-ratio: 1;
 		border-radius: var(--card-radius);
 		overflow: hidden;
@@ -651,10 +653,7 @@
 		cursor: pointer;
 	}
 	.progress {
-		width: min(320px, 80%);
-	}
-	.now-playing.stacked .progress {
-		width: 100%;
+		width: var(--cover-width, 100%);
 	}
 	.progress-times {
 		display: flex;
@@ -855,15 +854,6 @@
 	.now-playing.stacked .np-body {
 		grid-template-columns: 1fr;
 		overflow-y: auto;
-	}
-	.now-playing.stacked .np-right-col {
-		display: none;
-	}
-	/* On a short phone the column's own zero floor let its row collapse, and the
-	   centred lyrics spilled up over the transport; sized to content, the row
-	   stays whole and the body scrolls to the lyrics instead. */
-	.now-playing.stacked .np-lyrics-col {
-		min-height: min-content;
 	}
 	/* The take sheet's backdrop dims the surface, yet the header's × and "Go to song" stay
 	   above it: a tap meant for them must not only close the sheet. */

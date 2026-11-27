@@ -12,6 +12,18 @@ export async function tokenColor(page: Page, token: string): Promise<string> {
 	}, token);
 }
 
+/** An opaque colour as the browser paints it, as `rgb()`: a mixed or wide-gamut value reads back in sRGB. */
+export async function paintedRgb(page: Page, cssColor: string): Promise<string> {
+	return page.evaluate((color) => {
+		const context = document.createElement('canvas').getContext('2d');
+		if (!context) throw new Error('Expected a 2D canvas');
+		context.fillStyle = color;
+		context.fillRect(0, 0, 1, 1);
+		const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+		return `rgb(${red}, ${green}, ${blue})`;
+	}, cssColor);
+}
+
 export function relativeLuminance(cssColor: string): number {
 	const channels = cssColor
 		.match(/[\d.]+/g)
