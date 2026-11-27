@@ -1,0 +1,8 @@
+claim_id = "c3555b2977ba4f27aa2b9f31eb489d43"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "855e93be71b16ac423a4b7962366ea74cb690611"
+branch = "claude/issue-3507-voice-purge-after-30-days"
+scope = ["docs/architecture.md", "quality/baseline.toml", "src/songmaker_cli/audio_paths.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/cron_schedule.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/music_worker.py", "tests/songmaker_cli/test_cleanup_voice_purge.py", "tests/songmaker_cli/test_cron_schedule.py", "tests/songmaker_cli/test_music_worker.py"]
+opened_commit = "d6d88ceab1e28146cfd3b00fe2aa8bd982c96d09"
+whole_reason = "One daily run that deletes expired voices with their files, its cron key, the one owner of the voice directory's path and the document line that names the run."
