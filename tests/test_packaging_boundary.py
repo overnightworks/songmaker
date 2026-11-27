@@ -452,7 +452,7 @@ def test_health_api_models_import_without_server_runtime() -> None:
         [
             sys.executable, "-c",
             "import sys; import songmaker_cli.api_models; "
-            "assert not {'arq', 'sqlalchemy'} & sys.modules.keys()",
+            "assert not {'sqlalchemy'} & sys.modules.keys()",
         ],
         env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
         capture_output=True,

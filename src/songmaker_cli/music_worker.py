@@ -66,7 +66,7 @@ class MusicWorker(WorkerBase):
     def _timeout_seconds(self, job_type: JobType) -> int:
         if job_type is JobType.LORA_TRAINING:
             return self._settings.lora_training_job_timeout
-        return self._settings.arq_job_timeout
+        return self._settings.worker_job_timeout
 
     async def _run_payload(self, job_id: str, payload: JobPayload | None) -> None:
         redis = self._owner_redis

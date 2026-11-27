@@ -41,13 +41,17 @@ class StoredMessageMigrationContract:
     new_column: str
     insert_row: Callable[[Engine, str, str, object], None]
     other_stored_keys: frozenset[str] = frozenset()
+    reworded_sentences: frozenset[str] = frozenset()
 
     def test_a_known_sentence_becomes_the_token_that_words_it_again(self, upgraded):
         _, engine = upgraded
         stored = stored_values(engine, self.table, self.new_column)
         for number, (sentence, key) in enumerate(self.migration.STORED_MESSAGE_KEYS.items()):
             assert stored[f"known-{number}"] == {"key": key, "values": {}}
-            assert text(SOURCE_LANGUAGE, key) == sentence
+            if sentence in self.reworded_sentences:
+                assert text(SOURCE_LANGUAGE, key) != sentence
+            else:
+                assert text(SOURCE_LANGUAGE, key) == sentence
 
     def test_upgrade_replaces_the_sentence_column_by_the_token_column(self, upgraded):
         _, engine = upgraded

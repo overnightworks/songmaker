@@ -320,7 +320,7 @@ def reconcile_crashed_loras(ctx: AppContext) -> int:
     """Mark LoRAs stuck in active statuses as FAILED when their job is terminal.
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
-    tick. If the ARQ worker crashed mid-training, the LoRA row stays in
+    tick. If the music worker crashed mid-training, the LoRA row stays in
     PREPROCESSING / TRAINING / EXPORTING even though no job is running. It
     delegates locked, per-LoRA database reconciliation and post-commit
     filesystem cleanup to the LoRA job owner after the lifecycle reaper has
