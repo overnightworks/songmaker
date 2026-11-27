@@ -1,0 +1,7 @@
+claim_id = "55f267ffad224ecfa85e8d449091e0aa"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "f190b9734cd05594ddfe07690b43c568622bc10a"
+branch = "claude/issue-3502-worker-base-test-stop-signal"
+scope = ["tests/conftest.py", "tests/songmaker_cli/test_worker_base.py"]
+opened_commit = "8bde790f0797313afe83a2c9a6b60a7376933be4"
