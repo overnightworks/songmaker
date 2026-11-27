@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import signal
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -379,7 +377,7 @@ def test_the_music_worker_has_a_body_for_every_cron() -> None:
 
 
 def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
-    redis_url, readiness_file, stop_signal_handlers,
+    redis_url, readiness_file, send_stop_signal,
 ) -> None:
     runs: list[str] = []
 
@@ -399,20 +397,23 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
 
     window = Window()
 
-    async def run_until_every_cron_ran_then_stop() -> None:
+    async def run_until_every_cron_ran_then_stop() -> bool:
         redis = create_async_redis(redis_url)
         try:
             async with window.observing(redis):
                 running = asyncio.create_task(worker.run())
                 async with asyncio.timeout(RUN_WITHIN_SECONDS):
                     await until(lambda: len(runs) >= len(Cron))
-                    os.kill(os.getpid(), signal.SIGTERM)
+                    signal_reached_run = send_stop_signal(running)
                     await running
         finally:
             await redis.aclose()
+        return signal_reached_run
 
     with configured("restored-after-the-test"):
-        _run(run_until_every_cron_ran_then_stop())
+        signal_reached_run = _run(run_until_every_cron_ran_then_stop())
+
+    assert signal_reached_run
 
     once_each = dict.fromkeys(Cron, 1)
     ran = {cron: runs.count(cron.value) for cron in Cron}
