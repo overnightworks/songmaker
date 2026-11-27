@@ -432,12 +432,11 @@
 					{@render coverArt()}
 					{@render coverMeta()}
 					<!-- The docked panel has no transport of its own: the bar beside it
-						stays visible and keeps carrying seek, shuffle, prev/next and play. -->
-					{#if !isDocked}
-						{@render progress()}
-						{@render transportControls()}
-					{/if}
-					{@render judging?.()}
+						stays visible and keeps carrying seek, shuffle, prev/next and play.
+						The phone's card stands above the progress bar, the wide surfaces' below the transport. -->
+					{#if stacked}{@render judging?.()}{/if}
+					{#if !isDocked}{@render progress()}{@render transportControls()}{/if}
+					{#if !stacked}{@render judging?.()}{/if}
 				</section>
 
 				<section class="np-lyrics-col">
