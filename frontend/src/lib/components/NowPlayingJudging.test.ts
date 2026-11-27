@@ -31,7 +31,7 @@ afterEach(async () => {
 	vi.useRealTimers();
 });
 
-async function render(take: GenerationItem = generation()): Promise<void> {
+async function renderJudging(take: GenerationItem = generation()): Promise<void> {
 	target = document.createElement('div');
 	document.body.append(target);
 	props = reactiveProps({ generation: take, song: song() });
@@ -39,7 +39,7 @@ async function render(take: GenerationItem = generation()): Promise<void> {
 	await tick();
 }
 
-function slider(): HTMLInputElement {
+function ratingSlider(): HTMLInputElement {
 	const found = target.querySelector<HTMLInputElement>('input[type="range"]');
 	if (!found) throw new Error('Expected the rating slider');
 	return found;
@@ -51,7 +51,7 @@ function note(): HTMLTextAreaElement {
 	return found;
 }
 
-function type(text: string): void {
+function typeNote(text: string): void {
 	note().value = text;
 	note().dispatchEvent(new Event('input', { bubbles: true }));
 }
@@ -62,7 +62,7 @@ describe('NowPlayingJudging', () => {
 		{ name: 'Keep', field: 'is_kept', off: 'keep', on: 'unkeep', toggle: toggleKeep }
 	] as const)('$name flips the take it shows', async ({ field, off, on, toggle }) => {
 		const take = generation({ [field]: true });
-		await render(take);
+		await renderJudging(take);
 
 		queryButtonByLabel(target, words[`nowPlayingJudging.${on}`])?.click();
 
@@ -72,7 +72,7 @@ describe('NowPlayingJudging', () => {
 	});
 
 	it('opts its buttons into the frequent hitbox', async () => {
-		await render();
+		await renderJudging();
 
 		for (const button of target.querySelectorAll<HTMLElement>('button')) {
 			expect(button.dataset.hitbox).toBe('frequent');
@@ -80,35 +80,35 @@ describe('NowPlayingJudging', () => {
 	});
 
 	it('starts an unrated take at 50 and saves nothing yet', async () => {
-		await render(generation({ scores: null }));
+		await renderJudging(generation({ scores: null }));
 
-		expect(slider().value).toBe('50');
+		expect(ratingSlider().value).toBe('50');
 		expect(rate).not.toHaveBeenCalled();
 	});
 
 	it('shows the saved rating and note', async () => {
-		await render(generation({ scores: { user_rating: 82, user_notes: 'Warm bridge' } }));
+		await renderJudging(generation({ scores: { user_rating: 82, user_notes: 'Warm bridge' } }));
 
-		expect(slider().value).toBe('82');
+		expect(ratingSlider().value).toBe('82');
 		expect(note().value).toBe('Warm bridge');
 	});
 
 	it('saves the rating with the note when the slider is released, and not while dragging', async () => {
-		await render(generation({ scores: { user_rating: 50, user_notes: 'Warm bridge' } }));
+		await renderJudging(generation({ scores: { user_rating: 50, user_notes: 'Warm bridge' } }));
 
-		slider().value = '80';
-		slider().dispatchEvent(new Event('input', { bubbles: true }));
+		ratingSlider().value = '80';
+		ratingSlider().dispatchEvent(new Event('input', { bubbles: true }));
 		expect(rate).not.toHaveBeenCalled();
-		slider().dispatchEvent(new Event('change', { bubbles: true }));
+		ratingSlider().dispatchEvent(new Event('change', { bubbles: true }));
 
 		expect(rate).toHaveBeenCalledExactlyOnceWith('s1', 'g1', 80, 'Warm bridge');
 	});
 
 	it('saves the note after a pause in typing, not before', async () => {
-		await render(generation({ scores: { user_rating: 70, user_notes: '' } }));
+		await renderJudging(generation({ scores: { user_rating: 70, user_notes: '' } }));
 
-		type('Loved');
-		type('Loved the bridge');
+		typeNote('Loved');
+		typeNote('Loved the bridge');
 		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS - 1);
 		expect(rate).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(1);
@@ -117,18 +117,18 @@ describe('NowPlayingJudging', () => {
 	});
 
 	it('saves an unrated take with a note at the slider start', async () => {
-		await render(generation({ scores: null }));
+		await renderJudging(generation({ scores: null }));
 
-		type('Needs a second verse');
+		typeNote('Needs a second verse');
 		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS);
 
 		expect(rate).toHaveBeenCalledExactlyOnceWith('s1', 'g1', 50, 'Needs a second verse');
 	});
 
 	it('saves the note once when the field is left before the pause ends', async () => {
-		await render(generation({ scores: { user_rating: 70, user_notes: '' } }));
+		await renderJudging(generation({ scores: { user_rating: 70, user_notes: '' } }));
 
-		type('Loved it');
+		typeNote('Loved it');
 		note().dispatchEvent(new Event('blur'));
 		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS);
 
@@ -136,7 +136,7 @@ describe('NowPlayingJudging', () => {
 	});
 
 	it('saves nothing when the field is left unchanged', async () => {
-		await render(generation({ scores: { user_rating: 70, user_notes: 'Same' } }));
+		await renderJudging(generation({ scores: { user_rating: 70, user_notes: 'Same' } }));
 
 		note().dispatchEvent(new Event('blur'));
 		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS);
@@ -145,9 +145,9 @@ describe('NowPlayingJudging', () => {
 	});
 
 	it('keeps the typed note when the save does not come through', async () => {
-		await render(generation({ scores: { user_rating: 70, user_notes: '' } }));
+		await renderJudging(generation({ scores: { user_rating: 70, user_notes: '' } }));
 
-		type('Still mine');
+		typeNote('Still mine');
 		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS);
 		await tick();
 
@@ -155,13 +155,13 @@ describe('NowPlayingJudging', () => {
 	});
 
 	it('fills an untouched field when the saved scores arrive late, but not a typed one', async () => {
-		await render(generation({ scores: null }));
-		type('Typed first');
+		await renderJudging(generation({ scores: null }));
+		typeNote('Typed first');
 
 		props.generation = generation({ scores: { user_rating: 90, user_notes: 'From the server' } });
 		await tick();
 
-		expect(slider().value).toBe('90');
+		expect(ratingSlider().value).toBe('90');
 		expect(note().value).toBe('Typed first');
 	});
 });
