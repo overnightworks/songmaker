@@ -10,6 +10,7 @@ from typing import Final
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import ObjectDeletedError
 from webauth.ports import AuthenticatedUser
@@ -45,7 +46,6 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import get_arq_pool, is_scoring_worker_healthy
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     MODEL_AVAILABLE_MODES,
@@ -73,7 +73,7 @@ from songmaker_cli.db.queries.settings import list_active_models
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.job_payloads import GeneratePayload, ScorePayload
 from songmaker_cli.job_queue import JobQueue, publish_queue_wake
-from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
     is_visible_generation_failure,
@@ -83,7 +83,7 @@ from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.words import SOURCE_LANGUAGE, text
-from songmaker_cli.worker_liveness import WorkerLiveness, music_worker_liveness, read_music_roster
+from songmaker_cli.worker_liveness import WorkerLiveness, read_kind_roster, worker_kind_liveness
 
 log = logging.getLogger(__name__)
 
@@ -131,12 +131,11 @@ def _check_version_lora_ready(
     check_lora_ready_for_generation(session, params.user_lora_id, user)
 
 
-async def _has_online_acestep_worker(session: Session) -> bool:
+async def _has_online_acestep_worker(session: Session, redis: AsyncRedis) -> bool:
     from songmaker_cli.db.queries.workers import list_worker_identities
 
-    pool = get_arq_pool()
     for w in list_worker_identities(session):
-        if worker_is_online(await read_worker_state(pool, w.id)):
+        if worker_is_online(await read_worker_state(redis, w.id)):
             return True
     return False
 
@@ -302,7 +301,7 @@ async def api_generate_song(
             song_id=song_id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=None,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, kind_leases=ctx.kind_leases,
     )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -432,7 +431,7 @@ async def api_repaint_generation(
             song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=repaint_task,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, kind_leases=ctx.kind_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -501,7 +500,7 @@ async def api_cover_generation(
             song_id=song.id, version_id=version.id, count=req.count, user_id=user.id,
             seed=req.seed, target_model=req.model, task_params=cover_task,
         ),
-        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, kind_leases=ctx.kind_leases,
     )
     gen.wav_path = wav_name
     record_audit(
@@ -540,12 +539,12 @@ async def api_score_generation(
 
     # Before the row exists: once committed, the row is the queue entry and a live scoring
     # worker may claim it at once, so a refusal after the commit would fail a running job.
-    if not await is_scoring_worker_healthy():
+    if not await _worker_kind_is_up(ctx, WorkerLivenessSignal.SCORING):
         raise Refusal(503, "generationRefusal.workerNotRunning")
     job = await create_job_with_rate_limit(
         session, user, JobType.SCORE, take.song_id,
         payload=ScorePayload(gen_id=gen_id, scorers=req.scorers),
-        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, kind_leases=ctx.kind_leases,
     )
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
@@ -610,10 +609,10 @@ def api_unshare_generation(
     return StatusResponse()
 
 
-async def _music_worker_is_up(ctx: AppContext) -> bool:
-    """Whether the music signal is alive: a live lease holder, or a restart inside its grace."""
-    roster = await read_music_roster(ctx.music_leases)
-    return music_worker_liveness(ctx.redis, roster, now=utcnow()) is WorkerLiveness.ALIVE
+async def _worker_kind_is_up(ctx: AppContext, kind: WorkerLivenessSignal) -> bool:
+    """Whether the kind's signal is alive: a live lease holder, or a restart inside its grace."""
+    roster = await read_kind_roster(kind, ctx.kind_leases[kind])
+    return worker_kind_liveness(ctx.redis, kind, roster, now=utcnow()) is WorkerLiveness.ALIVE
 
 
 async def _capacity_shortfall(session: Session, ctx: AppContext) -> NoCapacityError | None:
@@ -621,9 +620,9 @@ async def _capacity_shortfall(session: Session, ctx: AppContext) -> NoCapacityEr
 
     It is read before the job's row exists: a committed row is claimable at once.
     """
-    if not await _music_worker_is_up(ctx):
+    if not await _worker_kind_is_up(ctx, WorkerLivenessSignal.MUSIC):
         return NoCapacityError(WORKER_NOT_RUNNING_DETAIL)
-    if not await _has_online_acestep_worker(session):
+    if not await _has_online_acestep_worker(session, ctx.async_redis):
         return NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
     return None
 

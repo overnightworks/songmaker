@@ -12,18 +12,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from redis import Redis
 from redis.exceptions import RedisError
 from tandem import Client, Hold, Leases, LeaseState, Liveness, Roster, StoreError
 
 from songmaker_cli.acestep_state import decode_redis_text, worker_is_online, worker_state_key
-from songmaker_cli.constants import (
-    ARQ_SCORING_HEALTH_KEY,
-    REDIS_KEY_PREFIX,
-    WORKER_LAST_ALIVE_TTL_SECONDS,
-)
+from songmaker_cli.constants import REDIS_KEY_PREFIX, WORKER_LAST_ALIVE_TTL_SECONDS
 from songmaker_cli.job_timing import (
     OWNER_LAPSE_CLAIM_SECONDS,
     OWNER_LEASE_REFRESH_SECONDS,
@@ -37,7 +33,6 @@ log = logging.getLogger(__name__)
 
 _PROCESS_STARTED_AT = utcnow()
 OWNER_LEASE_FAMILY = "owner"
-MUSIC_WORKER_KIND = "music"
 PID_ONE_STAT_FILE = Path("/proc/1/stat")
 _START_TICKS_FIELD = 22
 _FIELDS_BEFORE_COMMAND_END = 2
@@ -54,8 +49,20 @@ def _last_alive_key(signal: str) -> str:
 
 
 ACESTEP_LAST_ALIVE_KEY = _last_alive_key("acestep")
-MUSIC_LAST_ALIVE_KEY = _last_alive_key("music")
-SCORING_LAST_ALIVE_KEY = _last_alive_key("scoring")
+
+
+class WorkerKind(NamedTuple):
+    """What a kind of worker that holds a lease in its own family persists in Redis."""
+
+    lease_family: str
+    last_alive_key: str
+
+
+WORKER_KINDS: Final[Mapping[WorkerLivenessSignal, WorkerKind]] = {
+    WorkerLivenessSignal.MUSIC: WorkerKind("music-worker", _last_alive_key("music")),
+    WorkerLivenessSignal.SCORING: WorkerKind("scoring-worker", _last_alive_key("scoring")),
+}
+"""The one table of worker kinds. A signal without a row has no worker of its own."""
 
 
 def _leases(redis: Client, family: str) -> Leases:
@@ -77,22 +84,41 @@ def owner_leases(redis: Client) -> Leases:
     return _leases(redis, OWNER_LEASE_FAMILY)
 
 
-def worker_kind_leases(redis: Client, kind: str) -> Leases:
+def worker_kind_leases(redis: Client, kind: WorkerLivenessSignal) -> Leases:
     """The leases of the workers of one kind, held by no web process.
 
     The owner family holds the ids of web processes too, so its roster cannot say that a worker
-    of this kind lives; this family's roster can.
+    of this kind lives; this family's roster can. A signal without a row in ``WORKER_KINDS``
+    raises ``KeyError``.
     """
-    return _leases(redis, f"{kind}-worker")
+    return _leases(redis, WORKER_KINDS[kind].lease_family)
 
 
-async def read_music_roster(leases: Leases) -> Roster | None:
-    """The live music workers, or none when Redis cannot be read."""
+def every_worker_kind_leases(redis: Client) -> dict[WorkerLivenessSignal, Leases]:
+    """The leases of every worker kind, by kind."""
+    return {kind: worker_kind_leases(redis, kind) for kind in WORKER_KINDS}
+
+
+async def read_kind_roster(kind: WorkerLivenessSignal, leases: Leases) -> Roster | None:
+    """The live workers of one kind, or none when Redis cannot be read."""
     try:
         return await leases.live()
     except StoreError:
-        log.warning("Could not read the music worker roster", exc_info=True)
+        log.warning("Could not read the %s worker roster", kind, exc_info=True)
         return None
+
+
+async def read_kind_rosters(
+    kind_leases: Mapping[WorkerLivenessSignal, Leases],
+) -> dict[WorkerLivenessSignal, Roster | None]:
+    """The roster of every kind in ``kind_leases``; none for a kind whose read failed."""
+    return {kind: await read_kind_roster(kind, leases) for kind, leases in kind_leases.items()}
+
+
+async def kind_has_a_live_holder(kind: WorkerLivenessSignal, leases: Leases) -> bool:
+    """Whether a worker of ``kind`` holds a live lease in ``leases``; a failed read says no."""
+    roster = await read_kind_roster(kind, leases)
+    return roster is not None and bool(roster.holders)
 
 
 class JobOwnerStamp(NamedTuple):
@@ -226,7 +252,7 @@ def pid_one_start_ticks(stat_file: Path = PID_ONE_STAT_FILE) -> str:
 
 def write_readiness_file(readiness_file: Path, owner_id: str, start_ticks: str) -> None:
     """Record this start's owner id and PID 1's start ticks in one atomic write."""
-    pending = readiness_file.with_name(readiness_file.name + ".pending")
+    pending = readiness_file.with_name(f"{readiness_file.name}.{os.getpid()}.pending")
     pending.write_text(f"{owner_id} {start_ticks}")
     os.replace(pending, readiness_file)
 
@@ -319,64 +345,46 @@ def acestep_worker_liveness(
     )
 
 
-def arq_worker_liveness(
-    redis: Any,
-    *,
-    health_key: str,
-    last_alive_key: str,
-    signal: WorkerLivenessSignal,
-    now: datetime,
+def worker_kind_liveness(
+    redis: Redis, kind: WorkerLivenessSignal, roster: Roster | None, *, now: datetime,
 ) -> WorkerLiveness:
-    """Read an ARQ health signal and its durable last-alive observation."""
-    try:
-        signal_is_alive = bool(redis.exists(health_key))
-    except RedisError:
-        log.warning("Could not read arq worker liveness", exc_info=True)
-        return WorkerLiveness.UNKNOWN
-    if signal_is_alive:
-        _record_alive(redis, last_alive_key, aware_timestamp(now))
-        return WorkerLiveness.ALIVE
-    return _missing_signal_liveness(redis, last_alive_key, signal, aware_timestamp(now))
-
-
-def music_worker_liveness(
-    redis: Redis, roster: Roster | None, *, now: datetime,
-) -> WorkerLiveness:
-    """Read the music workers' roster and fall back to their durable observation.
+    """Read the roster of one worker kind and fall back to its durable observation.
 
     A roster that cannot be read, and an empty one Redis may have lost with a restart, are
     UNKNOWN; an empty roster that is complete follows the restart grace.
     """
     if roster is None:
         return WorkerLiveness.UNKNOWN
+    last_alive_key = WORKER_KINDS[kind].last_alive_key
     if roster.holders:
-        _record_alive(redis, MUSIC_LAST_ALIVE_KEY, aware_timestamp(now))
+        _record_alive(redis, last_alive_key, aware_timestamp(now))
         return WorkerLiveness.ALIVE
     if not roster.settled:
         return WorkerLiveness.UNKNOWN
-    return _missing_signal_liveness(
-        redis, MUSIC_LAST_ALIVE_KEY, WorkerLivenessSignal.MUSIC, aware_timestamp(now),
-    )
+    return _missing_signal_liveness(redis, last_alive_key, kind, aware_timestamp(now))
 
 
 def read_worker_liveness(
     redis: Any,
     acestep_worker_ids: Iterable[str],
     *,
-    music_roster: Roster | None,
+    rosters: Mapping[WorkerLivenessSignal, Roster | None],
     now: datetime | None = None,
 ) -> dict[JobType, WorkerLiveness]:
     """Read each execution signal without taking ownership of database access.
 
-    The async callers read the music roster first (``read_music_roster``) and pass it in.
+    The async callers read the rosters first (``read_kind_rosters``) and pass them in; a kind
+    without a roster reads like one that could not be read.
     """
     observed_at = aware_timestamp(now or utcnow())
     return worker_liveness_by_job_type(
         acestep=acestep_worker_liveness(redis, acestep_worker_ids, now=observed_at),
-        music=music_worker_liveness(redis, music_roster, now=observed_at),
-        scoring=arq_worker_liveness(
-            redis, health_key=ARQ_SCORING_HEALTH_KEY, last_alive_key=SCORING_LAST_ALIVE_KEY,
-            signal=WorkerLivenessSignal.SCORING,
+        music=worker_kind_liveness(
+            redis, WorkerLivenessSignal.MUSIC, rosters.get(WorkerLivenessSignal.MUSIC),
+            now=observed_at,
+        ),
+        scoring=worker_kind_liveness(
+            redis, WorkerLivenessSignal.SCORING, rosters.get(WorkerLivenessSignal.SCORING),
             now=observed_at,
         ),
     )

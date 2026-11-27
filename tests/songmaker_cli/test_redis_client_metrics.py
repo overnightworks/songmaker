@@ -8,15 +8,17 @@ from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
-from support.object_store import an_object_store
 from support.redis_proxy import redis_proxy
-from support.web_app import BUILT_SHELL, TEST_SECRET, make_fake_async_redis, web_client
+from support.web_app import (
+    BUILT_SHELL,
+    make_app_context,
+    web_client,
+)
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import (
     RedisHttpMetrics,
-    build_arq_redis_settings,
     create_async_redis,
     create_redis,
     redis_health,
@@ -45,19 +47,6 @@ def test_the_async_client_replays_a_command_whose_reply_the_line_lost(redis_url:
                 await client.aclose()
 
         assert asyncio.run(read_after_a_lost_reply()) == b"value"
-
-
-def test_the_sync_client_and_arq_settings_connect_to_the_same_url() -> None:
-    url = "redis://cache.internal:6391/4"
-
-    client_kwargs = create_redis(url).connection_pool.connection_kwargs
-    arq_settings = build_arq_redis_settings(url)
-
-    assert (client_kwargs["host"], client_kwargs["port"], client_kwargs["db"]) == (
-        arq_settings.host,
-        arq_settings.port,
-        arq_settings.database,
-    )
 
 
 def test_redis_health_returns_true(fake_redis) -> None:
@@ -123,31 +112,23 @@ def _make_redis_ctx(tmp_path: Path, factory, fake_redis) -> tuple[AppContext, Pa
             username="admin", role="admin",
         ))
         session.commit()
-    ctx = AppContext(
-        object_store=an_object_store(),
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=fake_redis, async_redis=make_fake_async_redis(),
-    )
+    ctx = make_app_context(db=factory, audio_dir=audio_dir, data_dir=data_dir, redis=fake_redis)
     return ctx, audio_dir, data_dir, project_root
 
 
 def test_health_reports_redis_ok(
-    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, fake_redis, monitoring_headers, pg_factory,
 ) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    with (
-        patch("songmaker_cli.arq_pool.is_music_worker_healthy", return_value=False),
-        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", return_value=False),
-        web_client(app) as client,
-    ):
+    with web_client(app) as client:
         resp = client.get("/health/details", headers=monitoring_headers)
     data = resp.json()
     assert data["redis"] == "ok"
 
 
 def test_health_reports_redis_error(
-    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, fake_redis, monitoring_headers, pg_factory,
 ) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -161,7 +142,7 @@ def test_health_reports_redis_error(
 
 
 def test_ip_rate_limit_middleware_uses_redis(
-    tmp_path: Path, fake_redis, mock_arq_pool, pg_factory,
+    tmp_path: Path, fake_redis, pg_factory,
 ) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -173,7 +154,7 @@ def test_ip_rate_limit_middleware_uses_redis(
         assert resp.status_code == 200
 
 
-def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory) -> None:
+def test_redis_rate_limit_fail_closed(tmp_path: Path, pg_factory) -> None:
     broken_redis = MagicMock()
     broken_redis.ping.return_value = True
     pipe_mock = MagicMock()
@@ -186,10 +167,8 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory)
             username="admin", role="admin",
         ))
         session.commit()
-    ctx = AppContext(
-        object_store=an_object_store(),
-        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=broken_redis, async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, redis=broken_redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={}, raise_server_exceptions=False)
@@ -199,7 +178,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory)
 
 
 def test_metrics_with_redis(
-    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers, pg_factory,
+    tmp_path: Path, fake_redis, monitoring_headers, pg_factory,
 ) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -213,7 +192,7 @@ def test_metrics_with_redis(
 
 
 def test_ip_rate_limit_middleware_writes_to_redis(
-    tmp_path: Path, fake_redis, mock_arq_pool, pg_factory,
+    tmp_path: Path, fake_redis, pg_factory,
 ) -> None:
     from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 

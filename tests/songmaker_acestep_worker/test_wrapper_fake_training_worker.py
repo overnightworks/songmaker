@@ -65,7 +65,7 @@ def _events(stream: str) -> list[tuple[str, dict[str, object]]]:
 
 
 def test_fake_worker_registers_with_the_internal_api(
-    tmp_path: Path, mock_arq_pool, pg_factory, internal_token: str,
+    tmp_path: Path, pg_factory, internal_token: str,
 ) -> None:
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",

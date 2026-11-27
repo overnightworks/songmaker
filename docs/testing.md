@@ -14,7 +14,7 @@ pytest tests/songmaker_cli/db --tb=short
 pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py
 # PostgreSQL and Redis tests — a disposable server of each per run, -n auto
 scripts/test_postgresql.sh tests/songmaker_cli/test_db_postgresql.py
-scripts/test_postgresql.sh tests/songmaker_cli/test_arq_codec.py
+scripts/test_postgresql.sh tests/songmaker_cli/test_acestep_state_redis.py
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
@@ -43,16 +43,16 @@ Coverage exclusions are intentionally narrower and identical in `.github/workflo
 CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` for files
 - A database test gets its worker's own PostgreSQL database, reset to its migrated state after the test (see [Database Tests](#database-tests))
-- `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
-- `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
-- Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
+- A test that needs a running worker arranges real leases on the app's fake asyncio Redis (`hold_a_worker_lease`) and a GPU worker's heartbeat there (`publish_worker_heartbeat`), never a patch of a liveness helper
+- The `_reset_settings_cache` autouse fixture clears `Settings` per-test state
+- Settings singletons are reset by fixtures; scorer model caches live in subprocesses
 - Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; the BPM, silence, and spectral scorers are measured because CI installs the `signal` extra (see `.github/workflows/coveragerc-ci.ini`)
 
 ### Database Tests
 
 Every database test runs on a real PostgreSQL; no test uses another database engine.
 
-**Running.** `scripts/test_postgresql.sh <files and pytest arguments>` starts a disposable container of Compose's PostgreSQL image, one of Compose's Redis image and one of Compose's Garage image, runs pytest against them and removes all three. Tests that need a Redis server (`tests/songmaker_cli/test_arq_codec.py`) run this way too: the script exports the Redis container's address as `TEST_REDIS_URL`, and `tests/support/redis_server.py` gives each xdist worker its own Redis database on it, flushed before every case; a run without `TEST_REDIS_URL`, or with more workers than the server has databases, fails every Redis test. The Garage container serves the object store tests (`tests/songmaker_cli/test_object_store.py`, the queue-stream cache and share tests): the script makes its bucket with `docker/scripts/make_garage_bucket.sh` and exports `TEST_S3_BUCKET` and the `AWS_*` variables the client reads; `tests/support/object_store.py` gives each case a key prefix of its own in the shared bucket, and the `backend-shard` jobs get the same store from platform's garage action. It needs Docker and `.venv`, refuses to start under high machine load, caps the run and the container's lifetime, and does not use `probe-run`. Its header owns the limits and their values.
+**Running.** `scripts/test_postgresql.sh <files and pytest arguments>` starts a disposable container of Compose's PostgreSQL image, one of Compose's Redis image and one of Compose's Garage image, runs pytest against them and removes all three. Tests that need a Redis server (`tests/songmaker_cli/test_acestep_state_redis.py`) run this way too: the script exports the Redis container's address as `TEST_REDIS_URL`, and `tests/support/redis_server.py` gives each xdist worker its own Redis database on it, flushed before every case; a run without `TEST_REDIS_URL`, or with more workers than the server has databases, fails every Redis test. The Garage container serves the object store tests (`tests/songmaker_cli/test_object_store.py`, the queue-stream cache and share tests): the script makes its bucket with `docker/scripts/make_garage_bucket.sh` and exports `TEST_S3_BUCKET` and the `AWS_*` variables the client reads; `tests/support/object_store.py` gives each case a key prefix of its own in the shared bucket, and the `backend-shard` jobs get the same store from platform's garage action. It needs Docker and `.venv`, refuses to start under high machine load, caps the run and the container's lifetime, and does not use `probe-run`. Its header owns the limits and their values.
 
 **Writing.** A test needs no marker: the case record (see CI PostgreSQL tests) decides from the fixture closure that it is a database test. Pick the fixture by what the test needs:
 - `pg_factory`: a session factory on this worker's migrated database; the fixture disposes its engine before the reset.

@@ -1,7 +1,7 @@
 """Real songmaker web and music-worker processes for tests that need more than one.
 
-A web process starts through the CLI `server` command and a music worker through the arq
-launcher, as a deployment does, each with its own data directory, one shared audio directory,
+A web process starts through the CLI `server` command and a music worker through its own
+entry point, as a deployment does, each with its own data directory, one shared audio directory,
 throwaway secrets, and the database and Redis the case owns; a web process also has its own
 port and worker id. Setting and variable names come from the settings classes. A case may add
 `StandIns`: a gateway origin, and an HTTPS issuer whose certificate the children trust through
@@ -43,11 +43,13 @@ from tandem.testing import settle_epoch
 
 from songmaker_acestep_worker.settings import WorkerSettings
 from songmaker_cli.constants import REDIS_KEY_PREFIX
+from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import Job
+from songmaker_cli.job_types import WorkerLivenessSignal
 from songmaker_cli.page_language import LANGUAGE_PLACEHOLDER
 from songmaker_cli.settings import Settings
-from songmaker_cli.worker_base import JOB_ENDED_EVENT
-from songmaker_cli.worker_liveness import owner_leases
+from songmaker_cli.worker_base import CRON_ENDED_EVENT, JOB_ENDED_EVENT
+from songmaker_cli.worker_liveness import owner_leases, worker_kind_leases
 
 T = TypeVar("T")
 
@@ -64,8 +66,8 @@ LOG_TAIL_BYTES: Final = 4000
 INHERITED_VARIABLES: Final = ("PATH", "HOME", "LANG", "VIRTUAL_ENV")
 INHERITED_PREFIXES: Final = ("COVERAGE_", "AWS_")
 TRUSTED_CERTIFICATES_VARIABLE: Final = "SSL_CERT_FILE"
-MUSIC_WORKER_SETTINGS: Final = "songmaker_cli.music_worker.MusicWorkerSettings"
-SCORING_WORKER_SETTINGS: Final = "songmaker_cli.scoring_worker.ScoringWorkerSettings"
+MUSIC_WORKER_COMMAND: Final = ["-m", "songmaker_cli.music_worker"]
+SCORING_WORKER_COMMAND: Final = ["-m", "songmaker_cli.scoring_worker"]
 
 
 def environment_name(settings_class: type[BaseSettings], field_name: str) -> str:
@@ -84,7 +86,7 @@ def die_with_parent(parent_pid: int) -> None:
         os.kill(os.getpid(), signal.SIGKILL)
 
 
-def _free_port() -> int:
+def free_port() -> int:
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
         probe.bind((LOOPBACK, 0))
         return probe.getsockname()[1]
@@ -146,7 +148,7 @@ class WebProcess(ChildProcess):
 
 @dataclass
 class WorkerProcess(ChildProcess):
-    """One running arq-hosted worker and the owner id its lease names."""
+    """One running worker and the owner id its lease names."""
 
     owner_id: str
 
@@ -200,7 +202,6 @@ class WebProcesses:
             environment_name(Settings, "oidc_issuer"): stand_ins.issuer_url,
             f"{prefix}__GATEWAY__ORIGIN": agent.gateway.origin,
             f"{prefix}__GATEWAY__KEY_FILE": str(agent.gateway.key_file),
-            f"{prefix}__API_GROUP": agent.api_group,
             TRUSTED_CERTIFICATES_VARIABLE: str(stand_ins.issuer_certificate),
         }
 
@@ -244,7 +245,7 @@ class WebProcesses:
     def start(self, name: str) -> WebProcess:
         """Start one web process and return it once `/health` answers."""
         worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
-        port = _free_port()
+        port = free_port()
         process, log, log_path = self._launch(
             name,
             [
@@ -264,19 +265,22 @@ class WebProcesses:
 
     def start_music_worker(self, name: str) -> WorkerProcess:
         """Start one music worker and return it once its lease names its owner id."""
-        return self._start_worker(name, MUSIC_WORKER_SETTINGS)
+        return self._start_worker(name, MUSIC_WORKER_COMMAND)
 
     def start_scoring_worker(self, name: str) -> WorkerProcess:
         """Start one scoring worker and return it once its lease names its owner id."""
-        return self._start_worker(name, SCORING_WORKER_SETTINGS)
+        return self._start_worker(name, SCORING_WORKER_COMMAND)
 
-    def _start_worker(self, name: str, settings_path: str) -> WorkerProcess:
+    def launch_worker(self, name: str, command: list[str]) -> WorkerProcess:
+        """Start a worker's `python <command>` and return it at once, ready or not."""
+        process, log, log_path = self._launch(name, command, environment={})
+        worker = WorkerProcess(name, process, log, log_path, owner_id="")
+        self._processes.append(worker)
+        return worker
+
+    def _start_worker(self, name: str, command: list[str]) -> WorkerProcess:
         def start(has_new_lease: Callable[[], bool]) -> WorkerProcess:
-            process, log, log_path = self._launch(
-                name, ["-m", "songmaker_cli.arq_worker", settings_path], environment={},
-            )
-            worker = WorkerProcess(name, process, log, log_path, owner_id="")
-            self._processes.append(worker)
+            worker = self.launch_worker(name, command)
             _wait_until_ready(worker, "hold an owner lease", has_new_lease)
             return worker
 
@@ -322,16 +326,27 @@ def poll_until(
     return True
 
 
-def times_run(workers: list[WorkerProcess], job_id: str) -> int:
-    """How many of the workers' ``arq_job.ended`` lines name the job: one per run."""
-    ended = (
+def _ended_lines(workers: list[WorkerProcess], event: str) -> list[dict]:
+    """The workers' lines of ``event``, parsed."""
+    entries = (
         json.loads(line)
         for worker in workers
         for line in worker.log_text().splitlines()
         if line.startswith("{")
     )
-    return sum(1 for entry in ended if entry.get("event") == JOB_ENDED_EVENT
-               and entry.get("job_id") == job_id)
+    return [entry for entry in entries if entry.get("event") == event]
+
+
+def times_run(workers: list[WorkerProcess], job_id: str) -> int:
+    """How many of the workers' ``queued_job.ended`` lines name the job: one per run."""
+    return sum(1 for entry in _ended_lines(workers, JOB_ENDED_EVENT)
+               if entry.get("job_id") == job_id)
+
+
+def times_cron_ran(workers: list[WorkerProcess], cron: Cron) -> int:
+    """How many of the workers' ``cron_job.ended`` lines name the cron: one per run."""
+    return sum(1 for entry in _ended_lines(workers, CRON_ENDED_EVENT)
+               if entry.get("job_function") == cron.value)
 
 
 def owners_of(factory, job_ids: list[str]) -> set[str | None]:
@@ -374,6 +389,16 @@ def leased_owner_ids(redis: Redis) -> set[str]:
         return set((await leases.live()).holders)
 
     return _on_the_owner_leases(redis, read_roster)
+
+
+def kind_lease_holders(redis: Redis, kind: WorkerLivenessSignal) -> set[str]:
+    """The holders of ``kind``'s lease family, as the production roster reads them."""
+
+    async def read_roster() -> set[str]:
+        async with _on_the_same_server(redis) as client:
+            return set((await worker_kind_leases(client, kind).live()).holders)
+
+    return asyncio.run(read_roster())
 
 
 def owner_lease_generation(redis: Redis, owner_id: str) -> str | None:

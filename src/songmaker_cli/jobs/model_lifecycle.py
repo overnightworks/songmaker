@@ -18,7 +18,6 @@ DOWNLOAD_LOCK_LOST_MESSAGE = "The download of '{mode}' lost its lock and stopped
 
 
 async def load_model_on_worker(
-    _ctx,
     job_id: str,
     worker_id: str,
     mode: str,
@@ -80,12 +79,12 @@ async def load_model_on_worker(
 
 
 async def download_model_on_worker(
-    ctx,
     job_id: str,
     mode: str,
     *,
     db_factory,
     owner: JobOwner,
+    redis,
 ) -> None:
     from songmaker_cli.acestep_state import (
         DownloadAlreadyRunning,
@@ -100,7 +99,6 @@ async def download_model_on_worker(
     if not _valid_download_mode(factory, job_id, mode, MODEL_CONFIG_PATHS):
         return
 
-    redis = ctx["redis"]
     try:
         async with single_flight_download(redis, mode, job_id):
             await _download_with_retries(factory, redis, job_id, mode)

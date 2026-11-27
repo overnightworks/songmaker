@@ -255,7 +255,7 @@ async def _prepare_chat_turn(
         session,
         user,
         JobType.CHAT,
-        redis=ctx.redis, owner_leases=ctx.owner_leases, music_leases=ctx.music_leases,
+        redis=ctx.redis, owner_leases=ctx.owner_leases, kind_leases=ctx.kind_leases,
         owner=ctx.owner,
     )
     _refuse_while_another_turn_runs(session, user)

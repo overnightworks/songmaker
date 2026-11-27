@@ -13,11 +13,10 @@ from fastapi.testclient import TestClient
 from logline import REQUEST_EVENT
 from logline.testing import configured
 from sqlalchemy.orm import Session
-from support.object_store import an_object_store
 from support.session_ids import a_session_id
 from support.web_app import (
     install_app_context,
-    make_fake_async_redis,
+    make_app_context,
     make_fake_redis,
     seed_user,
     web_client,
@@ -40,14 +39,13 @@ def _db(tmp_path: Path, pg_factory):
 
 
 def _build_auth_app(_db, tmp_path: Path, redis=None):
-    from songmaker_cli.app_context import AppContext, get_db_session
+    from songmaker_cli.app_context import get_db_session
 
     if redis is None:
         redis = make_fake_redis()
-    ctx = AppContext(
-        object_store=an_object_store(),
-        db=_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=_TEST_SECRET, redis=redis, async_redis=make_fake_async_redis(),
+    ctx = make_app_context(
+        db=_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", signing_key=_TEST_SECRET,
+        redis=redis,
     )
     app = FastAPI()
 

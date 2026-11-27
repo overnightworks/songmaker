@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final, cast
 
-from arq.connections import ArqRedis
+from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_acestep_engine.models import AceStepConfig
@@ -26,7 +26,6 @@ from songmaker_cli.api_models import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
-from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import audio_file_path, build_ace_config, resolve_model_mode
 from songmaker_cli.constants import (
     WORKER_SHARED_TMP_DIRNAME,
@@ -49,7 +48,7 @@ from songmaker_cli.generation_params import BaseGenerationParams, stored_config_
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import JobQueue, app_wake_channel, publish_queue_wake
-from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
+from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.messages import message
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
@@ -60,7 +59,7 @@ from songmaker_cli.scheduler import (
     WorkerHeld,
     WorkerTaskFailed,
 )
-from songmaker_cli.worker_liveness import JobOwner
+from songmaker_cli.worker_liveness import JobOwner, kind_has_a_live_holder, worker_kind_leases
 
 from ._runtime import (
     REFERENCE_AUDIO_NOT_FOUND,
@@ -632,7 +631,7 @@ def _create_auto_score_job(
 
 
 async def _auto_score_generation(
-    redis: ArqRedis,
+    redis: Redis,
     db_factory: sessionmaker[Session],
     gen_id: str,
     song_id: str,
@@ -650,12 +649,11 @@ async def _auto_score_generation(
     generation still has no score row, so ``lifecycle.py``'s throttled backfill loop picks it up
     once a worker comes back.
 
-    Health is checked via the passed-in ``redis`` connection, not the
-    process-singleton pool ``is_scoring_worker_healthy()`` defaults to —
-    this runs inside the music worker process, which never calls
-    ``init_arq_pool()``.
+    The scoring kind's leases are read through the passed-in ``redis`` connection.
     """
-    if not await is_scoring_worker_healthy(redis):
+    if not await kind_has_a_live_holder(
+        WorkerLivenessSignal.SCORING, worker_kind_leases(redis, WorkerLivenessSignal.SCORING),
+    ):
         log.warning("Scoring worker not running; generation %s is left to the backfill", gen_id)
         return
     try:
@@ -782,7 +780,7 @@ async def run_generation_job(
     audio_dir: Path,
     data_dir: Path,
     owner: JobOwner,
-    redis: ArqRedis,
+    redis: Redis,
     seed: int | None = None,
     task_params: RepaintTaskParams | CoverTaskParams | None = None,
 ) -> None:
@@ -854,7 +852,7 @@ async def run_generation_job(
 
 async def _admit_generation_worker_or_requeue(
     request: GenerationJobRequest,
-    redis: ArqRedis,
+    redis: Redis,
     db_factory: sessionmaker[Session],
 ):
     if _job_is_terminal(db_factory, request.job_id):
@@ -938,7 +936,7 @@ def _remove_temporary_generation_audio(paths: list[str]) -> None:
 
 async def _generate_variants(
     admitted_worker,
-    redis: ArqRedis,
+    redis: Redis,
     db_factory: sessionmaker[Session],
     request: GenerationJobRequest,
     ctx: GenerationContext,

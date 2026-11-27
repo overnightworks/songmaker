@@ -7,9 +7,9 @@ import logging
 from typing import Final
 
 import httpx
-from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
+from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
@@ -38,7 +38,6 @@ from songmaker_cli.api_models import (
     WorkerPoolResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.auth_dependencies import (
     require_admin,
 )
@@ -125,14 +124,14 @@ async def _post_to_worker(
 @router.get("/workers", openapi_extra=exclude_route(Exclusion.ADMIN))
 async def list_workers_endpoint(
     db: Session = Depends(get_db_session),
-    pool: ArqRedis = Depends(get_arq_pool_dep),
+    ctx: AppContext = Depends(get_app_context),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> WorkerPoolResponse:
     workers = list_worker_identities(db)
     infos: list[WorkerInfo] = []
     for w in workers:
-        state = await read_worker_state(pool, w.id)
-        queue_depth = await read_queue_depth(pool, w.id)
+        state = await read_worker_state(ctx.async_redis, w.id)
+        queue_depth = await read_queue_depth(ctx.async_redis, w.id)
         parsed_state = _state_from_dict(state, queue_depth, worker_id=w.id)
         infos.append(
             WorkerInfo(
@@ -147,21 +146,21 @@ async def list_workers_endpoint(
 @router.get("/registry", openapi_extra=exclude_route(Exclusion.ADMIN))
 async def get_registry_endpoint(
     db: Session = Depends(get_db_session),
-    pool: ArqRedis = Depends(get_arq_pool_dep),
+    ctx: AppContext = Depends(get_app_context),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> RegistryResponse:
     workers = list_worker_identities(db)
-    states = await _registry_worker_states(pool, workers)
+    states = await _registry_worker_states(ctx.async_redis, workers)
     return RegistryResponse(models=_registry_models(states))
 
 
 async def _registry_worker_states(
-    pool: ArqRedis,
+    redis: AsyncRedis,
     workers: list,
 ) -> dict[str, WorkerEphemeralState | None]:
     return {
         worker.id: _state_from_dict(
-            await read_worker_state(pool, worker.id), worker_id=worker.id,
+            await read_worker_state(redis, worker.id), worker_id=worker.id,
         )
         for worker in workers
     }
@@ -362,7 +361,6 @@ async def download_model_endpoint(
     mode: str,
     admin: AuthenticatedUser = Depends(require_admin),
     db: Session = Depends(get_db_session),
-    pool: ArqRedis = Depends(get_arq_pool_dep),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     from songmaker_cli.db.queries.jobs import (
@@ -375,7 +373,7 @@ async def download_model_endpoint(
     workers = list_worker_identities(db)
     online_states: dict[str, dict | None] = {}
     for w in workers:
-        online_states[w.id] = await read_worker_state(pool, w.id)
+        online_states[w.id] = await read_worker_state(ctx.async_redis, w.id)
 
     if not any(worker_is_online(state) for state in online_states.values()):
         raise Refusal(503, "adminRefusal.noOnlineWorkers")
@@ -387,7 +385,7 @@ async def download_model_endpoint(
     if mode in downloaded_union:
         raise Refusal(409, "adminRefusal.alreadyDownloaded", mode=mode)
 
-    in_progress = await read_download_in_progress(pool, mode)
+    in_progress = await read_download_in_progress(ctx.async_redis, mode)
     if in_progress is not None:
         raise Refusal(409, "adminRefusal.alreadyDownloading", mode=mode, jobId=in_progress)
 

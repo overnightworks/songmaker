@@ -1,4 +1,4 @@
-"""Behavioural test for scripts/arq_healthcheck.py, driven as the compose healthcheck runs it."""
+"""Behavioural test for the worker readiness probe, driven as the compose healthchecks run it."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "arq_healthcheck.py"
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "worker_readiness.py"
 
 
-def test_the_healthcheck_fails_naming_redis_url_when_it_is_unset() -> None:
+def test_the_probe_fails_naming_redis_url_when_it_is_unset() -> None:
     environment = {key: value for key, value in os.environ.items() if key != "REDIS_URL"}
 
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "music"],
+        [sys.executable, str(SCRIPT)],
         env=environment,
         capture_output=True,
         text=True,

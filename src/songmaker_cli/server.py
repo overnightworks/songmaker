@@ -89,7 +89,7 @@ from songmaker_cli.request_policies import (
 )
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, RealmSettings, Settings, get_settings
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.worker_liveness import keep_owner_lease, read_music_roster
+from songmaker_cli.worker_liveness import keep_owner_lease, read_kind_rosters
 
 WEB_SERVICE_NAME = "songmaker-web"
 
@@ -149,7 +149,6 @@ def _start_background_loops(
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries.auth import delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
@@ -165,12 +164,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     await fail_jobs_of_dead_owners(ctx)
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
-    reap_stale_jobs(ctx, music_roster=await read_music_roster(ctx.music_leases))
+    reap_stale_jobs(ctx, rosters=await read_kind_rosters(ctx.kind_leases))
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-
-    await init_arq_pool()
-    log.info("arq pool connected")
 
     app.state.startup_time = utcnow()
     try:
@@ -189,8 +185,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
     finally:
         await ctx.slot_releases.drain()
-        await close_arq_pool()
         await ctx.async_redis.aclose()
+        await ctx.wake_redis.aclose()
 
 
 def audio_path_rejected_handler(
@@ -355,7 +351,7 @@ def create_app(
     from songmaker_cli.redis_client import RedisHttpMetrics
 
     settings = get_settings()
-    realm = RealmSettings()
+    realm = app.state.realm = RealmSettings()
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     auth = build_web_auth(ctx, settings, realm, script_hashes, issuer_calls, wall_clock)
     app.state.web_auth = auth
@@ -437,6 +433,7 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
         async_redis=create_async_redis(settings.redis_url),
+        wake_redis=create_async_redis(settings.redis_url, follows_wakes=True),
         object_store=object_store,
     )
 
@@ -483,7 +480,7 @@ def run_server(
     app = create_app(audio_dir, data_dir, project_root)
     from songmaker_cli.agent.backend import compose_agent_backend
 
-    compose_agent_backend(app, settings)
+    compose_agent_backend(app, settings, app.state.realm)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
 

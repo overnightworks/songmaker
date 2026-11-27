@@ -6,11 +6,19 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import hold_a_music_lease, make_test_app, seed_user
+from support.refused_download import hold_a_download
+from support.web_app import (
+    hold_a_worker_lease,
+    make_test_app,
+    publish_worker_heartbeat,
+    seed_user,
+)
 
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.queries.loras import create_user_lora
+
+ONLINE_WORKER_HEARTBEAT = {"gpu_healthy": True, "available_modes": []}
 
 
 @pytest.fixture
@@ -113,39 +121,13 @@ def _seed_worker(client: TestClient, worker_id: str, **kwargs) -> None:
         session.commit()
 
 
-class _InMemoryAsyncRedis:
-    def __init__(self) -> None:
-        self._store: dict[str, str] = {}
-
-    async def get(self, key: str):
-        return self._store.get(key)
-
-    async def set(self, key: str, value, ex: int | None = None) -> None:
-        self._store[key] = value
-
-    async def incr(self, key: str) -> int:
-        cur = int(self._store.get(key, 0)) + 1
-        self._store[key] = str(cur)
-        return cur
-
-    async def decr(self, key: str) -> int:
-        cur = int(self._store.get(key, 0)) - 1
-        self._store[key] = str(cur)
-        return cur
-
-
-def _override_pool(client: TestClient, pool) -> None:
-    from songmaker_cli.arq_pool import get_arq_pool_dep
-    client.app.dependency_overrides[get_arq_pool_dep] = lambda: pool
-
-
-def _make_fake_pool() -> _InMemoryAsyncRedis:
-    return _InMemoryAsyncRedis()
+def _worker_redis(client: TestClient):
+    """The app's own asyncio Redis, where the GPU workers' heartbeats are read."""
+    return client.app.state.ctx.async_redis
 
 
 def test_list_workers_empty(client: TestClient) -> None:
     _login_as_admin(client)
-    _override_pool(client, _make_fake_pool())
     resp = client.get("/api/admin/workers")
     assert resp.status_code == 200
     assert resp.json() == {"workers": []}
@@ -158,7 +140,7 @@ def test_list_workers_online(client: TestClient) -> None:
 
     _login_as_admin(client)
     _seed_worker(client, "acestep-worker-0")
-    pool = _make_fake_pool()
+    pool = _worker_redis(client)
     state = {
         "loaded": [{"mode": "sft", "size_gb": 6.0}],
         "target_loading": None,
@@ -170,8 +152,7 @@ def test_list_workers_online(client: TestClient) -> None:
         "last_heartbeat_at": "2026-04-07T12:00:00+00:00",
         "gpu_healthy": True,
     }
-    pool._store[worker_state_key("acestep-worker-0")] = json.dumps(state)
-    _override_pool(client, pool)
+    pool.store[worker_state_key("acestep-worker-0")] = json.dumps(state)
 
     resp = client.get("/api/admin/workers")
     assert resp.status_code == 200
@@ -193,8 +174,8 @@ def test_list_workers_propagates_loading_last_log_line(client: TestClient) -> No
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps(
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("w1")] = json.dumps(
         {
             "loaded": [],
             "target_loading": "xl-turbo",
@@ -202,7 +183,6 @@ def test_list_workers_propagates_loading_last_log_line(client: TestClient) -> No
             "gpu_healthy": True,
         },
     )
-    _override_pool(client, pool)
 
     resp = client.get("/api/admin/workers")
     state = resp.json()["workers"][0]["state"]
@@ -230,7 +210,7 @@ def test_list_workers_last_error_transport(
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
+    pool = _worker_redis(client)
     # The payload provider needs TTL; FakeRedis supplies the real Redis contract.
     import fakeredis.aioredis
 
@@ -260,7 +240,6 @@ def test_list_workers_last_error_transport(
         await pool.set(worker_state_key("w1"), await redis.get(worker_state_key("w1")))
 
     asyncio.run(publish())
-    _override_pool(client, pool)
     response = client.get("/api/admin/workers")
     assert response.status_code == 200
     state = response.json()["workers"][0]["state"]
@@ -285,29 +264,25 @@ def test_last_error_worker_list_requires_admin(client: TestClient, role: str) ->
     elif role == "user":
         _login_as_user(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
+    pool = _worker_redis(client)
     sentinel = "PRIVATE-WORKER-DIAGNOSTIC"
     asyncio.run(pool.set(worker_state_key("w1"), json.dumps({
         "loaded": [], "gpu_healthy": True,
         "last_error": sentinel, "last_error_at": "2026-10-18T10:00:00+00:00",
     })))
-    _override_pool(client, pool)
     response = client.get("/api/admin/workers")
     assert response.status_code == {"anonymous": 401, "user": 403, "admin": 200}[role]
     assert (sentinel in response.text) is (role == "admin")
 
 
 def test_last_error_stays_out_of_public_and_musician_paths(
-    client: TestClient, mock_arq_pool, monitoring_headers,
+    client: TestClient, monitoring_headers,
 ) -> None:
     """S15-06: Last error stays out of public and musician paths."""
-    import asyncio
     import json
-    from unittest.mock import AsyncMock
 
     from songmaker_acestep_worker.clock import utcnow
     from songmaker_cli.acestep_state import worker_state_key
-    from songmaker_cli.arq_pool import init_arq_pool
     from songmaker_cli.db.queries.albums import create_album
     from songmaker_cli.db.queries.auth import get_user_by_username
     from songmaker_cli.db.queries.songs import create_song
@@ -319,18 +294,8 @@ def test_last_error_stays_out_of_public_and_musician_paths(
         "loaded": [], "gpu_healthy": True, "last_error": sentinel,
         "last_error_at": "2026-10-18T10:00:00+00:00",
     })
-    redis = _make_fake_pool()
-
-    async def prepare_pool():
-        pool = await init_arq_pool()
-        pool.get = AsyncMock(side_effect=redis.get)
-        pool.set = AsyncMock(side_effect=redis.set)
-        pool.exists = AsyncMock(return_value=True)
-        pool.zcard = AsyncMock(return_value=0)
-        await pool.set(worker_state_key("w1"), payload)
-
-    asyncio.run(prepare_pool())
-    hold_a_music_lease(client.app.state.ctx.async_redis)
+    publish_worker_heartbeat(client, "w1", json.loads(payload))
+    hold_a_worker_lease(client.app.state.ctx.async_redis)
     client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health/details", "/metrics"):
@@ -363,11 +328,10 @@ def test_list_workers_loading(client: TestClient) -> None:
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps(
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("w1")] = json.dumps(
         {"loaded": [], "target_loading": "xl-sft", "gpu_healthy": True},
     )
-    _override_pool(client, pool)
 
     resp = client.get("/api/admin/workers")
     assert resp.json()["workers"][0]["status"] == "loading"
@@ -376,7 +340,6 @@ def test_list_workers_loading(client: TestClient) -> None:
 def test_list_workers_offline_when_redis_missing(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_fake_pool())
     resp = client.get("/api/admin/workers")
     data = resp.json()
     assert data["workers"][0]["status"] == "offline"
@@ -394,11 +357,10 @@ def test_list_workers_offline_when_gpu_broken(client: TestClient) -> None:
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps(
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("w1")] = json.dumps(
         {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": False},
     )
-    _override_pool(client, pool)
 
     resp = client.get("/api/admin/workers")
     data = resp.json()
@@ -412,10 +374,9 @@ def test_list_workers_includes_queue_depth(client: TestClient) -> None:
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps({"loaded": [{"mode": "sft", "size_gb": 0}]})
-    pool._store[queue_depth_key("w1")] = "3"
-    _override_pool(client, pool)
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("w1")] = json.dumps({"loaded": [{"mode": "sft", "size_gb": 0}]})
+    pool.store[queue_depth_key("w1")] = "3"
 
     resp = client.get("/api/admin/workers")
     assert resp.json()["workers"][0]["state"]["queue_depth"] == 3
@@ -428,11 +389,10 @@ def test_list_workers_ignores_invalid_heartbeat(client: TestClient, caplog) -> N
 
     _login_as_admin(client)
     _seed_worker(client, "renamed-field")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("renamed-field")] = json.dumps(
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("renamed-field")] = json.dumps(
         {"renamed_loaded": ["sft"], "gpu_healthy": True},
     )
-    _override_pool(client, pool)
 
     resp = client.get("/api/admin/workers")
 
@@ -455,20 +415,19 @@ def test_registry_union_across_workers(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
     _seed_worker(client, "w2")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps(
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("w1")] = json.dumps(
         {
             "loaded": [{"mode": "sft", "size_gb": 0}], "target_loading": None,
             "available_modes": ["sft"], "gpu_healthy": True,
         },
     )
-    pool._store[worker_state_key("w2")] = json.dumps(
+    pool.store[worker_state_key("w2")] = json.dumps(
         {
             "loaded": [], "target_loading": "turbo", "available_modes": ["turbo"],
             "gpu_healthy": True,
         },
     )
-    _override_pool(client, pool)
 
     resp = client.get("/api/admin/registry")
     assert resp.status_code == 200
@@ -491,14 +450,13 @@ def test_registry_unknown_availability_when_only_worker_gpu_broken(client: TestC
     from songmaker_cli.acestep_state import worker_state_key
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps(
+    pool = _worker_redis(client)
+    pool.store[worker_state_key("w1")] = json.dumps(
         {
             "loaded": [{"mode": "sft", "size_gb": 0}], "available_modes": ["sft"],
             "gpu_healthy": False,
         },
     )
-    _override_pool(client, pool)
 
     resp = client.get("/api/admin/registry")
     assert resp.status_code == 200
@@ -515,7 +473,7 @@ def test_registry_unknown_availability_when_no_worker_online(client: TestClient)
     # online to answer the question.
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": None}))
+    _publish_heartbeats(client, {"w1": None})
 
     resp = client.get("/api/admin/registry")
     assert resp.status_code == 200
@@ -789,30 +747,24 @@ def test_restart_worker_requires_admin(client: TestClient) -> None:
 # ── download_model_endpoint ─────────────────────────────────────────
 
 
-def _make_pool_with_state(
-    states: dict[str, dict | None], *, gpu_healthy: bool = True,
-) -> object:
+def _publish_heartbeats(
+    client: TestClient, states: dict[str, dict | None], *, gpu_healthy: bool = True,
+) -> None:
     """Defaults every present worker's heartbeat to a healthy GPU so the
     many download-endpoint tests unrelated to issue #367 don't need to know
     about it. A state dict that already carries "gpu_healthy" (e.g. to
     simulate a broken worker) is never overridden."""
-    import json
-
-    from songmaker_cli.acestep_state import worker_state_key
-
-    pool = _make_fake_pool()
-    for wid, state in states.items():
+    for worker_id, state in states.items():
         if state is not None:
-            payload = dict(state)
-            payload.setdefault("gpu_healthy", gpu_healthy)
-            pool._store[worker_state_key(wid)] = json.dumps(payload)
-    return pool
+            publish_worker_heartbeat(
+                client, worker_id, {"gpu_healthy": gpu_healthy, **state},
+            )
 
 
 def test_download_endpoint_unknown_mode(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+    _publish_heartbeats(client, {"w1": {"available_modes": []}})
     resp = client.post("/api/admin/registry/ghost/download")
     assert resp.status_code == 400
 
@@ -820,7 +772,7 @@ def test_download_endpoint_unknown_mode(client: TestClient) -> None:
 def test_download_endpoint_no_workers(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": None}))
+    _publish_heartbeats(client, {"w1": None})
     resp = client.post("/api/admin/registry/sft/download")
     assert resp.status_code == 503
 
@@ -832,10 +784,7 @@ def test_download_endpoint_no_workers_when_gpu_broken(client: TestClient) -> Non
     delayed-symptom pattern from issue #252."""
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(
-        client,
-        _make_pool_with_state({"w1": {"available_modes": [], "gpu_healthy": False}}),
-    )
+    _publish_heartbeats(client, {"w1": {"available_modes": [], "gpu_healthy": False}})
     resp = client.post("/api/admin/registry/sft/download")
     assert resp.status_code == 503
     assert "No online workers available to download" in resp.json()["detail"]
@@ -844,10 +793,7 @@ def test_download_endpoint_no_workers_when_gpu_broken(client: TestClient) -> Non
 def test_download_endpoint_already_downloaded(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(
-        client,
-        _make_pool_with_state({"w1": {"available_modes": ["sft", "turbo"]}}),
-    )
+    _publish_heartbeats(client, {"w1": {"available_modes": ["sft", "turbo"]}})
     resp = client.post("/api/admin/registry/sft/download")
     assert resp.status_code == 409
     assert "already downloaded" in resp.json()["detail"]
@@ -856,13 +802,10 @@ def test_download_endpoint_already_downloaded(client: TestClient) -> None:
 def test_download_endpoint_already_in_progress(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
-    from songmaker_cli.acestep_state import download_key
-
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    pool = _make_pool_with_state({"w1": {"available_modes": []}})
-    pool._store[download_key("xl-base")] = "previous-job-id"
-    _override_pool(client, pool)
+    publish_worker_heartbeat(client, "w1", ONLINE_WORKER_HEARTBEAT)
+    hold_a_download(_worker_redis(client), "xl-base", "previous-job-id")
 
     publish = AsyncMock()
     with patch.object(client.app.state.ctx.wake_channel, "publish", publish):
@@ -881,7 +824,7 @@ def test_download_endpoint_queues_job_and_wakes_the_music_queue(client: TestClie
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
-    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+    publish_worker_heartbeat(client, "w1", ONLINE_WORKER_HEARTBEAT)
 
     publish = AsyncMock()
     with patch.object(client.app.state.ctx.wake_channel, "publish", publish):

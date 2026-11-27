@@ -26,7 +26,6 @@ from agents.turn import FailureCode
 from agents.turn_events import AssistantTextEvent, FinalEvent
 from fastapi.testclient import TestClient
 from support.cowriter_gateway import (
-    API_GROUP,
     CowriterStack,
     agent_config,
     attach_cowriter_gateway,
@@ -35,6 +34,7 @@ from support.cowriter_gateway import (
     request_in_session,
     stops,
 )
+from support.realm import AI_GROUP
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
@@ -205,7 +205,7 @@ def _backend_without_key(world: World) -> GatewayBackend:
         gateway=ChatGateway(
             origin=world.stack.config.gateway.origin, key_file=world.tmp_path / "no-such-key",
         ),
-        api_group=API_GROUP,
+        api_group=AI_GROUP,
     )
     return GatewayBackend(config, tools=cowriter_hand_tools(world.factory), transport=None)
 
@@ -308,7 +308,7 @@ def test_a_spent_budget_reads_budget_spent_as_a_refusal_with_no_wait(world):
 
 @pytest.mark.parametrize(
     ("role", "groups"),
-    [("user", ("/apps/songmaker",)), ("guest", ("/apps/songmaker", API_GROUP))],
+    [("user", ("/apps/songmaker",)), ("guest", ("/apps/songmaker", AI_GROUP))],
     ids=["outside-the-api-group", "role-outside-the-agents-roles"],
 )
 def test_a_person_the_agent_is_not_enabled_for_is_refused_and_no_request_leaves(

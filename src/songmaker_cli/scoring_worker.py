@@ -1,119 +1,91 @@
 """Scoring worker — claims score jobs from their rows and runs them.
 
 Started as a separate process:
-    python -m songmaker_cli.arq_worker songmaker_cli.scoring_worker.ScoringWorkerSettings
+    python -m songmaker_cli.scoring_worker
 
-arq hosts the process (its health key says the worker lives) and carries the ``score``
-function for messages that web processes of the previous release still enqueue.
+The worker's lease in the ``scoring-worker`` family says it lives. The scorer subprocess exists
+before the first job is claimed and ends after the last one has.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
-from arq import func
-
-from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
-from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, SCORING_SERVICE_NAME
+from songmaker_cli.constants import SCORING_SERVICE_NAME, WORKER_READINESS_FILE
 from songmaker_cli.job_payloads import ScorePayload
 from songmaker_cli.job_queue import ClaimedJob, JobQueue
-from songmaker_cli.job_types import JobFunction
+from songmaker_cli.job_types import JobFunction, WorkerLivenessSignal
 from songmaker_cli.jobs import run_scoring_job
-from songmaker_cli.redis_client import build_arq_redis_settings
-from songmaker_cli.settings import get_settings
+from songmaker_cli.messages import message
+from songmaker_cli.scoring.subprocess_runner import ScorerProcess, set_scorer_process
 from songmaker_cli.worker_base import WorkerBase, logged_job
 
 log = logging.getLogger(__name__)
+
+TIMEOUT_ERROR_TYPE = "timeout"
 
 
 class ScoringWorker(WorkerBase):
     service_name = SCORING_SERVICE_NAME
     queue = JobQueue.SCORE
     job_types = queue.job_types
-    queue_name = ARQ_SCORING_QUEUE_NAME
+    lease_kind = WorkerLivenessSignal.SCORING
 
-    def __init__(self, settings=None) -> None:
-        super().__init__(settings)
-        # The one capacity of the process: the loop and the arq handler both take a place.
+    def __init__(
+        self, settings=None, *, scorer: ScorerProcess | None = None,
+        readiness_file: Path = WORKER_READINESS_FILE,
+    ) -> None:
+        super().__init__(settings, readiness_file=readiness_file)
         self._places = asyncio.Semaphore(self._settings.scoring_max_jobs)
+        self._scorer = ScorerProcess() if scorer is None else scorer
         self._run_logged = logged_job(
-            JobFunction.SCORE, self._run_claimed, status_of=self.job_status,
+            JobFunction.SCORE, self._run_payload, status_of=self.job_status,
         )
 
-    async def score(self, _ctx, job_id, gen_id, scorers):
-        """The arq message of a web process that still enqueues score jobs."""
-        async with self._places:
-            if not self.claim_job(job_id):
-                return
-            await self._score(job_id, gen_id, scorers)
-
     async def run_claimed(self, claimed: ClaimedJob) -> None:
-        await self._run_logged(None, claimed.job_id, claimed.payload)
+        """Run the claimed row within the job time limit.
 
-    async def _run_claimed(self, _ctx, job_id: str, payload) -> None:
+        The scorer thread of a job cut at the limit cannot be cancelled; its late result
+        writes nothing, because the row has ended.
+        """
+        try:
+            async with asyncio.timeout(self._settings.arq_job_timeout):
+                await self._run_logged(claimed.job_id, claimed.payload)
+        except TimeoutError:
+            log.error("Scoring job %s outlasted its time limit", claimed.job_id)
+            await asyncio.to_thread(
+                self.fail_job, claimed.job_id, message("jobFailure.tookTooLong"),
+                TIMEOUT_ERROR_TYPE,
+            )
+
+    async def _run_payload(self, job_id: str, payload) -> None:
         if not isinstance(payload, ScorePayload):
             await asyncio.to_thread(self.fail_job_without_payload, job_id)
             return
         scorers = None if payload.scorers is None else list(payload.scorers)
-        await self._score(job_id, payload.gen_id, scorers)
-
-    async def _score(self, job_id, gen_id, scorers) -> None:
         await asyncio.to_thread(
             run_scoring_job,
-            job_id, gen_id, scorers,
+            job_id, payload.gen_id, scorers,
             db_factory=self.get_db_factory(), audio_dir=self.audio_dir(),
             owner=self.owner, device=self._settings.scoring_device,
         )
 
-    async def on_startup(self, ctx) -> None:
-        from songmaker_cli.scoring.subprocess_runner import (
-            ScorerProcess,
-            set_scorer_process,
-        )
-
-        scorer = ScorerProcess()
-        set_scorer_process(scorer)
-
-        await super().on_startup(ctx)
-        self.start_serving(self.serve_queued_jobs())
+    async def start(self) -> None:
+        set_scorer_process(self._scorer)
+        await super().start()
         log.info("Scorer subprocess manager initialized")
 
-    async def on_shutdown(self, ctx) -> None:
-        from songmaker_cli.scoring.subprocess_runner import get_scorer_process
-
-        await self.stop_serving()
-
-        try:
-            get_scorer_process().shutdown()
-            log.info("Scorer subprocess shut down")
-        except RuntimeError:
-            pass
-
-        await super().on_shutdown(ctx)
+    async def stop(self) -> None:
+        await asyncio.to_thread(self._scorer.shutdown)
+        log.info("Scorer subprocess shut down")
+        await super().stop()
 
 
-_settings = get_settings()
-_scoring_worker = ScoringWorker(_settings)
+def main() -> None:
+    asyncio.run(ScoringWorker().run())
 
 
-class ScoringWorkerSettings:
-    functions = [
-        func(
-            logged_job(
-                JobFunction.SCORE, _scoring_worker.score, status_of=_scoring_worker.job_status,
-            ),
-            name=JobFunction.SCORE,
-        ),
-    ]
-    on_startup = _scoring_worker.on_startup
-    on_shutdown = _scoring_worker.on_shutdown
-    job_serializer = staticmethod(serialize_arq)
-    job_deserializer = staticmethod(deserialize_arq)
-    redis_settings = build_arq_redis_settings(_settings.redis_url, ride_out_outage=True)
-    queue_name = ScoringWorker.queue_name
-    max_jobs = _settings.scoring_max_jobs
-    job_timeout = _settings.arq_job_timeout
-    job_completion_wait = _settings.arq_drain_timeout
-    health_check_interval = ScoringWorker.health_check_interval
-    cron_jobs = []
+if __name__ == "__main__":
+    main()

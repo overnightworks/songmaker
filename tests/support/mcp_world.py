@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, NAME_BEARING_METHODS
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy.orm import sessionmaker
-from support.generation_job_world import worker_up
+from support.generation_job_world import register_online_gpu_worker, worker_up
 from support.mcp_tool_table import ALICE, BOB
 from support.realm import ADMIN_GROUP, AGENT_GROUP, LOGIN_GROUP, MCP_GROUP
 from support.reference_rows import a_reference
@@ -55,7 +55,6 @@ METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
 AGENT_ENVIRONMENT = {
     "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
-    "AGENT__API_GROUP": "/apps/songmaker/api",
 }
 MCP_CLIENT_ENVIRONMENT = {"REALM_MCP_CLIENT_ID": AGENTS_CLIENT, "REALM_MCP_SCOPE": MCP_SCOPE}
 MCP_ENVIRONMENT = {**MCP_CLIENT_ENVIRONMENT, "REALM_AGENT_GROUP": AGENT_GROUP}
@@ -235,6 +234,7 @@ def build_mcp_world(
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", str(generation_limit))
     mcp_world = McpWorld(make_token_world(tmp_path, factory=factory))
+    register_online_gpu_worker(factory)
     lifespans.enter_context(mcp_world.world.client)
     mcp_world.seed_people(alice_role=alice_role)
     return mcp_world
@@ -248,7 +248,7 @@ def worker_ready(client: TestClient) -> Iterator[None]:
 
 
 @pytest.fixture
-def lifespans(mock_arq_pool) -> Iterator[ExitStack]:
+def lifespans() -> Iterator[ExitStack]:
     """Owns the app lifespans a world enters, so each ends with its test."""
     with ExitStack() as stack:
         yield stack

@@ -19,9 +19,6 @@ src/songmaker_acestep_worker/wrapper.py :: ANN401 :: Dynamically typed expressio
 src/songmaker_acestep_worker/wrapper.py :: nested-any :: dict[str, Any] in `build_state_payload`
 src/songmaker_cli/acestep_state.py :: misc :: Incompatible types in "await" (actual type "Awaitable[str] | str", expected type "Awaitable[Any]")
 src/songmaker_cli/acestep_state.py :: nested-any :: dict[str, Any] in `read_worker_state`
-src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "cancel"
-src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "cancelling"
-src/songmaker_cli/acestep_state.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "uncancel"
 src/songmaker_cli/admin_api.py :: pydantic-orm :: "AdminUserLoraResponse" does not have from_attributes=True
 src/songmaker_cli/admin_api.py :: pydantic-orm :: "JobResponse" does not have from_attributes=True
 src/songmaker_cli/admin_api.py :: pydantic-orm :: "JobResponse" does not have from_attributes=True
@@ -106,7 +103,6 @@ src/songmaker_cli/api_models/songs.py :: pydantic-orm :: "GenerationResponse" do
 src/songmaker_cli/api_models/songs.py :: pydantic-orm :: "ReferenceResponse" does not have from_attributes=True
 src/songmaker_cli/api_models/songs.py :: pydantic-orm :: "SongSummaryResponse" does not have from_attributes=True
 src/songmaker_cli/api_models/songs.py :: union-attr :: Item "None" of "Rating | None" has no attribute "rating"
-src/songmaker_cli/arq_codec.py :: dict-item :: Unpacked dict entry 0 has incompatible type "object"; expected "SupportsKeysAndGetItem[str, str]"
 src/songmaker_cli/config.py :: arg-type :: Argument 1 to "AceStepConfig" has incompatible type "**dict[str, object]"; expected "bool"
 src/songmaker_cli/config.py :: arg-type :: Argument 1 to "AceStepConfig" has incompatible type "**dict[str, object]"; expected "float"
 src/songmaker_cli/config.py :: arg-type :: Argument 1 to "AceStepConfig" has incompatible type "**dict[str, object]"; expected "int | None"
@@ -222,10 +218,6 @@ src/songmaker_cli/memory_api.py :: pydantic-orm :: "MemoryScopeResponse" does no
 src/songmaker_cli/memory_api.py :: pydantic-orm :: "MemoryScopeResponse" does not have from_attributes=True
 src/songmaker_cli/memory_api.py :: pydantic-orm :: "MemoryScopeResponse" does not have from_attributes=True
 src/songmaker_cli/messages.py :: arg-type :: Argument 3 to "text" has incompatible type "**Mapping[str, str]"; expected "int | None"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[None]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
-src/songmaker_cli/music_worker.py :: arg-type :: Argument 1 to "cron" has incompatible type "Callable[..., Awaitable[int]]"; expected "str | WorkerCoroutine"
 src/songmaker_cli/playlist_api.py :: arg-type :: Argument 2 to "can_access_album" has incompatible type "AuthenticatedUser"; expected "Actor"
 src/songmaker_cli/playlist_api.py :: arg-type :: Argument 2 to "public_share_url" has incompatible type "str | None"; expected "str"
 src/songmaker_cli/playlist_api.py :: pydantic-orm :: "PlaylistDetailResponse" does not have from_attributes=True
@@ -249,10 +241,6 @@ src/songmaker_cli/refusals.py :: arg-type :: Argument 2 to "add_exception_handle
 src/songmaker_cli/resource_event_api.py :: arg-type :: Argument "cursor" to "ResourceEventStreamState" has incompatible type "int | None"; expected "int"
 src/songmaker_cli/resource_event_api.py :: arg-type :: Argument 1 to "has_replay_gap" has incompatible type "int | None"; expected "int"
 src/songmaker_cli/scheduler.py :: arg-type :: Argument 1 to "AceStepPhase" has incompatible type "Any | None"; expected "str"
-src/songmaker_cli/scheduler.py :: arg-type :: Argument 1 to "admit_generation" has incompatible type "Redis"; expected "ArqRedis"
-src/songmaker_cli/scheduler.py :: arg-type :: Argument 1 to "gpu_hold_is_free" has incompatible type "Redis"; expected "ArqRedis"
-src/songmaker_cli/scheduler.py :: arg-type :: Argument 1 to "read_queue_depth" has incompatible type "Redis"; expected "ArqRedis"
-src/songmaker_cli/scheduler.py :: arg-type :: Argument 1 to "read_worker_state" has incompatible type "Redis"; expected "ArqRedis"
 src/songmaker_cli/scoring/audiobox_aesthetics.py :: attr-defined :: "object" has no attribute "forward"
 src/songmaker_cli/scoring/pipeline.py :: arg-type :: Argument "sr" to "AudioData" has incompatible type "int | float"; expected "int"
 src/songmaker_cli/scoring/pipeline.py :: arg-type :: Argument 2 to "SongScores" has incompatible type "**dict[str, object]"; expected "AudioBoxScore | None"
@@ -271,8 +259,6 @@ src/songmaker_cli/scoring/subprocess_runner.py :: union-attr :: Item "None" of "
 src/songmaker_cli/scoring/subprocess_runner.py :: union-attr :: Item "None" of "Process | None" has no attribute "pid"
 src/songmaker_cli/scoring/subprocess_runner.py :: union-attr :: Item "None" of "Process | None" has no attribute "start"
 src/songmaker_cli/scoring/text_accuracy.py :: attr-defined :: "object" has no attribute "transcribe"
-src/songmaker_cli/scoring_worker.py :: arg-type :: Argument 1 to "func" has incompatible type "Callable[..., Awaitable[Any]]"; expected "str | Function | WorkerCoroutine"
-src/songmaker_cli/scoring_worker.py :: var-annotated :: Need type annotation for "cron_jobs" (hint: "cron_jobs: list[<type>] = ...")
 src/songmaker_cli/server.py :: misc :: Cannot infer type of lambda
 src/songmaker_cli/settings_api.py :: pydantic-orm :: "PresetResponse" does not have from_attributes=True
 src/songmaker_cli/settings_api.py :: pydantic-orm :: "PresetResponse" does not have from_attributes=True
@@ -297,11 +283,7 @@ src/songmaker_cli/song_api.py :: pydantic-orm :: "SongSummaryResponse" does not 
 src/songmaker_cli/song_api.py :: pydantic-orm :: "VersionResponse" does not have from_attributes=True
 src/songmaker_cli/take_judging_api.py :: arg-type :: Argument 4 to "_toggle_generation" has incompatible type "Callable[[Session, str], Generation]"; expected "Callable[[Session, str], None]"
 src/songmaker_cli/whisper_cues.py :: pydantic-orm :: "WhisperCue" does not have from_attributes=True
-src/songmaker_cli/worker_base.py :: arg-type :: Argument 3 to "StepTimer" has incompatible type "**dict[str, str]"; expected "float | None"
 src/songmaker_cli/worker_base.py :: union-attr :: Item "None" of "AsyncExitStack[bool | None] | None" has no attribute "aclose"
-src/songmaker_cli/worker_base.py :: union-attr :: Item "None" of "Redis | None" has no attribute "aclose"
-src/songmaker_cli/worker_base.py :: union-attr :: Item "None" of "Task[Any] | None" has no attribute "add_done_callback"
-src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import fakeredis
 import fakeredis.aioredis
-from support.owner_lease_epoch import settled_epoch
+from tandem.testing import aged_epoch
 
 from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_locks, reserve_gpu_hold
@@ -16,6 +16,7 @@ from songmaker_acestep_worker.model_cache import LoadedModel, ModelCache, VramRe
 from songmaker_acestep_worker.models import GenerationTaskResult
 from songmaker_acestep_worker.task_store import TaskStore
 from songmaker_acestep_worker.wrapper import WorkerDeps, build_state_payload
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 INTERNAL_TOKEN_HEADER = "X-Internal-Token"
 INTERNAL_TOKEN = "test-internal-token"
@@ -26,16 +27,11 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def settled_fake_redis(*live_keys: str) -> fakeredis.aioredis.FakeRedis:
-    """A worker's Redis that has run longer than a GPU hold lasts, as it finds it in operation.
-
-    Each of ``live_keys`` is set, as a process that is running sets its health key.
-    """
+def settled_fake_redis() -> fakeredis.aioredis.FakeRedis:
+    """A worker's Redis that has run longer than a GPU hold lasts, as it finds it in operation."""
     server = fakeredis.FakeServer()
     sync_client = fakeredis.FakeRedis(server=server)
-    sync_client.set(*settled_epoch())
-    for key in live_keys:
-        sync_client.set(key, 1)
+    sync_client.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
     return fakeredis.aioredis.FakeRedis(server=server, decode_responses=False)
 
 

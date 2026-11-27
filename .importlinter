@@ -74,8 +74,9 @@ containers =
     songmaker_cli
 exhaustive = true
 layers =
-    main | (arq_worker)
+    main
     server | music_worker | scoring_worker
+    cron_schedule
     api | worker_base
     (admin_api) | (album_api) | (audio_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (memory_api) | (playlist_api) | (reference_api) | (resource_event_api) | (settings_api) | (shared_views_api) | (sharing_api) | (song_api) | (take_judging_api)
     lifecycle
@@ -84,7 +85,7 @@ layers =
     agent
     cowriter
     mcp_server
-    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (page_language) : (object_store) : (queue_stream_build_lock) : (queue_streams) : (reference_audio) : (refusals) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor) : (shared_access)
+    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (page_language) : (object_store) : (queue_stream_build_lock) : (queue_streams) : (reference_audio) : (refusals) : (scheduler) : (app_context) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor) : (shared_access)
     api_models
     (health_types) | (scoring)
     db
@@ -96,7 +97,7 @@ layers =
     constants
     (messages)
     (job_payloads)
-    (acestep_capabilities) | (arq_codec) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues) | (words)
+    (acestep_capabilities) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues) | (words)
 ignore_imports =
     songmaker_cli.settings -> songmaker_cli.agent.settings
 
@@ -135,7 +136,6 @@ source_modules =
     songmaker_acestep_engine
     songmaker_cli.scoring
     songmaker_cli.acestep_capabilities
-    songmaker_cli.arq_codec
     songmaker_cli.audio_files
     songmaker_cli.audio_paths
     songmaker_cli.constants

@@ -231,9 +231,9 @@ rule = "test-layout"
 reason = "a grep gate over every source file that the share surface mounts, with no single subject"
 
 [[layout.allow]]
-path = "tests/test_dockerfile_installs.py"
+path = "tests/test_dockerfiles.py"
 rule = "test-layout"
-reason = "proves the install lines of every Dockerfile, which lie outside every package"
+reason = "proves the instructions of the Dockerfiles, which lie outside every package"
 
 [[layout.allow]]
 path = "tests/test_packaging_boundary.py"

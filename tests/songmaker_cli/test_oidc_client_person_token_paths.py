@@ -306,7 +306,7 @@ def test_t14_monitoring_refuses_a_persons_token_and_makes_no_account_of_it(
 
 @pytest.mark.parametrize("path", ["/metrics", "/health/details"])
 def test_t14_monitoring_serves_the_monitoring_token_beside_the_person_gate(
-    token_world: TokenWorld, mock_arq_pool, monitoring_headers: dict[str, str], path: str,
+    token_world: TokenWorld, monitoring_headers: dict[str, str], path: str,
 ) -> None:
     with TestClient(token_world.client.app, base_url=TEST_ORIGIN, cookies={}) as running:
         response = running.get(path, headers=monitoring_headers)

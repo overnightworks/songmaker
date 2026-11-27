@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 import shutil
+import signal
 import socket
 import tempfile
 
@@ -38,7 +39,6 @@ from collections.abc import Mapping, Sequence  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
-from unittest.mock import patch  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
@@ -160,43 +160,14 @@ def _reset_settings_cache():
     get_worker_settings.cache_clear()
 
 
-@pytest.fixture(autouse=True)
-def _reset_worker_singletons():
-    yield
-    from songmaker_cli import music_worker as mw_mod
-    from songmaker_cli import scoring_worker as sw_mod
-
-    for worker in (mw_mod._music_worker, sw_mod._scoring_worker):
-        worker._db_factory = None
-        worker._db_engine = None
-
-
 @pytest.fixture
-def mock_arq_pool():
-    """Prevent lifespan from connecting to real Redis via arq."""
-    from unittest.mock import AsyncMock
-
-    import songmaker_cli.arq_pool as arq_mod
-
-    saved = arq_mod._pool
-
-    async def _fake_init():
-        arq_mod._pool = AsyncMock(
-            zcard=AsyncMock(return_value=0), keys=AsyncMock(return_value=[]),
-            get=AsyncMock(return_value=None), exists=AsyncMock(return_value=0),
-            aclose=AsyncMock(),
-        )
-        return arq_mod._pool
-
-    async def _fake_close():
-        arq_mod._pool = None
-
-    with (
-        patch("songmaker_cli.arq_pool.init_arq_pool", side_effect=_fake_init),
-        patch("songmaker_cli.arq_pool.close_arq_pool", side_effect=_fake_close),
-    ):
-        yield
-    arq_mod._pool = saved
+def stop_signal_handlers():
+    """Leave the process's handlers of the stop signals as the test found them."""
+    stop_signals = (signal.SIGINT, signal.SIGTERM)
+    before = {number: signal.getsignal(number) for number in stop_signals}
+    yield
+    for number, handler in before.items():
+        signal.signal(number, handler)
 
 
 @pytest.fixture
@@ -410,6 +381,25 @@ def pg_factory(postgresql_url):
     factory = _session_factory_on(postgresql_url)
     yield factory
     factory.kw["bind"].dispose()
+
+
+@pytest.fixture
+def workers_on_db(pg_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Workers read this test's database and hold an owner."""
+    from support.job_owner import an_owner
+
+    from songmaker_cli.music_worker import MusicWorker
+    from songmaker_cli.scoring_worker import ScoringWorker
+
+    for worker_class in (MusicWorker, ScoringWorker):
+        monkeypatch.setattr(worker_class, "get_db_factory", lambda self: pg_factory)
+        monkeypatch.setattr(worker_class, "owner", an_owner("worker"), raising=False)
+
+
+@pytest.fixture
+def readiness_file(tmp_path: Path) -> Path:
+    """The file a test's workers write their readiness to, instead of the shared path."""
+    return tmp_path / "readiness"
 
 
 @pytest.fixture

@@ -12,6 +12,9 @@ from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from redis import Redis
+from tandem.testing import aged_epoch
+
+from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 REDIS_SERVER_VARIABLE = "TEST_REDIS_URL"
 WITHOUT_XDIST = "master"
@@ -59,3 +62,15 @@ def redis_url(redis_database_url: str) -> str:
     with Redis.from_url(redis_database_url) as database:
         database.flushdb()
     return redis_database_url
+
+
+def settle_the_real_servers_epoch(redis_url: str) -> None:
+    """Date the epoch as on a Redis that has run longer than any lock lasts."""
+    with Redis.from_url(redis_url) as server:
+        server.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX))
+
+
+def lose_everything(redis_url: str) -> None:
+    """What a Redis restart does to the keys."""
+    with Redis.from_url(redis_url) as server:
+        server.flushdb()

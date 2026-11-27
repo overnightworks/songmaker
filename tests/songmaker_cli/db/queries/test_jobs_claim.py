@@ -10,7 +10,6 @@ from support.job_owner import an_owner
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     claim_next_queued_job,
-    claim_queued_job,
     create_job,
     get_job,
     update_job_status,
@@ -22,62 +21,24 @@ FIRST = an_owner("first-owner", "first-generation")
 SECOND = an_owner("second-owner", "second-generation")
 
 
-def test_claiming_a_queued_job_runs_it_for_the_claimer(pg_factory) -> None:
+def test_a_job_put_back_in_the_queue_with_a_wait_can_be_claimed_again_once_it_ended(
+    pg_factory,
+) -> None:
+    wait_ends = datetime.now(timezone.utc) - timedelta(seconds=5)
     with pg_factory() as session:
         job = create_job(session, JobType.GENERATE)
-
-        claimed = claim_queued_job(session, job.id, FIRST)
-
-        row = get_job(session, job.id)
-        assert (claimed, row.status, row.owner_id, row.owner_generation) == (
-            True, JobStatus.RUNNING, "first-owner", "first-generation",
-        )
-
-
-def test_a_second_claim_of_the_same_job_fails_and_leaves_the_first_owner(pg_factory) -> None:
-    with pg_factory() as session:
-        job = create_job(session, JobType.GENERATE)
-        claim_queued_job(session, job.id, FIRST)
-
-        claimed_again = claim_queued_job(session, job.id, SECOND)
-
-        assert (claimed_again, get_job(session, job.id).owner_id) == (False, "first-owner")
-
-
-@pytest.mark.parametrize(
-    "status", [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.PARTIAL, JobStatus.CANCELLED],
-)
-def test_a_job_that_ended_cannot_be_claimed(pg_factory, status) -> None:
-    with pg_factory() as session:
-        job = create_job(session, JobType.GENERATE)
-        update_job_status(session, job.id, JobStatusUpdate(status))
-
-        claimed = claim_queued_job(session, job.id, FIRST)
-
-        assert (claimed, get_job(session, job.id).status) == (False, status)
-
-
-def test_a_job_without_a_row_cannot_be_claimed(pg_factory) -> None:
-    with pg_factory() as session:
-        assert claim_queued_job(session, "no-such-job", FIRST) is False
-
-
-def test_a_job_put_back_in_the_queue_with_a_wait_can_be_claimed_again(pg_factory) -> None:
-    wait_ends = datetime.now(timezone.utc) + timedelta(seconds=5)
-    with pg_factory() as session:
-        job = create_job(session, JobType.GENERATE)
-        claim_queued_job(session, job.id, FIRST)
+        claim_next_queued_job(session, FIRST, JobType.GENERATE)
         update_job_status(
             session, job.id, JobStatusUpdate(JobStatus.QUEUED, run_after=wait_ends),
         )
         queued = get_job(session, job.id)
         waiting = (queued.status, queued.owner_id, queued.owner_generation, queued.run_after)
 
-        claimed = claim_queued_job(session, job.id, SECOND)
+        claimed = claim_next_queued_job(session, SECOND, JobType.GENERATE)
 
         row = get_job(session, job.id)
-        assert (waiting, claimed, row.owner_id, row.run_after) == (
-            (JobStatus.QUEUED, None, None, wait_ends), True, "second-owner", None,
+        assert (waiting, claimed.id, row.owner_id, row.run_after) == (
+            (JobStatus.QUEUED, None, None, wait_ends), job.id, "second-owner", None,
         )
 
 
@@ -130,23 +91,14 @@ def test_a_cancelled_job_is_never_claimed_though_its_wait_has_ended(pg_factory) 
         assert get_job(session, job.id).status == JobStatus.CANCELLED
 
 
-def test_a_job_without_a_wait_is_left_to_its_queue_message(pg_factory) -> None:
-    with pg_factory() as session:
-        job = _a_job_due_in(session, 0)
-        job.run_after = None
-        session.flush()
-
-        assert claim_next_queued_job(session, FIRST, JobType.SCORE) is None
-
-
 @pytest.mark.parametrize(
     "job_type",
     [
         JobType.COVER, JobType.GENERATE, JobType.LORA_TRAINING,
-        JobType.LOAD_MODEL_ON_WORKER, JobType.DOWNLOAD_MODEL_ON_WORKER,
+        JobType.LOAD_MODEL_ON_WORKER, JobType.DOWNLOAD_MODEL_ON_WORKER, JobType.SCORE,
     ],
 )
-def test_a_job_without_a_wait_is_claimed_when_no_queue_message_runs_it(
+def test_a_job_without_a_wait_is_due_whatever_its_type(
     pg_factory, job_type,
 ) -> None:
     with pg_factory() as session:
