@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import hashlib
 import logging
@@ -35,7 +36,7 @@ atexit.register(shutil.rmtree, _numba_cache_dir, ignore_errors=True)
 
 import struct  # noqa: E402
 import wave  # noqa: E402
-from collections.abc import Mapping, Sequence  # noqa: E402
+from collections.abc import Callable, Mapping, Sequence  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -168,6 +169,25 @@ def stop_signal_handlers():
     yield
     for number, handler in before.items():
         signal.signal(number, handler)
+
+
+@pytest.fixture
+def send_stop_signal(stop_signal_handlers: None) -> Callable[[asyncio.Task[None]], bool]:
+    """Send the process's SIGTERM for a worker's ``run`` task, only while that task still runs.
+
+    ``run`` removes its handler as it ends, and a SIGTERM then has its default action: it ends
+    the test process. Called from the loop's thread, the check and the signal happen without a
+    loop step between them, so a task that is not done still holds its handler. Returns whether
+    the signal was sent.
+    """
+
+    def send(running: asyncio.Task[None]) -> bool:
+        if running.done():
+            return False
+        os.kill(os.getpid(), signal.SIGTERM)
+        return True
+
+    return send
 
 
 @pytest.fixture

@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import signal
 import time
 from collections.abc import Callable, Coroutine, Iterator
 from pathlib import Path
@@ -192,7 +190,8 @@ def _serving_worker_on(redis_url: str, readiness_file: Path, *servings) -> _Serv
 
 
 def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its_servings(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
+    restored_logging: None, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    redis_url: str, readiness_file: Path,
 ) -> None:
     serving, held_while_stopping = asyncio.Event(), []
 
@@ -210,7 +209,7 @@ def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its
         running = asyncio.create_task(worker.run())
         await serving.wait()
         held_while_serving = await _held_leases(redis_url)
-        os.kill(os.getpid(), signal.SIGTERM)
+        assert send_stop_signal(running)
         async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
             await running
         return held_while_serving, await _held_leases(redis_url)
@@ -330,7 +329,8 @@ def _queue_serving_worker_on(redis_url: str, readiness_file: Path) -> _QueueServ
 
 
 def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
+    restored_logging: None, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
         worker = _queue_serving_worker_on(proxy.url, readiness_file)
@@ -353,7 +353,7 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
                         await asyncio.sleep(0.1)
                 return not running.done(), before, after, worker.claimed_rows
             finally:
-                os.kill(os.getpid(), signal.SIGTERM)
+                send_stop_signal(running)
                 await asyncio.gather(running, return_exceptions=True)
 
         still_serving, before, after, claimed = _run(cut_restore_and_queue_a_row())
@@ -363,7 +363,8 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
 
 
 def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
+    restored_logging: None, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
         worker = _queue_serving_worker_on(proxy.url, readiness_file)
@@ -375,7 +376,7 @@ def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
             proxy.refuse()
             await asyncio.sleep(1)
             started = time.monotonic()
-            os.kill(os.getpid(), signal.SIGTERM)
+            assert send_stop_signal(running), "run() ended on its own during the outage"
             async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
                 await running
             return time.monotonic() - started
