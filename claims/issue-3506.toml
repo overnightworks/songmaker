@@ -1,0 +1,7 @@
+claim_id = "da677653936345cab72636fad46b0046"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "3265ba2f179f3f78d41c74c748631e1a3441d241"
+branch = "claude/issue-3506-worker-tests-stop-signal"
+scope = ["tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_scoring_worker.py"]
+opened_commit = "66d5b694c96e39882759cda1a2567b875add21e4"
