@@ -102,7 +102,7 @@ def test_job_type_values():
 
 
 def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
-    """ARQ job functions and direct job types share the reaper's one policy."""
+    """Worker job functions and direct job types share the reaper's one policy."""
     reachable_types = set(JobType) | {JobType(job_function) for job_function in JobFunction}
 
     assert set(STALE_JOB_THRESHOLDS) == reachable_types
@@ -156,7 +156,7 @@ def test_cover_policy_uses_the_web_queue_without_a_worker_signal() -> None:
     assert policy.restart_grace_seconds is None
 
 
-def test_generate_timeout_windows_are_covered_before_arq_timeout() -> None:
+def test_generate_timeout_windows_are_covered_before_worker_timeout() -> None:
     settings = Settings(
         database_url="postgresql://example",
         redis_url="redis://example",
@@ -179,7 +179,7 @@ def test_generate_timeout_windows_are_covered_before_arq_timeout() -> None:
     )
     assert ACESTEP_SSE_READ_TIMEOUT_SECONDS < (
         STALE_JOB_THRESHOLDS[JobType.GENERATE].heartbeat_seconds
-    ) < settings.arq_job_timeout
+    ) < settings.worker_job_timeout
 
 
 def test_resource_type_values():

@@ -408,7 +408,7 @@ def fake_clock():
 def test_training_progress_keeps_a_long_running_lora_alive(
     seeded, db_factory, fake_clock,
 ) -> None:
-    generation_timeout_seconds = TEST_SETTINGS.arq_job_timeout
+    generation_timeout_seconds = TEST_SETTINGS.worker_job_timeout
     assert TEST_LORA_TRAINING_CONFIG.train_epochs == 500
     assert TEST_SETTINGS.lora_training_job_timeout > generation_timeout_seconds
 

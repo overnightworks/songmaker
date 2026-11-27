@@ -50,7 +50,7 @@ def _required_settings() -> dict[str, str]:
     ("setting", "value"),
     [
         ("ACESTEP_POLL_TIMEOUT", "1200"),
-        ("ARQ_JOB_TIMEOUT", "760"),
+        ("WORKER_JOB_TIMEOUT", "760"),
     ],
 )
 def test_rejects_an_invalid_generation_timeout_order(
@@ -59,7 +59,7 @@ def test_rejects_an_invalid_generation_timeout_order(
     monkeypatch.setenv(setting, value)
     required = _required_settings()
 
-    with pytest.raises(ValidationError, match="SSE read < reaper < arq"):
+    with pytest.raises(ValidationError, match="SSE read < reaper < worker job timeout"):
         Settings(**required)
 
 
@@ -76,7 +76,7 @@ def test_rejects_an_invalid_lora_training_timeout_order(
     monkeypatch.setenv(setting, value)
     required = _required_settings()
 
-    with pytest.raises(ValidationError, match="progress poll < reaper < arq"):
+    with pytest.raises(ValidationError, match="progress poll < reaper < worker job timeout"):
         Settings(**required)
 
 

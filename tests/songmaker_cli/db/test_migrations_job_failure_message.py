@@ -284,6 +284,7 @@ class TestJobFailureMigration(StoredMessageMigrationContract):
         WORKER_REPORTED_KEY, RECORDED_KEY, GENERATION_FAILED_KEY, CHAT_PROBLEM_KEY,
         *MIGRATION.MODE_TEMPLATES,
     })
+    reworded_sentences = frozenset({"Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown"})
 
 
 
