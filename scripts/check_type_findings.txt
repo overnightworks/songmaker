@@ -283,9 +283,7 @@ src/songmaker_cli/song_api.py :: pydantic-orm :: "SongSummaryResponse" does not 
 src/songmaker_cli/song_api.py :: pydantic-orm :: "VersionResponse" does not have from_attributes=True
 src/songmaker_cli/take_judging_api.py :: arg-type :: Argument 4 to "_toggle_generation" has incompatible type "Callable[[Session, str], Generation]"; expected "Callable[[Session, str], None]"
 src/songmaker_cli/whisper_cues.py :: pydantic-orm :: "WhisperCue" does not have from_attributes=True
-src/songmaker_cli/worker_base.py :: arg-type :: Argument 3 to "StepTimer" has incompatible type "**dict[str, str]"; expected "float | None"
 src/songmaker_cli/worker_base.py :: union-attr :: Item "None" of "AsyncExitStack[bool | None] | None" has no attribute "aclose"
-src/songmaker_cli/worker_base.py :: union-attr :: Item "None" of "Redis | None" has no attribute "aclose"
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`
 src/songmaker_cli/worker_liveness.py :: ANN401 :: Dynamically typed expressions (typing.Any) are disallowed in `redis`

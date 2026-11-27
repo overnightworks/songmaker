@@ -44,12 +44,12 @@
 "frontend/src/routes/settings/users/+page.svelte" = 918
 "src/songmaker_acestep_worker/wrapper.py" = 1057
 "src/songmaker_cli/jobs/generation.py" = 1036
-"src/songmaker_cli/jobs/lora_training.py" = 1472
+"src/songmaker_cli/jobs/lora_training.py" = 1471
 "src/songmaker_cli/queue_streams.py" = 825
 "tests/songmaker_acestep_engine/test_client.py" = 818
 "tests/songmaker_acestep_worker/test_wrapper.py" = 1496
 "tests/songmaker_acestep_worker/test_wrapper_train_lora.py" = 1177
-"tests/songmaker_cli/jobs/test_lora_training.py" = 1821
+"tests/songmaker_cli/jobs/test_lora_training.py" = 1802
 "tests/songmaker_cli/test_admin_api.py" = 908
 "tests/songmaker_cli/test_api.py" = 4343
 "tests/songmaker_cli/test_db.py" = 2404
@@ -105,7 +105,6 @@
 
 [function_lines."src/songmaker_cli/jobs/model_lifecycle.py"]
 "_run_download_attempt" = 80
-"load_model_on_worker" = 60
 
 [function_lines."src/songmaker_cli/jobs/scoring.py"]
 "run_scoring_job" = 90
@@ -127,11 +126,11 @@
 
 [function_lines."tests/songmaker_cli/jobs/test_lora_training.py"]
 "test_happy_path_transitions_and_persists" = 81
-"test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 70
+"test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 69
 "test_unknown_handover_probe_does_not_release_a_worker_owned_hold" = 64
 
 [function_lines."tests/songmaker_cli/jobs/test_lora_training_worker_auth.py"]
-"test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 66
+"test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 65
 
 [function_lines."tests/songmaker_cli/test_api.py"]
 "test_s8_live_stream_during_second_take" = 93

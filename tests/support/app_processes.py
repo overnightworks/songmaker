@@ -338,7 +338,7 @@ def _ended_lines(workers: list[WorkerProcess], event: str) -> list[dict]:
 
 
 def times_run(workers: list[WorkerProcess], job_id: str) -> int:
-    """How many of the workers' ``arq_job.ended`` lines name the job: one per run."""
+    """How many of the workers' ``queued_job.ended`` lines name the job: one per run."""
     return sum(1 for entry in _ended_lines(workers, JOB_ENDED_EVENT)
                if entry.get("job_id") == job_id)
 

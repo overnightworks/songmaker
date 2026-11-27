@@ -222,7 +222,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
     with _patch_worker_calls(adapter_src, submitted_requests=submitted_requests):
         _run(
             run_lora_training_job(
-                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
                 training_config=TEST_LORA_TRAINING_CONFIG, owner=an_owner("o1"),
             )
@@ -305,7 +305,6 @@ def test_matching_worker_mode_is_recorded_when_training_completes(
     with _patch_worker_calls(str(output_dir), events=turbo_training_events):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -360,7 +359,6 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
     with _patch_worker_calls(str(output_dir), events=invalid_mode_events):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -444,7 +442,7 @@ def test_training_progress_keeps_a_long_running_lora_alive(
         patch("songmaker_cli.jobs.lora_training._touch_heartbeat", touch_heartbeat),
     ):
         _run(run_lora_training_job(
-            {}, "job-1", seeded["lora_id"], seeded["user_id"],
+            "job-1", seeded["lora_id"], seeded["user_id"],
             db_factory=db_factory,
             audio_dir=seeded["audio_dir"],
             redis=MagicMock(),
@@ -488,7 +486,6 @@ def test_missing_sample_audio_raises_and_marks_failed(
 
     _run(
         run_lora_training_job(
-            {},
             "job-1",
             seeded["lora_id"],
             seeded["user_id"],
@@ -512,7 +509,6 @@ def test_worker_training_failure_keeps_a_training_specific_reason(
     with _patch_worker_calls(str(tmp_path / "adapter"), events=failed_training_events):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -572,7 +568,6 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
 
     with patches():
         training = run_lora_training_job(
-            {},
             "job-1",
             seeded["lora_id"],
             seeded["user_id"],
@@ -597,7 +592,6 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
     with _patch_worker_calls(malicious):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -688,7 +682,6 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
 
     with _patch_worker_calls(str(temporary_dir), events=turbo_training_events):
         training = run_lora_training_job(
-            {},
             "job-1",
             seeded["lora_id"],
             seeded["user_id"],
@@ -799,7 +792,6 @@ def test_adoption_stays_ready_when_previous_cleanup_fails(
     with _patch_worker_calls(str(temporary_dir)):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -845,7 +837,6 @@ def test_adoption_restores_the_previous_adapter_when_second_rename_fails(
     with _patch_worker_calls(str(temporary_dir)):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -875,7 +866,6 @@ def test_deleted_lora_rejected(seeded, db_factory) -> None:
 
     _run(
         run_lora_training_job(
-            {},
             "job-1",
             seeded["lora_id"],
             seeded["user_id"],
@@ -893,7 +883,6 @@ def test_deleted_lora_rejected(seeded, db_factory) -> None:
 def test_missing_lora_fails_job(seeded, db_factory) -> None:
     _run(
         run_lora_training_job(
-            {},
             "job-1",
             "does-not-exist",
             seeded["user_id"],
@@ -916,7 +905,6 @@ def test_no_capacity_marks_failed(seeded, db_factory) -> None:
     ):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -951,7 +939,6 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
     ):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -979,7 +966,6 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
     ):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -1029,7 +1015,7 @@ def test_a_generation_that_has_not_started_a_take_defers_lora_before_running(
     ):
         _run(
             run_lora_training_job(
-                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=redis,
                 owner=an_owner("o1"),
             )
@@ -1062,7 +1048,7 @@ def test_lora_defer_passes_do_not_sleep_in_their_place(seeded, db_factory) -> No
         ):
             for _ in range(1100):
                 await run_lora_training_job(
-                    {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                    "job-1", seeded["lora_id"], seeded["user_id"],
                     db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=redis,
                     owner=an_owner("o1"),
                 )
@@ -1101,7 +1087,6 @@ def test_renewal_failure_cancels_materialization_and_releases_the_hold(seeded, d
     ):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -1244,7 +1229,6 @@ def test_lora_starts_hold_renewal_before_marking_the_job_running(seeded, db_fact
     ):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -1285,7 +1269,6 @@ def test_running_update_failure_releases_the_new_lora_hold(seeded, db_factory) -
     ):
         _run(
             run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -1340,7 +1323,6 @@ def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release_hold),
         ):
             await run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -1392,7 +1374,6 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
             patch("songmaker_cli.jobs.lora_training._release_lora_hold", release_hold),
         ):
             training = run_lora_training_job(
-                {},
                 "job-1",
                 seeded["lora_id"],
                 seeded["user_id"],
@@ -1441,7 +1422,7 @@ def test_lora_releases_its_hold_when_running_cannot_be_applied(seeded, db_factor
     ):
         _run(
             run_lora_training_job(
-                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                "job-1", seeded["lora_id"], seeded["user_id"],
                 db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
                 owner=an_owner("o1"),
             )

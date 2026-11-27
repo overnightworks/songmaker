@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+import contextlib
 
 import pytest
+from logline import current_traceparent
+from support.job_owner import given_owner_redis
 
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.job_payloads import LoraTrainingPayload, ScorePayload
@@ -13,7 +15,7 @@ from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.scoring_worker import ScoringWorker
-from songmaker_cli.worker_base import JOB_ENDED_EVENT
+from songmaker_cli.worker_base import JOB_ENDED_EVENT, JOB_STATUS_UNREADABLE_EVENT
 
 
 @pytest.fixture
@@ -63,11 +65,124 @@ def test_a_music_job_ends_its_line_failed_when_its_run_failed_the_row(job_rows, 
         job_id, JobType.LORA_TRAINING,
         LoraTrainingPayload(lora_id="missing-voice", user_id="user", target_mode="turbo"),
     )
-    worker = MusicWorker()
-    worker._job_context = {"redis": AsyncMock()}
+    worker = given_owner_redis(MusicWorker())
 
     with caplog.at_level("INFO"):
         asyncio.run(worker.run_claimed(claimed))
 
     (ended,) = [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
     assert (ended.job_function, ended.outcome) == (JobFunction.LORA_TRAINING, "failed")
+
+
+def a_score_claim(job_id: str) -> ClaimedJob:
+    return ClaimedJob(
+        job_id, JobType.SCORE, ScorePayload(gen_id="generation", scorers=("scorer",)),
+    )
+
+
+def ended_lines(caplog):
+    return [record for record in caplog.records if record.getMessage() == JOB_ENDED_EVENT]
+
+
+class ScriptedScoringWorker(ScoringWorker):
+    """A scoring worker whose payload run is the test's own."""
+
+    def __init__(self, run=None) -> None:
+        super().__init__()
+        self.payload_runs = 0
+        self._run = run
+
+    async def _run_payload(self, job_id: str, payload) -> None:
+        self.payload_runs += 1
+        if self._run is not None:
+            self._run(self.payload_runs)
+
+
+def raise_private_content(_run_number: int) -> None:
+    raise ValueError("private content")
+
+
+@pytest.mark.parametrize(
+    ("row_status", "run", "raises", "outcome", "reason"),
+    [
+        (JobStatus.COMPLETED, None, contextlib.nullcontext(), "ok", None),
+        (
+            JobStatus.RUNNING,
+            raise_private_content,
+            pytest.raises(ValueError, match="private content"),
+            "failed",
+            None,
+        ),
+        (JobStatus.FAILED, None, contextlib.nullcontext(), "failed", "job_failed"),
+        (JobStatus.CANCELLED, None, contextlib.nullcontext(), "cancelled", None),
+    ],
+    ids=["row-completed", "job-raised", "row-failed", "row-cancelled"],
+)
+def test_a_claimed_job_ends_with_one_line_carrying_its_id_and_outcome(
+    row_status, run, raises, outcome, reason, job_rows, caplog
+) -> None:
+    job_id = job_rows(row_status)
+    worker = ScriptedScoringWorker(run)
+    claimed_run = worker.run_claimed(a_score_claim(job_id))
+
+    with caplog.at_level("INFO"), raises:
+        asyncio.run(claimed_run)
+
+    (ended,) = ended_lines(caplog)
+    assert (ended.job_id, ended.job_function, ended.outcome, getattr(ended, "reason", None)) == (
+        job_id, JobFunction.SCORE, outcome, reason,
+    )
+    assert ended.duration_ms >= 0
+    assert "private content" not in "".join(
+        str(value) for value in vars(ended).values() if isinstance(value, str)
+    )
+
+
+def test_a_job_whose_row_status_cannot_be_read_ends_failed_and_finishes(
+    job_rows, caplog
+) -> None:
+    class UnreadableStatusWorker(ScriptedScoringWorker):
+        def job_status(self, job_id: str):
+            raise OSError("private content")
+
+    worker = UnreadableStatusWorker()
+    job_id = job_rows(JobStatus.COMPLETED)
+
+    with caplog.at_level("INFO"):
+        asyncio.run(worker.run_claimed(a_score_claim(job_id)))
+
+    (ended,) = ended_lines(caplog)
+    (warning,) = [
+        record for record in caplog.records
+        if record.getMessage() == JOB_STATUS_UNREADABLE_EVENT
+    ]
+    assert worker.payload_runs == 1
+    assert (ended.outcome, ended.reason, ended.levelname) == (
+        "failed", "status_unreadable", "WARNING",
+    )
+    assert (warning.job_id, warning.error_type) == (job_id, "OSError")
+
+
+def test_each_job_runs_in_a_trace_of_its_own_and_none_outlives_a_failed_job(
+    job_rows,
+) -> None:
+    seen_traceparents = []
+
+    def run(run_number: int) -> None:
+        seen_traceparents.append(current_traceparent())
+        if run_number == 1:
+            raise ValueError("deliberate failure")
+
+    async def run_both() -> None:
+        worker = ScriptedScoringWorker(run)
+        failing_claim = a_score_claim(job_rows(JobStatus.RUNNING))
+        with pytest.raises(ValueError, match="deliberate failure"):
+            await worker.run_claimed(failing_claim)
+        assert current_traceparent() is None
+        await worker.run_claimed(a_score_claim(job_rows(JobStatus.COMPLETED)))
+        assert current_traceparent() is None
+
+    asyncio.run(run_both())
+
+    first, second = seen_traceparents
+    assert first.split("-")[1] != second.split("-")[1]
