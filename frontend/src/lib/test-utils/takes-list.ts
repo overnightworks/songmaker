@@ -73,7 +73,6 @@ export function mockActions(): GenerationActions {
 		pick,
 		keep,
 		del: vi.fn(),
-		rate: vi.fn(() => Promise.resolve()),
 		share: vi.fn(() =>
 			Promise.resolve({
 				status: 'ok',

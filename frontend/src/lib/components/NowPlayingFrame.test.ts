@@ -81,6 +81,42 @@ describe('NowPlayingFrame', () => {
 		}
 	);
 	it.each([
+		{ stacked: true, card: 'before' },
+		{ stacked: false, card: 'after' }
+	])(
+		'puts the judging card $card the progress bar when stacked is $stacked',
+		async ({ stacked, card }) => {
+			if (stacked) document.documentElement.dataset.pointer = 'coarse';
+			const target = document.createElement('div');
+			document.body.append(target);
+			mounted = mount(NowPlayingFrame, {
+				target,
+				props: {
+					surface: 'full',
+					stacked,
+					coverUrl: null,
+					judging: createRawSnippet(() => ({ render: () => '<section id="card"></section>' })),
+					info: {
+						generation: makeGeneration(),
+						songId: 'song-1',
+						songTitle: 'Tide',
+						albumTitle: 'Night Drive',
+						artist: '',
+						lyrics: null
+					}
+				}
+			});
+			await tick();
+			const progress = target.querySelector('.progress');
+			const cardElement = target.querySelector('#card');
+			if (!progress || !cardElement) throw new Error('Expected the card and the progress bar');
+			const progressFollowsCard = cardElement.compareDocumentPosition(progress);
+			expect(Boolean(progressFollowsCard & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+				card === 'before'
+			);
+		}
+	);
+	it.each([
 		{
 			name: 'a share song page',
 			props: { surface: 'page' as const, showTakeLabel: false },

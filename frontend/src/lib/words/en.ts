@@ -681,7 +681,6 @@ export type Words = {
     readonly "takeActions.pickFailed": string;
     readonly "takeActions.keepFailed": string;
     readonly "takeActions.restoreFailed": string;
-    readonly "takeActions.ratingSaved": string;
     readonly "takeActions.ratingFailed": string;
     readonly "takeActions.rescoreQueued": string;
     readonly "takeActions.rescoreFailed": string;
@@ -693,10 +692,11 @@ export type Words = {
     readonly "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => string;
     readonly "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => string;
     readonly "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => string;
-    readonly "nowPlayingTake.pick": string;
-    readonly "nowPlayingTake.unpick": string;
-    readonly "nowPlayingTake.keep": string;
-    readonly "nowPlayingTake.unkeep": string;
+    readonly "nowPlayingJudging.label": string;
+    readonly "nowPlayingJudging.pick": string;
+    readonly "nowPlayingJudging.unpick": string;
+    readonly "nowPlayingJudging.keep": string;
+    readonly "nowPlayingJudging.unkeep": string;
     readonly "nowPlayingTake.scores": string;
     readonly "nowPlayingTake.scoresEmpty": string;
     readonly "nowPlayingTake.scoreRating": string;
@@ -710,10 +710,8 @@ export type Words = {
     readonly "nowPlayingTake.rescoring": string;
     readonly "nowPlayingTake.rescore": string;
     readonly "nowPlayingTake.recipe": string;
-    readonly "nowPlayingTake.rating": string;
-    readonly "nowPlayingTake.ratingNotes": string;
-    readonly "nowPlayingTake.ratingSave": string;
-    readonly "nowPlayingTake.ratingSaving": string;
+    readonly "nowPlayingJudging.rating": string;
+    readonly "nowPlayingJudging.ratingNotes": string;
     readonly "nowPlayingTake.useSeed": string;
     readonly "nowPlayingTake.repaint": string;
     readonly "nowPlayingTake.cover": string;
@@ -2295,7 +2293,6 @@ export const words: Words = {
     "takeActions.pickFailed": "Pick failed",
     "takeActions.keepFailed": "Keep failed",
     "takeActions.restoreFailed": "Restore failed",
-    "takeActions.ratingSaved": "Rating saved",
     "takeActions.ratingFailed": "Rating failed",
     "takeActions.rescoreQueued": "Re-scoring this take…",
     "takeActions.rescoreFailed": "Re-score failed",
@@ -2307,10 +2304,11 @@ export const words: Words = {
     "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.mode,
     "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration + " · " + gaps.mode,
     "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => "Open v" + gaps.number,
-    "nowPlayingTake.pick": "Pick",
-    "nowPlayingTake.unpick": "Unpick",
-    "nowPlayingTake.keep": "Keep",
-    "nowPlayingTake.unkeep": "Unkeep",
+    "nowPlayingJudging.label": "Judge this take",
+    "nowPlayingJudging.pick": "Pick",
+    "nowPlayingJudging.unpick": "Unpick",
+    "nowPlayingJudging.keep": "Keep",
+    "nowPlayingJudging.unkeep": "Unkeep",
     "nowPlayingTake.scores": "Scores",
     "nowPlayingTake.scoresEmpty": "No scores yet",
     "nowPlayingTake.scoreRating": "Rating",
@@ -2324,10 +2322,8 @@ export const words: Words = {
     "nowPlayingTake.rescoring": "Re-scoring…",
     "nowPlayingTake.rescore": "Re-score",
     "nowPlayingTake.recipe": "Recipe",
-    "nowPlayingTake.rating": "Your rating",
-    "nowPlayingTake.ratingNotes": "Notes (optional)",
-    "nowPlayingTake.ratingSave": "Save rating",
-    "nowPlayingTake.ratingSaving": "Saving…",
+    "nowPlayingJudging.rating": "Rating",
+    "nowPlayingJudging.ratingNotes": "Notes (optional)",
     "nowPlayingTake.useSeed": "Use seed",
     "nowPlayingTake.repaint": "Repaint",
     "nowPlayingTake.cover": "Cover",
