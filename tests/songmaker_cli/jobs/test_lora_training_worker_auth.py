@@ -152,7 +152,6 @@ def test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch(
                         ),
                     )
                     await run_lora_training_job(
-                        {},
                         "job",
                         "lora",
                         "user",

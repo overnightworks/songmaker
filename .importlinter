@@ -97,7 +97,7 @@ layers =
     constants
     (messages)
     (job_payloads)
-    (acestep_capabilities) | (arq_codec) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues) | (words)
+    (acestep_capabilities) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues) | (words)
 ignore_imports =
     songmaker_cli.settings -> songmaker_cli.agent.settings
 
@@ -136,7 +136,6 @@ source_modules =
     songmaker_acestep_engine
     songmaker_cli.scoring
     songmaker_cli.acestep_capabilities
-    songmaker_cli.arq_codec
     songmaker_cli.audio_files
     songmaker_cli.audio_paths
     songmaker_cli.constants

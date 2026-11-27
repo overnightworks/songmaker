@@ -707,23 +707,6 @@ The platform owns the deploy and its backup: it applies a release through Flux a
 
 
 
-### arq JSON queue codec
-
-The web producer and both workers use
-one UTF-8 JSON codec (`arq_codec.py`) for jobs and results. Unsupported objects,
-non-string object keys and nonfinite numbers are rejected. No class is imported
-or reconstructed, and there is no pickle fallback. The wire tests in
-[`test_arq_codec.py`](../tests/songmaker_cli/test_arq_codec.py) cover the configured entry points.
-The codec is not Redis access control or network isolation; those are separate requirements.
-
-arq 0.27 cannot JSON-encode exception objects in failed or cancelled results. It
-logs one serialization warning and stores inert `r="unable to serialize result"`
-with `s=False`; its public result reader raises `SerializationError`. The app
-does not read arq results. A leftover pickle job is rejected visibly with its job
-ID, executes nothing and leaves a readable failed result. A legacy pickle result
-read fails explicitly. Preserve that evidence and reconcile the application job
-before retrying; never purge or silently retry these entries.
-
 ### Secrets
 
 - `OIDC_ISSUER`: Required, with no default; every `docker compose --project-directory . -f docker/docker-compose.test.yml` command refuses without it. The test stack sets the `REALM_` keys itself, `REALM_CLIENT_ID` defaulting to `songmaker`. A leftover `OIDC_CLIENT_ID`, `ADMIN_USERNAME` or `ADMIN_PASSWORD` in `.env` stops startup (`Settings` rejects unknown keys), so remove them when deploying the Keycloak sign-in. A leftover `AGENT__MCP_CLIENT_ID`, `AGENT__MCP_SCOPE`, `AGENT__MCP_AGENT_GROUP` or `AGENT__API_GROUP` in the environment stops web at startup too (the `agent` section forbids extra keys), so the platform removes them from `apps/songmaker/web.yaml`.
@@ -745,8 +728,7 @@ All request models use Pydantic with strict constraints:
 - Role fields: `Literal["admin", "user"]` — no arbitrary role injection
 - No raw SQL — 100% SQLAlchemy ORM with parameterized queries
 - No Python `eval` or `exec`, `shell=True`, or `yaml.load` in `src/`.
-- Untrusted arq data uses the JSON boundary above; trusted local scorer-process
-  serialization is a separate boundary, not a queue decoder.
+- Trusted local scorer-process serialization is a separate boundary, not a queue decoder.
 
 ## Path Traversal Protection
 
