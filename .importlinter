@@ -15,7 +15,7 @@
 # application-layers: songmaker_cli modules import only downward (entry points,
 #   workers, routes, runners, the gateway turn, co-writer and MCP, services,
 #   HTTP contract, scoring and health types, persistence, below persistence,
-#   settings, job timing, constants, leaves), and the routes never import each other.
+#   settings, job timing, audio paths, constants, leaves), and the routes never import each other.
 #   exhaustive: a module without a row breaks the contract. The one ignored import is
 #   settings reading the `agent` section's model from `agent.settings`, a leaf that
 #   imports no in-tree module (it holds the section the settings embed, as
@@ -94,10 +94,11 @@ layers =
     job_timing
     acestep_state
     (job_queue)
+    (audio_paths)
     constants
     (messages)
     (job_payloads)
-    (acestep_capabilities) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues) | (words)
+    (acestep_capabilities) | (audio_files) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues) | (words)
 ignore_imports =
     songmaker_cli.settings -> songmaker_cli.agent.settings
 

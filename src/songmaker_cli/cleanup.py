@@ -14,10 +14,13 @@ retention period.
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from songmaker_cli.api_helpers import cleanup_generation_files
+from songmaker_cli.audio_paths import confined_under, lora_owner_root, lora_root
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
@@ -32,6 +35,7 @@ from songmaker_cli.db.queries.generations import (
     lock_songs,
 )
 from songmaker_cli.db.queries.jobs import ActiveJobError
+from songmaker_cli.db.queries.loras import delete_expired_user_loras, list_expired_user_loras
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
 from songmaker_cli.db.soft_delete import soft_delete_cutoff
@@ -159,6 +163,51 @@ def run_cleanup_expired(
             album_count, song_count,
         )
     return album_count, song_count
+
+
+def _remove_voice_directory(audio_dir: Path, user_id: str, lora_id: str) -> bool:
+    """Remove one voice's directory whole; report whether it is gone.
+
+    A directory that does not resolve strictly below its owner's voice directory is not
+    touched, and a removal that fails is logged: the voice's rows stay for the next run.
+    """
+    directory = confined_under(
+        lora_owner_root(audio_dir, user_id), lora_root(audio_dir, user_id, lora_id),
+    )
+    if directory is None:
+        log.warning("voice_purge: voice %s has a directory outside its owner's, kept", lora_id)
+        return False
+    try:
+        if directory.exists():
+            shutil.rmtree(directory)
+    except OSError:
+        log.warning("voice_purge: voice %s has a directory that stays", lora_id, exc_info=True)
+        return False
+    return True
+
+
+def run_voice_purge(db_factory, audio_dir: Path, *, now: datetime) -> int:
+    """Hard-delete the voices deleted before the final-deletion cutoff; returns their count.
+
+    Files go before rows: a voice whose directory stays keeps its rows, so the next run
+    retries it, and a crash between the removals and the commit leaves rows the next run
+    finishes. The rows of every voice whose directory is gone are deleted in one transaction
+    this run commits. A voice a training job still holds is left alone.
+    """
+    cutoff = soft_delete_cutoff(now)
+    with db_factory() as session:
+        expired = list_expired_user_loras(session, cutoff)
+    removed_ids = [
+        lora_id for lora_id, user_id in expired
+        if _remove_voice_directory(audio_dir, user_id, lora_id)
+    ]
+    if not removed_ids:
+        return 0
+    with db_factory() as session:
+        deleted = delete_expired_user_loras(session, removed_ids, cutoff)
+        session.commit()
+    log.info("voice_purge: hard-deleted %d voice(s)", deleted)
+    return deleted
 
 
 def _delete_expired_takes(

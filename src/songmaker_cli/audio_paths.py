@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path, PurePosixPath
 
+from songmaker_cli.constants import USER_LORAS_DIRNAME
+
 log = logging.getLogger(__name__)
 
 
@@ -31,6 +33,16 @@ def confined_under(root: Path, path: Path) -> Path | None:
     if resolved_path == resolved_root or not resolved_path.is_relative_to(resolved_root):
         return None
     return resolved_path
+
+
+def lora_owner_root(audio_dir: Path, user_id: str) -> Path:
+    """The directory holding every voice of one person."""
+    return audio_dir / USER_LORAS_DIRNAME / user_id
+
+
+def lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
+    """The directory holding one voice's samples, work directories and adapter."""
+    return lora_owner_root(audio_dir, user_id) / lora_id
 
 
 def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:

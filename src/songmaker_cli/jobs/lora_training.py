@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.audio_paths import confined_under
+from songmaker_cli.audio_paths import confined_under, lora_owner_root, lora_root
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
@@ -207,24 +207,20 @@ def _worker_training_started_at(value: object) -> datetime | None:
     return training_started_at
 
 
-def _lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return audio_dir / USER_LORAS_DIRNAME / user_id / lora_id
-
-
 def _dataset_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_DATASET_DIRNAME
+    return lora_root(audio_dir, user_id, lora_id) / USER_LORA_DATASET_DIRNAME
 
 
 def _output_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME
+    return lora_root(audio_dir, user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME
 
 
 def _tmp_training_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
+    return lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
 
 
 def _completed_training_mode_path(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / _COMPLETED_TRAINING_MODE_FILENAME
+    return lora_root(audio_dir, user_id, lora_id) / _COMPLETED_TRAINING_MODE_FILENAME
 
 
 def _completed_training_mode_tmp_path(audio_dir: Path, user_id: str, lora_id: str) -> Path:
@@ -1276,7 +1272,7 @@ def _validated_lora_adapter_handoff(
     audio_dir: Path, user_id: str, tmp_output: Path, worker_result: TrainLoraTaskResultDTO
 ) -> Path:
     reported = worker_result.adapter_dir
-    adapter_src = confined_under(audio_dir / USER_LORAS_DIRNAME / user_id, Path(reported))
+    adapter_src = confined_under(lora_owner_root(audio_dir, user_id), Path(reported))
     if adapter_src is None or adapter_src != tmp_output.resolve():
         raise RuntimeError(f"Worker reported unexpected training handoff path: {reported}")
     if not adapter_src.is_dir():
