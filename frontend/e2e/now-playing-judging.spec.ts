@@ -27,6 +27,13 @@ async function openJudgingCard(page: Page, shell: 'desktop' | 'mobile') {
 	return page.getByRole('region', { name: words['nowPlayingJudging.label'] });
 }
 
+/** The header names the surface only: the kicker is there and the song's title is not. */
+async function expectHeaderWithoutTitle(page: Page) {
+	const header = page.locator('.np-header');
+	await expect(header).toContainText(words['nowPlaying.kicker']);
+	await expect(header).not.toContainText(readSeededLibrary().albumTracks[0].songTitle);
+}
+
 function isRating(request: Request): boolean {
 	return request.method() === 'POST' && request.url().endsWith('/rate');
 }
@@ -59,11 +66,13 @@ test(
 				.getByRole('complementary')
 				.getByRole('region', { name: words['nowPlayingJudging.label'] })
 		).toBeVisible();
+		await expectHeaderWithoutTitle(page);
 
 		await page.getByRole('button', { name: words['nowPlaying.expand'], exact: true }).click();
 
 		await expect(page.getByRole('complementary')).toHaveCount(0);
 		await expect(card).toBeVisible();
+		await expectHeaderWithoutTitle(page);
 	}
 );
 
@@ -119,6 +128,9 @@ test('a pressed pill keeps its label as its name and says its state only in aria
 			card.getByRole('button', { name, pressed: !wasPressed, exact: true })
 		).toBeVisible();
 		await expect(pill).toHaveAccessibleName(name);
+
+		await pill.click();
+		await expect(pill).toHaveAttribute('aria-pressed', String(wasPressed));
 	}
 });
 
@@ -135,7 +147,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				name: words[`nowPlayingJudging.${word}`],
 				exact: true
 			});
-			if ((await pill.getAttribute('aria-pressed')) !== 'true') await pill.click();
+			const wasPressed = (await pill.getAttribute('aria-pressed')) === 'true';
+			if (!wasPressed) await pill.click();
 			await expect(pill).toHaveAttribute('aria-pressed', 'true');
 			const { ink, fill } = await pill.evaluate((element) => ({
 				ink: getComputedStyle(element).color,
@@ -144,6 +157,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			expect(
 				contrastRatio(await paintedRgb(page, ink), await paintedRgb(page, fill))
 			).toBeGreaterThanOrEqual(4.5);
+			if (!wasPressed) {
+				await pill.click();
+				await expect(pill).toHaveAttribute('aria-pressed', 'false');
+			}
 		}
 
 		const note = card.getByRole('textbox', { name: words['nowPlayingJudging.ratingNotes'] });

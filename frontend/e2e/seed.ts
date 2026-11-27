@@ -691,14 +691,16 @@ function takeId(takes: Map<string, string>, songTitle: string): string {
 export async function seedTakeStripSong(
 	albumId: string,
 	title: string,
-	takeCount: number
+	takeCount: number,
+	lyrics = ''
 ): Promise<string> {
 	try {
 		return await runTakeSeeder(
 			['--album-id', albumId, '--title', title],
 			takeCount,
 			requiredAdminUsername(),
-			readFileSync(TAKE_FIXTURE)
+			readFileSync(TAKE_FIXTURE),
+			lyrics ? ['--lyrics', lyrics] : []
 		);
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);

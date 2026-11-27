@@ -9,6 +9,10 @@ import { words } from '../src/lib/words/en';
 const SHORT_PHONE_VIEWPORT = { width: MOBILE_VIEWPORT.width, height: 664 };
 // Long enough to wrap onto a second line beside the cover thumbnail.
 const TWO_LINE_TITLE = 'A very long song title that needs two lines on a phone';
+// Far more lines than the lyrics region can show on either phone height.
+const LONG_LYRICS = Array.from({ length: 70 }, (_, index) => `Lyric line number ${index + 1}`).join(
+	'\n'
+);
 
 let guard: FlowGuard;
 
@@ -36,7 +40,7 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 		const { id: albumId } = (await album.json()) as { id: string };
 		try {
 			// Two takes keep the take sheet shut behind the Queue row.
-			await seedTakeStripSong(albumId, TWO_LINE_TITLE, 2);
+			await seedTakeStripSong(albumId, TWO_LINE_TITLE, 2, LONG_LYRICS);
 			await page.goto(`/album/${albumId}`);
 			await playOpenAlbum(page);
 			await openNowPlayingFromBar(page, 'mobile', TWO_LINE_TITLE);
@@ -66,7 +70,7 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 					surface.getByRole('button', { name: words['nowPlaying.previousSong'] }),
 					surface.getByRole('button', { name: words['transport.pause'] }),
 					surface.getByRole('button', { name: words['nowPlaying.nextSong'] }),
-					surface.getByRole('slider').first(),
+					surface.getByRole('slider', { name: words['transport.seek'] }),
 					surface.getByRole('region', { name: words['nowPlayingJudging.label'] }),
 					surface.locator('button[aria-haspopup="dialog"]')
 				];
@@ -75,6 +79,31 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 					await expect(control).toBeVisible();
 					await expectInsideViewport(page, control);
 				}
+			});
+		});
+	}
+
+	for (const viewport of [MOBILE_VIEWPORT, SHORT_PHONE_VIEWPORT]) {
+		test(`long lyrics scroll in their own region at ${viewport.width}x${viewport.height} and leave the transport on the first screen`, async ({
+			page
+		}) => {
+			await onTwoLineSong(page, viewport, async (surface) => {
+				const lyrics = surface.locator('.lyrics');
+				await expect(lyrics).toBeVisible();
+				const body = surface.locator('.phone-body');
+				const scrolls = await lyrics.evaluate(
+					(element) => element.scrollHeight > element.clientHeight
+				);
+				expect(scrolls).toBe(true);
+
+				await lyrics.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+
+				await expect.poll(() => lyrics.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+				expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+				await expectInsideViewport(
+					page,
+					surface.getByRole('button', { name: words['transport.pause'] })
+				);
 			});
 		});
 	}
