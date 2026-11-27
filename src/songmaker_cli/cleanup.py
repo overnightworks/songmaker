@@ -1,6 +1,6 @@
 """Hard-delete soft-deleted Albums/Songs older than the soft-delete retention window.
 
-Scheduled as an arq cron job. Reuses the existing delete_album/delete_song
+The music worker runs it as a cron. Reuses the existing delete_album/delete_song
 query functions (which already collect mp3/wav paths before ORM cascade
 fires) so file unlinks happen post-commit, exactly like the synchronous
 DELETE endpoints used to.

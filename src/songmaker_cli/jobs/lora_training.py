@@ -1034,7 +1034,6 @@ def _persist_crashed_lora_reconciliation(
 
 
 async def run_lora_training_job(
-    _ctx,
     job_id: str,
     lora_id: str,
     user_id: str,

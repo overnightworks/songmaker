@@ -10,9 +10,9 @@ Three roles:
   ``Generation.generation_params`` after a run. Inherits the knobs and adds
   resolved/output fields (model id, bpm, key_scale, task type, repaint/cover
   knobs, COT outputs).
-* :class:`RepaintTaskParams` / :class:`CoverTaskParams` — strict typed
-  replacement for the dict-typed ``repaint_params``/``cover_params`` arq kwargs
-  that flow API → arq → worker → ``run_generation_job``.
+* :class:`RepaintTaskParams` / :class:`CoverTaskParams` — the strict typed
+  task parameters the job row's payload stores and the worker reads back for
+  ``run_generation_job``.
 """
 
 from __future__ import annotations
@@ -102,11 +102,10 @@ class StoredGenerationParams(BaseGenerationParams):
 
 
 class RepaintTaskParams(BaseModel):
-    """Strict typed replacement for the dict-typed ``repaint_params`` arq kwarg.
+    """The strict typed parameters of a repaint.
 
     Constructed at the API boundary after the source generation has been
-    resolved to a wav path. Flows through arq via ``model_dump()`` and is
-    rehydrated in :meth:`MusicWorker.generate` via ``model_validate``.
+    resolved to a wav path. Stored in the job row's payload and read back by the worker.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -124,7 +123,7 @@ class RepaintTaskParams(BaseModel):
 
 
 class CoverTaskParams(BaseModel):
-    """Strict typed replacement for the dict-typed ``cover_params`` arq kwarg."""
+    """The strict typed parameters of a cover."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

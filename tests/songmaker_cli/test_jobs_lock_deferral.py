@@ -84,7 +84,7 @@ def test_a_download_that_lost_its_lock_stops_and_the_next_job_joins_the_running_
 
             peer.deps.download_fn = controllable_transfer
             lost_job = asyncio.create_task(download_model_on_worker(
-                {"redis": redis}, "dl-lost", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+                "dl-lost", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
             ))
             await transfer_running.wait()
             other_process = redis.another_process()
@@ -96,7 +96,7 @@ def test_a_download_that_lost_its_lock_stops_and_the_next_job_joins_the_running_
             await other_locks.release("sft", generation)
             streams_before = [kind for kind, _ in peer.requests].count("stream")
             next_job = asyncio.create_task(download_model_on_worker(
-                {"redis": redis}, "dl-next", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+                "dl-next", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
             ))
             while [kind for kind, _ in peer.requests].count("stream") == streams_before:
                 await asyncio.sleep(0.01)

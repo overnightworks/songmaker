@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from support.generation_job_world import (
@@ -12,6 +11,7 @@ from support.generation_job_world import (
     run_async,
 )
 from support.job_owner import an_owner
+from support.score_jobs import ScoringRedis
 
 from songmaker_cli.db.models import Generation
 from songmaker_cli.generation_params import CoverTaskParams
@@ -51,7 +51,7 @@ def test_a_cover_job_leaves_no_source_copy_in_the_tmp_directory(
                 db_factory=seeded_db,
                 audio_dir=audio_dir,
                 data_dir=Path("data"),
-                redis=MagicMock(),
+                redis=ScoringRedis(worker_running=False),
                 target_model="sft",
                 owner=an_owner("o1"),
                 task_params=CoverTaskParams(
