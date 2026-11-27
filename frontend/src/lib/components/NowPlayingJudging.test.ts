@@ -71,6 +71,12 @@ describe('NowPlayingJudging', () => {
 		expect(queryButtonByLabel(target, words[`nowPlayingJudging.${off}`])).toBeNull();
 	});
 
+	it.each(['pick', 'keep', 'rating'] as const)('writes the word %s on the card', async (word) => {
+		await renderJudging();
+
+		expect(target).toHaveTextContent(words[`nowPlayingJudging.${word}`]);
+	});
+
 	it('opts its buttons into the frequent hitbox', async () => {
 		await renderJudging();
 

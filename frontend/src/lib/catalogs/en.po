@@ -2938,7 +2938,7 @@ msgid "Recipe"
 msgstr ""
 
 msgctxt "nowPlayingJudging.rating"
-msgid "Your rating"
+msgid "Rating"
 msgstr ""
 
 msgctxt "nowPlayingJudging.ratingNotes"

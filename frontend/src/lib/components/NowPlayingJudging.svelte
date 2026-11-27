@@ -18,6 +18,8 @@
 		song: SongItem;
 	} = $props();
 
+	const ratingId = $props.id();
+
 	// The rate route takes a rating with every note, so an unrated take starts
 	// its slider at the middle.
 	const UNRATED_START = 50;
@@ -87,6 +89,7 @@
 			title={pageText(generation.is_picked ? 'nowPlayingJudging.unpick' : 'nowPlayingJudging.pick')}
 		>
 			<Icon name={generation.is_picked ? 'star-filled' : 'star'} size={18} />
+			{pageText('nowPlayingJudging.pick')}
 		</button>
 		<button
 			type="button"
@@ -101,14 +104,18 @@
 			title={pageText(generation.is_kept ? 'nowPlayingJudging.unkeep' : 'nowPlayingJudging.keep')}
 		>
 			<Icon name={generation.is_kept ? 'heart-filled' : 'heart'} size={18} />
+			{pageText('nowPlayingJudging.keep')}
 		</button>
+	</div>
+	<div class="judging-rating">
+		<label class="rating-label" for={ratingId}>{pageText('nowPlayingJudging.rating')}</label>
 		<input
+			id={ratingId}
 			type="range"
 			class="rating-slider"
 			min="0"
 			max="100"
 			step="1"
-			aria-label={pageText('nowPlayingJudging.rating')}
 			bind:value={ratingValue}
 			onchange={saveRating}
 		/>
@@ -135,20 +142,23 @@
 		border-radius: var(--card-radius);
 		background: var(--surface);
 	}
-	.judging-top {
+	.judging-top,
+	.judging-rating {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 	}
 	.badge-btn {
-		flex: none;
-		width: 32px;
-		height: 32px;
+		flex: 1;
+		min-height: 36px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: 0.4rem;
 		border: 1px solid var(--border);
-		border-radius: 50%;
+		border-radius: var(--btn-radius-pill);
+		font-family: var(--font-body);
+		font-weight: 600;
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
@@ -161,6 +171,10 @@
 		color: var(--accent);
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+	}
+	.rating-label {
+		font-size: var(--label-font-size);
+		color: var(--text-muted);
 	}
 	.rating-slider {
 		flex: 1;

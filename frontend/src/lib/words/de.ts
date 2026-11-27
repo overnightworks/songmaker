@@ -906,7 +906,7 @@ const translated = {
     "nowPlayingTake.rescoring": "Wird neu bewertet…",
     "nowPlayingTake.rescore": "Neu bewerten",
     "nowPlayingTake.recipe": "Rezept",
-    "nowPlayingJudging.rating": "Deine Bewertung",
+    "nowPlayingJudging.rating": "Bewertung",
     "nowPlayingJudging.ratingNotes": "Notizen (optional)",
     "nowPlayingTake.useSeed": "Seed übernehmen",
     "nowPlayingTake.repaint": "Repaint",

@@ -2322,7 +2322,7 @@ export const words: Words = {
     "nowPlayingTake.rescoring": "Re-scoring…",
     "nowPlayingTake.rescore": "Re-score",
     "nowPlayingTake.recipe": "Recipe",
-    "nowPlayingJudging.rating": "Your rating",
+    "nowPlayingJudging.rating": "Rating",
     "nowPlayingJudging.ratingNotes": "Notes (optional)",
     "nowPlayingTake.useSeed": "Use seed",
     "nowPlayingTake.repaint": "Repaint",

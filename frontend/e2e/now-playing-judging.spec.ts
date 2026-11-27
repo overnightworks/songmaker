@@ -42,6 +42,9 @@ test('the judging card stands in the take column with no Save button', async ({
 		card.getByRole('textbox', { name: words['nowPlayingJudging.ratingNotes'] })
 	).toBeVisible();
 	await expect(card.getByRole('button', { name: /save/i })).toHaveCount(0);
+	for (const word of ['pick', 'keep', 'rating'] as const) {
+		await expect(card.getByText(words[`nowPlayingJudging.${word}`], { exact: true })).toBeVisible();
+	}
 });
 
 test('the judging card stands in the docked panel and stays when it is expanded', async ({

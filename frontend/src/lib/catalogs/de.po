@@ -3031,8 +3031,8 @@ msgid "Recipe"
 msgstr "Rezept"
 
 msgctxt "nowPlayingJudging.rating"
-msgid "Your rating"
-msgstr "Deine Bewertung"
+msgid "Rating"
+msgstr "Bewertung"
 
 msgctxt "nowPlayingJudging.ratingNotes"
 msgid "Notes (optional)"
