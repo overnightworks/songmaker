@@ -1,0 +1,7 @@
+claim_id = "8f2bf81007384b44a2e04751c64c19cb"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "5fa0a7b15aae390b6fc498d9afd8939f6ba46d0d"
+branch = "fix/postgres-17-12"
+scope = [".github/workflows/ci.yml", "docker/docker-compose.test.yml"]
+opened_commit = "d7258e72c6657d745aab5d8dbaabc37ca93b5703"
