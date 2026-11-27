@@ -606,14 +606,14 @@ A compromised acestep-worker container has:
 - The model-weights volume mount (read/write, but only its own checkpoints directory).
 - The `audiofiles` volume, read-write at `/app/data/audio`: every musician's audio files.
 - The container network the services share, so network access to every service on it, including Redis, the web container and the music-worker container.
-- Redis without authentication, through the same `REDIS_URL` every service uses: every key is readable and writable, arq queues and rate-limit state included.
+- Redis without authentication, through the same `REDIS_URL` every service uses: every key is readable and writable, the worker leases, cron deadlines, wake channel, locks, tandem slots and rate-limit state included. Redis holds no queued job; the queue is PostgreSQL rows.
 
 It does **not** have:
 
 - A direct database connection (the worker has no `DATABASE_URL`; it only calls `/api/internal/workers/register`, which writes a single identity row).
 - The session secret (the acestep worker has no `SESSION_SECRET`).
 
-A compromised worker can overwrite or delete any stored audio file, enqueue or alter arq jobs, rewrite rate-limit state, publish bogus state to Redis, register with a wrong host/port, or refuse to load models. User audio integrity and queue contents are within its reach. It has no direct database connection, but the jobs it forges or alters run in workers that hold `DATABASE_URL` (for example, a scoring job for a chosen generation writes that generation's scores), so database rows are reachable indirectly. The session secret is not.
+A compromised worker can overwrite or delete any stored audio file, register with a wrong host/port, or refuse to load models. Through Redis it cannot enqueue, forge or alter a job: no worker runs a job read from Redis, and workers claim jobs only from PostgreSQL rows. It can still harm availability and publish false state: forge or delete worker leases, which flip the web's worker signals and make the web fail the running jobs of an owner whose lease it finds gone, or keep the jobs of a dead owner alive; move a cron deadline, which can delay or repeat an idempotent cron (the audit-log retention included, whose cutoff comes from the worker's own clock, so it deletes nothing extra); publish a wake, which only makes a running cover or a worker's claim loop re-read PostgreSQL and cancels or claims nothing by itself; and rewrite locks, tandem slots and rate-limit state. Audio integrity is within its reach. No job can be enqueued or forged, and no payload runs from Redis. The session secret is not.
 
 ### How a take reaches music
 

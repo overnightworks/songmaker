@@ -304,7 +304,7 @@ scripts/voices_e2e_probe.sh
 
 The fake worker uses the same internal worker registration, Redis heartbeat,
 GPU-hold, task-SSE, and adapter-result contracts as the ACE-Step worker. It
-only replaces model training and generation output; ARQ, job, and database
+only replaces model training and generation output; worker, job, and database
 handling remain in the application. The two S5 occupancy jobs target one
 dedicated song/version whose existing prompt exactly equals
 `FAKE_GENERATION_OCCUPANCY_PROMPT`; no generation request carries a prompt.

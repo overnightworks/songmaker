@@ -2,11 +2,11 @@
 
 AI-powered song generation platform. Create albums and songs with lyrics + style prompts, generate music via [ACE-Step](https://github.com/ace-step/ACE-Step), auto-master to MP3, and score quality.
 
-SvelteKit frontend + FastAPI backend + PostgreSQL + Redis + arq job workers + GPU ACE-Step worker.
+SvelteKit frontend + FastAPI backend + PostgreSQL + Redis + job workers + GPU ACE-Step worker.
 
 ## Deployment and the test stack
 
-The platform serves Songmaker: it runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, Redis and the S3 object store (the web's bucket, `SONGMAKER_S3_BUCKET`, holds the queue-stream snapshots) from the images the Release workflow pushes. This repository ships no deploy file.
+The platform serves Songmaker: it runs the web app, both job workers, the ACE-Step GPU worker, PostgreSQL, Redis and the S3 object store (the web's bucket, `SONGMAKER_S3_BUCKET`, holds the queue-stream snapshots) from the images the Release workflow pushes. This repository ships no deploy file.
 
 [`docker/docker-compose.test.yml`](docker/docker-compose.test.yml) is the test stack: CI's e2e boot, the GPU and Voices probes and local e2e runs boot it with throwaway secrets. Run every Compose call from the repository root, so the project name, the root `.env` and the relative paths keep resolving there:
 

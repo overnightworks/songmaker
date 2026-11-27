@@ -87,7 +87,7 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease
 def scoring_worker_on_pg(workers_on_db, readiness_file: Path, tmp_path: Path):
     """A scoring worker with a short time limit, on this test's database."""
     settings = get_settings().model_copy(
-        update={"audio_dir": str(tmp_path), "arq_job_timeout": TIME_LIMIT_SECONDS},
+        update={"audio_dir": str(tmp_path), "worker_job_timeout": TIME_LIMIT_SECONDS},
     )
     return ScoringWorker(settings, readiness_file=readiness_file)
 

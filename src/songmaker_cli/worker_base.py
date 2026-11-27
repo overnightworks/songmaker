@@ -234,7 +234,7 @@ class WorkerBase:
             self.wake_channel, self.queue,
             claim=self.claim_next_job, run=self.run_claimed,
             places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
-            drain_seconds=self._settings.arq_drain_timeout,
+            drain_seconds=self._settings.worker_drain_timeout,
         )
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:

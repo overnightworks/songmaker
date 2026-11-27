@@ -2941,7 +2941,7 @@ export const words: Words = {
     "jobFailure.referenceAudioNotFound": "Reference audio not found",
     "jobFailure.referenceDeletedDuringTake": "The reference track was deleted while this take was generating.",
     "jobFailure.voiceUnavailable": "Selected voice is unavailable for this generation",
-    "jobFailure.generationCancelled": "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+    "jobFailure.generationCancelled": "Job cancelled: it ran past the time limit or the worker shut down.",
     "jobFailure.partialTakes": (gaps: { readonly cause: string; readonly completed: string; readonly count: number; readonly failed: string }) => gaps.completed + "/" + numberFormat.format(gaps.count) + " completed, " + gaps.failed + " failed: " + gaps.cause,
     "jobFailure.scoringWorkerDown": "Scoring worker not running",
     "jobFailure.scoringEnqueueFailed": "Failed to enqueue auto-score job",

@@ -826,7 +826,7 @@ async def run_generation_job(
             _remove_temporary_generation_audio(tmp_copies)
 
     except asyncio.CancelledError:
-        log.warning("Generation job %s cancelled (arq timeout or worker shutdown)", job_id)
+        log.warning("Generation job %s cancelled (job timeout or worker shutdown)", job_id)
         _update_job(
             db_factory,
             job_id,

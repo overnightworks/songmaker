@@ -1527,7 +1527,7 @@ const translated = {
     "jobFailure.referenceAudioNotFound": "Referenz-Audio nicht gefunden",
     "jobFailure.referenceDeletedDuringTake": "Der Referenztrack wurde gelöscht, während dieser Take generiert wurde.",
     "jobFailure.voiceUnavailable": "Die gewählte Stimme ist für diese Generierung nicht verfügbar",
-    "jobFailure.generationCancelled": "Job abgebrochen: ARQ_JOB_TIMEOUT überschritten oder Worker heruntergefahren",
+    "jobFailure.generationCancelled": "Job abgebrochen: Zeitlimit überschritten oder Worker heruntergefahren.",
     "jobFailure.partialTakes": (gaps: { readonly cause: string; readonly completed: string; readonly count: number; readonly failed: string }) => gaps.completed + "/" + numberFormat.format(gaps.count) + " fertig, " + gaps.failed + " fehlgeschlagen: " + gaps.cause,
     "jobFailure.scoringWorkerDown": "Der Bewertungs-Worker läuft nicht",
     "jobFailure.scoringEnqueueFailed": "Der Job zur automatischen Bewertung konnte nicht eingereiht werden",

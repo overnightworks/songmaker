@@ -1593,7 +1593,7 @@ subprocess watchdog covers the child's single concurrent phase — its slowest
 scorer budget plus headroom — and never drops below
 `SCORING_PIPELINE_TIMEOUT_SECONDS`. If it fired first the subprocess would be
 SIGKILLed and even the values the run did produce would be lost.
-`ARQ_JOB_TIMEOUT` must stay above the whole job: the child watchdog plus its margin.
+`WORKER_JOB_TIMEOUT` must stay above the whole job: the child watchdog plus its margin.
 
 `whisper_cues` is a JSON list of `{start, end, text}` from faster-whisper segments (start/end in seconds), each optionally carrying `words`, the same shape one level finer, from `word_timestamps=True` (#142). `null` means never scored or a legacy row; a list (including `[]`) means text_accuracy ran and stored whatever usable cues it produced. A cue without `words` was scored before word timestamps existed and gets them only through a re-score (#132) — the key is omitted rather than stored as `null`, so those rows keep their original shape. `whisper_text` is the same cue texts joined with newlines. Missing timings are not invented.
 
@@ -1604,7 +1604,7 @@ SIGKILLed and even the values the run did produce would be lost.
   API ─→ route by type ──┤
                          └─ jobs rows (type score) + wake queue/score → Scoring Worker(s)
 
-  Chat runs inline in the API process (no arq queue), as a task of its own:
+  Chat runs inline in the API process (no job queue), as a task of its own:
   a client that disconnects stops listening, not the turn.
 ```
 
@@ -1614,11 +1614,11 @@ SIGKILLed and even the values the run did produce would be lost.
 - Handles `generate`, `load_model_on_worker`, `download_model_on_worker`, and
   `lora_training` jobs, claimed from their rows ("Queued job lifecycle" below)
 - `MUSIC_MAX_JOBS` places, 2 by default (concurrent SSE consumers; the actual generation runs on the
-  acestep-worker); each job runs within `ARQ_JOB_TIMEOUT`, a LoRA training within
+  acestep-worker); each job runs within `WORKER_JOB_TIMEOUT`, a LoRA training within
   `LORA_TRAINING_JOB_TIMEOUT`
 - Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`. The
   claiming loop and the crons are the tasks of one `asyncio.TaskGroup`, so a stop signal ends both
-  (a running job drains within `ARQ_DRAIN_TIMEOUT`), and one that raises ends the worker
+  (a running job drains within `WORKER_DRAIN_TIMEOUT`), and one that raises ends the worker
   process loudly while the lease is released.
 - Crons: audits orphaned audio files and applies file-expiry cleanup every even minute; once a
   day (`DAILY_CLEANUP_HOUR_UTC`) it deletes audit-log entries older than
@@ -1646,7 +1646,7 @@ SIGKILLed and even the values the run did produce would be lost.
   so the worker holds no provider credential; the subprocess is spawned with
   `SECRET_ENV_KEYS` scrubbed
 - Handles `score` jobs, claimed from their rows ("Queued job lifecycle" below); each runs within
-  `ARQ_JOB_TIMEOUT`, and one still running then ends `failed` with `error_type = "timeout"` and the
+  `WORKER_JOB_TIMEOUT`, and one still running then ends `failed` with `error_type = "timeout"` and the
   stored message `jobFailure.tookTooLong`; the scorer thread of that job cannot be cancelled and
   writes nothing late, because its row has ended
 - Loads Whisper and AudioBox from files pinned by hash in its image
@@ -1682,8 +1682,8 @@ SIGKILLed and even the values the run did produce would be lost.
   closed at shutdown, through `AppContext.following_wake_channel`; `AppContext.wake_channel`
   publishes on `async_redis`. Below redis-py 8.2 a quiet subscription ends at its client's
   `socket_timeout` and tandem subscribes again (WAKE-30), which would make a running cover's cancel
-  listener re-read the job every 2 s; arq keeps songmaker on redis-py 5.3, so the second client stays
-  until songmaker leaves arq and tandem's floor reaches 8.2.
+  listener re-read the job every 2 s; songmaker's lock holds redis-py below 8.2, so the second client stays
+  until tandem's floor and the lock reach 8.2.
 - `WorkerBase.run()` is the entry of every worker process: it installs the stop-signal handlers
   (SIGINT and SIGTERM) first, so a stop that arrives while `start()` waits for the database or opens
   the lease ends the worker through `stop()` within seconds, holding no lease; then it starts (readiness
@@ -1711,7 +1711,7 @@ loses none. The music queue (`queue/music`: `generate`, `lora_training`, `load_m
 the web process reads the capacity a generation needs (music worker alive, an online ACE-Step
 worker) before it creates the row, and a generation nothing can run commits already failed, so no
 worker claims it before the refusal; one loop claims the four types, oldest `run_after` first; each job runs within
-`ARQ_JOB_TIMEOUT`, a LoRA training within `LORA_TRAINING_JOB_TIMEOUT`; and LoRA training yields to a
+`WORKER_JOB_TIMEOUT`, a LoRA training within `LORA_TRAINING_JOB_TIMEOUT`; and LoRA training yields to a
 generation that is queued or claimed and has not started a take, so a generation claimed but not yet
 admitted never waits behind a whole training run.
 
@@ -1734,7 +1734,7 @@ admitted never waits behind a whole training run.
    by at most that interval. A Redis that is down at start leaves the loop polling alone.
 4. It runs the job from the claimed row's payload and writes its one `queued_job.ended` line. A
    claimed row whose payload is not a score payload fails as unexpected. A stop signal ends
-   the claiming at once and waits `ARQ_DRAIN_TIMEOUT` for the running job; one still
+   the claiming at once and waits `WORKER_DRAIN_TIMEOUT` for the running job; one still
    running keeps its row, which the owner lease hands to the reaper.
 
 Recovery judges a score row by its owner stamp like every other row: a `running` row whose
@@ -1897,7 +1897,7 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
 
   Generation uses three ordered clocks: ACE-Step's 600-second poll window,
   the scheduler's 630-second SSE read timeout (poll window plus 30-second
-  margin), and the worker's 1000-second `ARQ_JOB_TIMEOUT` per job as the final safeguard. Before
+  margin), and the worker's 1000-second `WORKER_JOB_TIMEOUT` per job as the final safeguard. Before
   the first SSE event, a cold worker can spend 600 seconds loading a model,
   30 seconds accepting generation, and 10 seconds connecting the stream. The
   760-second generate reaper threshold is therefore the longer of that
@@ -1908,7 +1908,7 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   the heartbeat and the first-event and read windows do not concatenate.
 
   LoRA training uses its own `LORA_TRAINING_JOB_TIMEOUT` (3600 seconds by
-  default), while the MusicWorker's global `ARQ_JOB_TIMEOUT` remains the
+  default), while the MusicWorker's global `WORKER_JOB_TIMEOUT` remains the
   generation limit. Its five-second worker progress poll is ordered below the
   300-second LoRA reaper threshold, which is ordered below the LoRA job timeout.
   Every TaskStore progress event follows the shared SSE path and refreshes the

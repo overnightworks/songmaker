@@ -740,7 +740,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     """The chat/lora_training reaper (#371) must actually be scheduled by the
     running server, not just exist as a function -- generate/score get their
-    equivalent from the arq-worker cron unconditionally; the web-process side
+    equivalent from the worker cron unconditionally; the web-process side
     only takes effect if _lifespan starts it like the other three loops."""
     from songmaker_cli.server import _lifespan
 
