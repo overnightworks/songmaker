@@ -135,6 +135,17 @@ describe('NowPlayingJudging', () => {
 		expect(rate).toHaveBeenCalledExactlyOnceWith('s1', 'g1', 70, 'Loved it');
 	});
 
+	it('saves a pending note when the card goes away', async () => {
+		await renderJudging(generation({ scores: { user_rating: 70, user_notes: '' } }));
+
+		typeNote('Typed then gone');
+		vi.advanceTimersByTime(NOTE_SAVE_PAUSE_MS - 1);
+		await unmount(mounted!);
+		mounted = undefined;
+
+		expect(rate).toHaveBeenCalledExactlyOnceWith('s1', 'g1', 70, 'Typed then gone');
+	});
+
 	it('saves nothing when the field is left unchanged', async () => {
 		await renderJudging(generation({ scores: { user_rating: 70, user_notes: 'Same' } }));
 
@@ -144,7 +155,7 @@ describe('NowPlayingJudging', () => {
 		expect(rate).not.toHaveBeenCalled();
 	});
 
-	it('keeps the typed note when the save does not come through', async () => {
+	it('keeps the typed note after its save', async () => {
 		await renderJudging(generation({ scores: { user_rating: 70, user_notes: '' } }));
 
 		typeNote('Still mine');
