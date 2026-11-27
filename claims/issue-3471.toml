@@ -1,8 +1,0 @@
-claim_id = "23b4fd4193ef4d42a3e5afec0103685e"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "bcd20cbb51defdd6314a6a9200b5a08e563c4e7c"
-branch = "claude/issue-3471-judging-card-every-surface"
-scope = ["docs/architecture.md", "docs/library.md", "docs/mockups/now-playing-queue", "frontend/e2e", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingFrame.test.ts", "frontend/src/lib/components/NowPlayingJudging.svelte", "frontend/src/lib/components/NowPlayingJudging.test.ts", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/editor/TakesListBulkDelete.test.ts", "frontend/src/lib/components/editor/TakesListFolds.test.ts", "frontend/src/lib/contexts/generation-actions.ts", "frontend/src/lib/stores/takeActions.test.ts", "frontend/src/lib/stores/takeActions.ts", "frontend/src/lib/test-utils/reactive-props.svelte.ts", "frontend/src/lib/test-utils/takes-list.ts", "frontend/src/lib/words", "quality/baseline.toml", "scripts/style-literals.txt", "src/songmaker_cli/words.py"]
-opened_commit = "511dd69db7d5f076e15bd0a26794ca34e3860146"
-whole_reason = "One judging card replaces the This-take panel's Pick, Keep, Rating and Note on every Now Playing surface; its words, docs, frozen mock-ups and tests change with it, or a surface keeps a second judging path."
