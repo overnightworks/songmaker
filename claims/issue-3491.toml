@@ -1,5 +1,5 @@
 claim_id = "2734bd180fbe423e8abe006041a9fa6c"
-agent = "Claude 6c37e6a6-75aa-459f-a727-4aa48d1d7262"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
 role = "builder"
 base = "614850b5a17f8aa56df5eb96c5b999650dc8cc44"
 branch = "claude/issue-3491-the-queued-job-line-and-the-codec-lose-a"
