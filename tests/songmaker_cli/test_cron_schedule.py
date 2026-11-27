@@ -30,7 +30,12 @@ from songmaker_cli.cron_schedule import (
 from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.worker_base import CRON_ENDED_EVENT
 
-DAILY = (Cron.GENERATION_RETENTION, Cron.REFERENCE_REMNANT, Cron.REFERENCE_UNUSED)
+DAILY = (
+    Cron.AUDIT_LOG_RETENTION,
+    Cron.GENERATION_RETENTION,
+    Cron.REFERENCE_REMNANT,
+    Cron.REFERENCE_UNUSED,
+)
 
 
 def _at(hour: int, minute: int = 0, second: int = 0, *, day: int = 23, micro: int = 0) -> datetime:

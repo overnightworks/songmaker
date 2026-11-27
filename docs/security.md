@@ -31,7 +31,7 @@ People sign in through the operator's Keycloak realm (OpenID Connect, authorizat
 - **Session cookies of the old login**: the 0.14 library's cookies are refused (`401`); the migration also deletes every session row.
 - **Frontend auth-check classification**: A non-public 401 navigates the whole page to `/login/oidc?next=…`; the public paths (`/shared/*`, `/share/*`) never redirect. A 429, a 5xx or a network error on the SPA's startup `GET /api/auth/me` is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a sign-out.
 
-**Platform's live check.** After each release platform's live check signs in a test person, `live-check`, with the realm's `/apps/songmaker` group only: no admin group and no MCP group, and the account is disabled in Keycloak between runs. It drives four routes: `GET /login/oidc` and `GET /auth/callback` sign the person in, `GET /api/auth/me` answers 200, `POST /auth/logout` with an allowed `Origin` signs the person out, and `GET /api/auth/me` then answers 401. A first sign-in leaves that person's account row, its resource-event cursor and one audit row (the account creation); they stay as the person's own data, and the session row goes with the logout. Moving or renaming any of the four routes is agreed with platform's head before it lands. Their paths have one owner each, `OIDC_START_PATH`, `OIDC_CALLBACK_PATH` and `LOGOUT_PATH` in `constants.py` and the `/me` route in `auth_api.py`.
+**Platform's live check.** After each release platform's live check signs in a test person, `live-check`, with the realm's `/apps/songmaker` group only: no admin group and no MCP group, and the account is disabled in Keycloak between runs. It drives four routes: `GET /login/oidc` and `GET /auth/callback` sign the person in, `GET /api/auth/me` answers 200, `POST /auth/logout` with an allowed `Origin` signs the person out, and `GET /api/auth/me` then answers 401. A first sign-in leaves that person's account row, its resource-event cursor and one audit row (the account creation); they stay as the person's own data (the audit row until the audit-log retention deletes it), and the session row goes with the logout. Moving or renaming any of the four routes is agreed with platform's head before it lands. Their paths have one owner each, `OIDC_START_PATH`, `OIDC_CALLBACK_PATH` and `LOGOUT_PATH` in `constants.py` and the `/me` route in `auth_api.py`.
 
 ### Keycloak outage
 
@@ -682,6 +682,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
 - **Read access**: none over HTTP — `GET /api/admin/audit-log` answers 404 because no admin surface shows the trail; the rows stay in the database and are read there.
+- **Retention**: rows older than `AUDIT_LOG_RETENTION_DAYS` (default 90) are deleted by the daily audit-log retention cron.
 
 ## Deployment
 

@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import BinaryIO, Final
 
 import httpx
-from logline import outgoing_headers
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
@@ -243,10 +242,7 @@ async def pick_any_online_worker(
 
 
 def worker_request_headers() -> dict[str, str]:
-    return {
-        INTERNAL_TOKEN_HEADER: get_settings().songmaker_internal_token.get_secret_value(),
-        **outgoing_headers(),
-    }
+    return {INTERNAL_TOKEN_HEADER: get_settings().songmaker_internal_token.get_secret_value()}
 
 
 async def _maybe_invoke(callback: Callable | None, *args) -> None:

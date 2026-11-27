@@ -2,11 +2,13 @@
 
 The music worker runs it as a cron. Reuses the existing delete_album/delete_song
 query functions (which already collect mp3/wav paths before ORM cascade
-fires) so file unlinks happen post-commit, exactly like the synchronous
-DELETE endpoints used to.
+fires) so file unlinks happen post-commit.
 
 Also runs generation retention: archives expired unpicked/unkept
 generations and hard-deletes archived generations after a second window.
+
+run_audit_log_retention deletes audit-log entries older than the audit-log
+retention period.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_fil
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
+from songmaker_cli.db.queries.auth import delete_audit_entries_before
 from songmaker_cli.db.queries.generations import (
     archive_generation,
     delete_expired_generation,
@@ -232,3 +235,11 @@ def run_generation_retention(
             report.archived_count, report.deleted_count,
         )
     return report
+
+
+def run_audit_log_retention(db_factory, *, days: int, now: datetime) -> int:
+    """Delete the audit-log entries created before ``now`` minus ``days``; returns their count."""
+    with db_factory() as session:
+        deleted = delete_audit_entries_before(session, now - timedelta(days=days))
+        session.commit()
+    return deleted
