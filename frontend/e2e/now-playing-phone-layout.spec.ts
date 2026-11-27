@@ -100,10 +100,14 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 
 				await expect.poll(() => lyrics.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 				expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+				expect(await body.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(
+					true
+				);
 				await expectInsideViewport(
 					page,
 					surface.getByRole('button', { name: words['transport.pause'] })
 				);
+				await expectInsideViewport(page, surface.locator('button[aria-haspopup="dialog"]'));
 			});
 		});
 	}
