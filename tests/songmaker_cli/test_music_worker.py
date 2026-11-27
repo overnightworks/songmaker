@@ -27,7 +27,7 @@ from songmaker_cli.acestep_state import download_locks, worker_state_key
 from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.cron_schedule import Cron, CronBody
-from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
+from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
@@ -40,6 +40,7 @@ from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
 from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.timestamps import utcnow
 
 FOREVER_SECONDS = 3600
 RUN_WITHIN_SECONDS = 30
@@ -349,6 +350,28 @@ def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_delet
     assert calls == ["reconcile", "delete"]
     assert received == {"days": 17, "hour": DAILY_CLEANUP_HOUR_UTC, "now": now}
     assert changed == 2 + 1 + 4
+
+
+def test_the_audit_log_retention_cron_deletes_the_entries_older_than_the_setting_and_counts_them(
+    pg_factory,
+) -> None:
+    now = utcnow()
+    with pg_factory() as session:
+        for entry_id, age in [("old", timedelta(days=8)), ("young", timedelta(days=6))]:
+            session.add(AuditLog(
+                id=entry_id, action="login", resource_type="session", created_at=now - age,
+            ))
+        session.add(User(id="old", username="old", created_at=now - timedelta(days=800)))
+        session.commit()
+    worker = MusicWorker(_settings().model_copy(update={"audit_log_retention_days": 7}))
+    worker.get_db_factory = MagicMock(return_value=pg_factory)
+
+    deleted = _run(worker.cron_bodies()[Cron.AUDIT_LOG_RETENTION]())
+
+    with pg_factory() as session:
+        remaining = {entry.id for entry in session.query(AuditLog)}
+        people = session.query(User).count()
+    assert (deleted, remaining, people) == (1, {"young"}, 1)
 
 
 def test_the_music_worker_has_a_body_for_every_cron() -> None:

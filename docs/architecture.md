@@ -1621,10 +1621,11 @@ SIGKILLed and even the values the run did produce would be lost.
   (a running job drains within `ARQ_DRAIN_TIMEOUT`), and one that raises ends the worker
   process loudly while the lease is released.
 - Crons: audits orphaned audio files and applies file-expiry cleanup every even minute; once a
-  day (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
+  day (`DAILY_CLEANUP_HOUR_UTC`) it deletes audit-log entries older than
+  `AUDIT_LOG_RETENTION_DAYS`, applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed. The four are keys of one tandem `Deadlines` of kind `worker-crons`
+  has passed. They are keys of one tandem `Deadlines` of kind `worker-crons`
   (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
   once across all workers, extends the claim while the body runs and calls `done` after it. Redis
   TIME is the only clock: a run ends with `recur`, which arms the key for the next tick
