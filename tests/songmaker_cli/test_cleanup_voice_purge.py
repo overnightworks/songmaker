@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -213,7 +214,7 @@ def test_a_voice_of_a_linked_owner_directory_leaves_the_directory_it_links_to_wi
 
 @pytest.fixture
 def away():
-    """A directory beside the audio root with a short absolute path, as an owner id needs."""
+    """A short absolute directory in the system temp directory: users.id holds 36 characters."""
     directory = Path(tempfile.mkdtemp())
     try:
         yield directory
@@ -242,7 +243,8 @@ def _voice_id_dot_slash_naming_a_live_voice(world: _World, away: Path) -> tuple[
     ],
 )
 def test_a_voice_whose_ids_join_to_a_directory_that_is_not_its_own_leaves_that_directory(
-    world: _World, away: Path, monkeypatch: pytest.MonkeyPatch, hostile,
+    world: _World, away: Path, monkeypatch: pytest.MonkeyPatch,
+    hostile: Callable[[_World, Path], tuple[str, str, Path]],
 ) -> None:
     owner_id, voice_id, victim = hostile(world, away)
     (victim / "kept.txt").parent.mkdir(parents=True, exist_ok=True)
