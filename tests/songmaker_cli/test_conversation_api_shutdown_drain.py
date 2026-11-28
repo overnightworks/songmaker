@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
@@ -16,7 +17,9 @@ JOB_ID = "job-1"
 
 
 def test_the_turn_drain_returns_at_once_without_running_turns() -> None:
-    asyncio.run(asyncio.wait_for(end_running_chat_turns(60), 5))
+    started = time.monotonic()
+    returned = asyncio.run(end_running_chat_turns(60))
+    assert (returned, time.monotonic() - started < 1) == (None, True)
 
 
 @pytest.mark.parametrize(
