@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -13,12 +12,14 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
-from botocore.response import StreamingBody
+from botocore.exceptions import ClientError, NoCredentialsError
 from logline import unit_trace
 from logline.testing import configured
 from pydantic import ValidationError
-from support.object_store import an_unreachable_object_store
+from support.object_store import (
+    a_store_that_drops_the_connection_mid_body,
+    an_unreachable_object_store,
+)
 
 from songmaker_cli import object_store as object_store_module
 from songmaker_cli import server
@@ -235,17 +236,14 @@ def test_a_store_that_cannot_be_reached_is_named_unavailable(
         call(store)
 
 
-def test_a_connection_that_drops_while_the_body_is_read_is_named_unavailable() -> None:
-    store = ObjectStore("b")
-    body = StreamingBody(io.BytesIO(b""), 1)
-    answer = {"Body": body, "ContentLength": 1}
+def test_a_connection_that_drops_while_the_body_is_read_is_named_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with a_store_that_drops_the_connection_mid_body(monkeypatch) as store:
+        body = store.open("k")
 
-    with (
-        patch.object(store._client, "get_object", return_value=answer),
-        patch.object(body, "read", side_effect=ReadTimeoutError(endpoint_url="http://x")),
-        pytest.raises(ObjectStoreUnavailableError),
-    ):
-        store.get_bytes("k")
+        with pytest.raises(ObjectStoreUnavailableError):
+            body.read()
 
 
 def test_missing_credentials_reach_the_caller_unchanged(
