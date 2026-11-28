@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import batched
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING, Final
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionError, HTTPClientError
 from botocore.response import StreamingBody
 
 from songmaker_cli.settings import process_environment_variable
@@ -38,6 +39,18 @@ class ObjectMissingError(Exception):
 
 class ObjectRangeError(Exception):
     """The requested byte range lies outside the object."""
+
+
+class ObjectStoreUnavailableError(Exception):
+    """The store cannot be reached: a refused or dropped connection, a timeout, a DNS failure."""
+
+
+@contextmanager
+def _unavailable_as_error() -> Iterator[None]:
+    try:
+        yield
+    except (ConnectionError, HTTPClientError) as exc:
+        raise ObjectStoreUnavailableError from exc
 
 
 @dataclass(frozen=True)
@@ -77,12 +90,16 @@ class ObjectStore:
         self._client = boto3.client("s3", config=Config(s3={"addressing_style": "path"}))
 
     def put_file(self, key: str, path: Path, *, content_type: str) -> None:
-        self._client.upload_file(
-            str(path), self._bucket, key, ExtraArgs={"ContentType": content_type},
-        )
+        with _unavailable_as_error():
+            self._client.upload_file(
+                str(path), self._bucket, key, ExtraArgs={"ContentType": content_type},
+            )
 
     def put_bytes(self, key: str, body: bytes, *, content_type: str) -> None:
-        self._client.put_object(Bucket=self._bucket, Key=key, Body=body, ContentType=content_type)
+        with _unavailable_as_error():
+            self._client.put_object(
+                Bucket=self._bucket, Key=key, Body=body, ContentType=content_type,
+            )
 
     def get_bytes(self, key: str) -> bytes:
         return self.open(key).read()
@@ -90,27 +107,30 @@ class ObjectStore:
     def open(self, key: str, byte_range: str | None = None) -> ObjectBody:
         """Stream the object; `byte_range` is an HTTP `Range` header value."""
         try:
-            answer = self._client.get_object(
-                Bucket=self._bucket, Key=key, **({"Range": byte_range} if byte_range else {}),
-            )
+            with _unavailable_as_error():
+                answer = self._client.get_object(
+                    Bucket=self._bucket, Key=key, **({"Range": byte_range} if byte_range else {}),
+                )
         except ClientError as exc:
             raise _store_error(exc) from exc
         return ObjectBody(answer["Body"], answer["ContentLength"], answer.get("ContentRange"))
 
     def delete(self, keys: list[str]) -> None:
         for batch in batched(keys, DELETE_OBJECTS_PER_CALL):
-            self._client.delete_objects(
-                Bucket=self._bucket,
-                Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
-            )
+            with _unavailable_as_error():
+                self._client.delete_objects(
+                    Bucket=self._bucket,
+                    Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
+                )
 
     def list(self, prefix: str) -> Iterator[StoredObject]:
         pages = self._client.get_paginator("list_objects_v2").paginate(
             Bucket=self._bucket, Prefix=prefix,
         )
-        for page in pages:
-            for entry in page.get("Contents", []):
-                yield StoredObject(entry["Key"], entry["Size"], entry["LastModified"])
+        with _unavailable_as_error():
+            for page in pages:
+                for entry in page.get("Contents", []):
+                    yield StoredObject(entry["Key"], entry["Size"], entry["LastModified"])
 
 
 def _store_error(exc: ClientError) -> ObjectMissingError | ObjectRangeError | ClientError:

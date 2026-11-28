@@ -82,7 +82,13 @@ from songmaker_cli.oidc_client import (
     build_oidc_client_config,
 )
 from songmaker_cli.page_language import PageShell
-from songmaker_cli.refusals import install_refusal_handler, not_found_response
+from songmaker_cli.object_store import ObjectStoreUnavailableError
+from songmaker_cli.refusals import (
+    Refusal,
+    install_refusal_handler,
+    not_found_response,
+    refusal_handler,
+)
 from songmaker_cli.request_policies import (
     SIGN_IN_PATHS,
     build_body_size_policy,
@@ -153,11 +159,8 @@ def _start_background_loops(
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.db.queries.auth import delete_expired_sessions
-    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
-
     ctx: AppContext = app.state.ctx
     registry = ctx.background_loops
-    await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)
         if deleted:
@@ -202,8 +205,19 @@ def audio_path_rejected_handler(
     return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
 
+def object_store_unavailable_handler(
+    request: Request,
+    exc: ObjectStoreUnavailableError,
+) -> JSONResponse:
+    """Answer any route that reached an unreachable object store with the one 503 refusal."""
+    return refusal_handler(
+        request, Refusal(503, "objectStoreRefusal.unavailable"),
+    )
+
+
 def _install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+    app.add_exception_handler(ObjectStoreUnavailableError, object_store_unavailable_handler)
     install_refusal_handler(app)
 
     @app.exception_handler(RequestValidationError)

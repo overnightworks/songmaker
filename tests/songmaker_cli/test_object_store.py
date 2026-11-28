@@ -10,11 +10,13 @@ from http.client import HTTPConnection
 from pathlib import Path
 from unittest.mock import patch
 
+import boto3
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 from logline import unit_trace
 from logline.testing import configured
 from pydantic import ValidationError
+from support.object_store import an_unreachable_object_store
 
 from songmaker_cli import object_store as object_store_module
 from songmaker_cli import server
@@ -22,6 +24,7 @@ from songmaker_cli.object_store import (
     ObjectMissingError,
     ObjectRangeError,
     ObjectStore,
+    ObjectStoreUnavailableError,
     object_store_of,
 )
 from songmaker_cli.settings import Settings
@@ -210,6 +213,38 @@ def test_a_store_error_that_is_not_a_missing_key_or_range_reaches_the_caller_unc
         store.get_bytes(key)
 
     assert raised.value.response["Error"]["Code"] == "NoSuchBucket"
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(lambda store: store.get_bytes("k"), id="read"),
+        pytest.param(lambda store: store.put_bytes("k", b"x", content_type="text/plain"), id="put"),
+        pytest.param(lambda store: store.delete(["k"]), id="delete"),
+        pytest.param(lambda store: list(store.list("")), id="list"),
+    ],
+)
+def test_a_store_that_cannot_be_reached_is_named_unavailable(
+    call, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = an_unreachable_object_store(monkeypatch)
+
+    with pytest.raises(ObjectStoreUnavailableError):
+        call(store)
+
+
+def test_missing_credentials_reach_the_caller_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    an_unreachable_object_store(monkeypatch)
+    for variable in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+        monkeypatch.delenv(variable)
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "none"))
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "none"))
+    monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)
+
+    with pytest.raises(NoCredentialsError):
+        ObjectStore("b").get_bytes("k")
 
 
 def test_deleting_more_keys_than_one_call_takes_removes_them_all(

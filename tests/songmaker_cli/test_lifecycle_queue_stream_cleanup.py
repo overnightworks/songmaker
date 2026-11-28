@@ -8,7 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from support.web_app import make_app_context, make_fake_redis
+from support.object_store import an_unreachable_object_store
+from support.web_app import make_app_context, make_fake_redis, make_test_app
 
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.queue_streams as queue_streams
@@ -120,3 +121,14 @@ def test_periodic_loop_reads_failing_while_the_resource_event_sweep_keeps_raisin
 
     health = registry.loop_health()[BackgroundLoopName.RESOURCE_EVENT_CLEANUP]
     assert health.status is BackgroundLoopStatus.FAILING
+
+
+def test_the_web_starts_and_answers_while_the_object_store_cannot_be_reached(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
+) -> None:
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, object_store=an_unreachable_object_store(monkeypatch),
+    )
+
+    with client:
+        assert client.get("/health").status_code == 200

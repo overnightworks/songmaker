@@ -9,11 +9,13 @@ queue-stream cache names a key prefix of its own first.
 from __future__ import annotations
 
 import os
+import socket
 import uuid
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import timedelta
 
+import boto3
 import pytest
 
 from songmaker_cli import queue_streams
@@ -30,6 +32,20 @@ def configured_bucket() -> str:
 
 def an_object_store() -> ObjectStore:
     return ObjectStore(configured_bucket())
+
+
+def an_unreachable_object_store(monkeypatch: pytest.MonkeyPatch) -> ObjectStore:
+    """A store whose endpoint is a loopback port nothing listens on: every call is refused."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        port = reserved.getsockname()[1]
+    # boto3 caches its credentials in the default session; a fresh one reads this case's variables.
+    monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)
+    monkeypatch.setenv("AWS_ENDPOINT_URL_S3", f"http://127.0.0.1:{port}")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "garage")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "unreachable")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "unreachable")
+    return ObjectStore(UNCONFIGURED_BUCKET)
 
 
 class AgedObjectStore(ObjectStore):

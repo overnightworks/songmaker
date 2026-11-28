@@ -187,6 +187,7 @@ export type Words = {
     readonly "referenceMenu.inUse": string;
     readonly "newPlace.heading": (gaps: { readonly library: string }) => readonly (string | { readonly marker: "strong"; readonly text: string })[];
     readonly "takeRefusal.archived": string;
+    readonly "objectStoreRefusal.unavailable": string;
     readonly "modelRefusal.unavailable": (gaps: { readonly model: string }) => string;
     readonly "songMenu.label": string;
     readonly "songMenu.close": string;
@@ -1630,6 +1631,7 @@ export const words: Words = {
     "referenceMenu.inUse": "In use",
     "newPlace.heading": (gaps: { readonly library: string }): readonly (string | { readonly marker: "strong"; readonly text: string })[] => ["New in ", { marker: "strong", text: gaps.library }],
     "takeRefusal.archived": "Restore this take first.",
+    "objectStoreRefusal.unavailable": "The file store is not reachable right now. Try again in a moment.",
     "modelRefusal.unavailable": (gaps: { readonly model: string }) => "Model '" + gaps.model + "' is not currently available",
     "songMenu.label": "Song menu",
     "songMenu.close": "Close menu",
