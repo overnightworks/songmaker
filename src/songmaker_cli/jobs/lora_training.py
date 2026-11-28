@@ -35,7 +35,13 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.queries.auth import record_audit
-from songmaker_cli.db.queries.jobs import count_generation_jobs_awaiting_the_gpu, get_job
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    count_generation_jobs_awaiting_the_gpu,
+    get_job,
+    lock_active_job,
+    update_job_status,
+)
 from songmaker_cli.db.queries.loras import (
     get_user_lora_model_mode,
     list_active_user_loras,
@@ -839,20 +845,30 @@ def cleanup_failed_lora_with_factory(
     audio_dir: Path,
     db_factory: sessionmaker[Session],
     error_message: Message,
+    job_id: str,
+    error_type: str,
 ) -> None:
-    """Persist a LoRA failure, then remove its disposable working paths.
+    """Fail a LoRA training's voice and job under one lock of the job's row, then clean up.
 
+    A row that has ended lands no failure: the reconciliation of ended rows decides the voice.
     Database failures propagate to the caller.  Filesystem failures are
     logged with their traceback and followed by an orphan-work-dir audit;
     sample audio is never removed.
     """
     with db_factory() as session:
+        if lock_active_job(session, job_id) is None:
+            log.warning("LoRA training job %s ended before its failure landed; dropping it", job_id)
+            return
         cleanup_failed_lora(
             session=session,
             lora_id=lora_id,
             user_id=user_id,
             error_message=error_message,
         )
+        failed = JobStatusUpdate(
+            JobStatus.FAILED, error_message=error_message, error_type=error_type,
+        )
+        update_job_status(session, job_id, failed)
         session.commit()
 
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
@@ -998,6 +1014,35 @@ def _completed_model_mode_for_lora(
     return None
 
 
+def _mark_lora_ready(
+    session: Session,
+    lora_id: str,
+    user_id: str,
+    model_mode: str | None,
+    audit_detail: str,
+    *,
+    completed_at: datetime | None = None,
+) -> None:
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
+    update_user_lora(
+        session,
+        lora_id,
+        status=LoraStatus.READY,
+        storage_path=storage_rel,
+        completed_at=completed_at,
+        model_mode=model_mode,
+        clear_error=True,
+    )
+    record_audit(
+        session,
+        user_id,
+        AuditAction.TRAIN_LORA,
+        ResourceType.LORA,
+        lora_id,
+        audit_detail,
+    )
+
+
 def _persist_crashed_lora_reconciliation(
     session: Session,
     lora_id: str,
@@ -1014,23 +1059,13 @@ def _persist_crashed_lora_reconciliation(
             error_message=error_message,
         )
         return
-    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
-    update_user_lora(
+    _mark_lora_ready(
         session,
         lora_id,
-        status=LoraStatus.READY,
-        storage_path=storage_rel,
-        completed_at=utcnow(),
-        model_mode=completed_model_mode,
-        clear_error=True,
-    )
-    record_audit(
-        session,
         user_id,
-        AuditAction.TRAIN_LORA,
-        ResourceType.LORA,
-        lora_id,
+        completed_model_mode,
         "ready: recovered complete adapter after interrupted training",
+        completed_at=utcnow(),
     )
 
 
@@ -1177,12 +1212,7 @@ def _defer_lora_training_for_generation(
             audio_dir=audio_dir,
             db_factory=db_factory,
             error_message=error_message,
-        )
-        _update_job(
-            db_factory,
-            job_id,
-            JobStatus.FAILED,
-            error_message=error_message,
+            job_id=job_id,
             error_type="generation_queue_timeout",
         )
         return
@@ -1241,36 +1271,52 @@ def _complete_lora_training(
     user_id: str,
     submitted: tuple[TrainLoraTaskResultDTO, Path, Path],
 ) -> None:
+    """Land a finished training while its job row is active, under one lock of the row.
+
+    A row that has ended lands nothing: the reconciliation of ended rows decides the voice.
+    """
     worker_result, dataset_dir, tmp_output = submitted
-    completed_model_mode = _validate_completed_training_model_mode(
-        requested_mode=target_mode,
-        worker_mode=worker_result.mode,
-    )
-    _validated_lora_adapter_handoff(audio_dir, user_id, tmp_output, worker_result)
-    _record_completed_training_model_mode(
-        audio_dir,
-        user_id,
-        lora_id,
-        job_id,
-        completed_model_mode,
-    )
-    previous_model_mode = _save_lora_model_mode(
-        db_factory,
-        lora_id,
-        completed_model_mode,
-    )
-    final_dir = _output_dir(audio_dir, user_id, lora_id)
-    _replace_lora_adapter(final_dir, tmp_output, previous_model_mode)
-    _remove_replaced_lora_paths(dataset_dir, final_dir)
-    _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
-    _mark_lora_training_complete(
-        db_factory,
-        job_id,
-        lora_id,
-        user_id,
-        completed_model_mode,
-        worker_result.num_samples,
-    )
+    with db_factory() as session:
+        if lock_active_job(session, job_id) is None:
+            log.warning("LoRA training job %s ended before its result landed; dropping it", job_id)
+            _remove_unlanded_lora_output(tmp_output)
+            return
+        completed_model_mode = _validate_completed_training_model_mode(
+            requested_mode=target_mode,
+            worker_mode=worker_result.mode,
+        )
+        _validated_lora_adapter_handoff(audio_dir, user_id, tmp_output, worker_result)
+        _record_completed_training_model_mode(
+            audio_dir,
+            user_id,
+            lora_id,
+            job_id,
+            completed_model_mode,
+        )
+        previous_model_mode = get_user_lora_model_mode(session, lora_id)
+        final_dir = _output_dir(audio_dir, user_id, lora_id)
+        _replace_lora_adapter(final_dir, tmp_output, previous_model_mode)
+        _remove_replaced_lora_paths(dataset_dir, final_dir)
+        _mark_lora_ready(
+            session,
+            lora_id,
+            user_id,
+            completed_model_mode,
+            f"ready: samples={worker_result.num_samples}",
+            completed_at=utcnow(),
+        )
+        update_job_status(session, job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0))
+        session.commit()
+        _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
+
+
+def _remove_unlanded_lora_output(tmp_output: Path) -> None:
+    if not tmp_output.exists():
+        return
+    try:
+        shutil.rmtree(tmp_output)
+    except OSError:
+        log.exception("Failed to remove unlanded LoRA training output %s", tmp_output)
 
 
 def _validated_lora_adapter_handoff(
@@ -1283,18 +1329,6 @@ def _validated_lora_adapter_handoff(
     if not adapter_src.is_dir():
         raise RuntimeError(f"Worker reported adapter at {adapter_src} but it is not a directory")
     return adapter_src
-
-
-def _save_lora_model_mode(
-    db_factory: sessionmaker[Session],
-    lora_id: str,
-    completed_model_mode: str,
-) -> str:
-    with db_factory() as session:
-        previous_model_mode = get_user_lora_model_mode(session, lora_id)
-        update_user_lora(session, lora_id, model_mode=completed_model_mode)
-        session.commit()
-    return previous_model_mode
 
 
 def _replace_lora_adapter(
@@ -1347,37 +1381,6 @@ def _remove_replaced_lora_paths(dataset_dir: Path, final_dir: Path) -> None:
         log.warning("Failed to remove dataset dir %s", dataset_dir)
 
 
-def _mark_lora_training_complete(
-    db_factory: sessionmaker[Session],
-    job_id: str,
-    lora_id: str,
-    user_id: str,
-    completed_model_mode: str,
-    sample_count: int,
-) -> None:
-    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
-    with db_factory() as session:
-        update_user_lora(
-            session,
-            lora_id,
-            status=LoraStatus.READY,
-            storage_path=storage_rel,
-            completed_at=utcnow(),
-            model_mode=completed_model_mode,
-            clear_error=True,
-        )
-        record_audit(
-            session,
-            user_id,
-            AuditAction.TRAIN_LORA,
-            ResourceType.LORA,
-            lora_id,
-            f"ready: samples={sample_count}",
-        )
-        session.commit()
-    _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
-
-
 def _handle_cancelled_lora_training(
     db_factory: sessionmaker[Session],
     audio_dir: Path,
@@ -1393,12 +1396,7 @@ def _handle_cancelled_lora_training(
         audio_dir=audio_dir,
         db_factory=db_factory,
         error_message=error_message,
-    )
-    _update_job(
-        db_factory,
-        job_id,
-        JobStatus.FAILED,
-        error_message=error_message,
+        job_id=job_id,
         error_type="timeout",
     )
 
@@ -1414,22 +1412,12 @@ def _keep_restored_lora_adapter(
     log.exception("LoRA training job %s kept its previous adapter: %s", job_id, exc)
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
         _log_failed_lora_cleanup(db_factory, audio_dir)
-    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     with db_factory() as session:
-        update_user_lora(
+        _mark_lora_ready(
             session,
             lora_id,
-            status=LoraStatus.READY,
-            storage_path=storage_rel,
-            model_mode=exc.previous_model_mode,
-            clear_error=True,
-        )
-        record_audit(
-            session,
             user_id,
-            AuditAction.TRAIN_LORA,
-            ResourceType.LORA,
-            lora_id,
+            exc.previous_model_mode,
             "ready: retained previous adapter after failed replacement",
         )
         session.commit()
@@ -1451,18 +1439,12 @@ def _fail_lora_training(
     lora_id: str,
     user_id: str,
 ) -> None:
-    failure = _sanitize_training_error(exc, job_id)
     cleanup_failed_lora_with_factory(
         lora_id=lora_id,
         user_id=user_id,
         audio_dir=audio_dir,
         db_factory=db_factory,
-        error_message=failure,
-    )
-    _update_job(
-        db_factory,
-        job_id,
-        JobStatus.FAILED,
-        error_message=failure,
+        error_message=_sanitize_training_error(exc, job_id),
+        job_id=job_id,
         error_type=error_type,
     )

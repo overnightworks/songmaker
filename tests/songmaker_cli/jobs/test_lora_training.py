@@ -9,7 +9,6 @@ audit) without a real ACE-Step subprocess.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.job_owner import an_owner
-from support.lora_training_world import seed_queued_lora
+from support.lora_training_world import FakeWorker, patch_worker_calls
 from support.web_app import SettledFakeAsyncRedis
 from support.wrapper_deps import reserved_gpu_hold
 
@@ -81,90 +80,6 @@ def db_factory(pg_factory):
     return pg_factory
 
 
-@pytest.fixture
-def seeded(db_factory, tmp_path: Path) -> dict:
-    return seed_queued_lora(db_factory, tmp_path)
-
-
-class _FakeWorker:
-    id = "w0"
-    base_url = "http://fake"
-    loaded_modes = ("sft",)
-
-
-async def _fake_events_ok(*args, **kwargs) -> AsyncIterator[tuple[str, dict]]:
-    yield ("progress", {"progress": 0.05, "current_epoch": 0, "train_epochs": 500})
-    yield ("progress", {"progress": 0.25, "current_epoch": 25, "train_epochs": 500})
-    yield ("progress", {"progress": 0.90, "current_epoch": 500, "train_epochs": 500})
-    yield (
-        "done",
-        {
-            "result": {
-                "mode": "sft",
-                "adapter_dir": "",
-                "num_samples": 3,
-            },
-        },
-    )
-
-
-def _patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=None):
-    """Return context-manager patches for worker-side HTTP + SSE stubs."""
-    events = events or _fake_events_ok
-
-    @contextmanager
-    def _cm():
-        submit = AsyncMock()
-        response = MagicMock()
-        response.raise_for_status = MagicMock()
-        handover_response = MagicMock()
-        handover_response.raise_for_status = MagicMock()
-        handover_response.json.return_value = {"claimed": True, "task_id": "t-1"}
-        response.json = MagicMock(return_value={"task_id": "t-1"})
-
-        async def post(*args, **kwargs):
-            if submitted_requests is not None:
-                submitted_requests.append((args[0], kwargs.get("json")))
-            if args[0].endswith("/gpu_hold/reserve"):
-                response.json = MagicMock(return_value={"token": "hold-token"})
-            elif args[0].endswith("/tasks/train_lora"):
-                response.json = MagicMock(return_value={"task_id": "t-1"})
-            return response
-
-        submit.post = AsyncMock(side_effect=post)
-        submit.__aenter__ = AsyncMock(return_value=submit)
-        submit.__aexit__ = AsyncMock(return_value=None)
-
-        async def async_events(*_a, **_kw):
-            async for ev_type, data in events(*_a, **_kw):
-                if ev_type == "done" and isinstance(data.get("result"), dict):
-                    if not data["result"].get("adapter_dir"):
-                        data["result"]["adapter_dir"] = adapter_dir
-                    Path(adapter_dir).parent.mkdir(parents=True, exist_ok=True)
-                    if not Path(adapter_dir).exists():
-                        Path(adapter_dir).mkdir(parents=True)
-                        (Path(adapter_dir) / "adapter_config.json").write_text("{}")
-                yield ev_type, data
-
-        with (
-            patch(
-                "songmaker_cli.jobs.lora_training.pick_worker",
-                AsyncMock(return_value=_FakeWorker()),
-            ),
-            patch(
-                "songmaker_cli.jobs.lora_training._iterate_task_events",
-                async_events,
-            ),
-            patch(
-                "httpx.AsyncClient",
-                return_value=submit,
-            ),
-        ):
-            yield
-
-    return _cm()
-
-
 def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
     seeded, db_factory,
 ) -> None:
@@ -219,7 +134,7 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
     adapter_src = _create_adapter_dir()
 
     submitted_requests: list[tuple[str, dict]] = []
-    with _patch_worker_calls(adapter_src, submitted_requests=submitted_requests):
+    with patch_worker_calls(adapter_src, submitted_requests=submitted_requests):
         _run(
             run_lora_training_job(
                 "job-1", seeded["lora_id"], seeded["user_id"],
@@ -302,7 +217,7 @@ def test_matching_worker_mode_is_recorded_when_training_completes(
             {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}},
         )
 
-    with _patch_worker_calls(str(output_dir), events=turbo_training_events):
+    with patch_worker_calls(str(output_dir), events=turbo_training_events):
         _run(
             run_lora_training_job(
                 "job-1",
@@ -356,7 +271,7 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
             {"result": {"mode": worker_mode, "adapter_dir": "", "num_samples": 3}},
         )
 
-    with _patch_worker_calls(str(output_dir), events=invalid_mode_events):
+    with patch_worker_calls(str(output_dir), events=invalid_mode_events):
         _run(
             run_lora_training_job(
                 "job-1",
@@ -438,7 +353,7 @@ def test_training_progress_keeps_a_long_running_lora_alive(
             session.commit()
 
     with (
-        _patch_worker_calls(str(output_dir), events=progress_for_long_training),
+        patch_worker_calls(str(output_dir), events=progress_for_long_training),
         patch("songmaker_cli.jobs.lora_training._touch_heartbeat", touch_heartbeat),
     ):
         _run(run_lora_training_job(
@@ -506,7 +421,7 @@ def test_worker_training_failure_keeps_a_training_specific_reason(
     async def failed_training_events(*args, **kwargs):
         yield ("error", {"error": "fake worker training failure"})
 
-    with _patch_worker_calls(str(tmp_path / "adapter"), events=failed_training_events):
+    with patch_worker_calls(str(tmp_path / "adapter"), events=failed_training_events):
         _run(
             run_lora_training_job(
                 "job-1",
@@ -552,7 +467,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
         with (
             patch(
                 "songmaker_cli.jobs.lora_training.pick_worker",
-                AsyncMock(return_value=_FakeWorker()),
+                AsyncMock(return_value=FakeWorker()),
             ),
             patch(
                 "songmaker_cli.jobs.lora_training._iterate_task_events",
@@ -589,7 +504,7 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
 
 def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
     malicious = "/etc/passwd"
-    with _patch_worker_calls(malicious):
+    with patch_worker_calls(malicious):
         _run(
             run_lora_training_job(
                 "job-1",
@@ -620,6 +535,8 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
         audio_dir=audio_dir,
         db_factory=db_factory,
         error_message=message("voiceFailure.recorded", cause="testing"),
+        job_id="job-1",
+        error_type="lora_training_error",
     )
     assert not (lora_root / USER_LORA_DATASET_DIRNAME).exists()
     assert (lora_root / USER_LORA_OUTPUT_DIRNAME).exists()
@@ -634,14 +551,16 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
 
 
 @pytest.mark.parametrize(
-    "crash_point",
-    ["after_first_rename", "after_second_rename", "after_previous_cleanup"],
+    ("crash_point", "reconciled_count"),
+    [
+        ("after_first_rename", 1),
+        ("after_second_rename", 1),
+        ("after_previous_cleanup", 1),
+        ("after_record_clear", 0),
+    ],
 )
 def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
-    seeded,
-    db_factory,
-    monkeypatch,
-    crash_point: str,
+    seeded, db_factory, monkeypatch, crash_point: str, reconciled_count: int
 ) -> None:
     from songmaker_cli.jobs import lora_training
 
@@ -652,35 +571,32 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
     (final_dir / "adapter.txt").write_text("old")
     temporary_dir = lora_root / "training_tmp"
 
-    original_rename = lora_training.os.rename
-    rename_count = 0
+    def crash_after_call(owner, name: str, nth_call: int, path: Path | None = None) -> None:
+        original = getattr(owner, name)
+        calls = 0
 
-    def crash_during_adoption(source, destination) -> None:
-        nonlocal rename_count
-        original_rename(source, destination)
-        rename_count += 1
-        if (crash_point == "after_first_rename" and rename_count == 1) or (
-            crash_point == "after_second_rename" and rename_count == 2
-        ):
-            raise SystemExit("simulated process crash")
+        def crashing(*args, **kwargs) -> None:
+            nonlocal calls
+            original(*args, **kwargs)
+            if path is None or Path(args[0]) == path:
+                calls += 1
+                if calls == nth_call:
+                    raise SystemExit("simulated process crash")
 
-    monkeypatch.setattr(lora_training.os, "rename", crash_during_adoption)
-    original_rmtree = lora_training.shutil.rmtree
+        monkeypatch.setattr(owner, name, crashing)
 
-    def crash_after_previous_cleanup(path, *args, **kwargs) -> None:
-        original_rmtree(path, *args, **kwargs)
-        if crash_point == "after_previous_cleanup" and Path(path) == previous_dir:
-            raise SystemExit("simulated process crash")
-
-    monkeypatch.setattr(lora_training.shutil, "rmtree", crash_after_previous_cleanup)
+    crash_targets = {
+        "after_first_rename": (lora_training.os, "rename", 1),
+        "after_second_rename": (lora_training.os, "rename", 2),
+        "after_previous_cleanup": (lora_training.shutil, "rmtree", 1, previous_dir),
+        "after_record_clear": (lora_training, "_clear_completed_training_model_mode", 1),
+    }
+    crash_after_call(*crash_targets[crash_point])
 
     async def turbo_training_events(*_args, **_kwargs):
-        yield (
-            "done",
-            {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}},
-        )
+        yield ("done", {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}})
 
-    with _patch_worker_calls(str(temporary_dir), events=turbo_training_events):
+    with patch_worker_calls(str(temporary_dir), events=turbo_training_events):
         training = run_lora_training_job(
             "job-1",
             seeded["lora_id"],
@@ -694,12 +610,10 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
             _run(training)
 
     with db_factory() as session:
-        lora = get_user_lora(session, seeded["lora_id"])
-        job = get_job(session, "job-1")
-        job.status = JobStatus.FAILED
+        get_job(session, "job-1").status = JobStatus.FAILED
         session.commit()
 
-    assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == 1
+    assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == reconciled_count
     assert (final_dir / "adapter_config.json").exists()
     assert not previous_dir.exists()
     with db_factory() as session:
@@ -789,7 +703,7 @@ def test_adoption_stays_ready_when_previous_cleanup_fails(
 
     monkeypatch.setattr(lora_training.shutil, "rmtree", fail_to_remove_previous)
 
-    with _patch_worker_calls(str(temporary_dir)):
+    with patch_worker_calls(str(temporary_dir)):
         _run(
             run_lora_training_job(
                 "job-1",
@@ -834,7 +748,7 @@ def test_adoption_restores_the_previous_adapter_when_second_rename_fails(
 
     monkeypatch.setattr(lora_training.os, "rename", fail_second_rename)
 
-    with _patch_worker_calls(str(temporary_dir)):
+    with patch_worker_calls(str(temporary_dir)):
         _run(
             run_lora_training_job(
                 "job-1",
@@ -1009,7 +923,7 @@ def test_a_generation_that_has_not_started_a_take_defers_lora_before_running(
     with (
         patch(
             "songmaker_cli.jobs.lora_training.pick_worker",
-            AsyncMock(return_value=_FakeWorker()),
+            AsyncMock(return_value=FakeWorker()),
         ),
         patch("songmaker_cli.jobs.lora_training._materialize_dataset", materialize),
     ):
@@ -1079,7 +993,7 @@ def test_renewal_failure_cancels_materialization_and_releases_the_hold(seeded, d
     with (
         patch(
             "songmaker_cli.jobs.lora_training._reserve_lora_worker",
-            AsyncMock(return_value=(_FakeWorker(), "hold-token")),
+            AsyncMock(return_value=(FakeWorker(), "hold-token")),
         ),
         patch("songmaker_cli.jobs.lora_training._renew_lora_hold", failed_renewal),
         patch("songmaker_cli.jobs.lora_training.asyncio.to_thread", slow_materialization),
@@ -1217,7 +1131,7 @@ def test_lora_starts_hold_renewal_before_marking_the_job_running(seeded, db_fact
     with (
         patch(
             "songmaker_cli.jobs.lora_training._reserve_lora_worker",
-            AsyncMock(return_value=(_FakeWorker(), "hold-token")),
+            AsyncMock(return_value=(FakeWorker(), "hold-token")),
         ),
         patch("songmaker_cli.jobs.lora_training._renew_lora_hold", renewal),
         patch("songmaker_cli.jobs.lora_training._update_job", checked_update_job),
@@ -1261,7 +1175,7 @@ def test_running_update_failure_releases_the_new_lora_hold(seeded, db_factory) -
     with (
         patch(
             "songmaker_cli.jobs.lora_training._reserve_lora_worker",
-            AsyncMock(return_value=(_FakeWorker(), "hold-token")),
+            AsyncMock(return_value=(FakeWorker(), "hold-token")),
         ),
         patch("songmaker_cli.jobs.lora_training._start_lora_hold_renewal", start_renewal),
         patch("songmaker_cli.jobs.lora_training._update_job", fail_first_running_update),
@@ -1309,7 +1223,7 @@ def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
         with (
             patch(
                 "songmaker_cli.jobs.lora_training._reserve_lora_worker",
-                AsyncMock(return_value=(_FakeWorker(), hold_token)),
+                AsyncMock(return_value=(FakeWorker(), hold_token)),
             ),
             patch("songmaker_cli.jobs.lora_training._start_lora_hold_renewal", start_renewal),
             patch(
@@ -1363,7 +1277,7 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
         with (
             patch(
                 "songmaker_cli.jobs.lora_training._reserve_lora_worker",
-                AsyncMock(return_value=(_FakeWorker(), hold_token)),
+                AsyncMock(return_value=(FakeWorker(), hold_token)),
             ),
             patch("songmaker_cli.jobs.lora_training._start_lora_hold_renewal", start_renewal),
             patch(
@@ -1413,7 +1327,7 @@ def test_lora_releases_its_hold_when_running_cannot_be_applied(seeded, db_factor
     with (
         patch(
             "songmaker_cli.jobs.lora_training._reserve_lora_worker",
-            AsyncMock(return_value=(_FakeWorker(), "hold-token")),
+            AsyncMock(return_value=(FakeWorker(), "hold-token")),
         ),
         patch("songmaker_cli.jobs.lora_training._start_lora_hold_renewal", start_renewal),
         patch("songmaker_cli.jobs.lora_training._update_job", refuse_running),
@@ -1770,7 +1684,7 @@ def test_lora_reserve_checks_waiting_generations_after_selecting_the_worker(
         nonlocal picked
 
         picked = True
-        return _FakeWorker()
+        return FakeWorker()
 
     def count(session):
         assert picked
