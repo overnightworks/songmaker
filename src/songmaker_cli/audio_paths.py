@@ -40,9 +40,14 @@ def lora_owner_root(audio_dir: Path, user_id: str) -> Path:
     return audio_dir / USER_LORAS_DIRNAME / user_id
 
 
+def lora_relative_root(user_id: str, lora_id: str) -> PurePosixPath:
+    """One voice's directory relative to the audio root, as its rows store it."""
+    return PurePosixPath(USER_LORAS_DIRNAME) / user_id / lora_id
+
+
 def lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
     """The directory holding one voice's samples, work directories and adapter."""
-    return lora_owner_root(audio_dir, user_id) / lora_id
+    return audio_dir / lora_relative_root(user_id, lora_id)
 
 
 def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:

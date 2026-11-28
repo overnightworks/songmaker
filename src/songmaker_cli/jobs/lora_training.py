@@ -17,7 +17,12 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.audio_paths import confined_under, lora_owner_root, lora_root
+from songmaker_cli.audio_paths import (
+    confined_under,
+    lora_owner_root,
+    lora_relative_root,
+    lora_root,
+)
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
@@ -1009,7 +1014,7 @@ def _persist_crashed_lora_reconciliation(
             error_message=error_message,
         )
         return
-    storage_rel = str(Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME)
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     update_user_lora(
         session,
         lora_id,
@@ -1350,9 +1355,7 @@ def _mark_lora_training_complete(
     completed_model_mode: str,
     sample_count: int,
 ) -> None:
-    storage_rel = str(
-        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-    )
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     with db_factory() as session:
         update_user_lora(
             session,
@@ -1411,9 +1414,7 @@ def _keep_restored_lora_adapter(
     log.exception("LoRA training job %s kept its previous adapter: %s", job_id, exc)
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
         _log_failed_lora_cleanup(db_factory, audio_dir)
-    storage_rel = str(
-        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-    )
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     with db_factory() as session:
         update_user_lora(
             session,
