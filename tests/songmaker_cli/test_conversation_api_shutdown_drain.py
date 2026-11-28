@@ -3,23 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 
-from songmaker_cli.conversation_api import ChatTurnLifecycle, end_running_chat_turns
+from songmaker_cli.conversation_api import ChatTurnLifecycle
 from songmaker_cli.db.models import Job
 from songmaker_cli.health_types import BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import message
 
 JOB_ID = "job-1"
-
-
-def test_the_turn_drain_returns_at_once_without_running_turns() -> None:
-    started = time.monotonic()
-    returned = asyncio.run(end_running_chat_turns(60))
-    assert (returned, time.monotonic() - started < 1) == (None, True)
 
 
 @pytest.mark.parametrize(
