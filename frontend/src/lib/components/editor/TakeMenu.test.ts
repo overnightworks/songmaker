@@ -204,6 +204,16 @@ describe('TakeMenu', () => {
 		}
 	);
 
+	it("gives an archived take's Re-score and Restore rows a glyph each, not the same one", async () => {
+		const { target } = await render({ gen: gen({ is_archived: true }) });
+		const glyphOf = (label: string) =>
+			menuRow(target, label).querySelector('svg')?.getAttribute('data-icon');
+
+		expect(glyphOf(words['takeMenu.rescore'])).toBeTruthy();
+		expect(glyphOf(words['takeMenu.restore'])).toBeTruthy();
+		expect(glyphOf(words['takeMenu.restore'])).not.toBe(glyphOf(words['takeMenu.rescore']));
+	});
+
 	it('leaves Delete out of a menu whose owner cannot delete', async () => {
 		const { target } = await render({ ondelete: undefined });
 

@@ -72,7 +72,11 @@ export async function leaveNowPlayingForSong(page: Page): Promise<void> {
 }
 
 /** Every take of the song carries scores, a Rating among them, beside its own, as the song loads. */
-export async function scoreTheTakes(page: Page, songId: string): Promise<void> {
+export async function scoreTheTakes(
+	page: Page,
+	songId: string,
+	extraScores: object = {}
+): Promise<void> {
 	await page.route(new RegExp(`/api/songs/${songId}$`), async (route) => {
 		const response = await route.fetch();
 		const song = (await response.json()) as { generations: { scores?: object }[] };
@@ -81,7 +85,8 @@ export async function scoreTheTakes(page: Page, songId: string): Promise<void> {
 			text_accuracy: 86,
 			dynamics: 55,
 			audiobox_quality: 7.4,
-			audiobox_enjoyment: 6.8
+			audiobox_enjoyment: 6.8,
+			...extraScores
 		};
 		song.generations = song.generations.map((take) => ({
 			...take,
