@@ -18,7 +18,6 @@ from tandem import Slots
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.agent.mcp import Exclusion, exclude_route
-from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import (
     GenerationCreatedResourceEvent,
     ResourceHelloEvent,
@@ -40,7 +39,12 @@ from songmaker_cli.db.queries.resource_events import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
-from songmaker_cli.redis_client import StreamSlotFamily, hold_stream_slot, open_stream_slot
+from songmaker_cli.redis_client import (
+    StreamSlotFamily,
+    get_cached_limiter,
+    hold_stream_slot,
+    open_stream_slot,
+)
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()

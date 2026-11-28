@@ -76,11 +76,9 @@ _JOB_STREAM_SLOTS: Final = StreamSlotFamily(
     unavailable_detail="Job stream limiter unavailable",
 )
 
-# The job SSE stream fails closed, same as the resource-event stream's slot
-# (resource_event_api._take_stream_slot): an unenforced concurrency cap
-# could let a runaway client open unbounded streams. Enforced by hand in
-# _take_job_stream_slot's try/except below; api_helpers' enforce_rate_limit
-# meters a request budget, not a concurrency cap.
+# The job SSE stream fails closed: an unenforced concurrency cap could let a
+# runaway client open unbounded streams. redis_client.open_stream_slot enforces
+# it; api_helpers' enforce_rate_limit meters a request budget, not a concurrency cap.
 
 
 _GET_JOB_DESCRIPTION = (

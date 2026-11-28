@@ -16,7 +16,6 @@ from fastapi import HTTPException, Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from tandem import Slots
 
-from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     REDIS_METRICS_DURATION_KEY,
@@ -141,6 +140,26 @@ async def take_stream_slot(
     Returns the token for ``SlotReleases.release_in_background``, or None when a pool is at its cap.
     """
     return await slots.take({GLOBAL_SLOT_POOL: global_cap, f"person:{user_id}": per_person_cap})
+
+
+def get_cached_limiter[LimiterT](
+    request: Request,
+    state_attr: str,
+    build: Callable[[], LimiterT],
+) -> LimiterT:
+    """Return the limiter cached on ``request.app.state``, building it via
+    ``build`` on first use.
+
+    One limiter instance lives per FastAPI app process (cached on
+    ``app.state`` rather than a module global, so tests that create a fresh
+    app per case get a fresh limiter too), avoiding the Redis connection
+    setup ``build`` does on every request.
+    """
+    limiter = getattr(request.app.state, state_attr, None)
+    if limiter is None:
+        limiter = build()
+        setattr(request.app.state, state_attr, limiter)
+    return limiter
 
 
 STREAM_SLOT_RETRY_AFTER_SECONDS = "5"

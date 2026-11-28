@@ -9,7 +9,7 @@ from webauth.proxies import client_address
 from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
-from songmaker_cli.api_helpers import RateLimitRejected, enforce_rate_limit, get_cached_limiter
+from songmaker_cli.api_helpers import RateLimitRejected, enforce_rate_limit
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.audio_paths import AudioPathRejectedError, require_canonical_audio_filename
 from songmaker_cli.constants import (
@@ -18,6 +18,7 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.db.models import Generation
+from songmaker_cli.redis_client import get_cached_limiter
 
 NOT_FOUND_DETAIL: Final = "Not found"
 SHARED_RATE_LIMIT_REFUSAL: Final = "Too many requests"
