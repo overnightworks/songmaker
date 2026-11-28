@@ -1,0 +1,8 @@
+claim_id = "df712dfb558e4cb5af9213d5b9fc776b"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "bd9329d1d0dfbbb065d54761e2743bddb146688b"
+branch = "claude/issue-3514-drop-jobs-worker-pid"
+scope = ["src/songmaker_cli/db/migrations/versions", "tests/songmaker_cli/db/test_migrations_job_owner.py", "tests/songmaker_cli/db/test_migrations_job_payload.py", "tests/songmaker_cli/db/test_migrations_job_session.py", "tests/songmaker_cli/db/test_migrations_job_version.py", "tests/songmaker_cli/db/test_migrations_job_worker_pid.py", "tests/support/migration_chain.py"]
+opened_commit = "ee27fae8e9aefbd5af492fc0227a35f22a6cb7b4"
+whole_reason = "One column drop with its migration test, and the shared test helper its check needs with the four tests that copy that check today."
