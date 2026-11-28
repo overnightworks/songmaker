@@ -326,8 +326,6 @@ class _QueueServingWorker(_DummyWorker):
             await asyncio.sleep(0.1)
 
 
-
-
 def _queue_serving_worker_on(redis_url: str, readiness_file: Path) -> _QueueServingWorker:
     return _QueueServingWorker(_settings_on(redis_url), readiness_file)
 
