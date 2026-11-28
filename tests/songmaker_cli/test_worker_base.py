@@ -336,7 +336,8 @@ def _queue_serving_worker_on(redis_url: str, readiness_file: Path) -> _QueueServ
 
 
 def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
-    restored_logging: None, database_engine: MagicMock, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    restored_logging: None, database_engine: MagicMock,
+    send_stop_signal: Callable[[asyncio.Task[None]], bool],
     redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
@@ -370,7 +371,8 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
 
 
 def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds_with_its_database_pool_disposed(
-    restored_logging: None, database_engine: MagicMock, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    restored_logging: None, database_engine: MagicMock,
+    send_stop_signal: Callable[[asyncio.Task[None]], bool],
     redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
