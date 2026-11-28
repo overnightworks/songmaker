@@ -1293,7 +1293,6 @@ def _complete_lora_training(
         final_dir = _output_dir(audio_dir, user_id, lora_id)
         _replace_lora_adapter(final_dir, tmp_output, previous_model_mode)
         _remove_replaced_lora_paths(dataset_dir, final_dir)
-        _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
         _mark_lora_ready(
             session,
             lora_id,
@@ -1304,6 +1303,7 @@ def _complete_lora_training(
         )
         update_job_status(session, job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0))
         session.commit()
+        _clear_completed_training_model_mode(audio_dir, user_id, lora_id)
 
 
 def _remove_unlanded_lora_output(tmp_output: Path) -> None:

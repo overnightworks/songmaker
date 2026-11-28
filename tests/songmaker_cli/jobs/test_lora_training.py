@@ -613,14 +613,20 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
 
 
 @pytest.mark.parametrize(
-    "crash_point",
-    ["after_first_rename", "after_second_rename", "after_previous_cleanup"],
+    ("crash_point", "reconciled_count"),
+    [
+        ("after_first_rename", 1),
+        ("after_second_rename", 1),
+        ("after_previous_cleanup", 1),
+        ("after_record_clear", 0),
+    ],
 )
 def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
     seeded,
     db_factory,
     monkeypatch,
     crash_point: str,
+    reconciled_count: int,
 ) -> None:
     from songmaker_cli.jobs import lora_training
 
@@ -652,6 +658,16 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
             raise SystemExit("simulated process crash")
 
     monkeypatch.setattr(lora_training.shutil, "rmtree", crash_after_previous_cleanup)
+    original_clear_record = lora_training._clear_completed_training_model_mode
+
+    def crash_after_record_clear(*args, **kwargs) -> None:
+        original_clear_record(*args, **kwargs)
+        if crash_point == "after_record_clear":
+            raise SystemExit("simulated process crash")
+
+    monkeypatch.setattr(
+        lora_training, "_clear_completed_training_model_mode", crash_after_record_clear
+    )
 
     async def turbo_training_events(*_args, **_kwargs):
         yield (
@@ -678,7 +694,7 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
         job.status = JobStatus.FAILED
         session.commit()
 
-    assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == 1
+    assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == reconciled_count
     assert (final_dir / "adapter_config.json").exists()
     assert not previous_dir.exists()
     with db_factory() as session:
