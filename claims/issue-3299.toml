@@ -1,0 +1,8 @@
+claim_id = "a6f308803bc442e39c111181ea387ed2"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "45881aa6b874defb7bceb92bc22c7e1d2b3ba05c"
+branch = "claude/issue-3299-store-outage-answers-503"
+scope = ["docs/architecture.md", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/words", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/object_store.py", "src/songmaker_cli/server.py", "src/songmaker_cli/shared_views_api.py", "src/songmaker_cli/sharing_api.py", "src/songmaker_cli/words.py", "tests/songmaker_cli/test_lifecycle_queue_stream_cleanup.py", "tests/songmaker_cli/test_object_store.py", "tests/songmaker_cli/test_queue_streams_refusals.py", "tests/songmaker_cli/test_server.py", "tests/support/object_store.py"]
+opened_commit = "99942fdf788bd83b351c20002e68661a34f542a7"
+whole_reason = "One named outage of the object store, from its adapter through one handler and the startup sweep to its catalog words and the sentence that states it."
