@@ -65,7 +65,7 @@ from songmaker_cli.settings import LoraTrainingJobConfig
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_liveness import JobOwner
 
-from ._runtime import _defer_job, _sanitize_error, _touch_heartbeat, _update_job
+from ._runtime import _defer_job, _sanitize_error, _touch_heartbeat, _update_job, _write_if_active
 
 log = logging.getLogger(__name__)
 
@@ -120,10 +120,10 @@ class _LoraProgressThrottle:
             new_status = LoraStatus.EXPORTING
         elif fraction >= 0.20:
             new_status = LoraStatus.TRAINING
-        if new_status != self.last_status_name:
-            with self.db_factory() as session:
-                update_user_lora(session, self.lora_id, status=new_status)
-                session.commit()
+        if new_status != self.last_status_name and _write_if_active(
+            self.db_factory, self.job_id,
+            lambda session: update_user_lora(session, self.lora_id, status=new_status),
+        ):
             self.last_status_name = new_status
         _update_job(
             self.db_factory,
@@ -694,11 +694,11 @@ async def _prepare_and_submit_lora(
             ),
             renew_task,
         )
-        with db_factory() as session:
-            update_user_lora(
-                session, lora_id, status=LoraStatus.PREPROCESSING, clear_error=True,
-            )
-            session.commit()
+        if not _write_if_active(
+            db_factory, job_id, lambda session: update_user_lora(
+                session, lora_id, status=LoraStatus.PREPROCESSING, clear_error=True),
+        ):
+            return None
         _update_job(db_factory, job_id, JobStatus.RUNNING, progress=0.05)
 
         output_dir = _output_dir(audio_dir, user_id, lora_id)
@@ -855,10 +855,7 @@ def cleanup_failed_lora_with_factory(
     logged with their traceback and followed by an orphan-work-dir audit;
     sample audio is never removed.
     """
-    with db_factory() as session:
-        if lock_active_job(session, job_id) is None:
-            log.warning("LoRA training job %s ended before its failure landed; dropping it", job_id)
-            return
+    def fail_voice_and_job(session: Session) -> None:
         cleanup_failed_lora(
             session=session,
             lora_id=lora_id,
@@ -869,7 +866,9 @@ def cleanup_failed_lora_with_factory(
             JobStatus.FAILED, error_message=error_message, error_type=error_type,
         )
         update_job_status(session, job_id, failed)
-        session.commit()
+
+    if not _write_if_active(db_factory, job_id, fail_voice_and_job):
+        return
 
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
         _log_failed_lora_cleanup(db_factory, audio_dir)
@@ -1412,7 +1411,7 @@ def _keep_restored_lora_adapter(
     log.exception("LoRA training job %s kept its previous adapter: %s", job_id, exc)
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
         _log_failed_lora_cleanup(db_factory, audio_dir)
-    with db_factory() as session:
+    def keep_previous_adapter(session: Session) -> None:
         _mark_lora_ready(
             session,
             lora_id,
@@ -1420,14 +1419,14 @@ def _keep_restored_lora_adapter(
             exc.previous_model_mode,
             "ready: retained previous adapter after failed replacement",
         )
-        session.commit()
-    _update_job(
-        db_factory,
-        job_id,
-        JobStatus.FAILED,
-        error_message=_sanitize_training_error(exc, job_id),
-        error_type="lora_training_error",
-    )
+        failed = JobStatusUpdate(
+            JobStatus.FAILED,
+            error_message=_sanitize_training_error(exc, job_id),
+            error_type="lora_training_error",
+        )
+        update_job_status(session, job_id, failed)
+
+    _write_if_active(db_factory, job_id, keep_previous_adapter)
 
 
 def _fail_lora_training(

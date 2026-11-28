@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from contextlib import suppress
 from datetime import timedelta
 from typing import Any, Final
@@ -14,6 +15,7 @@ from songmaker_acestep_engine.errors import AudioDownloadError
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     get_job,
+    lock_active_job,
     update_job_heartbeat,
     update_job_status,
 )
@@ -103,6 +105,19 @@ def _update_job(factory, job_id: str, status: JobStatus, **fields: Any) -> bool:
     raise RuntimeError(
         f"Job {job_id} status update to {status!r} failed after 2 attempts"
     ) from last_exc
+
+
+def _write_if_active(
+    factory, job_id: str, write: Callable[[Session], object],
+) -> bool:
+    """Commit ``write`` under one lock of the job's row; a row that has ended writes nothing."""
+    with factory() as session:
+        if lock_active_job(session, job_id) is None:
+            log.warning("Job %s ended before its write landed; dropping it", job_id)
+            return False
+        write(session)
+        session.commit()
+    return True
 
 
 def _defer_job(

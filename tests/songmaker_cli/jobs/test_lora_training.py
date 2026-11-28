@@ -17,7 +17,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.job_owner import an_owner
-from support.lora_training_world import FakeWorker, patch_worker_calls
+from support.lora_training_world import (
+    FakeWorker,
+    fail_the_adapter_move_into_place,
+    patch_worker_calls,
+)
 from support.web_app import SettledFakeAsyncRedis
 from support.wrapper_deps import reserved_gpu_hold
 
@@ -728,25 +732,13 @@ def test_adoption_restores_the_previous_adapter_when_second_rename_fails(
     db_factory,
     monkeypatch,
 ) -> None:
-    from songmaker_cli.jobs import lora_training
-
     lora_root = seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
     final_dir = lora_root / USER_LORA_OUTPUT_DIRNAME
     previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
     final_dir.mkdir(parents=True)
     (final_dir / "adapter.txt").write_text("old")
     temporary_dir = lora_root / "training_tmp"
-    original_rename = lora_training.os.rename
-    rename_count = 0
-
-    def fail_second_rename(source, destination) -> None:
-        nonlocal rename_count
-        rename_count += 1
-        if rename_count == 2:
-            raise OSError("simulated second rename failure")
-        original_rename(source, destination)
-
-    monkeypatch.setattr(lora_training.os, "rename", fail_second_rename)
+    fail_the_adapter_move_into_place(monkeypatch)
 
     with patch_worker_calls(str(temporary_dir)):
         _run(
@@ -767,7 +759,12 @@ def test_adoption_restores_the_previous_adapter_when_second_rename_fails(
         lora = get_user_lora(session, seeded["lora_id"])
         job = get_job(session, "job-1")
         assert lora.status == LoraStatus.READY
+        assert lora.error_message is None
         assert job.status == JobStatus.FAILED
+        audits = [
+            audit.detail for audit in session.query(AuditLog).filter_by(resource_id=lora.id)
+        ]
+        assert audits == ["ready: retained previous adapter after failed replacement"]
 
 
 def test_deleted_lora_rejected(seeded, db_factory) -> None:
