@@ -314,13 +314,12 @@ def _append_candidates(
 
 def _locked_entry(session: Session, playlist_id: str, entry_id: str) -> PlaylistEntry:
     """Reads the entry after the lock wait, never a position another writer has since shifted."""
-    entry = (
-        session.query(PlaylistEntry)
-        .populate_existing()
-        .filter_by(id=entry_id, playlist_id=playlist_id)
-        .first()
-    )
-    if not entry:
+    entry = session.scalars(
+        select(PlaylistEntry)
+        .where(PlaylistEntry.id == entry_id, PlaylistEntry.playlist_id == playlist_id)
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if entry is None:
         raise ValueError(f"Playlist entry not found: {entry_id}")
     return entry
 
