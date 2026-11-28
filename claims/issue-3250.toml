@@ -1,0 +1,7 @@
+claim_id = "17ec1dcab43542a988b6b978a3de6a23"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "55a978717ab7b09ebae219eab08965816efd0b89"
+branch = "claude/issue-3250-stop-disposes-pool-test"
+scope = ["tests/songmaker_cli/test_worker_base.py"]
+opened_commit = "e5afcf6717243d9405141b075fe0a5c269f8e1e0"
