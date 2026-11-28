@@ -13,18 +13,19 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any, cast
 
+from redis import Redis as SyncRedis
 from redis.asyncio import Redis
 from tandem import Liveness, LockLost, Locks, Script
 
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
-QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
+ADMITTED_KEY_PREFIX = "songmaker:acestep:admitted"
 DOWNLOAD_KEY_PREFIX = "songmaker:acestep:download"
 LM_FAILURE_KEY_PREFIX = "songmaker:acestep:lm-failure"
 GPU_HOLD_FAMILY = "gpu"
@@ -36,12 +37,13 @@ DOWNLOAD_LOCK_LASTS = timedelta(seconds=15)
 DOWNLOAD_LOCK_EXTEND_EVERY = timedelta(seconds=5)
 DOWNLOAD_LOCK_POLL_SECONDS = 1.0
 
-# KEYS: the queue depth, then the GPU holds' epoch, expiry and generation keys; ARGV: the lock span
-# in ms and the worker id. A hold, or a restart that may have lost one, refuses the admission.
+# KEYS: the admitted job ids, then the GPU holds' epoch, expiry and generation keys; ARGV: the lock
+# span in ms, the worker id and the job id. A hold, or a restart that may have lost one, refuses
+# the admission.
 ADMIT_GENERATION_SCRIPT = """
 local keys = {epoch = KEYS[2], expiry = KEYS[3], generation = KEYS[4]}
 if tandem.lock_state(keys, ARGV[2], ARGV[1]) then return 0 end
-redis.call('INCR', KEYS[1])
+redis.call('SADD', KEYS[1], ARGV[3])
 return 1
 """
 
@@ -50,8 +52,9 @@ def worker_state_key(worker_id: str) -> str:
     return f"{WORKER_KEY_PREFIX}:{worker_id}"
 
 
-def queue_depth_key(worker_id: str) -> str:
-    return f"{QUEUE_KEY_PREFIX}:{worker_id}"
+def admitted_key(worker_id: str) -> str:
+    """The set of job ids admitted on the worker; its size is the worker's queue depth."""
+    return f"{ADMITTED_KEY_PREFIX}:{worker_id}"
 
 
 def gpu_hold_locks(pool: Redis) -> Locks:
@@ -123,25 +126,43 @@ def worker_is_online(state: Mapping[str, Any] | None) -> bool:
 
 
 async def read_queue_depth(pool: Redis, worker_id: str) -> int:
-    raw = await pool.get(queue_depth_key(worker_id))
-    text = decode_redis_text(raw)
-    return int(text) if text is not None else 0
+    # redis-py types the asyncio set commands as both awaitable and plain.
+    return await cast("Awaitable[int]", pool.scard(admitted_key(worker_id)))
 
 
-async def decr_queue_depth(pool: Redis, worker_id: str) -> int:
-    return await pool.decr(queue_depth_key(worker_id))
+async def release_admission(pool: Redis, worker_id: str, job_id: str) -> None:
+    await cast("Awaitable[int]", pool.srem(admitted_key(worker_id), job_id))
 
 
-async def admit_generation(pool: Redis, worker_id: str) -> bool:
+def remove_admissions_of_ended_jobs(
+    redis: SyncRedis,
+    worker_id: str,
+    ended_among: Callable[[Collection[str]], Collection[str]],
+) -> int:
+    """Remove the worker's admitted job ids that ``ended_among`` names; returns how many.
+
+    Only those ids are removed, never the set rewritten, so an admission made after the read stays.
+    The removal is idempotent: the job's own release may remove the same id.
+    """
+    key = admitted_key(worker_id)
+    raw_ids = cast("set[bytes | str]", redis.smembers(key))
+    admitted = {cast("str", decode_redis_text(raw)) for raw in raw_ids}
+    ended = list(ended_among(admitted)) if admitted else []
+    if ended:
+        redis.srem(key, *ended)
+    return len(ended)
+
+
+async def admit_generation(pool: Redis, worker_id: str, job_id: str) -> bool:
     locks = gpu_hold_locks(pool)
     result = await Script(pool, ADMIT_GENERATION_SCRIPT).run(
         [
-            queue_depth_key(worker_id),
+            admitted_key(worker_id),
             locks.keys.epoch,
             locks.keys.expiry,
             locks.keys.generation,
         ],
-        [int(locks.lasts.total_seconds() * 1000), worker_id],
+        [int(locks.lasts.total_seconds() * 1000), worker_id, job_id],
     )
     return bool(result)
 

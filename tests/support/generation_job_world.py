@@ -167,7 +167,7 @@ def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_
                 admit_generation_worker=AsyncMock(return_value=MagicMock(id="w1")),
                 dispatch_generation_on_worker=dispatch,
             ),
-            patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+            patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         ):
             yield
 

@@ -525,6 +525,17 @@ def active_job_owner_stamps(session: Session) -> set[JobOwnerStamp]:
     }
 
 
+def terminal_job_ids(session: Session, job_ids: Collection[str]) -> set[str]:
+    """The ids among ``job_ids`` whose job is terminal or gone; a terminal status never reverts."""
+    still_active = {
+        job_id
+        for (job_id,) in session.query(Job.id).filter(
+            Job.id.in_(job_ids), Job.status.in_(JOB_ACTIVE_STATUSES),
+        )
+    }
+    return set(job_ids) - still_active
+
+
 def _owner_gone_verdict(
     job: Job, owner_liveness: Mapping[JobOwnerStamp, Liveness] | None,
 ) -> JobVerdict | None:

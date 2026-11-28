@@ -31,7 +31,7 @@ from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_acestep_engine.progress import AceStepPhase, AceStepProgress
 from songmaker_acestep_worker.clock import utcnow
 from songmaker_acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
-from songmaker_acestep_worker.heartbeat import GPU_HOLD_LASTS, gpu_hold_locks, queue_depth_key
+from songmaker_acestep_worker.heartbeat import GPU_HOLD_LASTS, admitted_key, gpu_hold_locks
 from songmaker_acestep_worker.model_cache import LoadedModel, VramStats
 from songmaker_acestep_worker.models import (
     GenerateRequest,
@@ -184,7 +184,7 @@ def test_read_queue_depth_set(tmp_path: Path) -> None:
     deps, redis = make_deps(tmp_path)
 
     async def go():
-        await redis.set(queue_depth_key(deps.worker_id), 5)
+        await redis.sadd(admitted_key(deps.worker_id), *(f"job-{n}" for n in range(5)))
         return await read_queue_depth(deps.redis, deps.worker_id)
 
     assert run(go()) == 5
@@ -942,7 +942,7 @@ def test_build_state_payload(tmp_path: Path) -> None:
     deps, redis = make_deps(tmp_path)
 
     async def go():
-        await redis.set(queue_depth_key(deps.worker_id), 4)
+        await redis.sadd(admitted_key(deps.worker_id), *(f"job-{n}" for n in range(4)))
         return await build_state_payload(deps)
 
     payload = run(go())

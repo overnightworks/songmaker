@@ -18,8 +18,8 @@ from songmaker_acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
+    admitted_key,
     gpu_hold_locks,
-    queue_depth_key,
     read_queue_depth,
     worker_state_key,
 )
@@ -124,7 +124,7 @@ def _hold_the_gpu(redis, worker_id: str) -> None:
 
 
 def _set_queue(redis, worker_id: str, depth: int) -> None:
-    redis.store[queue_depth_key(worker_id)] = str(depth)
+    redis.store.add_members(admitted_key(worker_id), *(f"job-{n}" for n in range(depth)))
 
 
 def _make_picked(wid="w1", host="h", port=8001, loaded=None, depth=0):
@@ -229,7 +229,7 @@ def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_s
             pytest.raises(AllWorkersHeld),
         ):
             await admit_generation_worker(
-                target_mode="sft",
+                target_mode="sft", job_id="j1",
                 redis=redis,
                 db_factory=lambda: db_session,
             )
@@ -269,7 +269,7 @@ def test_admit_generation_closes_its_session_before_the_occupancy_call(db_factor
             script = self._inner.register_script(source)
 
             async def run_when_no_session_is_open(*, keys, args):
-                if "INCR" in source:
+                if "SADD" in source:
                     assert sessions_entered >= 1, "pick_worker must have opened a session"
                     assert sessions_exited == sessions_entered, "session still open at the call"
                 return await script(keys=keys, args=args)
@@ -281,7 +281,7 @@ def test_admit_generation_closes_its_session_before_the_occupancy_call(db_factor
         loaded = [{"mode": "sft", "size_gb": 1.0}]
         await fake.set(worker_state_key("w1"), json.dumps({"gpu_healthy": True, "loaded": loaded}))
         await admit_generation_worker(
-            target_mode="sft",
+            target_mode="sft", job_id="j1",
             redis=_RedisCheckingSessionsAtEval(fake),
             db_factory=_TrackingSession,
         )
@@ -952,7 +952,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
         async with generation_worker_peer(db_factory=db_factory) as peer:
             address = peer.http_server.socket.getsockname()
             worker = await admit_generation_worker(
-                target_mode="sft",
+                target_mode="sft", job_id="j1",
                 redis=peer.redis,
                 db_factory=db_factory,
             )
