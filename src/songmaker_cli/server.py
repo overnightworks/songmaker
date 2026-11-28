@@ -76,13 +76,13 @@ from songmaker_cli.lifecycle import (
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.http_metrics import HttpMetricsMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
+from songmaker_cli.object_store import ObjectStoreUnavailableError
 from songmaker_cli.oidc_client import (
     build_admission_config,
     build_bearer_gate,
     build_oidc_client_config,
 )
 from songmaker_cli.page_language import PageShell
-from songmaker_cli.object_store import ObjectStoreUnavailableError
 from songmaker_cli.refusals import (
     Refusal,
     install_refusal_handler,
@@ -207,7 +207,7 @@ def audio_path_rejected_handler(
 
 def object_store_unavailable_handler(
     request: Request,
-    exc: ObjectStoreUnavailableError,
+    exc: Exception,
 ) -> JSONResponse:
     """Answer any route that reached an unreachable object store with the one 503 refusal."""
     return refusal_handler(
