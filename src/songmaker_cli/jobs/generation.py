@@ -860,8 +860,7 @@ async def _admit_generation_worker_or_requeue(
         return None
     try:
         return await jobs.admit_generation_worker(
-            target_mode=request.target_model,
-            job_id=request.job_id,
+            target_mode=request.target_model, job_id=request.job_id,
             redis=redis,
             db_factory=db_factory,
         )

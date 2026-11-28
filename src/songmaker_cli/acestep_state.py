@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Callable, Collection, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Mapping
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any, cast
@@ -126,11 +126,12 @@ def worker_is_online(state: Mapping[str, Any] | None) -> bool:
 
 
 async def read_queue_depth(pool: Redis, worker_id: str) -> int:
-    return await pool.scard(admitted_key(worker_id))
+    # redis-py types the asyncio set commands as both awaitable and plain.
+    return await cast("Awaitable[int]", pool.scard(admitted_key(worker_id)))
 
 
 async def release_admission(pool: Redis, worker_id: str, job_id: str) -> None:
-    await pool.srem(admitted_key(worker_id), job_id)
+    await cast("Awaitable[int]", pool.srem(admitted_key(worker_id), job_id))
 
 
 def remove_admissions_of_ended_jobs(

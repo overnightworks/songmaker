@@ -60,7 +60,8 @@ class _KeyView:
         self._view.set(key, value)
 
     def add_members(self, key: str, *members: str) -> None:
-        self._view.sadd(key, *members)
+        if members:
+            self._view.sadd(key, *members)
 
 
 class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
