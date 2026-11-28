@@ -71,6 +71,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
+from songmaker_cli.health_types import BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import Message, message
 from songmaker_cli.refusals import Refusal
@@ -110,7 +111,7 @@ class ChatTurnLifecycle:
         )
 
         if cancelled:
-            # A turn cancelled while the process shuts down was cut by the restart, not by its client.
+            # A turn cancelled during the shutdown was cut by the restart, not by its client.
             if self.background_loops.shutting_down:
                 failure, error_type = message("chatFailure.serverRestarted"), "server_restarted"
             else:

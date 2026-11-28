@@ -470,8 +470,12 @@ class _DrainingServer(uvicorn.Server):
     streams end and the turns drain on the app's shutting-down state, which this sets first.
     """
 
+    def __init__(self, config: uvicorn.Config, background_loops: BackgroundLoopRegistry) -> None:
+        super().__init__(config)
+        self._background_loops = background_loops
+
     async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
-        self.config.app.state.ctx.background_loops.begin_shutdown()
+        self._background_loops.begin_shutdown()
         await super().shutdown(sockets)
 
 
@@ -519,4 +523,4 @@ def run_server(
         proxy_headers=False,
         log_config=None,
     )
-    _DrainingServer(config).run()
+    _DrainingServer(config, app.state.ctx.background_loops).run()

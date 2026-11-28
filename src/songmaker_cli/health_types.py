@@ -68,7 +68,9 @@ class BackgroundLoopRegistry:
             return 0.0
         return monotonic() - self._shutdown_began_at
 
-    async def ending_at_shutdown(self, frames: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+    async def ending_at_shutdown(
+        self, frames: AsyncGenerator[str, None],
+    ) -> AsyncGenerator[str, None]:
         """Relay ``frames`` until the shutdown begins, then close them at once."""
         begun = asyncio.ensure_future(self._shutdown_begun.wait())
         next_frame: asyncio.Future[str] | None = None

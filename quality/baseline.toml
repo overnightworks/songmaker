@@ -61,7 +61,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 1929
 "tests/songmaker_cli/test_resource_event_api.py" = 1103
 "tests/songmaker_cli/test_scheduler.py" = 1278
-"tests/songmaker_cli/test_server.py" = 1632
+"tests/songmaker_cli/test_server.py" = 1631
 "tests/songmaker_cli/test_sharing_api.py" = 2385
 
 [function_lines."src/songmaker_acestep_worker/__main__.py"]

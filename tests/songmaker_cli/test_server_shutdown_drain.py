@@ -1,4 +1,4 @@
-"""A web process that gets SIGTERM ends its streams at once and gives its co-writer turns a bound."""
+"""A web process that gets SIGTERM ends its streams and bounds its co-writer turns."""
 
 from __future__ import annotations
 
