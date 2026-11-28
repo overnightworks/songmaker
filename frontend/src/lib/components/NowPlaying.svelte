@@ -400,7 +400,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: 0.8rem;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 	}
 	.from-link {

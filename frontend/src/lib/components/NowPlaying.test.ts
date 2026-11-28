@@ -309,17 +309,13 @@ describe('NowPlaying', () => {
 	});
 
 	it("goes to an imported take's song from its menu and leaves Now Playing behind", async () => {
-		const imported = { version_id: null, version_number: null };
-		const playing = info();
-		songList.set([
-			song({ ...playingSongDefaults(), generations: [{ ...playing.generation, ...imported }] })
-		]);
-		await renderSurface({ ...playing, generation: { ...playing.generation, ...imported } });
-
+		const { generation: take, ...playing } = info();
+		const imported = { ...take, version_id: null, version_number: null };
+		songList.set([song({ ...playingSongDefaults(), generations: [imported] })]);
+		await renderSurface({ ...playing, generation: imported });
 		target.querySelector<HTMLButtonElement>('.title-line .menu-trigger')?.click();
 		await tick();
 		menuRow(target, words['takeMenu.goToSong']).click();
-
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});

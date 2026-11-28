@@ -1,7 +1,7 @@
 import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { SongItem } from '#lib/api/types.ts';
+import type { ShareResult, SongItem } from '#lib/api/types.ts';
 
 vi.mock('#lib/api/client.ts', () => ({
 	fetchSong: vi.fn(),
@@ -28,8 +28,7 @@ import {
 	shareGeneration,
 	unarchiveGeneration,
 	unkeepGeneration,
-	unpickGeneration,
-	unshareGeneration
+	unpickGeneration
 } from '#lib/api/client.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
@@ -398,12 +397,12 @@ describe('a failed take action', () => {
 });
 
 describe('the take menu shared actions', () => {
-	const shareResult = {
+	const shareResult: ShareResult = {
 		status: 'ok',
 		share_url: 'https://example.com/share/gen/tide',
 		share_slug: 'tide',
 		songs_without_playable_take: []
-	} as const;
+	};
 
 	function takeInList() {
 		return get(songList)[0].generations[0];

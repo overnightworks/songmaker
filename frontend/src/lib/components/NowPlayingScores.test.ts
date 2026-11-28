@@ -16,7 +16,7 @@ afterEach(async () => {
 	activeJobs.set([]);
 });
 
-async function render(take: GenerationItem, look: 'footer' | 'chips' = 'footer') {
+async function showScores(take: GenerationItem, look: 'footer' | 'chips' = 'footer') {
 	target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(NowPlayingScores, { target, props: { generation: take, look } });
@@ -33,7 +33,7 @@ describe('NowPlayingScores', () => {
 	it.each(['footer', 'chips'] as const)(
 		'lists the automatic scores in the %s look, with no Rating and no control',
 		async (look) => {
-			await render(
+			await showScores(
 				generation({
 					id: 'g1',
 					scores: {
@@ -59,17 +59,17 @@ describe('NowPlayingScores', () => {
 	it('names the footer by its heading and the chips by none', async () => {
 		const take = generation({ id: 'g1', scores: { dynamics: 74 } });
 
-		await render(take, 'footer');
+		await showScores(take, 'footer');
 		expect(target.querySelector('.heading')?.textContent).toBe(words['nowPlayingScores.heading']);
 		await unmount(mounted as ReturnType<typeof mount>);
 		target.remove();
 
-		await render(take, 'chips');
+		await showScores(take, 'chips');
 		expect(target.querySelector('.heading')).toBeNull();
 	});
 
 	it('says there are no scores yet for a take nobody scored', async () => {
-		await render(generation({ id: 'g1', scores: null }));
+		await showScores(generation({ id: 'g1', scores: null }));
 
 		expect(target.textContent).toContain(words['nowPlayingScores.empty']);
 	});
@@ -92,7 +92,7 @@ describe('NowPlayingScores', () => {
 			}
 		]);
 
-		await render(generation({ id: 'g1', scores: { dynamics: 74 } }));
+		await showScores(generation({ id: 'g1', scores: { dynamics: 74 } }));
 
 		expect(target.querySelector('[role="status"]')?.textContent).toBe(
 			words['nowPlayingScores.rescoring']

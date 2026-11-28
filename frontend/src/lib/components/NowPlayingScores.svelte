@@ -93,7 +93,7 @@
 	.heading {
 		margin: 0;
 		font-family: var(--font-display);
-		font-size: 0.68rem;
+		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		color: var(--text-subtle);
@@ -109,7 +109,7 @@
 	.entry {
 		display: flex;
 		flex-direction: column;
-		font-size: 0.7rem;
+		font-size: 11px;
 		color: var(--text-muted);
 	}
 	.value {
@@ -117,7 +117,7 @@
 		align-items: center;
 		gap: 0.35rem;
 		font-family: var(--font-display);
-		font-size: 0.95rem;
+		font-size: 15px;
 		color: var(--text);
 	}
 	.dot {
@@ -143,15 +143,15 @@
 		gap: 0.4rem;
 		padding: 0.25rem 0.65rem;
 		border: 1px solid var(--border);
-		border-radius: 999px;
+		border-radius: var(--btn-radius-pill);
 		background: var(--surface);
 	}
 	.chips .value {
-		font-size: 0.78rem;
+		font-size: 12px;
 	}
 	.note {
 		margin: 0;
-		font-size: 0.78rem;
+		font-size: 12px;
 		color: var(--text-subtle);
 	}
 </style>

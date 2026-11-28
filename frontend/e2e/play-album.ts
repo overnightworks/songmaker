@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { words } from '../src/lib/words/en';
-import { workspace, type Shell } from './helpers';
+import { nameStartingWith, workspace, type Shell } from './helpers';
 
 /** Starts the open album from its header's play button. */
 export async function playOpenAlbum(page: Page, text: typeof words = words): Promise<void> {
@@ -50,4 +50,12 @@ export async function openThisTakeFromBar(
 		if (await closedSheetTrigger.isVisible()) await closedSheetTrigger.click();
 	}
 	await takeTab.click();
+}
+
+/** The phone's Now Playing leaves for the playing song through its take menu: Open version, or Go to song for an imported take. */
+export async function leaveNowPlayingForSong(page: Page, songTitle: string): Promise<void> {
+	const nowPlaying = page.getByRole('dialog', { name: songTitle });
+	await nowPlaying.getByRole('button', { name: words['takeMenu.label'] }).click();
+	const leave = nameStartingWith(words['takeMenu.openVersion'], words['takeMenu.goToSong']);
+	await nowPlaying.getByRole('button', { name: leave }).click();
 }

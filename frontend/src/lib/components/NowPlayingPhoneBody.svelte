@@ -58,9 +58,6 @@
 		min-width: 0;
 		width: auto;
 	}
-	.title-row :global(.cover-title) {
-		font-size: 1.15rem;
-	}
 	/* The words take what the rest leaves and scroll inside it; below the floor
 	   the body scrolls instead, so the lyrics never spill over the transport. */
 	.lyrics-region {

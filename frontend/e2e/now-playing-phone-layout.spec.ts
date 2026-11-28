@@ -8,7 +8,7 @@ import { words } from '../src/lib/words/en';
 
 const SHORT_PHONE_VIEWPORT = { width: MOBILE_VIEWPORT.width, height: 664 };
 // Long enough to wrap onto a second line beside the cover thumbnail.
-const TWO_LINE_TITLE = 'A very long song title that needs two lines on a phone';
+const TWO_LINE_TITLE = 'A long song title that wraps on a phone';
 // Far more lines than the lyrics region can show on either phone height.
 const LONG_LYRICS = Array.from({ length: 70 }, (_, index) => `Lyric line number ${index + 1}`).join(
 	'\n'
