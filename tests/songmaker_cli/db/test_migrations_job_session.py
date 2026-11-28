@@ -8,6 +8,7 @@ from alembic import command
 from sqlalchemy import inspect
 from support.migration_chain import (
     assert_column_nullable_empty_and_job_kept,
+    assert_downgrade_drops_indexed_column_and_keeps_job,
     column_names,
     insert_bare_job,
     job_count,
@@ -71,16 +72,10 @@ def test_upgrade_keeps_an_existing_job_without_a_session(reference_link_database
 
 
 def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
-    config, _ = reference_link_database
-    engine = _upgraded_with_a_cover_job(reference_link_database)
-    command.downgrade(config, PREVIOUS_REVISION)
-    assert COLUMN not in column_names(engine, "jobs")
-    assert not any(
-        index["column_names"] == [COLUMN] for index in inspect(engine).get_indexes("jobs")
+    _upgraded_with_a_cover_job(reference_link_database)
+    assert_downgrade_drops_indexed_column_and_keeps_job(
+        reference_link_database, COLUMN, PREVIOUS_REVISION, MIGRATION.revision,
     )
-    assert job_count(engine) == 1
-    command.upgrade(config, MIGRATION.revision)
-    assert COLUMN in column_names(engine, "jobs")
 
 
 def test_the_wait_upgrade_adds_a_nullable_column_and_keeps_the_job_without_a_wait(

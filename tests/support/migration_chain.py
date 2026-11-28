@@ -51,6 +51,24 @@ def assert_column_nullable_empty_and_job_kept(engine: Engine, column: str) -> No
     )
 
 
+def assert_downgrade_drops_indexed_column_and_keeps_job(
+    database: tuple[Config, Engine], column: str, previous_revision: str, revision: str,
+) -> None:
+    """Downgrading to `previous_revision` drops `column` of ``jobs`` and its index, keeps the job.
+
+    The upgrade to `revision` then restores the column.
+    """
+    config, engine = database
+    command.downgrade(config, previous_revision)
+    assert column not in column_names(engine, "jobs")
+    assert not any(
+        index["column_names"] == [column] for index in inspect(engine).get_indexes("jobs")
+    )
+    assert job_count(engine) == 1
+    command.upgrade(config, revision)
+    assert column in column_names(engine, "jobs")
+
+
 def job_count(engine: Engine) -> int:
     with engine.connect() as connection:
         return connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
