@@ -4,7 +4,50 @@
     {
       "run": "8dd98cb7a9af494da2fe4e5e33152864",
       "start_tip": null,
-      "follows": true
+      "follows": true,
+      "end_tip": "eba7969358eda0e239513e1adf5d6504c71aed3d",
+      "ran": [
+        "build",
+        "review",
+        "gate"
+      ],
+      "record": {
+        "version": 1,
+        "stages": {
+          "build": "sonnet/high",
+          "fix": "none",
+          "review": "opus/medium",
+          "test": "none",
+          "gate": "opus/high",
+          "land": "haiku/low"
+        },
+        "fix_rounds": {
+          "review": 0,
+          "gate": 0,
+          "ci": 0,
+          "test": 0
+        },
+        "blocking": {
+          "review": 1,
+          "gate": 2,
+          "ci": 0,
+          "test": 0
+        },
+        "misses": {
+          "review": 0,
+          "gate": 0,
+          "ci": 0,
+          "test": 0
+        },
+        "verdicts": [
+          {
+            "stage": "review",
+            "verdict": "revise",
+            "sha": "eba7969358eda0e239513e1adf5d6504c71aed3d"
+          }
+        ],
+        "risk": "material"
+      }
     }
   ]
 }
