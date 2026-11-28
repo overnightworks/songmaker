@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { GenerationItem, ShareResult } from '#lib/api/types.ts';
+	import { takeVersion } from '#lib/constants/now-playing.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
+	import { rescoringTakeIds } from '#lib/stores/takeActions.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import AddToPicker from '../AddToPicker.svelte';
 	import Icon from '../Icon.svelte';
@@ -9,21 +11,28 @@
 
 	interface Props {
 		gen: GenerationItem;
+		onopenversion: (versionId: string) => void;
+		ongotosong: () => void;
 		onrepaint: () => void;
 		oncover: () => void;
 		onuseseed: () => void;
+		onrescore: () => void;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		onaddto: (playlistId: string) => void;
 		onrestore: () => void;
-		ondelete: () => void;
+		// Only the editor deletes a take; Now Playing leaves it out.
+		ondelete?: () => void;
 	}
 
 	let {
 		gen,
+		onopenversion,
+		ongotosong,
 		onrepaint,
 		oncover,
 		onuseseed,
+		onrescore,
 		onshare,
 		onunshare,
 		onaddto,
@@ -39,6 +48,9 @@
 				})
 			: pageText('takeMenu.heading', { take: String(gen.generation_number) })
 	);
+
+	const openableVersion = $derived(takeVersion(gen.version_id, gen.version_number));
+	const rescoring = $derived($rescoringTakeIds.has(gen.id));
 
 	const shareToggle = createShareToggle(() => ({
 		kind: 'gen',
@@ -75,6 +87,18 @@
 		<AddToPicker onselect={addToAndClose} onback={() => (adding = false)} />
 	{:else}
 		<p class="menu-heading">{takeLabel}</p>
+		{#if openableVersion}
+			{@const versionId = openableVersion.versionId}
+			<button class="menu-item" onclick={() => runAndClose(() => onopenversion(versionId))}>
+				<Icon name="file-music" size={14} />
+				{pageText('takeMenu.openVersion')}
+			</button>
+		{:else}
+			<button class="menu-item" onclick={() => runAndClose(ongotosong)}>
+				<Icon name="file-music" size={14} />
+				{pageText('takeMenu.goToSong')}
+			</button>
+		{/if}
 		<button class="menu-item" onclick={() => runAndClose(onrepaint)}>
 			<Icon name="paintbrush" size={14} />
 			{pageText('takeMenu.repaint')}
@@ -90,6 +114,10 @@
 				<span class="menu-item-hint">{gen.seed}</span>
 			</button>
 		{/if}
+		<button class="menu-item" disabled={rescoring} onclick={() => runAndClose(onrescore)}>
+			<Icon name="refresh-cw" size={14} />
+			{pageText('takeMenu.rescore')}
+		</button>
 		{#if gen.is_archived}
 			<button class="menu-item" onclick={() => runAndClose(onrestore)}>
 				<Icon name="refresh-cw" size={14} />
@@ -118,9 +146,11 @@
 				/>
 			</button>
 		{/if}
-		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-			<Icon name="trash" size={14} />
-			{pageText('takeMenu.delete')}
-		</button>
+		{#if ondelete}
+			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+				<Icon name="trash" size={14} />
+				{pageText('takeMenu.delete')}
+			</button>
+		{/if}
 	{/if}
 </MenuPopover>

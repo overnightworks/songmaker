@@ -3,8 +3,6 @@
 	import { onMount, tick, type ComponentProps } from 'svelte';
 	import {
 		fetchSong,
-		shareGeneration,
-		unshareGeneration,
 		deleteGeneration,
 		uploadSongCover,
 		deleteSongCover
@@ -17,7 +15,6 @@
 		songList,
 		replaceSongInList,
 		updateSongInList,
-		updateGenerationInList,
 		removeGenerationFromSong,
 		addAlbumToList
 	} from '#lib/stores/libraryData.ts';
@@ -75,6 +72,7 @@
 		setSourceFromGeneration
 	} from '#lib/stores/recipe.ts';
 	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
+	import { shareTake, unshareTake } from '#lib/stores/takeActions.ts';
 	import type { ShareResult, SongItem, VersionItem } from '#lib/api/types.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
@@ -318,8 +316,8 @@
 	setGenerationActions({
 		...takeActionsFor(() => song),
 		del: onDeleteGeneration,
-		share: onGenShareEnable,
-		unshare: onGenShareDisable,
+		share: shareTake,
+		unshare: unshareTake,
 		// Plain mutation: the take row that asked for it owns the outcome the
 		// listener sees, success and failure alike (#163/3).
 		addToPlaylist: addGenerationToPlaylist,
@@ -483,21 +481,6 @@
 	const onRenameSong = (title: string): Promise<void> => renameSongTo(songIdOrThrow(), title);
 	const onSongShareEnable = (): Promise<ShareResult> => enableSongSharing(songIdOrThrow());
 	const onSongShareDisable = (): Promise<void> => disableSongSharing(songIdOrThrow());
-
-	async function onGenShareEnable(genId: string) {
-		const result = await shareGeneration(genId);
-		updateGenerationInList(genId, (g) => ({
-			...g,
-			is_shared: true,
-			share_slug: result.share_slug
-		}));
-		return result;
-	}
-
-	async function onGenShareDisable(genId: string) {
-		await unshareGeneration(genId);
-		updateGenerationInList(genId, (g) => ({ ...g, is_shared: false, share_slug: null }));
-	}
 
 	async function onDeleteGeneration(genId: string): Promise<void> {
 		if (!song) return;

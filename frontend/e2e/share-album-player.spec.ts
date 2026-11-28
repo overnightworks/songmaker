@@ -508,7 +508,7 @@ test.describe('rights and neighbours', () => {
 		const { page } = visitor;
 
 		await expect(page.getByRole('button', { name: /edit|pencil/i })).toHaveCount(0);
-		await expect(page.getByText(words['nowPlaying.goToSong'])).toHaveCount(0);
+		await expect(page.getByText(words['takeMenu.goToSong'])).toHaveCount(0);
 		await expect(page.locator('.queue-take')).toHaveCount(0);
 		await expect(page.getByText(/\bTake\b|\bv\d+\b/)).toHaveCount(0);
 		await expect(page.getByText(MOCK_UNPLAYABLE_TITLE)).toHaveCount(0);

@@ -15,10 +15,6 @@
 		NOW_PLAYING_DOCKED_WIDTH_PX,
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_Z_INDEX,
-		nowPlayingFromLabel,
-		nowPlayingTakeLabel,
-		SOURCE_OPEN_LABEL_KEYS,
-		type NowPlayingSource,
 		type NowPlayingSurfaceKind
 	} from '#lib/constants/now-playing.ts';
 	import { formatTime } from '#lib/utils/format.ts';
@@ -38,7 +34,6 @@
 		coverUrl,
 		artwork,
 		onCoverError,
-		source = null,
 		surface = 'full',
 		transportElement = $bindable(),
 		stacked = $bindable(false),
@@ -56,7 +51,6 @@
 		onSeek = (seconds) => audioPlayer.seek(seconds),
 		ended = false,
 		unplayableNotice = null,
-		onGoToSong,
 		upNextTitle = null,
 		rightPanelLabel,
 		sheetLabel = pageText('nowPlaying.rightPanel'),
@@ -73,6 +67,9 @@
 		lyricsText = null,
 		rightPanel,
 		judging,
+		scores,
+		subtitle,
+		takeMenu,
 		collectionHead,
 		songs
 	}: {
@@ -84,9 +81,6 @@
 		coverUrl: string | null;
 		artwork?: Snippet;
 		onCoverError?: () => void;
-		// Where the playing queue comes from. The stacked layout names it under
-		// the title as a way back there; everywhere else the album line stands.
-		source?: NowPlayingSource | null;
 		// 'full' covers the viewport as a modal dialog; 'docked' is a column in
 		// the page's own layout — no dialog role, no focus trap, no transport
 		// of its own, since the transport bar beside it keeps carrying that.
@@ -120,7 +114,6 @@
 		ended?: boolean;
 		// Why there is nothing to play; Play is dimmed and this line says so.
 		unplayableNotice?: string | null;
-		onGoToSong?: () => void;
 		// The phone's trigger for the right panel: what plays next and the
 		// panel's name. Read only where a rightPanel is given.
 		upNextTitle?: string | null;
@@ -143,6 +136,10 @@
 		// neither the column nor the phone's sheet trigger.
 		rightPanel?: Snippet;
 		judging?: Snippet;
+		// The take's scores, its subtitle line and its one menu, which stands in the title row.
+		scores?: Snippet;
+		subtitle?: Snippet;
+		takeMenu?: Snippet;
 	} = $props();
 
 	const frequentHitbox = `min-width: ${HITBOX_FREQUENT_PX}px; min-height: ${HITBOX_FREQUENT_PX}px`;
@@ -158,10 +155,7 @@
 	const albumLine = $derived(
 		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
 	);
-	const takeLabel = $derived(
-		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
-	);
-	const noticeLead = $derived(showTakeLabel ? takeLabel : stacked && source ? '' : albumLine);
+	const noticeLead = $derived(showTakeLabel ? '' : albumLine);
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
 	const duration = $derived(
@@ -230,24 +224,17 @@
 
 {#snippet coverMeta()}
 	<div class="cover-meta">
-		<svelte:element
-			this={isPage ? 'h1' : 'h2'}
-			id={isPage ? undefined : 'now-playing-title'}
-			class="cover-title"
-		>
-			{info.songTitle}
-		</svelte:element>
-		{#if stacked && source}
-			<button
-				type="button"
-				class="from-link"
-				data-hitbox="text"
-				onclick={source.open}
-				aria-label={pageText(SOURCE_OPEN_LABEL_KEYS[source.kind], { title: source.title })}
+		<div class="title-line">
+			<svelte:element
+				this={isPage ? 'h1' : 'h2'}
+				id={isPage ? undefined : 'now-playing-title'}
+				class="cover-title"
 			>
-				{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
-			</button>
-		{:else if albumLine && showTakeLabel}<span class="cover-line">{albumLine}</span>{/if}
+				{info.songTitle}
+			</svelte:element>
+			{@render takeMenu?.()}
+		</div>
+		{@render subtitle?.()}
 		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
 	</div>
 {/snippet}
@@ -360,14 +347,6 @@
 	{@render progress()}
 {/snippet}
 
-{#snippet goToSongButton()}
-	{#if onGoToSong}
-		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}>
-			{pageText('nowPlaying.goToSong')}
-		</button>
-	{/if}
-{/snippet}
-
 <div
 	bind:this={root}
 	class="now-playing"
@@ -415,7 +394,6 @@
 			<header class="np-header">
 				<p class="np-kicker">{pageText('nowPlaying.kicker')}</p>
 				<div class="np-header-actions">
-					{#if stacked}{@render goToSongButton()}{/if}
 					{#if isDocked && onExpand}
 						<button type="button" class="surface-btn" onclick={onExpand}>
 							{pageText('nowPlaying.expand')}
@@ -435,6 +413,7 @@
 					meta={coverMeta}
 					{lyrics}
 					{judging}
+					{scores}
 					{progress}
 					transport={transportControls}
 				/>
@@ -451,7 +430,7 @@
 
 					<section class="np-lyrics-col">
 						{@render lyrics()}
-						{@render goToSongButton()}
+						{@render scores?.()}
 					</section>
 
 					{#if rightPanel}
@@ -526,7 +505,6 @@
 	.np-header-actions {
 		flex-shrink: 0;
 		display: flex;
-		flex-wrap: wrap;
 		justify-content: flex-end;
 		align-items: center;
 		gap: 0.3rem;
@@ -623,9 +601,11 @@
 	.cover-meta {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: stretch;
 		gap: 0.2rem;
-		text-align: center;
+		width: var(--cover-width);
+		--ai-row-justify: flex-start;
+		text-align: left;
 	}
 	.cover-title {
 		margin: 0;
@@ -635,22 +615,18 @@
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.cover-line {
 		font-size: 0.8rem;
 		color: var(--text-muted);
 	}
-	.from-link {
-		display: inline-flex;
+	.title-line {
+		display: flex;
 		align-items: center;
-		gap: 0.2rem;
-		padding: 0 0.5rem;
-		border: none;
-		background: none;
-		color: var(--accent);
-		font: inherit;
-		font-size: 0.8rem;
-		cursor: pointer;
+		justify-content: space-between;
+		gap: 0.5rem;
 	}
 	.progress {
 		width: var(--cover-width, 100%);
@@ -741,20 +717,6 @@
 		min-width: 0;
 		min-height: 0;
 		justify-content: center;
-	}
-	.go-song {
-		align-self: flex-start;
-		padding: 0.5rem 0.9rem;
-		border-radius: var(--btn-radius-sm);
-		border: 1px solid var(--border);
-		background: color-mix(in srgb, var(--surface) 80%, transparent);
-		color: var(--text);
-		font-size: var(--label-font-size);
-		cursor: pointer;
-	}
-	.go-song:hover {
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 	}
 	.np-right-col {
 		display: flex;
@@ -855,8 +817,8 @@
 		grid-template-columns: 1fr;
 		overflow-y: auto;
 	}
-	/* The take sheet's backdrop dims the surface, yet the header's × and "Go to song" stay
-	   above it: a tap meant for them must not only close the sheet. */
+	/* The take sheet's backdrop dims the surface, yet the header's × stays above it: a tap
+	   meant for it must not only close the sheet. */
 	.now-playing.stacked .np-header {
 		position: relative;
 		z-index: 2;

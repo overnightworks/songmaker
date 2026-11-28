@@ -905,7 +905,13 @@ async function openAlbumFromNavigation(
 async function goToPlayingSong(page: Page, title: string): Promise<void> {
 	await transportButton(page, { name: words['player.openNowPlaying']({ title: title }) }).click();
 	const nowPlaying = page.getByRole('dialog', { name: title });
-	await nowPlaying.getByRole('button', { name: words['nowPlaying.goToSong'], exact: true }).click();
+	await nowPlaying.getByRole('button', { name: words['takeMenu.label'], exact: true }).click();
+	// A take with a version opens it, an imported one goes to its song: both leave Now Playing for the song.
+	await page
+		.getByRole('button', {
+			name: new RegExp(`^(${words['takeMenu.openVersion']}|${words['takeMenu.goToSong']})$`)
+		})
+		.click();
 }
 
 // Search and the full Now Playing are phone layers.

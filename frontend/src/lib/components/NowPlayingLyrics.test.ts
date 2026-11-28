@@ -277,10 +277,9 @@ describe('NowPlayingLyrics', () => {
 	});
 
 	it('never asks the reader to re-score, having no take to act on', async () => {
-		// The panel also renders for a public share listener, who cannot
-		// re-score anything — NowPlayingTake owns that action.
+		// The lyrics also render for a public share listener, who cannot
+		// re-score anything.
 		await render({ lyrics: LINE_1, cues: null, whisperText: 'a rough transcript' });
-		expect(target.textContent).not.toContain(pageWords['nowPlayingTake.rescoreAction']);
 		expect(target.querySelector('button')).toBeNull();
 	});
 

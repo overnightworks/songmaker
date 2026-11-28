@@ -49,12 +49,9 @@ describe('NowPlayingFrame', () => {
 		expect(cover).not.toHaveTextContent('Collection mosaic');
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
-	it.each([
-		{ stacked: true, home: '.np-header' },
-		{ stacked: false, home: '.np-lyrics-col' }
-	])(
-		'keeps Go to song clear of the take sheet when stacked is $stacked',
-		async ({ stacked, home }) => {
+	it.each([{ stacked: true }, { stacked: false }])(
+		'stands the take menu in the title row beside the title when stacked is $stacked',
+		async ({ stacked }) => {
 			if (stacked) document.documentElement.dataset.pointer = 'coarse';
 			const target = document.createElement('div');
 			document.body.append(target);
@@ -64,7 +61,7 @@ describe('NowPlayingFrame', () => {
 					surface: 'full',
 					stacked,
 					coverUrl: null,
-					onGoToSong: () => undefined,
+					takeMenu: createRawSnippet(() => ({ render: () => '<button id="menu">More</button>' })),
 					info: {
 						generation: makeGeneration(),
 						songId: 'song-1',
@@ -76,8 +73,9 @@ describe('NowPlayingFrame', () => {
 				}
 			});
 			await tick();
-			expect(target.querySelector(`${home} .go-song`)).not.toBeNull();
-			expect(target.querySelectorAll('.go-song')).toHaveLength(1);
+			const titleRow = target.querySelector('.title-line');
+			expect(titleRow).toHaveTextContent('Tide');
+			expect(titleRow?.querySelector('#menu')).not.toBeNull();
 		}
 	);
 	it.each([
@@ -125,7 +123,7 @@ describe('NowPlayingFrame', () => {
 		{
 			name: 'the full player',
 			props: { surface: 'full' as const, showTakeLabel: true },
-			line: 'take'
+			line: ''
 		},
 		{
 			name: 'a collection page',
@@ -161,10 +159,7 @@ describe('NowPlayingFrame', () => {
 			expect(badges[0]).toHaveTextContent(words['aiNotice.generated']);
 			const row = badges[0].closest('.cover-line');
 			expect(row).not.toBeNull();
-			if (line === 'take') {
-				expect(row).toHaveTextContent(/take/i);
-				expect(row).not.toHaveTextContent('Night Drive');
-			} else if (line) expect(row).toHaveTextContent(line);
+			if (line) expect(row).toHaveTextContent(line);
 		}
 	);
 	it('shows no sung marks on a share page, though its take was sung differently', async () => {

@@ -3,27 +3,14 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 
-// rescoringTakeIds stays real so the pending state is driven the way the app
-// drives it: by the scoring job sitting in the jobs store.
-vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
-	...(await importOriginal<typeof import('#lib/stores/takeActions.ts')>()),
-	rescore: vi.fn().mockResolvedValue(undefined)
-}));
 vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 	appPageAddress: (await importOriginal<typeof import('#lib/stores/navigation.ts')>())
 		.appPageAddress,
-	followAppPageLink: vi.fn(),
-	revealPlayingSong: vi.fn().mockResolvedValue(undefined),
-	openTakeVersion: vi.fn().mockResolvedValue(undefined)
+	followAppPageLink: vi.fn()
 }));
 
-import { get } from 'svelte/store';
 import { words } from '#lib/words/en.ts';
-import { activeJobs } from '#lib/stores/jobs.ts';
-import { rescore } from '#lib/stores/takeActions.ts';
-import { followAppPageLink, openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
-import { nowPlayingOpen, nowPlayingSurface } from '#lib/stores/player.ts';
-import { pendingTakeUse } from '#lib/stores/recipe.ts';
+import { followAppPageLink } from '#lib/stores/navigation.ts';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
 const generationDefaults = {
@@ -44,9 +31,6 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	vi.clearAllMocks();
-	nowPlayingSurface.set('closed');
-	pendingTakeUse.set(null);
-	activeJobs.set([]);
 });
 
 async function render(overrides: Partial<{ generation: GenerationItem; song: SongItem }> = {}) {
@@ -109,230 +93,14 @@ describe('NowPlayingTake', () => {
 		expect(heading).toBe(`${words['nowPlaying.takeVersioned']({ version: '1', take: '1' })} · sft`);
 		expect(heading).not.toContain('0:00');
 	});
-
-	it('renders scores from the generation', async () => {
-		await render({
-			generation: generation({
-				...generationDefaults,
-				scores: {
-					user_rating: 82,
-					text_accuracy: 91,
-					dynamics: 74
-				}
-			})
-		});
-		expect(target.textContent).toContain('82');
-		expect(target.textContent).toContain('91%');
-		expect(target.textContent).toContain('74');
-	});
-
-	it('shows a named empty state when there are no scores yet', async () => {
-		await render({ generation: generation(generationDefaults) });
-		expect(target.textContent).toContain(words['nowPlayingTake.scoresEmpty']);
-	});
-
-	it('asks for a re-score while the take has no lyric cues', async () => {
-		// #141/9: without cues the lyrics cannot follow the audio, and the panel
-		// says why instead of leaving the listener to guess.
-		await render({ generation: generation(generationDefaults) });
-		expect(target.textContent).toContain(words['nowPlayingTake.rescoreAction']);
-	});
-
-	it('re-scores the take from the hint, once', async () => {
-		await render({ generation: generation(generationDefaults) });
-		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
-		if (!hint) throw new Error('Expected the re-score hint button');
-		expect(hint.textContent?.trim()).toBe(words['nowPlayingTake.rescoreAction']);
-
-		hint.click();
-		await tick();
-
-		expect(rescore).toHaveBeenCalledTimes(1);
-		expect(rescore).toHaveBeenCalledWith('s1', 'g1');
-	});
-
-	it('reports the take as re-scoring while its scoring job runs', async () => {
-		activeJobs.set([
-			{
-				job: {
-					id: 'j1',
-					type: 'score',
-					status: 'running',
-					progress: 0.2,
-					error: null,
-					error_type: null,
-					started_at: null,
-					completed_at: null
-				},
-				songId: 's1',
-				genId: 'g1'
-			}
-		]);
-		await render({ generation: generation(generationDefaults) });
-		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
-		if (!hint) throw new Error('Expected the re-score hint button');
-
-		expect(hint.textContent?.trim()).toBe(words['nowPlayingTake.rescoring']);
-		expect(hint.disabled).toBe(true);
-
-		hint.click();
-		await tick();
-		expect(rescore).not.toHaveBeenCalled();
-	});
-
-	it('offers Re-score even when the take already has cues', async () => {
-		// A take scored before word timestamps carries segment-only cues, whose
-		// lines light together — re-scoring is exactly what buys per-line timing,
-		// so the entry cannot hang off the missing-cues hint.
-		await render({
-			generation: generation({
-				...generationDefaults,
-				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
-			})
-		});
-		const entry = target.querySelector<HTMLButtonElement>('.rescore');
-		if (!entry) throw new Error('Expected the Re-score entry');
-		expect(entry.textContent?.trim()).toBe(words['nowPlayingTake.rescore']);
-		expect(target.querySelector('.rescore-hint')).toBeNull();
-
-		entry.click();
-		await tick();
-
-		expect(rescore).toHaveBeenCalledTimes(1);
-		expect(rescore).toHaveBeenCalledWith('s1', 'g1');
-	});
-
-	it('reports the Re-score entry as re-scoring while its scoring job runs', async () => {
-		activeJobs.set([
-			{
-				job: {
-					id: 'j1',
-					type: 'score',
-					status: 'running',
-					progress: 0.2,
-					error: null,
-					error_type: null,
-					started_at: null,
-					completed_at: null
-				},
-				songId: 's1',
-				genId: 'g1'
-			}
-		]);
-		await render({
-			generation: generation({
-				...generationDefaults,
-				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
-			})
-		});
-		const entry = target.querySelector<HTMLButtonElement>('.rescore');
-		if (!entry) throw new Error('Expected the Re-score entry');
-
-		expect(entry.textContent?.trim()).toBe(words['nowPlayingTake.rescoring']);
-		expect(entry.disabled).toBe(true);
-
-		entry.click();
-		await tick();
-		expect(rescore).not.toHaveBeenCalled();
-	});
-
-	it('drops the re-score hint once the take has cues', async () => {
-		await render({
-			generation: generation({
-				...generationDefaults,
-				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
-			})
-		});
-		expect(target.textContent).not.toContain(words['nowPlayingTake.rescoreAction']);
-	});
-
-	it.each(['.use-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
-		'opts %s into the frequent hitbox',
-		async (selector) => {
-			// Sizing itself is pinned once for the shared mechanism in
-			// frequent-hitbox.test.ts; here the contract is that these controls opt in.
-			await render({});
-			const controls = Array.from(target.querySelectorAll<HTMLElement>(selector));
-			expect(controls.length).toBeGreaterThan(0);
-			for (const control of controls) expect(control.dataset.hitbox).toBe('frequent');
-		}
-	);
-
-	it('C5: names the seed action Use seed with the seed as its hint', async () => {
-		await render({ generation: generation(generationDefaults) });
-		const row = target.querySelector<HTMLButtonElement>('.use-seed');
-		expect(row?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-			`${words['nowPlayingTake.useSeed']} 48113`
-		);
-		expect(row?.querySelector('.use-seed-hint')?.textContent).toBe('48113');
-		expect(row?.querySelector('svg')).not.toBeNull();
-	});
-
-	it('C5: omits the seed action when the take has no seed', async () => {
-		await render({ generation: generation({ ...generationDefaults, seed: null }) });
-		expect(target.querySelector('.use-seed')).toBeNull();
-	});
-
-	it.each([
-		[words['nowPlayingTake.repaint'], 'repaint'],
-		[words['nowPlayingTake.cover'], 'cover'],
-		[words['nowPlayingTake.useSeed'], 'seed']
-	] as const)(
-		'%s hands the take over, closes Now Playing, and navigates to its song',
-		async (label, use) => {
-			nowPlayingSurface.set('full');
-			const gen = generation(generationDefaults);
-			const withSong = song({
-				slug: 'tide',
-				title: 'Tide',
-				album_title: 'Nachtstrom',
-				lyrics: 'la la',
-				prompt: 'dreamy',
-				created_at: ''
-			});
-			await render({ generation: gen, song: withSong });
-
-			Array.from(target.querySelectorAll<HTMLButtonElement>('.take-source-action, .use-seed'))
-				.find((button) => button.textContent?.trim().startsWith(label))
-				?.click();
-			await tick();
-
-			expect(get(pendingTakeUse)).toEqual({ generation: gen, use });
-			expect(get(nowPlayingOpen)).toBe(false);
-			expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
-		}
-	);
 });
 
-describe('NowPlayingTake Open vN', () => {
-	const takeOfV5 = generation({ ...generationDefaults, version_id: 'ver-5', version_number: 5 });
-
-	function openVersionLink(): HTMLButtonElement | null {
-		return (
-			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-				(button) =>
-					button.textContent?.trim() === words['nowPlayingTake.openVersion']({ number: '5' })
-			) ?? null
-		);
-	}
-
-	it("closes Now Playing and opens the take's song with its version to load", async () => {
-		nowPlayingSurface.set('full');
-		const withSong = song({ id: 's1', title: 'Tide' });
-		await render({ generation: takeOfV5, song: withSong });
-
-		openVersionLink()?.click();
-		await tick();
-
-		expect(get(nowPlayingOpen)).toBe(false);
-		expect(openTakeVersion).toHaveBeenCalledWith(withSong, takeOfV5.id, 'ver-5');
-	});
-
+describe('NowPlayingTake imported heading', () => {
 	it.each([
 		{ origin: 'no version at all', version_number: null },
 		{ origin: 'a version number but no version', version_number: 3 }
 	])(
-		'names an imported take with $origin "Imported take", with no model and no Open link',
+		'names an imported take with $origin "Imported take", with no model',
 		async ({ version_number }) => {
 			await render({
 				generation: generation({
@@ -346,7 +114,6 @@ describe('NowPlayingTake Open vN', () => {
 			expect(target.querySelector('.take-heading')?.textContent).toBe(
 				words['nowPlayingTake.importedHeading']
 			);
-			expect(target.textContent).not.toContain('Open v');
 		}
 	);
 });

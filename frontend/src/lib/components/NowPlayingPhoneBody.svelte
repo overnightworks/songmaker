@@ -2,13 +2,14 @@
 	import type { Snippet } from 'svelte';
 
 	// The phone keeps its transport on the first screen: the title row, the
-	// words in a region that scrolls on its own, then the card, the progress
-	// bar and the transport.
+	// words in a region that scrolls on its own, then the scores, the card, the
+	// progress bar and the transport.
 	let {
 		cover,
 		meta,
 		lyrics,
 		judging,
+		scores,
 		progress,
 		transport
 	}: {
@@ -16,6 +17,7 @@
 		meta: Snippet;
 		lyrics: Snippet;
 		judging?: Snippet;
+		scores?: Snippet;
 		progress: Snippet;
 		transport: Snippet;
 	} = $props();
@@ -24,6 +26,7 @@
 <div class="phone-body">
 	<div class="title-row">{@render cover()}{@render meta()}</div>
 	<section class="lyrics-region">{@render lyrics()}</section>
+	{@render scores?.()}
 	{@render judging?.()}
 	{@render progress()}
 	{@render transport()}
@@ -51,13 +54,9 @@
 		box-shadow: none;
 	}
 	.title-row :global(.cover-meta) {
+		flex: 1;
 		min-width: 0;
-		align-items: flex-start;
-		--ai-row-justify: flex-start;
-		text-align: left;
-	}
-	.title-row :global(.cover-title) {
-		overflow-wrap: anywhere;
+		width: auto;
 	}
 	/* The words take what the rest leaves and scroll inside it; below the floor
 	   the body scrolls instead, so the lyrics never spill over the transport. */
