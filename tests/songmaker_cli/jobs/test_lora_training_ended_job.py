@@ -1,4 +1,4 @@
-"""A training whose job row ended while its trainer ran lands nothing."""
+"""A training whose job row ended while its trainer ran writes nothing to its voice."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from songmaker_cli.db.models import AuditLog
 from songmaker_cli.db.queries.jobs import get_job, recover_jobs_of_dead_owners
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.jobs import lora_training
 from songmaker_cli.jobs.lora_training import reconcile_crashed_loras, run_lora_training_job
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import JobOwnerStamp
@@ -113,3 +114,88 @@ def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
     if has_previous_adapter:
         assert (final_dir / "previous-adapter.txt").read_text() == "previous"
         assert list(final_dir.iterdir()) == [final_dir / "previous-adapter.txt"]
+
+
+def _a_training_run(seeded, pg_factory, target_mode: str = "turbo"):
+    return run_lora_training_job(
+        "job-1", seeded["lora_id"], seeded["user_id"],
+        db_factory=pg_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+        target_mode=target_mode, owner=an_owner("o1"),
+        training_config=get_settings().lora_training_config,
+    )
+
+
+@pytest.mark.parametrize("row_ends", [True, False], ids=["row-ended", "row-active"])
+def test_a_failed_adapter_replacement_keeps_the_previous_adapter_only_while_the_row_is_active(
+    seeded, pg_factory, monkeypatch, row_ends,
+) -> None:
+    lora_root = seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
+    final_dir = lora_root / USER_LORA_OUTPUT_DIRNAME
+    final_dir.mkdir()
+    (final_dir / "previous-adapter.txt").write_text("previous")
+    left_by_the_owner_pass = {}
+    original_rename = lora_training.os.rename
+    original_rmtree = lora_training.shutil.rmtree
+    renames_done = 0
+    owner_pass_pending = row_ends
+
+    def fail_the_move_into_place(source, destination) -> None:
+        nonlocal renames_done
+        renames_done += 1
+        if renames_done == 2:
+            raise OSError("the move into place failed")
+        original_rename(source, destination)
+
+    def end_the_row_once_the_adapter_is_restored(path, *args, **kwargs) -> None:
+        nonlocal owner_pass_pending
+        if owner_pass_pending and renames_done >= 3:
+            owner_pass_pending = False
+            _fail_the_job_through_the_owner_pass(pg_factory, seeded["audio_dir"])
+            with pg_factory() as session:
+                left_by_the_owner_pass.update(voice=_voice_and_audits(session, seeded["lora_id"]))
+        original_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(lora_training.os, "rename", fail_the_move_into_place)
+    monkeypatch.setattr(lora_training.shutil, "rmtree", end_the_row_once_the_adapter_is_restored)
+    with patch_worker_calls(str(lora_root / USER_LORA_TRAINING_TMP_DIRNAME)):
+        asyncio.run(_a_training_run(seeded, pg_factory, target_mode="sft"))
+
+    with pg_factory() as session:
+        status, error_message, audits = _voice_and_audits(session, seeded["lora_id"])
+        assert get_job(session, "job-1").status == JobStatus.FAILED
+    if row_ends:
+        assert (status, error_message, audits) == left_by_the_owner_pass["voice"]
+    else:
+        assert (final_dir / "previous-adapter.txt").read_text() == "previous"
+        assert status == LoraStatus.READY
+        assert error_message is None
+        assert audits == ["ready: retained previous adapter after failed replacement"]
+
+
+@pytest.mark.parametrize("row_ends", [True, False], ids=["row-ended", "row-active"])
+def test_a_progress_tier_reaches_the_voice_only_while_the_row_is_active(
+    seeded, pg_factory, row_ends,
+) -> None:
+    left_by_the_owner_pass = {}
+    voice_after_each_tier = []
+
+    async def trainer_that_reports_its_tiers(*_args, **_kwargs):
+        if row_ends:
+            _fail_the_job_through_the_owner_pass(pg_factory, seeded["audio_dir"])
+            with pg_factory() as session:
+                left_by_the_owner_pass.update(voice=_voice_and_audits(session, seeded["lora_id"]))
+        for epoch, fraction in ((1, 0.25), (2, 0.95)):
+            yield ("progress", {"progress": fraction, "current_epoch": epoch, "train_epochs": 3})
+            with pg_factory() as session:
+                voice_after_each_tier.append(_voice_and_audits(session, seeded["lora_id"]))
+        yield ("error", {"error": "trainer lost its output"})
+
+    with patch_worker_calls("unused", events=trainer_that_reports_its_tiers):
+        asyncio.run(_a_training_run(seeded, pg_factory))
+
+    if row_ends:
+        assert voice_after_each_tier == [left_by_the_owner_pass["voice"]] * 2
+    else:
+        assert [status for status, *_ in voice_after_each_tier] == [
+            LoraStatus.TRAINING, LoraStatus.EXPORTING,
+        ]
