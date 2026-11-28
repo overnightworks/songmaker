@@ -1,4 +1,5 @@
-"""Writers of one playlist's order wait for each other, so its positions stay 0 to n-1."""
+"""Writers of one playlist's order wait for each other, so its positions stay 0 to n-1; a move
+past the end lands last."""
 
 from __future__ import annotations
 
@@ -77,6 +78,14 @@ class _World:
                 playlist_id=TARGET, generation_id=take,
             ).one().id
 
+    def takes_in_order(self) -> list[str]:
+        with self.pg_factory() as session:
+            return [
+                entry.generation_id
+                for entry in session.query(PlaylistEntry).filter_by(playlist_id=TARGET)
+                .order_by(PlaylistEntry.position)
+            ]
+
     def positions(self) -> list[int]:
         with self.pg_factory() as session:
             return [
@@ -127,3 +136,21 @@ def test_a_removal_and_an_add_running_together_leave_the_positions_gap_free(
     )
     assert [answers["first"].status_code, answers["second"].status_code] == [200, 200]
     assert world.positions() == [0, 1]
+
+
+def test_a_move_past_the_end_lands_last_and_the_next_append_follows_it(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    for take in ("take-1", "take-2"):
+        assert world.add_take(take)().status_code == 200
+
+    moved = world.client.patch(
+        f"/api/playlists/{TARGET}/entries/{world.entry_of('take-1')}/position",
+        json={"new_position": 9999},
+    )
+
+    assert moved.status_code == 200
+    assert world.add_take("take-3")().status_code == 200
+    assert world.takes_in_order() == ["take-2", "take-1", "take-3"]
+    assert world.positions() == [0, 1, 2]

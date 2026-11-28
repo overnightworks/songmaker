@@ -428,34 +428,6 @@ def test_reorder_playlist_entry_backward(seeded_session: Session) -> None:
     assert positions["g2"] == 2
 
 
-def test_a_move_past_the_end_lands_last_and_the_next_append_follows_it(
-    client: TestClient,
-) -> None:
-    playlist_id = client.post("/api/playlists", json={"title": "Far"}).json()["id"]
-    entry_ids = [
-        client.post(
-            f"/api/playlists/{playlist_id}/entries/generation", json={"generation_id": take},
-        ).json()["id"]
-        for take in ("g1", "g3")
-    ]
-
-    moved = client.patch(
-        f"/api/playlists/{playlist_id}/entries/{entry_ids[0]}/position",
-        json={"new_position": 9999},
-    )
-    appended = client.post(
-        f"/api/playlists/{playlist_id}/entries/generation", json={"generation_id": "g2"},
-    )
-
-    assert moved.status_code == 200
-    assert appended.status_code == 200
-    positions = {
-        entry["generation_id"]: entry["position"]
-        for entry in client.get(f"/api/playlists/{playlist_id}").json()["entries"]
-    }
-    assert positions == {"g3": 0, "g1": 1, "g2": 2}
-
-
 def test_reorder_same_position_noop(seeded_session: Session) -> None:
     playlist = _create_playlist(seeded_session, "Test")
     e1 = add_generation_to_playlist(seeded_session, playlist.id, "g1")
