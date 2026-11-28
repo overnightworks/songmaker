@@ -46,7 +46,6 @@ import pytest  # noqa: E402
 import structlog  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
-from support.fake_cli_process import close_fake_cli_processes  # noqa: E402
 from support.generation_failures import SONGMAKER_FAILURE_CASES  # noqa: E402
 from support.oidc_client import write_test_client_secret  # noqa: E402
 from support.realm import REALM_ENVIRONMENT  # noqa: E402
@@ -131,13 +130,6 @@ def isolated_logging():
         logger.disabled = disabled
         logger.propagate = propagate
     structlog.configure(**structlog_state)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _close_fake_cli_pipes():
-    """Close the pipe-backed fake Claude CLI streams after each test module."""
-    yield
-    close_fake_cli_processes()
 
 
 @pytest.fixture

@@ -70,9 +70,6 @@ RUN chmod +x /app/start_web_server.sh
 # can verify only a numeric USER.
 RUN groupadd --gid 1000 songmaker \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash songmaker
-# The web consumer owns the mounted CLI profile directories; Compose mounts
-# the binaries and credential mirrors read-only.
-RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
 # The audio directory is a volume mount point and the only path under /app the web process
 # writes. Docker seeds an empty named volume from whichever image mounts it
 # first — as root when that image lacks the directory, which the app can never
