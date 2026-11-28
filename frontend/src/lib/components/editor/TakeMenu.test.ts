@@ -30,6 +30,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+	activeJobs.set([]);
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	vi.unstubAllGlobals();
@@ -234,7 +235,6 @@ describe('TakeMenu', () => {
 
 		expect(row.disabled).toBe(true);
 		expect(props.onrescore).not.toHaveBeenCalled();
-		activeJobs.set([]);
 	});
 
 	it('unshares a shared archived take from its Share row and stays open', async () => {
