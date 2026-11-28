@@ -258,8 +258,10 @@ def test_missing_credentials_reach_the_caller_unchanged(
     monkeypatch.delenv("AWS_PROFILE", raising=False)
     monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)
 
+    store = ObjectStore("b")
+
     with pytest.raises(NoCredentialsError):
-        ObjectStore("b").get_bytes("k")
+        store.get_bytes("k")
 
 
 def test_deleting_more_keys_than_one_call_takes_removes_them_all(
