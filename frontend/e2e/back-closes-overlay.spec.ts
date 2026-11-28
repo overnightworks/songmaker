@@ -1,5 +1,5 @@
 import { GROUPS, openSearchSheet, phoneSearchResult, searchSheet } from './phone-search';
-import { openThisTakeFromBar } from './play-album';
+import { leaveNowPlayingForSong, openThisTakeFromBar } from './play-album';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import {
 	mockPlaylist,
@@ -904,8 +904,7 @@ async function openAlbumFromNavigation(
 
 async function goToPlayingSong(page: Page, title: string): Promise<void> {
 	await transportButton(page, { name: words['player.openNowPlaying']({ title: title }) }).click();
-	const nowPlaying = page.getByRole('dialog', { name: title });
-	await nowPlaying.getByRole('button', { name: words['nowPlaying.goToSong'], exact: true }).click();
+	await leaveNowPlayingForSong(page);
 }
 
 // Search and the full Now Playing are phone layers.

@@ -602,7 +602,7 @@ async function rights(page: Page, payload: SharedPlaylistPayload) {
 	).toHaveCount(0);
 	await expect(page.locator('.queue-take')).toHaveCount(0);
 	await expect(
-		page.getByText(new RegExp(`${words['nowPlaying.goToSong']}|\\bTake\\b|\\bv\\d+\\b`))
+		page.getByText(new RegExp(`${words['takeMenu.goToSong']}|\\bTake\\b|\\bv\\d+\\b`))
 	).toHaveCount(0);
 	await expect(page.locator('.queue-title')).toHaveText(
 		payload.entries.map((entry) => entry.song_title)

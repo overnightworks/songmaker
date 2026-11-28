@@ -7,13 +7,16 @@ import {
 	pickGeneration,
 	rateGeneration,
 	scoreGeneration,
+	shareGeneration,
 	unarchiveGeneration,
 	unkeepGeneration,
-	unpickGeneration
+	unpickGeneration,
+	unshareGeneration
 } from '#lib/api/client.ts';
-import type { GenerationItem } from '#lib/api/types.ts';
+import type { GenerationItem, ShareResult } from '#lib/api/types.ts';
 import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
-import { upsertSongInList } from '#lib/stores/libraryData.ts';
+import { updateGenerationInList, upsertSongInList } from '#lib/stores/libraryData.ts';
+import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
 import { addToast } from '#lib/stores/toast.ts';
 import { pageText } from '#lib/utils/page-words.ts';
 
@@ -131,3 +134,29 @@ export const rescoringTakeIds = derived(
 		return ids;
 	}
 );
+
+// Sharing and playlists are the take menu's, wherever it stands: the editor
+// reaches them through its actions context, Now Playing directly.
+export async function shareTake(genId: string): Promise<ShareResult> {
+	const result = await shareGeneration(genId);
+	updateGenerationInList(genId, (take) => ({
+		...take,
+		is_shared: true,
+		share_slug: result.share_slug
+	}));
+	return result;
+}
+
+export async function unshareTake(genId: string): Promise<void> {
+	await unshareGeneration(genId);
+	updateGenerationInList(genId, (take) => ({ ...take, is_shared: false, share_slug: null }));
+}
+
+export async function addTakeToPlaylist(playlistId: string, genId: string): Promise<void> {
+	try {
+		await addGenerationToPlaylist(playlistId, genId);
+		addToast(pageText('takesList.addedToPlaylist'), 'success');
+	} catch (e) {
+		addToast(describeFailure(e, pageText('takesList.addFailed')), 'error');
+	}
+}

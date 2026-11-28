@@ -807,6 +807,18 @@ msgctxt "takeMenu.heading"
 msgid "Take · {take}"
 msgstr ""
 
+msgctxt "takeMenu.openVersion"
+msgid "Open version"
+msgstr ""
+
+msgctxt "takeMenu.goToSong"
+msgid "Go to song"
+msgstr ""
+
+msgctxt "takeMenu.rescore"
+msgid "Re-score"
+msgstr ""
+
 msgctxt "takeMenu.repaint"
 msgid "Repaint"
 msgstr ""
@@ -2865,10 +2877,6 @@ msgctxt "nowPlayingTake.headingDurationMode"
 msgid "v{version} · take {take} · {duration} · {mode}"
 msgstr ""
 
-msgctxt "nowPlayingTake.openVersion"
-msgid "Open v{number}"
-msgstr ""
-
 msgctxt "nowPlayingJudging.label"
 msgid "Judge this take"
 msgstr ""
@@ -2881,52 +2889,40 @@ msgctxt "nowPlayingJudging.keep"
 msgid "Keep"
 msgstr ""
 
-msgctxt "nowPlayingTake.scores"
+msgctxt "nowPlayingScores.heading"
 msgid "Scores"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoresEmpty"
+msgctxt "nowPlayingScores.empty"
 msgid "No scores yet"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoreRating"
-msgid "Rating"
-msgstr ""
-
-msgctxt "nowPlayingTake.scoreLyricsSung"
+msgctxt "nowPlayingScores.lyricsSung"
 msgid "Lyrics sung"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoreDynamics"
+msgctxt "nowPlayingScores.dynamics"
 msgid "Dynamics"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoreQuality"
+msgctxt "nowPlayingScores.quality"
 msgid "Quality"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoreEnjoyment"
+msgctxt "nowPlayingScores.enjoyment"
 msgid "Enjoyment"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoreCoherence"
+msgctxt "nowPlayingScores.coherence"
 msgid "Coherence"
 msgstr ""
 
-msgctxt "nowPlayingTake.scoreBpm"
+msgctxt "nowPlayingScores.bpm"
 msgid "BPM"
 msgstr ""
 
-msgctxt "nowPlayingTake.rescoreAction"
-msgid "Re-score this take to follow the lyrics."
-msgstr ""
-
-msgctxt "nowPlayingTake.rescoring"
+msgctxt "nowPlayingScores.rescoring"
 msgid "Re-scoring…"
-msgstr ""
-
-msgctxt "nowPlayingTake.rescore"
-msgid "Re-score"
 msgstr ""
 
 msgctxt "nowPlayingTake.recipe"
@@ -2939,18 +2935,6 @@ msgstr ""
 
 msgctxt "nowPlayingJudging.ratingNotes"
 msgid "Notes (optional)"
-msgstr ""
-
-msgctxt "nowPlayingTake.useSeed"
-msgid "Use seed"
-msgstr ""
-
-msgctxt "nowPlayingTake.repaint"
-msgid "Repaint"
-msgstr ""
-
-msgctxt "nowPlayingTake.cover"
-msgid "Cover"
 msgstr ""
 
 msgctxt "takeRecipe.groupModel"
@@ -5551,10 +5535,6 @@ msgstr ""
 
 msgctxt "nowPlaying.collapse"
 msgid "Collapse"
-msgstr ""
-
-msgctxt "nowPlaying.goToSong"
-msgid "Go to song"
 msgstr ""
 
 msgctxt "nowPlaying.playAgain"

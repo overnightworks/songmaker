@@ -6,6 +6,7 @@ import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts'
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { HITBOX_STYLE as hitboxCss } from '#lib/styles/hitbox.ts';
+import { activeJobs } from '#lib/stores/jobs.ts';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import TakeMenu from './TakeMenu.svelte';
 import { words } from '#lib/words/en.ts';
@@ -29,6 +30,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+	activeJobs.set([]);
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	vi.unstubAllGlobals();
@@ -39,10 +41,13 @@ afterEach(async () => {
 
 function defaultProps() {
 	return {
-		gen: gen({ version_number: 3, generation_number: 2, seed: null }),
+		gen: gen({ version_id: 'ver-3', version_number: 3, generation_number: 2, seed: null }),
+		onopenversion: vi.fn(),
+		ongotosong: vi.fn(),
 		onrepaint: vi.fn(),
 		oncover: vi.fn(),
 		onuseseed: vi.fn(),
+		onrescore: vi.fn(),
 		onshare: vi.fn(async () => ({
 			status: 'ok',
 			share_url: 'https://example.com/share/gen/take',
@@ -52,7 +57,7 @@ function defaultProps() {
 		onunshare: vi.fn(async () => undefined),
 		onaddto: vi.fn(),
 		onrestore: vi.fn(),
-		ondelete: vi.fn()
+		ondelete: vi.fn() as (() => void) | undefined
 	};
 }
 
@@ -119,15 +124,17 @@ describe('TakeMenu', () => {
 		{ seed: null, rows: [] as string[] },
 		{ seed: 4127730, rows: [words['takeMenu.useSeed']] }
 	])(
-		'915_C3: offers ordered actions with an icon each, Use seed third only for a take with seed $seed, Delete last in red',
+		'915_C3: offers ordered actions with an icon each, Use seed after Cover only for a take with seed $seed, Delete last in red',
 		async ({ seed, rows: seedRows }) => {
 			const { target } = await render({
 				gen: gen({ is_kept: true, is_shared: true, is_archived: false, seed })
 			});
 			expect(menuRowLabels(target)).toEqual([
+				words['takeMenu.openVersion'],
 				words['takeMenu.repaint'],
 				words['takeMenu.cover'],
 				...seedRows,
+				words['takeMenu.rescore'],
 				words['takeMenu.addTo'],
 				words['takeMenu.share'],
 				words['takeMenu.delete']
@@ -156,14 +163,79 @@ describe('TakeMenu', () => {
 				})
 			});
 			expect(menuRowLabels(target)).toEqual([
+				words['takeMenu.openVersion'],
 				words['takeMenu.repaint'],
 				words['takeMenu.cover'],
+				words['takeMenu.rescore'],
 				words['takeMenu.restore'],
 				...shareRows,
 				words['takeMenu.delete']
 			]);
 		}
 	);
+
+	it.each([
+		{
+			case: 'a take with a version',
+			version_id: 'ver-3',
+			first: 'takeMenu.openVersion',
+			runs: 'onopenversion',
+			args: ['ver-3']
+		},
+		{
+			case: 'an imported take',
+			version_id: null,
+			first: 'takeMenu.goToSong',
+			runs: 'ongotosong',
+			args: []
+		}
+	] as const)(
+		'reads $first on its first row for $case and runs it',
+		async ({ version_id, first, runs, args }) => {
+			const { target, props } = await render({
+				gen: gen({ version_id, version_number: version_id ? 3 : null })
+			});
+			expect(menuRowLabels(target)[0]).toBe(words[first]);
+
+			menuRow(target, words[first]).click();
+			await tick();
+
+			expect(props[runs]).toHaveBeenCalledWith(...args);
+		}
+	);
+
+	it('leaves Delete out of a menu whose owner cannot delete', async () => {
+		const { target } = await render({ ondelete: undefined });
+
+		expect(menuRowLabels(target)).not.toContain(words['takeMenu.delete']);
+	});
+
+	it('disables Re-score while the take re-scores', async () => {
+		activeJobs.set([
+			{
+				job: {
+					id: 'j1',
+					type: 'score',
+					status: 'running',
+					progress: 0.2,
+					error: null,
+					error_type: null,
+					started_at: null,
+					completed_at: null
+				},
+				songId: 's1',
+				genId: 'g1'
+			}
+		]);
+		const { target, props } = await render({ gen: gen({ id: 'g1' }) });
+		const row = menuRow(target, words['takeMenu.rescore']);
+
+		row.click();
+		await tick();
+
+		expect(row.disabled).toBe(true);
+		expect(props.onrescore).not.toHaveBeenCalled();
+	});
 
 	it('unshares a shared archived take from its Share row and stays open', async () => {
 		const { target, props } = await render({
@@ -223,6 +295,7 @@ describe('TakeMenu', () => {
 
 	it.each([
 		[words['takeMenu.repaint'], 'onrepaint'],
+		[words['takeMenu.rescore'], 'onrescore'],
 		[words['takeMenu.cover'], 'oncover'],
 		[words['takeMenu.useSeed'], 'onuseseed'],
 		[words['takeMenu.delete'], 'ondelete'],
@@ -285,7 +358,7 @@ describe('TakeMenu', () => {
 
 	it('915_C3: focuses the first action and returns focus on Escape', async () => {
 		const { target } = await render();
-		expect(document.activeElement?.textContent?.trim()).toBe(words['takeMenu.repaint']);
+		expect(document.activeElement?.textContent?.trim()).toBe(words['takeMenu.openVersion']);
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
 		expect(target.querySelector('.menu-panel')).toBeNull();

@@ -41,10 +41,9 @@ import type { GenerateState } from '#lib/stores/generateAction.ts';
 import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
 import { playTake } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
+import { addGenerationToPlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
 	IDLE,
-	addToPlaylist,
 	clickMenuItem,
 	clickVersion,
 	keep,
@@ -59,7 +58,11 @@ import { words } from '#lib/words/en.ts';
 
 vi.mock('#lib/stores/playlists.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/playlists.ts')>();
-	return { ...actual, ensurePlaylistsLoaded: vi.fn(async () => undefined) };
+	return {
+		...actual,
+		addGenerationToPlaylist: vi.fn(() => Promise.resolve()),
+		ensurePlaylistsLoaded: vi.fn(async () => undefined)
+	};
 });
 
 let songSequence = 0;
@@ -69,7 +72,7 @@ beforeEach(() => {
 	keep.mockReset();
 	useSeed.mockReset();
 	clickVersion.mockClear();
-	addToPlaylist.mockClear();
+	vi.mocked(addGenerationToPlaylist).mockClear();
 	playlistList.set([{ ...playlist }]);
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
@@ -132,7 +135,7 @@ describe('TakesList menu', () => {
 		await tick();
 		await Promise.resolve();
 
-		expect(addToPlaylist).toHaveBeenCalledWith('p1', 'g1');
+		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
 		expect(playTake).not.toHaveBeenCalled();
 	});
 });

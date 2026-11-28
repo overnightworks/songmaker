@@ -27,6 +27,7 @@
 	} from '#lib/stores/takeFolds.ts';
 	import { groupTakes, takeGroupKey, type TakeGroup } from '#lib/utils/takeGroups.ts';
 	import { addToast } from '#lib/stores/toast.ts';
+	import { addTakeToPlaylist } from '#lib/stores/takeActions.ts';
 	import { bulkDeleteGenerations } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
@@ -132,15 +133,6 @@
 		}
 	}
 
-	async function onAddToPlaylist(playlistId: string, genId: string): Promise<void> {
-		try {
-			await actions.addToPlaylist(playlistId, genId);
-			addToast(pageText('takesList.addedToPlaylist'), 'success');
-		} catch (e) {
-			addToast(describeFailure(e, pageText('takesList.addFailed')), 'error');
-		}
-	}
-
 	// The row of a folded version, or of Imported (no version number): archived
 	// takes count in the total and are named after it.
 	function foldedLabel(group: TakeGroup): string {
@@ -190,7 +182,7 @@
 			{song}
 			{voices}
 			{onsource}
-			onaddto={(playlistId) => void onAddToPlaylist(playlistId, gen.id)}
+			onaddto={(playlistId) => void addTakeToPlaylist(playlistId, gen.id)}
 			ondelete={() => (deleteFor = gen)}
 		/>
 		{#if $sourceGeneration?.id === gen.id}

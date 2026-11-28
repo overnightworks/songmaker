@@ -202,6 +202,9 @@ export type Words = {
     readonly "takeMenu.close": string;
     readonly "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => string;
     readonly "takeMenu.heading": (gaps: { readonly take: string }) => string;
+    readonly "takeMenu.openVersion": string;
+    readonly "takeMenu.goToSong": string;
+    readonly "takeMenu.rescore": string;
     readonly "takeMenu.repaint": string;
     readonly "takeMenu.cover": string;
     readonly "takeMenu.useSeed": string;
@@ -692,28 +695,21 @@ export type Words = {
     readonly "nowPlayingTake.headingDuration": (gaps: { readonly duration: string; readonly take: string; readonly version: string }) => string;
     readonly "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => string;
     readonly "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => string;
-    readonly "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => string;
     readonly "nowPlayingJudging.label": string;
     readonly "nowPlayingJudging.pick": string;
     readonly "nowPlayingJudging.keep": string;
-    readonly "nowPlayingTake.scores": string;
-    readonly "nowPlayingTake.scoresEmpty": string;
-    readonly "nowPlayingTake.scoreRating": string;
-    readonly "nowPlayingTake.scoreLyricsSung": string;
-    readonly "nowPlayingTake.scoreDynamics": string;
-    readonly "nowPlayingTake.scoreQuality": string;
-    readonly "nowPlayingTake.scoreEnjoyment": string;
-    readonly "nowPlayingTake.scoreCoherence": string;
-    readonly "nowPlayingTake.scoreBpm": string;
-    readonly "nowPlayingTake.rescoreAction": string;
-    readonly "nowPlayingTake.rescoring": string;
-    readonly "nowPlayingTake.rescore": string;
+    readonly "nowPlayingScores.heading": string;
+    readonly "nowPlayingScores.empty": string;
+    readonly "nowPlayingScores.lyricsSung": string;
+    readonly "nowPlayingScores.dynamics": string;
+    readonly "nowPlayingScores.quality": string;
+    readonly "nowPlayingScores.enjoyment": string;
+    readonly "nowPlayingScores.coherence": string;
+    readonly "nowPlayingScores.bpm": string;
+    readonly "nowPlayingScores.rescoring": string;
     readonly "nowPlayingTake.recipe": string;
     readonly "nowPlayingJudging.rating": string;
     readonly "nowPlayingJudging.ratingNotes": string;
-    readonly "nowPlayingTake.useSeed": string;
-    readonly "nowPlayingTake.repaint": string;
-    readonly "nowPlayingTake.cover": string;
     readonly "takeRecipe.groupModel": string;
     readonly "takeRecipe.groupReproducibility": string;
     readonly "takeRecipe.groupVersion": string;
@@ -1353,7 +1349,6 @@ export type Words = {
     readonly "nowPlaying.close": string;
     readonly "nowPlaying.expand": string;
     readonly "nowPlaying.collapse": string;
-    readonly "nowPlaying.goToSong": string;
     readonly "nowPlaying.playAgain": string;
     readonly "nowPlaying.previousSong": string;
     readonly "nowPlaying.nextSong": string;
@@ -1646,6 +1641,9 @@ export const words: Words = {
     "takeMenu.close": "Close menu",
     "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => "Take · v" + gaps.version + " · " + gaps.take,
     "takeMenu.heading": (gaps: { readonly take: string }) => "Take · " + gaps.take,
+    "takeMenu.openVersion": "Open version",
+    "takeMenu.goToSong": "Go to song",
+    "takeMenu.rescore": "Re-score",
     "takeMenu.repaint": "Repaint",
     "takeMenu.cover": "Cover",
     "takeMenu.useSeed": "Use seed",
@@ -2304,28 +2302,21 @@ export const words: Words = {
     "nowPlayingTake.headingDuration": (gaps: { readonly duration: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration,
     "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.mode,
     "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration + " · " + gaps.mode,
-    "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => "Open v" + gaps.number,
     "nowPlayingJudging.label": "Judge this take",
     "nowPlayingJudging.pick": "Pick",
     "nowPlayingJudging.keep": "Keep",
-    "nowPlayingTake.scores": "Scores",
-    "nowPlayingTake.scoresEmpty": "No scores yet",
-    "nowPlayingTake.scoreRating": "Rating",
-    "nowPlayingTake.scoreLyricsSung": "Lyrics sung",
-    "nowPlayingTake.scoreDynamics": "Dynamics",
-    "nowPlayingTake.scoreQuality": "Quality",
-    "nowPlayingTake.scoreEnjoyment": "Enjoyment",
-    "nowPlayingTake.scoreCoherence": "Coherence",
-    "nowPlayingTake.scoreBpm": "BPM",
-    "nowPlayingTake.rescoreAction": "Re-score this take to follow the lyrics.",
-    "nowPlayingTake.rescoring": "Re-scoring…",
-    "nowPlayingTake.rescore": "Re-score",
+    "nowPlayingScores.heading": "Scores",
+    "nowPlayingScores.empty": "No scores yet",
+    "nowPlayingScores.lyricsSung": "Lyrics sung",
+    "nowPlayingScores.dynamics": "Dynamics",
+    "nowPlayingScores.quality": "Quality",
+    "nowPlayingScores.enjoyment": "Enjoyment",
+    "nowPlayingScores.coherence": "Coherence",
+    "nowPlayingScores.bpm": "BPM",
+    "nowPlayingScores.rescoring": "Re-scoring…",
     "nowPlayingTake.recipe": "Recipe",
     "nowPlayingJudging.rating": "Rating",
     "nowPlayingJudging.ratingNotes": "Notes (optional)",
-    "nowPlayingTake.useSeed": "Use seed",
-    "nowPlayingTake.repaint": "Repaint",
-    "nowPlayingTake.cover": "Cover",
     "takeRecipe.groupModel": "Model & Sampling",
     "takeRecipe.groupReproducibility": "Reproducibility",
     "takeRecipe.groupVersion": "Version",
@@ -3042,7 +3033,6 @@ export const words: Words = {
     "nowPlaying.close": "Close",
     "nowPlaying.expand": "Expand",
     "nowPlaying.collapse": "Collapse",
-    "nowPlaying.goToSong": "Go to song",
     "nowPlaying.playAgain": "Play again",
     "nowPlaying.previousSong": "Previous song",
     "nowPlaying.nextSong": "Next song",
