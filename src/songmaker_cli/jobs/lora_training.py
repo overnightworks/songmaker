@@ -850,7 +850,7 @@ def cleanup_failed_lora_with_factory(
 ) -> None:
     """Fail a LoRA training's voice and job under one lock of the job's row, then clean up.
 
-    A row that has ended lands no failure: the owner pass that ended it already decided the voice.
+    A row that has ended lands no failure: the reconciliation of ended rows decides the voice.
     Database failures propagate to the caller.  Filesystem failures are
     logged with their traceback and followed by an orphan-work-dir audit;
     sample audio is never removed.
@@ -1273,7 +1273,7 @@ def _complete_lora_training(
 ) -> None:
     """Land a finished training while its job row is active, under one lock of the row.
 
-    A row that has ended lands nothing: the owner pass that ended it already decided the voice.
+    A row that has ended lands nothing: the reconciliation of ended rows decides the voice.
     """
     worker_result, dataset_dir, tmp_output = submitted
     with db_factory() as session:
