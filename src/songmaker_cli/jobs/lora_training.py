@@ -694,11 +694,11 @@ async def _prepare_and_submit_lora(
             ),
             renew_task,
         )
-        with db_factory() as session:
-            update_user_lora(
-                session, lora_id, status=LoraStatus.PREPROCESSING, clear_error=True,
-            )
-            session.commit()
+        if not _write_if_active(
+            db_factory, job_id, lambda session: update_user_lora(
+                session, lora_id, status=LoraStatus.PREPROCESSING, clear_error=True),
+        ):
+            return None
         _update_job(db_factory, job_id, JobStatus.RUNNING, progress=0.05)
 
         output_dir = _output_dir(audio_dir, user_id, lora_id)

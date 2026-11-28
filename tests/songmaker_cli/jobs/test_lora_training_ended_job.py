@@ -150,6 +150,30 @@ def test_a_failed_adapter_replacement_marks_nothing_once_the_row_ended(
         assert _voice_and_audits(session, seeded["lora_id"]) == left_by_the_owner_pass["voice"]
 
 
+def test_a_training_whose_row_ended_while_its_dataset_was_built_marks_nothing(
+    seeded, pg_factory, monkeypatch,
+) -> None:
+    left_by_the_owner_pass = {}
+    original_symlink = lora_training.os.symlink
+
+    def end_the_row_while_the_dataset_is_built(source, destination, *args, **kwargs) -> None:
+        if not left_by_the_owner_pass:
+            _fail_the_job_through_the_owner_pass(pg_factory, seeded["audio_dir"])
+            with pg_factory() as session:
+                left_by_the_owner_pass.update(voice=_voice_and_audits(session, seeded["lora_id"]))
+            Path(destination).parent.mkdir(exist_ok=True)
+        original_symlink(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(lora_training.os, "symlink", end_the_row_while_the_dataset_is_built)
+    with patch_worker_calls("unused"):
+        asyncio.run(_a_training_run(seeded, pg_factory))
+
+    with pg_factory() as session:
+        assert get_job(session, "job-1").status == JobStatus.FAILED
+        assert _voice_and_audits(session, seeded["lora_id"]) == left_by_the_owner_pass["voice"]
+    assert left_by_the_owner_pass["voice"][0] == LoraStatus.FAILED
+
+
 @pytest.mark.parametrize("row_ends", [True, False], ids=["row-ended", "row-active"])
 def test_a_progress_tier_reaches_the_voice_only_while_the_row_is_active(
     seeded, pg_factory, row_ends,
