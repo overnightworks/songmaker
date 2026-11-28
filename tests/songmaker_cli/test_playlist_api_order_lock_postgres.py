@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
 from httpx import Response
 from support.postgres_lock_harness import StatementPause, after_the_playlist_lock, race
 from support.web_app import make_test_app, seed_session, seed_user
@@ -71,6 +72,12 @@ class _World:
 
     def remove(self, entry_id: str) -> Callable[[], Response]:
         return lambda: self.client.delete(f"/api/playlists/{TARGET}/entries/{entry_id}")
+
+    def move(self, entry_id: str, new_position: int) -> Callable[[], Response]:
+        return lambda: self.client.patch(
+            f"/api/playlists/{TARGET}/entries/{entry_id}/position",
+            json={"new_position": new_position},
+        )
 
     def entry_of(self, take: str) -> str:
         with self.pg_factory() as session:
@@ -154,3 +161,25 @@ def test_a_move_past_the_end_lands_last_and_the_next_append_follows_it(
     assert world.add_take("take-3")().status_code == 200
     assert world.takes_in_order() == ["take-2", "take-1", "take-3"]
     assert world.positions() == [0, 1, 2]
+
+
+@pytest.mark.parametrize("second_writer", ["removal", "move"])
+def test_a_removal_racing_a_removal_or_a_move_leaves_the_positions_gap_free(
+    pg_factory, tmp_path, second_writer,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    for take in FIRST_SOURCE:
+        assert world.add_take(take)().status_code == 200
+    second = (
+        world.remove(world.entry_of("take-2")) if second_writer == "removal"
+        else world.move(world.entry_of("take-2"), 0)
+    )
+    answers = race(
+        pg_factory, world.remove(world.entry_of("take-1")), second,
+        _held_at_the_playlist_lock(),
+    )
+    assert [answers["first"].status_code, answers["second"].status_code] == [200, 200]
+    assert world.positions() == list(range(len(world.positions())))
+    assert world.takes_in_order() == (
+        ["take-3"] if second_writer == "removal" else ["take-2", "take-3"]
+    )

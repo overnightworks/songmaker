@@ -312,17 +312,24 @@ def _append_candidates(
     return PlaylistAddResult(entries=entries, skipped=skipped)
 
 
-def remove_from_playlist(
-    session: Session, playlist_id: str, entry_id: str,
-) -> None:
-    _lock_playlist_order(session, playlist_id)
+def _locked_entry(session: Session, playlist_id: str, entry_id: str) -> PlaylistEntry:
+    """Reads the entry after the lock wait, never a position another writer has since shifted."""
     entry = (
         session.query(PlaylistEntry)
+        .populate_existing()
         .filter_by(id=entry_id, playlist_id=playlist_id)
         .first()
     )
     if not entry:
         raise ValueError(f"Playlist entry not found: {entry_id}")
+    return entry
+
+
+def remove_from_playlist(
+    session: Session, playlist_id: str, entry_id: str,
+) -> None:
+    _lock_playlist_order(session, playlist_id)
+    entry = _locked_entry(session, playlist_id, entry_id)
     removed_pos = entry.position
     session.delete(entry)
     session.query(PlaylistEntry).filter(
@@ -337,13 +344,7 @@ def reorder_playlist_entry(
 ) -> None:
     """Move an entry to ``new_position``; a position past the last entry means the last place."""
     _lock_playlist_order(session, playlist_id)
-    entry = (
-        session.query(PlaylistEntry)
-        .filter_by(id=entry_id, playlist_id=playlist_id)
-        .first()
-    )
-    if not entry:
-        raise ValueError(f"Playlist entry not found: {entry_id}")
+    entry = _locked_entry(session, playlist_id, entry_id)
 
     old_pos = entry.position
     new_position = min(new_position, _next_position(session, playlist_id) - 1)
