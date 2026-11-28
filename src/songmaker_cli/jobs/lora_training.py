@@ -1289,7 +1289,6 @@ def _complete_lora_training(
             completed_model_mode,
         )
         previous_model_mode = get_user_lora_model_mode(session, lora_id)
-        update_user_lora(session, lora_id, model_mode=completed_model_mode)
         final_dir = _output_dir(audio_dir, user_id, lora_id)
         _replace_lora_adapter(final_dir, tmp_output, previous_model_mode)
         _remove_replaced_lora_paths(dataset_dir, final_dir)

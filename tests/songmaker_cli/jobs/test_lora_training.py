@@ -27,6 +27,7 @@ from songmaker_cli.constants import (
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
+    USER_LORA_TRAINING_TMP_DIRNAME,
     LoraStatus,
 )
 from songmaker_cli.db.models import AuditLog, Job
@@ -530,7 +531,7 @@ def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
 ) -> None:
     lora_root = seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
     final_dir = lora_root / USER_LORA_OUTPUT_DIRNAME
-    temporary_dir = lora_root / "training_tmp"
+    temporary_dir = lora_root / USER_LORA_TRAINING_TMP_DIRNAME
     if has_previous_adapter:
         final_dir.mkdir()
         (final_dir / "previous-adapter.txt").write_text("previous")

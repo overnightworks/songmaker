@@ -98,9 +98,6 @@ def patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=None
         submit = AsyncMock()
         response = MagicMock()
         response.raise_for_status = MagicMock()
-        handover_response = MagicMock()
-        handover_response.raise_for_status = MagicMock()
-        handover_response.json.return_value = {"claimed": True, "task_id": "t-1"}
         response.json = MagicMock(return_value={"task_id": "t-1"})
 
         async def post(*args, **kwargs):
