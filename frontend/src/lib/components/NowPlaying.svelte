@@ -419,6 +419,7 @@
 	}
 	.source-line {
 		display: flex;
+		height: var(--hitbox-compact);
 		line-height: 1.2;
 		align-items: center;
 		gap: 0.4rem;
