@@ -904,7 +904,7 @@ async function openAlbumFromNavigation(
 
 async function goToPlayingSong(page: Page, title: string): Promise<void> {
 	await transportButton(page, { name: words['player.openNowPlaying']({ title: title }) }).click();
-	await leaveNowPlayingForSong(page, title);
+	await leaveNowPlayingForSong(page);
 }
 
 // Search and the full Now Playing are phone layers.

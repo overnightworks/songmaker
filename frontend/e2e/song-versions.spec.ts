@@ -33,7 +33,7 @@ const firstTake = words['takeRow.takeLabel']({ number: '1' });
 import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
 import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';
-import { openThisTakeFromBar } from './play-album';
+import { leaveNowPlayingForSong, openThisTakeFromBar } from './play-album';
 import {
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
@@ -661,8 +661,7 @@ test.describe('the versions of a song', () => {
 		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
-		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
-		await openV1.click();
+		await leaveNowPlayingForSong(page);
 
 		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
@@ -710,8 +709,7 @@ test.describe('the versions of a song', () => {
 		if (mobile) await openThisTakeFromBar(page, 'mobile', song.title);
 		else await page.getByRole('tab', { name: words['nowPlaying.takeTab'] }).click();
 
-		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
-		await openV1.click();
+		await leaveNowPlayingForSong(page);
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionDraftName(2));

@@ -52,10 +52,21 @@ export async function openThisTakeFromBar(
 	await takeTab.click();
 }
 
-/** The phone's Now Playing leaves for the playing song through its take menu: Open version, or Go to song for an imported take. */
-export async function leaveNowPlayingForSong(page: Page, songTitle: string): Promise<void> {
-	const nowPlaying = page.getByRole('dialog', { name: songTitle });
-	await nowPlaying.getByRole('button', { name: words['takeMenu.label'] }).click();
+/**
+ * Now Playing leaves for the playing song through its take menu: Open
+ * version, or Go to song for an imported take. The phone's This take sheet,
+ * when it stands open over the title row, is closed first.
+ */
+export async function leaveNowPlayingForSong(page: Page): Promise<void> {
+	const sheetBackdrop = page.locator('.mobile-sheet-backdrop');
+	if (await sheetBackdrop.isVisible()) await sheetBackdrop.click();
+	await page
+		.locator('.now-playing')
+		.getByRole('button', { name: words['takeMenu.label'], exact: true })
+		.click();
 	const leave = nameStartingWith(words['takeMenu.openVersion'], words['takeMenu.goToSong']);
-	await nowPlaying.getByRole('button', { name: leave }).click();
+	await page
+		.getByRole('dialog', { name: words['takeMenu.label'], exact: true })
+		.getByRole('button', { name: leave })
+		.click();
 }
