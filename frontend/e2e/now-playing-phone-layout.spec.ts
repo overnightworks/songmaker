@@ -6,6 +6,8 @@ import { openNowPlayingFromBar, playOpenAlbum, scoreTheTakes } from './play-albu
 import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
 
+// The title row holds the title, the source line and the AI notice, so the window keeps this much of the words.
+const MIN_VISIBLE_LYRIC_LINES = 2;
 const SHORT_PHONE_VIEWPORT = { width: MOBILE_VIEWPORT.width, height: 664 };
 // Long enough to wrap onto a second line beside the cover thumbnail.
 const TWO_LINE_TITLE = 'A long song title that wraps on a phone';
@@ -147,7 +149,7 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 	});
 
 	for (const scored of [false, true]) {
-		test(`the lyrics window is taller than the title row, and the body does not scroll, at 390x664 for ${scored ? 'a scored' : 'an unscored'} take`, async ({
+		test(`the lyrics window shows ${MIN_VISIBLE_LYRIC_LINES} lines, and the body does not scroll, at 390x664 for ${scored ? 'a scored' : 'an unscored'} take`, async ({
 			page
 		}) => {
 			await onTwoLineSong(
@@ -157,10 +159,13 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 					const chips = surface.locator('.scores.chips .entry');
 					if (scored) await expect(chips.first()).toBeVisible();
 					else await expect(chips).toHaveCount(0);
-					const titleRow = await surface.locator('.title-row').boundingBox();
-					const lyrics = await surface.locator('.lyrics-region').boundingBox();
-					if (!titleRow || !lyrics) throw new Error('Expected a laid out title row and lyrics');
-					expect(lyrics.height).toBeGreaterThan(titleRow.height);
+					const lyricLines = await surface
+						.locator('.np-lyrics .lyrics')
+						.evaluate(
+							(window) =>
+								window.clientHeight / Number.parseFloat(getComputedStyle(window).lineHeight)
+						);
+					expect(lyricLines).toBeGreaterThanOrEqual(MIN_VISIBLE_LYRIC_LINES);
 					expect(
 						await surface
 							.locator('.phone-body')

@@ -1,6 +1,6 @@
 // Spec: REQ-PLAYER-04 -- every take has one menu: Open version (Go to song for an imported take), Repaint, Cover, Use seed, Re-score, Add to… and Share, plus Delete in the editor; Now Playing carries it in its title row. Re-score is disabled while the take re-scores; the Scores carry no control and no Rating; the frame has no Go to song button, so nothing in the docked panel covers another control.
 //
-// Both shells walk the menu in Now Playing and in the editor; the desktop also walks the docked panel.
+// Both shells walk the menu in Now Playing and in the editor; the desktop also walks the docked panel. The phone cases cover the pending word leading the score chips and the subtitle's album name beside the version and the take.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import {
@@ -26,10 +26,10 @@ let albumId: string;
 let songTitle: string;
 let songId: string;
 
-async function createAlbum(page: Page): Promise<string> {
+async function createAlbum(page: Page, title = `E2E Take menu ${Date.now()}`): Promise<string> {
 	const album = await page.request.post('/api/albums', {
 		headers: await sameOriginHeaders(page),
-		data: { title: `E2E Take menu ${Date.now()}`, artist: '' }
+		data: { title, artist: '' }
 	});
 	expect(album.ok()).toBe(true);
 	return ((await album.json()) as { id: string }).id;
@@ -126,28 +126,40 @@ test('the editor take row carries the same rows with Delete last', async ({ page
 	expect(await rowWords(menuOf(page))).toEqual([...MENU_ROWS, words['takeMenu.delete']]);
 });
 
-test('Re-score is disabled while the take re-scores and the Scores show the pending word', async ({
-	page
-}, testInfo) => {
-	// The request stays out until the end: the take is re-scoring from the moment it leaves.
+/** Holds the take's re-score request out until the returned function answers it. */
+async function holdRescore(page: Page): Promise<() => void> {
 	let answer: () => void = () => undefined;
 	const answered = new Promise<void>((resolve) => (answer = resolve));
 	await page.route(SCORE_ROUTE, async (route) => {
 		await answered;
 		await route.fulfill({ status: 409, json: { detail: 'No scoring in this test' } });
 	});
-	await scoreTheTakes(page, songId);
-	const surface = await openNowPlaying(page, shellOf(testInfo), {
-		refusalsExpectedOn: [{ statuses: [409], path: '/api/generations/' }]
-	});
+	return answer;
+}
+
+const RESCORE_REFUSED: FlowGuardOptions = {
+	refusalsExpectedOn: [{ statuses: [409], path: '/api/generations/' }]
+};
+
+async function rescoreFromMenu(page: Page, surface: Locator): Promise<Locator> {
 	const menuTrigger = surface
 		.locator('.title-line')
 		.getByRole('button', { name: words['takeMenu.label'], exact: true });
 	await menuTrigger.click();
 	const requested = page.waitForRequest(SCORE_ROUTE);
-
 	await menuOf(page).getByRole('button', { name: words['takeMenu.rescore'] }).click();
 	await requested;
+	return menuTrigger;
+}
+
+test('Re-score is disabled while the take re-scores and the Scores show the pending word', async ({
+	page
+}, testInfo) => {
+	// The request stays out until the end: the take is re-scoring from the moment it leaves.
+	const answer = await holdRescore(page);
+	await scoreTheTakes(page, songId);
+	const surface = await openNowPlaying(page, shellOf(testInfo), RESCORE_REFUSED);
+	const menuTrigger = await rescoreFromMenu(page, surface);
 
 	await expect(
 		surface.getByRole('region', { name: words['nowPlayingScores.heading'] })
@@ -158,6 +170,27 @@ test('Re-score is disabled while the take re-scores and the Scores show the pend
 	).toBeDisabled();
 	answer();
 });
+
+for (const height of [844, 664]) {
+	test(
+		`a phone with six scores shows the pending word on screen while the take re-scores at 390x${height}`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height });
+			const answer = await holdRescore(page);
+			await scoreTheTakes(page, songId, { lyrical_coherence: 6.4, bpm_detected: 120 });
+			const surface = await openNowPlaying(page, 'mobile', RESCORE_REFUSED);
+			await rescoreFromMenu(page, surface);
+
+			await expect(
+				surface
+					.getByRole('region', { name: words['nowPlayingScores.heading'] })
+					.getByText(words['nowPlayingScores.rescoring'])
+			).toBeInViewport({ ratio: 1 });
+			answer();
+		}
+	);
+}
 
 test('the Scores carry no control and no Rating, and the frame has no Go to song', async ({
 	page
@@ -270,5 +303,30 @@ test(
 			await surface.locator('.phone-body').evaluate((body) => body.scrollHeight - body.clientHeight)
 		).toBeLessThanOrEqual(0);
 		await expect(surface.getByRole('button', { name: words['transport.pause'] })).toBeInViewport();
+	}
+);
+
+test(
+	'the phone subtitle reads a 16-character album name whole, then the version and the take, at 390',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		await archiveOwnedAlbum(page.request, albumId);
+		const albumTitle = `E2E ${String(Date.now()).slice(-12)}`;
+		albumId = await createAlbum(page, albumTitle);
+		songTitle = `Subtitle song ${Date.now()}`;
+		songId = await seedSongPhoneSong(albumId, songTitle, 1, 2, TAKE_SEED);
+		const surface = await openNowPlaying(page, 'mobile');
+
+		const source = surface.locator('.subtitle .from-link');
+		await expect(source).toContainText(albumTitle);
+		const [sourceBox, takeBox] = await Promise.all(
+			[source, surface.locator('.subtitle .take-label')].map((part) =>
+				part.evaluate((own) => own.getBoundingClientRect().toJSON() as DOMRect)
+			)
+		);
+		expect(sourceBox.right).toBeLessThanOrEqual(takeBox.left);
+		expect(
+			await source.evaluate((link) => link.scrollWidth - link.clientWidth)
+		).toBeLessThanOrEqual(0);
 	}
 );
