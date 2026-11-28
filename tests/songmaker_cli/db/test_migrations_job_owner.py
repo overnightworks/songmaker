@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from types import ModuleType
 
 import pytest
-import sqlalchemy as sa
 from alembic import command
-from sqlalchemy import inspect
 from support.migration_chain import (
+    BARE_JOB_ID,
+    assert_column_nullable_empty_and_job_kept,
     column_names,
     insert_bare_job,
     job_count,
@@ -58,11 +58,7 @@ def test_upgrade_adds_a_nullable_column_and_keeps_an_existing_job_without_an_own
 ):
     engine = _upgraded_with_an_unowned_job(reference_link_database, migration)
 
-    jobs = sa.table("jobs", sa.column(migration.column))
-    column = next(c for c in inspect(engine).get_columns("jobs") if c["name"] == migration.column)
-    with engine.connect() as connection:
-        values = list(connection.execute(sa.select(jobs.c[migration.column])).scalars())
-    assert (column["nullable"], values, job_count(engine)) == (True, [None], 1)
+    assert_column_nullable_empty_and_job_kept(engine, "jobs", migration.column, BARE_JOB_ID)
 
 
 def test_downgrade_drops_the_column_and_keeps_the_job(reference_link_database, migration):

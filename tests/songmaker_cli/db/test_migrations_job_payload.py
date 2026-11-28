@@ -5,10 +5,11 @@ from __future__ import annotations
 import importlib
 
 import pytest
-import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect
 from support.migration_chain import (
+    BARE_JOB_ID,
+    assert_column_nullable_empty_and_job_kept,
     column_names,
     insert_bare_job,
     job_count,
@@ -34,11 +35,7 @@ def test_upgrade_adds_a_nullable_column_and_keeps_an_existing_job_without_a_valu
 ):
     engine = _upgraded_with_a_job_of_the_old_shape(reference_link_database)
 
-    jobs = sa.table("jobs", sa.column(column))
-    added = next(c for c in inspect(engine).get_columns("jobs") if c["name"] == column)
-    with engine.connect() as connection:
-        values = list(connection.execute(sa.select(jobs.c[column])).scalars())
-    assert (added["nullable"], values, job_count(engine)) == (True, [None], 1)
+    assert_column_nullable_empty_and_job_kept(engine, "jobs", column, BARE_JOB_ID)
 
 
 def test_upgrade_stores_the_payload_as_binary_json_and_the_wait_with_its_zone(

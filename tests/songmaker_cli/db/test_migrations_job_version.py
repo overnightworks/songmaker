@@ -8,6 +8,8 @@ import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect
 from support.migration_chain import (
+    BARE_JOB_ID,
+    assert_column_nullable_empty_and_job_kept,
     column_names,
     insert_bare_job,
     job_count,
@@ -75,7 +77,7 @@ def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
 
 def test_upgrade_keeps_an_existing_job_without_a_version(reference_link_database):
     engine = _upgraded_with_a_job(reference_link_database)
-    assert _job_versions(engine) == [None]
+    assert_column_nullable_empty_and_job_kept(engine, "jobs", COLUMN, BARE_JOB_ID)
 
 
 def test_deleting_a_version_sets_its_jobs_key_to_null(reference_link_database):

@@ -11,6 +11,9 @@ from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
 
+BARE_JOB_ID = "job"
+
+
 def seeded_then_upgraded(
     database: tuple[Config, Engine],
     previous_revision: str,
@@ -41,6 +44,14 @@ def stored_values(engine: Engine, table: str, column: str) -> dict[str, object]:
         return dict(connection.execute(sa.select(rows.c.id, rows.c[column])).all())
 
 
+def assert_column_nullable_empty_and_job_kept(
+    engine: Engine, table: str, column: str, job_id: str,
+) -> None:
+    """`column` of `table` is nullable and empty, and the job `job_id` is its only row."""
+    nullable = next(c for c in inspect(engine).get_columns(table) if c["name"] == column)["nullable"]
+    assert (nullable, stored_values(engine, table, column)) == (True, {job_id: None})
+
+
 def job_count(engine: Engine) -> int:
     with engine.connect() as connection:
         return connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
@@ -49,7 +60,7 @@ def job_count(engine: Engine) -> int:
 def insert_bare_job(
     engine: Engine, *, job_type: str = "generate", status: str = "queued",
 ) -> None:
-    """Insert the job ``job`` with only the columns every revision's ``jobs`` table has.
+    """Insert the job `BARE_JOB_ID` with only the columns every revision's ``jobs`` table has.
 
     Older revisions' ``jobs`` tables lack the timestamp columns, so they join only where
     they exist.
@@ -60,6 +71,6 @@ def insert_bare_job(
     jobs = sa.table("jobs", *(sa.column(name) for name in names))
     with engine.begin() as connection:
         connection.execute(sa.insert(jobs).values(
-            id="job", type=job_type, status=status, progress=0.0,
+            id=BARE_JOB_ID, type=job_type, status=status, progress=0.0,
             **{name: sa.func.current_timestamp() for name in timestamps},
         ))
