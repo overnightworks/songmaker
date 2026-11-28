@@ -22,14 +22,12 @@ from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_r
 from songmaker_cli.api_helpers import (
     can_access_album,
     check_song_access_including_deleted,
-    get_cached_limiter,
     job_not_found,
 )
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    REDIS_KEY_PREFIX,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
     SSE_HEARTBEAT_COMMENT,
     SSE_HEARTBEAT_SECONDS,
@@ -52,7 +50,7 @@ from songmaker_cli.job_types import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.redis_client import take_stream_slot
+from songmaker_cli.redis_client import StreamSlotFamily, hold_stream_slot, open_stream_slot
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
@@ -69,10 +67,14 @@ SSE_POLL_INTERVAL_SECONDS = 1
 # any drop and resets its attempt counter on the next message, so a forced
 # close here is a cheap, already-handled event, not a new failure mode.
 JOB_STREAM_CONNECTION_SECONDS: Final[int] = RESOURCE_EVENT_STREAM_CONNECTION_SECONDS
-JOB_STREAM_SLOT_FAMILY: Final[str] = "job-stream"
-JOB_STREAM_SLOT_LASTS: Final[timedelta] = timedelta(seconds=JOB_STREAM_CONNECTION_SECONDS + 5)
-JOB_STREAM_LIMIT_DETAIL: Final[str] = "Too many job streams"
-JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
+_JOB_STREAM_SLOTS: Final = StreamSlotFamily(
+    family="job-stream",
+    lasts=timedelta(seconds=JOB_STREAM_CONNECTION_SECONDS + 5),
+    cache_attribute="_job_stream_slots",
+    subject="Job stream",
+    limit_detail="Too many job streams",
+    unavailable_detail="Job stream limiter unavailable",
+)
 
 # The job SSE stream fails closed, same as the resource-event stream's slot
 # (resource_event_api._take_stream_slot): an unenforced concurrency cap
@@ -223,44 +225,23 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
 
 
 def _take_job_stream_slot(request: Request, user_id: str) -> tuple[Slots, str]:
-    try:
-        slots = get_cached_limiter(request, "_job_stream_slots", lambda: Slots(
-            request.app.state.ctx.async_redis,
-            key_prefix=REDIS_KEY_PREFIX,
-            family=JOB_STREAM_SLOT_FAMILY,
-            lasts=JOB_STREAM_SLOT_LASTS,
-        ))
+    def caps() -> tuple[int, int]:
         settings = get_settings()
-        token = from_thread.run(
-            take_stream_slot,
-            slots,
-            user_id,
-            settings.job_stream_lease_max_per_user,
-            settings.job_stream_lease_max_global,
-        )
-    except Exception as exc:
-        log.warning("Job stream limiter unavailable")
-        raise HTTPException(503, JOB_STREAM_LIMITER_UNAVAILABLE) from exc  # unread: sse
-    if token is None:
-        raise HTTPException(  # unread: sse
-            429,
-            JOB_STREAM_LIMIT_DETAIL,
-            headers={"Retry-After": "5"},
-        )
-    return slots, token
+        return settings.job_stream_lease_max_per_user, settings.job_stream_lease_max_global
+
+    return open_stream_slot(request, user_id, _JOB_STREAM_SLOTS, caps)
 
 
-async def _held_job_event_generator(
+def _held_job_event_generator(
     ctx: AppContext,
     slots: Slots,
     slot_token: str,
     job_id: str,
 ) -> AsyncGenerator[str, None]:
-    try:
-        async for frame in _job_event_generator(ctx, job_id):
-            yield frame
-    finally:
-        ctx.slot_releases.release_in_background(slots, slot_token, subject="Job stream")
+    return hold_stream_slot(
+        ctx.slot_releases, slots, slot_token, _JOB_STREAM_SLOTS.subject,
+        _job_event_generator(ctx, job_id),
+    )
 
 
 # The jobs whose running work another web process stops when it hears their cancel.

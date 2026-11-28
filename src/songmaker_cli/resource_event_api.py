@@ -11,7 +11,6 @@ from datetime import timedelta
 from time import monotonic
 from typing import Annotated, Final
 
-from anyio import from_thread
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -28,7 +27,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    REDIS_KEY_PREFIX,
+    REDIS_RL_RESOURCE_STREAM_PREFIX,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
     RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
     RESOURCE_EVENT_STREAM_PATH,
@@ -41,7 +40,7 @@ from songmaker_cli.db.queries.resource_events import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
-from songmaker_cli.redis_client import take_stream_slot
+from songmaker_cli.redis_client import StreamSlotFamily, hold_stream_slot, open_stream_slot
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
@@ -56,16 +55,20 @@ RESOURCE_EVENT_STREAM_POLL_SECONDS: Final[float] = 1.0
 RESOURCE_EVENT_STREAM_PAGE_SIZE: Final[int] = 100
 RESOURCE_EVENT_STREAM_MAX_PER_USER: Final[int] = 6
 RESOURCE_EVENT_STREAM_MAX_GLOBAL: Final[int] = 12
-RESOURCE_EVENT_STREAM_SLOT_FAMILY: Final[str] = "resource-stream"
-RESOURCE_EVENT_STREAM_SLOT_LASTS: Final[timedelta] = timedelta(seconds=65)
 RESOURCE_EVENT_STREAM_LIMIT_DETAIL: Final[str] = "Too many resource streams"
-RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Resource stream limiter unavailable"
+_RESOURCE_STREAM_SLOTS: Final = StreamSlotFamily(
+    family="resource-stream",
+    lasts=timedelta(seconds=65),
+    cache_attribute="_resource_stream_slots",
+    subject="Resource stream",
+    limit_detail=RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
+    unavailable_detail="Resource stream limiter unavailable",
+)
 RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE: Final[str] = (
     "Resource stream unavailable: no spare database capacity"
 )
 LAST_EVENT_ID_INVALID: Final[str] = "Last-Event-ID must be a non-negative decimal"
 POSTGRES_BIGINT_MAX: Final[int] = (1 << 63) - 1
-REDIS_RL_RESOURCE_STREAM_PREFIX: Final[str] = "rl:resource-stream"
 LAST_EVENT_ID_OUT_OF_RANGE: Final[str] = "Last-Event-ID is beyond the event sequence range"
 
 
@@ -361,7 +364,7 @@ def _take_stream_slot(request: Request, user_id: str) -> tuple[Slots, str]:
     Fails closed: either the limiter itself erroring out or saying no
     rejects the request rather than letting an unmetered stream through.
     """
-    try:
+    def caps_after_open_check() -> tuple[int, int]:
         if not _get_open_limiter(request).is_allowed(
             user_id,
             limit=get_settings().resource_event_stream_open_limit,
@@ -372,29 +375,12 @@ def _take_stream_slot(request: Request, user_id: str) -> tuple[Slots, str]:
                 RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
                 headers={"Retry-After": str(RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS)},
             )
-        per_person_cap, global_cap = _resource_stream_caps()
-        slots = get_cached_limiter(request, "_resource_stream_slots", lambda: Slots(
-            request.app.state.ctx.async_redis,
-            key_prefix=REDIS_KEY_PREFIX,
-            family=RESOURCE_EVENT_STREAM_SLOT_FAMILY,
-            lasts=RESOURCE_EVENT_STREAM_SLOT_LASTS,
-        ))
-        token = from_thread.run(take_stream_slot, slots, user_id, per_person_cap, global_cap)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        log.warning("Resource stream limiter unavailable")
-        raise HTTPException(503, RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE) from exc  # unread: sse
-    if token is None:
-        raise HTTPException(  # unread: sse
-            429,
-            RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
-            headers={"Retry-After": "5"},
-        )
-    return slots, token
+        return _resource_stream_caps()
+
+    return open_stream_slot(request, user_id, _RESOURCE_STREAM_SLOTS, caps_after_open_check)
 
 
-async def _held_resource_event_generator(
+def _held_resource_event_generator(
     ctx: AppContext,
     slots: Slots,
     slot_token: str,
@@ -403,17 +389,12 @@ async def _held_resource_event_generator(
     high_water_mark: int,
     oldest_retained: int | None,
 ) -> AsyncGenerator[str, None]:
-    try:
-        async for frame in _resource_event_generator(
-            ctx,
-            user_id,
-            last_event_id,
-            high_water_mark,
-            oldest_retained,
-        ):
-            yield frame
-    finally:
-        ctx.slot_releases.release_in_background(slots, slot_token, subject="Resource stream")
+    return hold_stream_slot(
+        ctx.slot_releases, slots, slot_token, _RESOURCE_STREAM_SLOTS.subject,
+        _resource_event_generator(
+            ctx, user_id, last_event_id, high_water_mark, oldest_retained,
+        ),
+    )
 
 
 @router.get(
