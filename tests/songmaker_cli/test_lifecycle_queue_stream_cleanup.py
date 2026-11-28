@@ -132,3 +132,4 @@ def test_the_web_starts_and_answers_while_the_object_store_cannot_be_reached(
 
     with client:
         assert client.get("/health").status_code == 200
+        assert client.get("/login/oidc", follow_redirects=False).status_code == 303
