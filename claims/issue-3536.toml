@@ -1,0 +1,8 @@
+claim_id = "da6945f5b6454d37b4d5e559edc9db16"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "61a49ab4f2045f4dfa70fdf40cabfbb108633ee9"
+branch = "claude/issue-3536-slice10-phone-gaps"
+scope = ["frontend/e2e/now-playing-take-menu.spec.ts", "frontend/e2e/take-menu.spec.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingPhoneBody.svelte", "frontend/src/lib/components/NowPlayingScores.svelte", "frontend/src/lib/components/editor/TakeMenu.svelte"]
+opened_commit = "7748b12938435f1e26c392c7fb44650593f23ac8"
+whole_reason = "Slice 10's three visible gaps on the phone and in the take menu, with the two specs that prove them."
