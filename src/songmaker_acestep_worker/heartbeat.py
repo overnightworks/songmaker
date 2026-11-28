@@ -19,7 +19,7 @@ DEFAULT_INTERVAL_SECONDS = 5.0
 DEFAULT_TTL_SECONDS = 15
 
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
-QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
+ADMITTED_KEY_PREFIX = "songmaker:acestep:admitted"
 
 LOCK_KEY_PREFIX = "songmaker"
 GPU_HOLD_FAMILY = "gpu"
@@ -30,8 +30,8 @@ def worker_state_key(worker_id: str) -> str:
     return f"{WORKER_KEY_PREFIX}:{worker_id}"
 
 
-def queue_depth_key(worker_id: str) -> str:
-    return f"{QUEUE_KEY_PREFIX}:{worker_id}"
+def admitted_key(worker_id: str) -> str:
+    return f"{ADMITTED_KEY_PREFIX}:{worker_id}"
 
 
 def gpu_hold_locks(redis: Redis) -> Locks:
@@ -43,8 +43,7 @@ def gpu_hold_locks(redis: Redis) -> Locks:
 
 
 async def read_queue_depth(redis: Redis, worker_id: str) -> int:
-    raw = await redis.get(queue_depth_key(worker_id))
-    return int(raw) if raw is not None else 0
+    return await redis.scard(admitted_key(worker_id))
 
 
 async def gpu_hold_matches(redis: Redis, worker_id: str, generation: str) -> bool:
@@ -132,7 +131,7 @@ class HeartbeatLoop:
         await self._redis.set(key, json.dumps(state), ex=self._ttl)
 
     async def clear_orphaned_queue(self) -> None:
-        await self._redis.delete(queue_depth_key(self._worker_id))
+        await self._redis.delete(admitted_key(self._worker_id))
         await release_orphaned_gpu_hold(self._redis, self._worker_id)
 
     async def _run(self) -> None:

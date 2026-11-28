@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 import pytest
+import redis
 from support.redis_clock import until_redis_has_passed
 from support.redis_server import lose_everything, settle_the_real_servers_epoch
 from support.redis_that_loses_its_first_lock import RedisThatLosesItsFirstLock
@@ -26,6 +27,7 @@ from songmaker_cli.acestep_state import (
     gpu_hold_is_free,
     read_download_in_progress,
     read_queue_depth,
+    remove_admissions_of_ended_jobs,
     single_flight_download,
 )
 from songmaker_cli.lifecycle import JOB_REAPER_LOCK_NAME, tick_locks
@@ -88,7 +90,7 @@ def test_the_worker_reserve_and_the_web_admission_cannot_both_win(redis_url: str
 
     async def scenario(worker, web) -> tuple[bool, bool, int]:
         reserved = await reserve_gpu_hold(worker, WORKER) is not None
-        admitted = await admit_generation(web, WORKER)
+        admitted = await admit_generation(web, WORKER, "job-1")
         return reserved, admitted, await read_queue_depth(web, WORKER)
 
     assert _in_two_processes(redis_url, scenario) == (True, False, 0)
@@ -98,11 +100,29 @@ def test_the_web_admission_wins_against_a_later_worker_reserve(redis_url: str) -
     settle_the_real_servers_epoch(redis_url)
 
     async def scenario(worker, web) -> tuple[bool, bool, int]:
-        admitted = await admit_generation(web, WORKER)
+        admitted = await admit_generation(web, WORKER, "job-1")
         reserved = await reserve_gpu_hold(worker, WORKER) is not None
         return admitted, reserved, await read_queue_depth(web, WORKER)
 
     assert _in_two_processes(redis_url, scenario) == (True, False, 1)
+
+
+def test_the_hold_is_reserved_once_the_admission_of_an_ended_job_is_removed(
+    redis_url: str,
+) -> None:
+    settle_the_real_servers_epoch(redis_url)
+    reaper_side = redis.Redis.from_url(redis_url, decode_responses=True)
+
+    async def scenario(worker, web) -> tuple[bool, bool, bool]:
+        admitted = await admit_generation(web, WORKER, "job-1")
+        refused = await reserve_gpu_hold(worker, WORKER) is None
+        remove_admissions_of_ended_jobs(reaper_side, WORKER, lambda ids: ids)
+        return admitted, refused, await reserve_gpu_hold(worker, WORKER) is not None
+
+    try:
+        assert _in_two_processes(redis_url, scenario) == (True, True, True)
+    finally:
+        reaper_side.close()
 
 
 def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: str) -> None:
@@ -112,7 +132,7 @@ def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: 
     async def scenario(worker, web) -> tuple[bool, bool, bool]:
         return (
             await gpu_hold_is_free(web, WORKER),
-            await admit_generation(web, WORKER),
+            await admit_generation(web, WORKER, "job-1"),
             await reserve_gpu_hold(worker, WORKER) is not None,
         )
 
@@ -121,7 +141,7 @@ def test_the_gpu_is_refused_to_both_sides_until_a_restart_is_settled(redis_url: 
     settle_the_real_servers_epoch(redis_url)
 
     async def after_the_span(worker, web) -> tuple[bool, bool]:
-        return await gpu_hold_is_free(web, WORKER), await admit_generation(web, WORKER)
+        return await gpu_hold_is_free(web, WORKER), await admit_generation(web, WORKER, "job-1")
 
     assert _in_two_processes(redis_url, after_the_span) == (True, True)
 

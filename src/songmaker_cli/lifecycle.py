@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
 
 from fastapi import FastAPI
 from redis.asyncio import Redis as AsyncRedis
+from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
 from tandem import Client, Lapse, Liveness, Locks, Roster, StoreError
 
-from songmaker_cli.acestep_state import decode_redis_text
+from songmaker_cli.acestep_state import decode_redis_text, remove_admissions_of_ended_jobs
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
@@ -301,6 +302,17 @@ def reap_stale_jobs(
     ``rosters`` is what the caller read of each worker kind's leases (``read_kind_rosters``); it
     matters only when ``worker_liveness`` is not given.
     """
+    recovered_count = _recover_stale_jobs(ctx, now, worker_liveness, rosters)
+    reconcile_admitted_generations(ctx)
+    return recovered_count
+
+
+def _recover_stale_jobs(
+    ctx: AppContext,
+    now: datetime | None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None,
+    rosters: Mapping[WorkerLivenessSignal, Roster | None] | None,
+) -> int:
     from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
 
     if worker_liveness is None:
@@ -314,6 +326,37 @@ def reap_stale_jobs(
     if recovered_count:
         log.warning("Recovered %d stale job(s)", recovered_count)
     return recovered_count
+
+
+def reconcile_admitted_generations(ctx: AppContext) -> int:
+    """Remove from every ACE-Step worker's queue depth the admissions whose job has ended.
+
+    A generation killed after its admission never releases it, whichever path then failed its job.
+    Run after the recovery has committed, it removes exactly the ids the database calls terminal,
+    so an admission made meanwhile stays. A Redis that cannot be reached leaves the depth for the
+    next pass, so the database clean-ups and the start of the server never wait on it. Returns the
+    number of ids removed.
+    """
+    from songmaker_cli.db.queries.jobs import terminal_job_ids
+    from songmaker_cli.db.queries.workers import list_worker_identities
+
+    def ended_among(job_ids: Collection[str]) -> set[str]:
+        with ctx.db() as session:
+            return terminal_job_ids(session, job_ids)
+
+    with ctx.db() as session:
+        worker_ids = [worker.id for worker in list_worker_identities(session)]
+    try:
+        removed = sum(
+            remove_admissions_of_ended_jobs(ctx.redis, worker_id, ended_among)
+            for worker_id in worker_ids
+        )
+    except RedisError:
+        log.warning("The queue depth could not be reconciled; the next pass retries", exc_info=True)
+        return 0
+    if removed:
+        log.warning("Removed %d admission(s) of ended generation(s) from the queue depth", removed)
+    return removed
 
 
 def reconcile_crashed_loras(ctx: AppContext) -> int:
@@ -346,9 +389,10 @@ def _run_stale_job_reaper_tick(
 
     Returns ``(jobs_recovered, loras_reconciled)``.
     """
-    recovered_jobs = reap_stale_jobs(ctx, now=now, rosters=rosters)
+    recovered_jobs = _recover_stale_jobs(ctx, now, None, rosters)
     reconciled_loras = reconcile_crashed_loras(ctx)
     reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
+    reconcile_admitted_generations(ctx)
     return recovered_jobs, reconciled_loras
 
 
@@ -418,6 +462,7 @@ def _fail_jobs_of_gone_owners(
     if recovered_count:
         reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
         reconcile_crashed_loras(ctx)
+    reconcile_admitted_generations(ctx)
     return recovered_count
 
 

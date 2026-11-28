@@ -1564,7 +1564,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory, t
                 on_heartbeat=lambda: None,
             )
         assert result.adapter_dir == str(tmp_path / "adapter")
-        assert not await admit_generation(redis, "w0")
+        assert not await admit_generation(redis, "w0", "job-1")
         return release
 
     release = _run(exercise())
@@ -1625,12 +1625,12 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
                     on_heartbeat=lambda: None,
                 )
         assert job_renew_task.cancelled()
-        assert not await admit_generation(redis, "w0")
+        assert not await admit_generation(redis, "w0", "job-1")
         worker_renew_task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await worker_renew_task
         assert await release_gpu_hold(redis, "w0", hold_token)
-        assert await admit_generation(redis, "w0")
+        assert await admit_generation(redis, "w0", "job-1")
         return release
 
     release = _run(exercise())
@@ -1690,7 +1690,7 @@ def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> 
                     on_heartbeat=lambda: None,
                 )
         assert renew_task.cancelled()
-        assert not await admit_generation(redis, "w0")
+        assert not await admit_generation(redis, "w0", "job-1")
         return release
 
     release = _run(exercise())
