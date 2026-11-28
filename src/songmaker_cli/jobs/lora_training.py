@@ -1419,15 +1419,14 @@ def _keep_restored_lora_adapter(
             exc.previous_model_mode,
             "ready: retained previous adapter after failed replacement",
         )
-
-    if _write_if_active(db_factory, job_id, keep_previous_adapter):
-        _update_job(
-            db_factory,
-            job_id,
+        failed = JobStatusUpdate(
             JobStatus.FAILED,
             error_message=_sanitize_training_error(exc, job_id),
             error_type="lora_training_error",
         )
+        update_job_status(session, job_id, failed)
+
+    _write_if_active(db_factory, job_id, keep_previous_adapter)
 
 
 def _fail_lora_training(
