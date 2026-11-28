@@ -132,6 +132,11 @@
         "verdicts": [],
         "risk": "normal"
       }
+    },
+    {
+      "run": "ef3dd18b8e654e5dbcc77be864512798-3",
+      "start_tip": "ab9f3fd5eeb014249be0d335f448365d094bfeea",
+      "follows": true
     }
   ]
 }
