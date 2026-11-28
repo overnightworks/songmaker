@@ -815,6 +815,18 @@ msgctxt "takeMenu.heading"
 msgid "Take · {take}"
 msgstr "Take · {take}"
 
+msgctxt "takeMenu.openVersion"
+msgid "Open version"
+msgstr "Version öffnen"
+
+msgctxt "takeMenu.goToSong"
+msgid "Go to song"
+msgstr "Zum Song"
+
+msgctxt "takeMenu.rescore"
+msgid "Re-score"
+msgstr "Neu bewerten"
+
 msgctxt "takeMenu.repaint"
 msgid "Repaint"
 msgstr "Repaint"
@@ -2954,10 +2966,6 @@ msgctxt "nowPlayingTake.headingDurationMode"
 msgid "v{version} · take {take} · {duration} · {mode}"
 msgstr "v{version} · Take {take} · {duration} · {mode}"
 
-msgctxt "nowPlayingTake.openVersion"
-msgid "Open v{number}"
-msgstr "v{number} öffnen"
-
 msgctxt "nowPlayingJudging.label"
 msgid "Judge this take"
 msgstr "Diesen Take bewerten"
@@ -2970,53 +2978,41 @@ msgctxt "nowPlayingJudging.keep"
 msgid "Keep"
 msgstr "Behalten"
 
-msgctxt "nowPlayingTake.scores"
+msgctxt "nowPlayingScores.heading"
 msgid "Scores"
 msgstr "Scores"
 
-msgctxt "nowPlayingTake.scoresEmpty"
+msgctxt "nowPlayingScores.empty"
 msgid "No scores yet"
 msgstr "Noch keine Scores"
 
-msgctxt "nowPlayingTake.scoreRating"
-msgid "Rating"
-msgstr "Bewertung"
-
-msgctxt "nowPlayingTake.scoreLyricsSung"
+msgctxt "nowPlayingScores.lyricsSung"
 msgid "Lyrics sung"
 msgstr "Text gesungen"
 
-msgctxt "nowPlayingTake.scoreDynamics"
+msgctxt "nowPlayingScores.dynamics"
 msgid "Dynamics"
 msgstr "Dynamik"
 
-msgctxt "nowPlayingTake.scoreQuality"
+msgctxt "nowPlayingScores.quality"
 msgid "Quality"
 msgstr "Qualität"
 
-msgctxt "nowPlayingTake.scoreEnjoyment"
+msgctxt "nowPlayingScores.enjoyment"
 msgid "Enjoyment"
 msgstr "Hörspaß"
 
-msgctxt "nowPlayingTake.scoreCoherence"
+msgctxt "nowPlayingScores.coherence"
 msgid "Coherence"
 msgstr "Stimmigkeit"
 
-msgctxt "nowPlayingTake.scoreBpm"
+msgctxt "nowPlayingScores.bpm"
 msgid "BPM"
 msgstr "BPM"
 
-msgctxt "nowPlayingTake.rescoreAction"
-msgid "Re-score this take to follow the lyrics."
-msgstr "Bewerte diesen Take neu, damit er dem Songtext folgt."
-
-msgctxt "nowPlayingTake.rescoring"
+msgctxt "nowPlayingScores.rescoring"
 msgid "Re-scoring…"
 msgstr "Wird neu bewertet…"
-
-msgctxt "nowPlayingTake.rescore"
-msgid "Re-score"
-msgstr "Neu bewerten"
 
 msgctxt "nowPlayingTake.recipe"
 msgid "Recipe"
@@ -3029,18 +3025,6 @@ msgstr "Bewertung"
 msgctxt "nowPlayingJudging.ratingNotes"
 msgid "Notes (optional)"
 msgstr "Notizen (optional)"
-
-msgctxt "nowPlayingTake.useSeed"
-msgid "Use seed"
-msgstr "Seed übernehmen"
-
-msgctxt "nowPlayingTake.repaint"
-msgid "Repaint"
-msgstr "Repaint"
-
-msgctxt "nowPlayingTake.cover"
-msgid "Cover"
-msgstr "Cover"
 
 msgctxt "takeRecipe.groupModel"
 msgid "Model & Sampling"
@@ -5738,10 +5722,6 @@ msgstr "Aufklappen"
 msgctxt "nowPlaying.collapse"
 msgid "Collapse"
 msgstr "Zuklappen"
-
-msgctxt "nowPlaying.goToSong"
-msgid "Go to song"
-msgstr "Zum Song"
 
 msgctxt "nowPlaying.playAgain"
 msgid "Play again"

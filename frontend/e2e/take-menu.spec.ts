@@ -22,6 +22,7 @@ import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from 
 import { openNowPlayingFromBar } from './play-album';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
+import { takeMenuRows } from './take-menu-rows';
 
 const VIEWPORT_HEIGHT_PX = 844;
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
@@ -31,13 +32,12 @@ const MIDDLE_TAKE_INDEX = TAKE_COUNT / 2;
 const FIRST_TAKE_SEED = 4127730;
 const FOOT_OF_LIST_REACH_PX = HITBOX_FREQUENT_PX;
 const SAME_PLACE_TOLERANCE_PX = 0.5;
+// The album-form cells seed imported takes (no version, no seed), the Use seed cells versioned ones.
 const ROW_LABELS_IN_ORDER = [
-	words['takeMenu.repaint'],
-	words['takeMenu.cover'],
-	words['takeMenu.addTo'],
-	words['takeMenu.share'],
+	...takeMenuRows(false).filter((label) => label !== words['takeMenu.useSeed']),
 	words['takeMenu.delete']
 ];
+const USE_SEED_ROW_INDEX = takeMenuRows(true).indexOf(words['takeMenu.useSeed']);
 
 /**
  * Own album and song per flow, seeded straight into the database with
@@ -252,7 +252,7 @@ for (const { ids, position, cell } of GRID) {
 test.describe('Use seed row', () => {
 	for (const cell of CELLS) {
 		test(
-			`1928 T29: a take with a seed lists Use seed third, with the seed as its hint, at ${cell.width} px`,
+			`1928 T29: a take with a seed lists Use seed after Cover, with the seed as its hint, at ${cell.width} px`,
 			{ tag: ONLY_IN_SHELL[cell.shell] },
 			async ({ page }) => {
 				await onOwnTakes(
@@ -264,11 +264,11 @@ test.describe('Use seed row', () => {
 							await trigger.click();
 							const rows = takeMenu(page).getByRole('button');
 							await expect(rows).toHaveCount(ROW_LABELS_IN_ORDER.length + 1);
-							await expect(rows.nth(2)).toContainText(words['takeMenu.useSeed']);
-							await expect(rows.nth(2).locator('.menu-item-hint')).toHaveText(
+							await expect(rows.nth(USE_SEED_ROW_INDEX)).toContainText(words['takeMenu.useSeed']);
+							await expect(rows.nth(USE_SEED_ROW_INDEX).locator('.menu-item-hint')).toHaveText(
 								String(FIRST_TAKE_SEED + TAKE_COUNT - 1 - index)
 							);
-							await expect(rows.nth(2).locator('svg')).toHaveCount(1);
+							await expect(rows.nth(USE_SEED_ROW_INDEX).locator('svg')).toHaveCount(1);
 							await closeWithEscape(page, trigger);
 						}
 					},

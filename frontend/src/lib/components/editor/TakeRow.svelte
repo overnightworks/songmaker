@@ -4,7 +4,7 @@
 	import type { SourceMode } from '#lib/stores/recipe.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import { playTake } from '#lib/stores/player.ts';
-	import { rescoringTakeIds, restoreTake } from '#lib/stores/takeActions.ts';
+	import { rescore, rescoringTakeIds, restoreTake } from '#lib/stores/takeActions.ts';
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		formatScore,
@@ -21,7 +21,7 @@
 	import { selectionMode, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
 	import { revealTakeGroup } from '#lib/stores/takeFolds.ts';
 	import { takeGroupKey } from '#lib/utils/takeGroups.ts';
-	import { followPlainClick, jumpToTake } from '#lib/stores/navigation.ts';
+	import { followPlainClick, jumpToTake, revealPlayingSong } from '#lib/stores/navigation.ts';
 	import { formatTime } from '#lib/utils/format.ts';
 	import { isPlayableTake } from '#lib/utils/playable.ts';
 	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
@@ -354,9 +354,12 @@
 		{#if !$selectionMode}
 			<TakeMenu
 				{gen}
+				onopenversion={(versionId) => void actions.clickVersion(versionId)}
+				ongotosong={() => void revealPlayingSong(song, gen.id)}
 				onrepaint={() => onsource(gen, 'repaint')}
 				oncover={() => onsource(gen, 'cover')}
 				onuseseed={() => actions.useSeed(gen)}
+				onrescore={() => void rescore(song.id, gen.id)}
 				onshare={() => actions.share(gen.id)}
 				onunshare={() => actions.unshare(gen.id)}
 				{onaddto}

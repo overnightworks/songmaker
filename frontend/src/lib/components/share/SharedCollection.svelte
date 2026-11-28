@@ -218,7 +218,6 @@
 			onSeek={(seconds) => playback.seek(seconds)}
 			ended={playback.ended}
 			unplayableNotice={nothingToPlay ? pageText('share.noAudio') : null}
-			showTakeLabel={false}
 			lyricsEmptyLabel={pageText('share.noLyrics')}
 			lyricsCues={stagedTrack?.cues ?? null}
 			lyricsText={stagedTrack?.lyrics ?? null}

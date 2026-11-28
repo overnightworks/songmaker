@@ -9,7 +9,6 @@ export interface GenerationActions {
 	del: (genId: string) => void;
 	share: (genId: string) => Promise<ShareResult>;
 	unshare: (genId: string) => Promise<void>;
-	addToPlaylist: (playlistId: string, genId: string) => Promise<void>;
 	useSeed: (gen: GenerationItem) => void;
 	/** Loads a version as the draft, asking first over unsaved edits; answers whether it loaded. */
 	clickVersion: (versionId: string) => Promise<boolean>;

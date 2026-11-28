@@ -182,11 +182,11 @@ test(
 			.getByRole('contentinfo')
 			.getByRole('button', { name: words['transport.nowPlaying'], exact: true })
 			.click();
-		await page.getByRole('tab', { name: words['nowPlaying.takeTab'], exact: true }).click();
 		await page
-			.locator('.np-take')
-			.getByRole('button', { name: nameStartingWith(words['nowPlayingTake.useSeed']) })
+			.getByRole('complementary')
+			.getByRole('button', { name: words['takeMenu.label'], exact: true })
 			.click();
+		await page.getByRole('button', { name: nameStartingWith(words['takeMenu.useSeed']) }).click();
 		await expect(page.getByRole('heading', { name: songs.otherTitle, exact: true })).toBeVisible();
 		await expect(chip(page)).toHaveText(
 			new RegExp(`^\\s*${words['seedChip.label']({ number: '1' })}`)

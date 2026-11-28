@@ -23,11 +23,11 @@ lib/components/ModelRegistryPanel.svelte 10
 lib/components/ModelsServiceRow.svelte 6
 lib/components/NewPlaceCard.svelte 3
 lib/components/NewPlaceMenu.svelte 1
-lib/components/NowPlayingFrame.svelte 22
+lib/components/NowPlayingFrame.svelte 21
 lib/components/NowPlayingJudging.svelte 3
 lib/components/NowPlayingLyrics.svelte 5
 lib/components/NowPlayingQueue.svelte 7
-lib/components/NowPlayingTake.svelte 12
+lib/components/NowPlayingTake.svelte 4
 lib/components/OfflineStrip.svelte 1
 lib/components/ParamControls.svelte 5
 lib/components/PhoneAppBar.svelte 1
