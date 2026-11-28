@@ -9,6 +9,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -333,27 +334,31 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, pg_factory) -> None:
 # ── run_server ──────────────────────────────────────────────────────
 
 
-def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
+@pytest.fixture
+def uvicorn_stub():
+    """What `run_server` builds and starts instead of a listening server: its config and run."""
+    with patch("uvicorn.Config") as config, patch("uvicorn.Server.run") as run:
+        yield SimpleNamespace(config=config, run=run)
+
+
+def test_run_server_serves_through_the_draining_server(tmp_path: Path, uvicorn_stub) -> None:
     mock_app = MagicMock()
 
-    with (
-        patch("uvicorn.run") as mock_uvicorn,
-        patch("songmaker_cli.server.create_app", return_value=mock_app),
-    ):
+    with patch("songmaker_cli.server.create_app", return_value=mock_app):
         run_server(project_root=tmp_path, port=9999)
 
-    mock_uvicorn.assert_called_once()
-    call_kwargs = mock_uvicorn.call_args
+    uvicorn_stub.run.assert_called_once()
+    uvicorn_stub.config.assert_called_once()
+    call_kwargs = uvicorn_stub.config.call_args
     assert call_kwargs.kwargs.get("port") == 9999
     assert call_kwargs.kwargs.get("log_config") is None
 
 
 def test_run_server_writes_its_lines_under_the_web_service_name(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], uvicorn_stub,
 ) -> None:
     with (
         configured("restored-after-the-test"),
-        patch("uvicorn.run"),
         patch("songmaker_cli.server.create_app", return_value=MagicMock()),
     ):
         run_server(project_root=tmp_path, port=9999)
@@ -364,24 +369,22 @@ def test_run_server_writes_its_lines_under_the_web_service_name(
     assert "probe.ended" in {line["event"] for line in lines}
 
 
-def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
+def test_run_server_defaults_to_localhost(tmp_path: Path, uvicorn_stub) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         run_server(project_root=tmp_path, port=8080)
 
-    _, kwargs = mock_uvicorn.call_args
+    _, kwargs = uvicorn_stub.config.call_args
     assert kwargs.get("host") == "127.0.0.1"
 
 
-def test_run_server_opens_browser(tmp_path: Path) -> None:
+def test_run_server_opens_browser(tmp_path: Path, uvicorn_stub) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("webbrowser.open") as mock_browser,
     ):
@@ -390,14 +393,13 @@ def test_run_server_opens_browser(tmp_path: Path) -> None:
     mock_browser.assert_called_once()
 
 
-def test_run_server_creates_dirs(tmp_path: Path) -> None:
+def test_run_server_creates_dirs(tmp_path: Path, uvicorn_stub) -> None:
     from songmaker_cli.settings import get_settings
 
     settings = get_settings()
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         run_server(project_root=tmp_path)
@@ -406,14 +408,13 @@ def test_run_server_creates_dirs(tmp_path: Path) -> None:
     assert (tmp_path / settings.data_dir).exists()
 
 
-def test_run_server_infers_dirs_from_project_root(tmp_path: Path) -> None:
+def test_run_server_infers_dirs_from_project_root(tmp_path: Path, uvicorn_stub) -> None:
     from songmaker_cli.settings import get_settings
 
     settings = get_settings()
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app) as mock_create,
         patch("songmaker_cli.server.find_project_root", return_value=tmp_path),
     ):
@@ -611,28 +612,26 @@ def test_a_request_the_security_stack_refuses_still_gets_its_request_line(
     assert request_line["outcome"] == "ok"
 
 
-def test_run_server_infers_project_root(tmp_path: Path) -> None:
+def test_run_server_infers_project_root(tmp_path: Path, uvicorn_stub) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("songmaker_cli.server.find_project_root", return_value=None),
     ):
         run_server(project_root=None)
 
 
-def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
+def test_run_server_leaves_forwarded_headers_to_the_application(uvicorn_stub) -> None:
     """Uvicorn's own proxy-header handling would rewrite the peer address and
     the scheme from any peer, ahead of the TrustedProxies decision."""
     with (
-        patch("uvicorn.run") as mock_run,
         patch("songmaker_cli.server.create_app", return_value=MagicMock()),
         patch("songmaker_cli.server.find_project_root", return_value=None),
     ):
         run_server(project_root=None)
 
-    assert mock_run.call_args.kwargs["proxy_headers"] is False
+    assert uvicorn_stub.config.call_args.kwargs["proxy_headers"] is False
 
 
 def test_lifespan_shutdown_order_drains_pending_slot_releases(tmp_path: Path, pg_factory) -> None:

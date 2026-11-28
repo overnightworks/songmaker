@@ -5205,6 +5205,10 @@ msgctxt "chatFailure.clientCancelled"
 msgid "Turn cancelled by the client."
 msgstr ""
 
+msgctxt "chatFailure.serverRestarted"
+msgid "The reply stopped because songmaker restarted. Try again."
+msgstr ""
+
 msgctxt "chatFailure.requestCancelled"
 msgid "Chat request cancelled"
 msgstr ""

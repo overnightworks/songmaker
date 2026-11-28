@@ -1539,6 +1539,7 @@ const translated = {
     "jobFailure.tookTooLong": "Hat zu lange gedauert – bitte versuch es noch einmal.",
     "jobFailure.queuedTooLong": "Zu lange gewartet – bitte versuch es noch einmal.",
     "chatFailure.clientCancelled": "Antwort vom Client abgebrochen.",
+    "chatFailure.serverRestarted": "Die Antwort brach ab, weil songmaker neu gestartet ist. Versuch es noch einmal.",
     "chatFailure.requestCancelled": "Chat-Anfrage abgebrochen",
     "chatFailure.setupFailed": "Chat-Einrichtung fehlgeschlagen",
     "chatFailure.requestFailed": "Chat-Anfrage fehlgeschlagen",

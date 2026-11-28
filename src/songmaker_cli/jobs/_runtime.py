@@ -164,15 +164,14 @@ async def _stop_chat_job_heartbeat(task: asyncio.Task[None], job_id: str) -> Non
 
 
 async def _cancel_chat_job(
-    session: Session, heartbeat_task: asyncio.Task[None], job_id: str,
+    session: Session,
+    heartbeat_task: asyncio.Task[None],
+    job_id: str,
+    failure: Message,
+    error_type: str,
 ) -> None:
     try:
-        _fail_chat_job(
-            session,
-            job_id,
-            message("chatFailure.clientCancelled"),
-            "cancelled",
-        )
+        _fail_chat_job(session, job_id, failure, error_type)
     finally:
         await _stop_chat_job_heartbeat(heartbeat_task, job_id)
 
