@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -10,13 +12,14 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from support.worker_settings import worker_settings
 
 import songmaker_cli.music_worker as music_worker_module
 from songmaker_cli.constants import USER_LORAS_DIRNAME, LoraStatus
 from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import User, UserLora, UserLoraSample
 from songmaker_cli.music_worker import MusicWorker
-from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.settings import get_settings
 
 NOW = datetime(2026, 11, 28, 3, 0, tzinfo=UTC)
 OWNER = "owner-1"
@@ -96,11 +99,7 @@ class _World:
 
     def run_the_daily_purge(self, monkeypatch: pytest.MonkeyPatch) -> int:
         monkeypatch.setattr(music_worker_module, "utcnow", lambda: NOW)
-        settings = Settings(
-            database_url="postgresql://example", redis_url="redis://example",
-            session_secret="session-secret", songmaker_internal_token="internal-token",
-            audio_dir=str(self.audio_dir),
-        )
+        settings = worker_settings().model_copy(update={"audio_dir": str(self.audio_dir)})
         worker = MusicWorker(settings)
         worker.get_db_factory = MagicMock(return_value=self.pg_factory)
         return asyncio.run(worker.cron_bodies()[Cron.VOICE_PURGE]())
@@ -112,20 +111,18 @@ def world(pg_factory, tmp_path: Path) -> _World:
 
 
 @pytest.fixture
-def stuck_directory(monkeypatch: pytest.MonkeyPatch, world: _World) -> dict[str, bool]:
-    """Fails the removal of one voice's directory while ``fails`` holds."""
-    state = {"fails": True}
-    stuck = world.directory("stuck-directory").resolve()
-    real_rmtree = shutil.rmtree
+def stuck_directory(world: _World):
+    """Makes one voice's samples unremovable; the fixture's value lifts that."""
+    samples = world.directory("stuck-directory") / "samples"
+    samples.chmod(0o500)
+    try:
+        yield lambda: samples.chmod(0o700)
+    finally:
+        if samples.exists():
+            samples.chmod(0o700)
 
-    def rmtree(path, *args, **kwargs):
-        if state["fails"] and Path(path).resolve() == stuck:
-            raise PermissionError(path)
-        return real_rmtree(path, *args, **kwargs)
 
-    monkeypatch.setattr(shutil, "rmtree", rmtree)
-    return state
-
+ROOT_IGNORES_PERMISSIONS = "root removes files from a read-only directory"
 
 KEPT = {
     "exactly-at-the-cutoff", "deleted-recently", "never-deleted", "still-training",
@@ -133,6 +130,7 @@ KEPT = {
 }
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason=ROOT_IGNORES_PERMISSIONS)
 def test_the_daily_purge_removes_voices_deleted_before_the_window_with_samples_and_directory(
     world: _World, stuck_directory, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -145,7 +143,7 @@ def test_the_daily_purge_removes_voices_deleted_before_the_window_with_samples_a
 
 
 def test_a_directory_outside_the_owners_voices_is_left_with_its_rows(
-    world: _World, stuck_directory, monkeypatch: pytest.MonkeyPatch,
+    world: _World, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     world.run_the_daily_purge(monkeypatch)
 
@@ -153,11 +151,28 @@ def test_a_directory_outside_the_owners_voices_is_left_with_its_rows(
     assert "outside-directory" in world.voices_left()
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason=ROOT_IGNORES_PERMISSIONS)
+def test_a_voice_whose_directory_stays_is_logged_as_a_warning(
+    world: _World, stuck_directory, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        world.run_the_daily_purge(monkeypatch)
+
+    assert any(
+        record.levelno == logging.WARNING and record.name == "songmaker_cli.cleanup"
+        and "stuck-directory" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason=ROOT_IGNORES_PERMISSIONS)
 def test_the_next_daily_purge_removes_a_voice_whose_directory_could_not_be_removed_before(
     world: _World, stuck_directory, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    lift_the_stuck_directory = stuck_directory
     world.run_the_daily_purge(monkeypatch)
-    stuck_directory["fails"] = False
+    lift_the_stuck_directory()
 
     purged = world.run_the_daily_purge(monkeypatch)
 
