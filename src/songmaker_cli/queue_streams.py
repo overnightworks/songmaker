@@ -36,7 +36,6 @@ from songmaker_cli.api_helpers import (
     RateLimitRejected,
     check_generation_access,
     enforce_rate_limit,
-    get_cached_limiter,
 )
 from songmaker_cli.api_models.queue_streams import (
     LibraryTakePool,
@@ -57,6 +56,7 @@ from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.object_store import ObjectMissingError, StoredObject
 from songmaker_cli.queue_stream_build_lock import build_lock as _build_lock
+from songmaker_cli.redis_client import get_cached_limiter
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.timestamps import utcnow
 
