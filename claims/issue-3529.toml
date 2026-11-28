@@ -1,8 +1,0 @@
-claim_id = "6488f3b5fd8f4b9b985388563a48e40b"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "148620bd770ad3410f3cef745c4ef4df1ead5210"
-branch = "claude/issue-3529-registry-one-path"
-scope = ["src/songmaker_cli/health_api.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/server.py", "tests/songmaker_cli/db/queries/test_resource_events.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_lifecycle_owner_loops.py", "tests/songmaker_cli/test_lifecycle_queue_stream_cleanup.py", "tests/songmaker_cli/test_lifecycle_session_cleanup.py"]
-opened_commit = "22b184410544dabbfadde31ebfa2e6e421b68737"
-whole_reason = "One rename of every reader of the background loop registry onto its one path; a half move would leave the two paths this removes."
