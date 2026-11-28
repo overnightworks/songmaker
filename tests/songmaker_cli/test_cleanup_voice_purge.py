@@ -106,6 +106,17 @@ class _World:
         owner_root = self.audio_dir / USER_LORAS_DIRNAME / OWNER
         return {path.name for path in owner_root.iterdir()}
 
+    def add_expired_voice(self, owner_id: str, voice_id: str) -> None:
+        with self.pg_factory() as session:
+            if session.get(User, owner_id) is None:
+                session.add(User(id=owner_id, username=uuid.uuid4().hex))
+                session.flush()
+            session.add(UserLora(
+                id=voice_id, user_id=owner_id, name="hostile", slug="hostile",
+                status=LoraStatus.READY, deleted_at=NOW - timedelta(days=_window() + 1),
+            ))
+            session.commit()
+
     def run_the_daily_purge(self, monkeypatch: pytest.MonkeyPatch) -> int:
         monkeypatch.setattr(music_worker_module, "utcnow", lambda: NOW)
         settings = worker_settings().model_copy(update={"audio_dir": str(self.audio_dir)})
@@ -249,19 +260,34 @@ def test_a_voice_whose_ids_join_to_a_directory_that_is_not_its_own_leaves_that_d
     owner_id, voice_id, victim = hostile(world, away)
     (victim / "kept.txt").parent.mkdir(parents=True, exist_ok=True)
     (victim / "kept.txt").write_bytes(b"audio")
-    with world.pg_factory() as session:
-        if session.get(User, owner_id) is None:
-            session.add(User(id=owner_id, username=uuid.uuid4().hex))
-            session.flush()
-        session.add(UserLora(
-            id=voice_id, user_id=owner_id, name="hostile", slug="hostile",
-            status=LoraStatus.READY, deleted_at=NOW - timedelta(days=_window() + 1),
-        ))
-        session.commit()
+    world.add_expired_voice(owner_id, voice_id)
 
     world.run_the_daily_purge(monkeypatch)
 
     assert (victim / "kept.txt").read_bytes() == b"audio"
+    assert voice_id in world.voices_left()
+
+
+@pytest.mark.parametrize(
+    ("owner_id", "voice_id"),
+    [
+        pytest.param("/", "etc", id="slash-owner-id"),
+        pytest.param("//", "etc", id="double-slash-owner-id"),
+        pytest.param(OWNER, "/", id="slash-voice-id"),
+        pytest.param(OWNER, "//", id="double-slash-voice-id"),
+    ],
+)
+def test_a_voice_whose_id_is_made_of_slashes_is_removed_nowhere_and_keeps_its_rows(
+    world: _World, monkeypatch: pytest.MonkeyPatch, owner_id: str, voice_id: str,
+) -> None:
+    """These ids join to the filesystem root, so a regression must not reach a real removal."""
+    removed: list[Path] = []
+    monkeypatch.setattr(shutil, "rmtree", lambda path, *args, **kwargs: removed.append(Path(path)))
+    world.add_expired_voice(owner_id, voice_id)
+
+    world.run_the_daily_purge(monkeypatch)
+
+    assert [path for path in removed if not path.is_relative_to(world.audio_dir)] == []
     assert voice_id in world.voices_left()
 
 

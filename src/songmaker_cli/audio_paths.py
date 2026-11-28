@@ -42,7 +42,7 @@ def is_plain_path_component(name: str) -> bool:
     Joining anything else onto a directory can leave it: an absolute name replaces the
     directory, and ``.``, ``..``, a slash or a leading ``./`` reach a sibling or a parent.
     """
-    return name not in {"", ".", ".."} and PurePosixPath(name).parts == (name,)
+    return name not in {"", ".", ".."} and "/" not in name
 
 
 def _lora_owner_relative_root(user_id: str) -> PurePosixPath:
