@@ -704,7 +704,8 @@
 		font-size: 1.4rem;
 		line-height: 1;
 	}
-	.np-lyrics-col {
+	.np-lyrics-col,
+	.np-right-col {
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
@@ -713,13 +714,7 @@
 		justify-content: center;
 	}
 	.np-right-col {
-		display: flex;
-		flex-direction: column;
-		gap: 0.8rem;
-		min-width: 0;
-		min-height: 0;
 		overflow-y: auto;
-		justify-content: center;
 	}
 	.mobile-panel-trigger {
 		flex-shrink: 0;
@@ -785,8 +780,11 @@
 	.now-playing.docked .np-header {
 		padding: 0.9rem 1rem 0;
 	}
+	/* The words keep a floor of their own, so the column's rows never shrink
+	   under the scores and the tabs below them. */
 	.now-playing.docked .np-body {
 		grid-template-columns: 1fr;
+		grid-template-rows: auto minmax(10rem, auto) auto;
 		gap: 1.1rem;
 		padding: 0.9rem 1rem 1.2rem;
 		overflow-y: auto;
