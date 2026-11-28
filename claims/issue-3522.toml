@@ -1,7 +1,0 @@
-claim_id = "8dd1a7231d7e43bcaa45374c97c2d8ca"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "9a859f5587ad423e457be7d7613232c18b80d911"
-branch = "claude/issue-3522-drain-names-grace-coupling"
-scope = ["docs/acestep.md", "docs/architecture.md", "src/songmaker_cli/settings.py"]
-opened_commit = "16aa25f835b8d2161f036c41ac891574023b6300"
