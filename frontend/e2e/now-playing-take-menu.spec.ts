@@ -16,6 +16,7 @@ import { showTab } from './foldedSong';
 import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 import { words } from '../src/lib/words/en';
+import { TAKE_MENU_ROWS } from './take-menu-rows';
 
 const TAKE_SEED = 4127730;
 const SCORE_ROUTE = /\/api\/generations\/[^/]+\/score$/;
@@ -94,15 +95,7 @@ async function scoreTheTakes(page: Page): Promise<void> {
 	});
 }
 
-const MENU_ROWS = [
-	words['takeMenu.openVersion'],
-	words['takeMenu.repaint'],
-	words['takeMenu.cover'],
-	words['takeMenu.useSeed'],
-	words['takeMenu.rescore'],
-	words['takeMenu.addTo'],
-	words['takeMenu.share']
-];
+const MENU_ROWS = TAKE_MENU_ROWS;
 
 test("Now Playing's title row carries the take menu, with no pencil beside it", async ({
 	page
