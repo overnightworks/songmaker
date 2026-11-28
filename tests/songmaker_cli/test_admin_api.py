@@ -296,7 +296,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     })
     publish_worker_heartbeat(client, "w1", json.loads(payload))
     hold_a_worker_lease(client.app.state.ctx.async_redis)
-    client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
+    client.app.state.ctx.background_loops = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health/details", "/metrics"):
         response = client.get(path, headers=monitoring_headers)

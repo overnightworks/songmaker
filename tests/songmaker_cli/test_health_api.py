@@ -54,7 +54,7 @@ def test_health_and_metrics_report_background_loop_health(
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
-        registry = client.app.state.background_loop_registry
+        registry = client.app.state.ctx.background_loops
         for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
             registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
         registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
@@ -190,7 +190,7 @@ def test_health_preserves_response_bytes(
         for _ in range(3):
             create_job(session, JobType.GENERATE)
         session.commit()
-    registry = health_client.app.state.background_loop_registry
+    registry = health_client.app.state.ctx.background_loops
     registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
     for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
         registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))

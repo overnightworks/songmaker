@@ -422,8 +422,8 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
                     exists=lambda *_args, **_kwargs: False,
                     get=lambda *_args, **_kwargs: None,
                 ),
+                background_loops=registry,
             ),
-            background_loop_registry=registry,
         ),
     )
     _add_job(ctx, job_id="missing-policy", job_type="unknown_type", status=JobStatus.QUEUED)
@@ -454,8 +454,8 @@ def _run_reaper_ticks(
             ctx=SimpleNamespace(
                 async_redis=tick_lock.async_redis,
                 kind_leases=every_worker_kind_leases(tick_lock.async_redis),
+                background_loops=registry,
             ),
-            background_loop_registry=registry,
         ),
     )
     monkeypatch.setattr("songmaker_cli.lifecycle._run_stale_job_reaper_tick", tick)
