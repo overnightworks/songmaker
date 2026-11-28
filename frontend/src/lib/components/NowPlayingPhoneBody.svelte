@@ -62,7 +62,7 @@
 	   the body scrolls instead, so the lyrics never spill over the transport. */
 	.lyrics-region {
 		flex: 1 1 0;
-		min-height: 5rem;
+		min-height: 4rem;
 		display: flex;
 		flex-direction: column;
 	}
@@ -78,6 +78,10 @@
 	}
 	.phone-body :global(.scores.chips .entries) {
 		flex-wrap: nowrap;
+	}
+	/* The pending word leads the row, so it stands on screen without a swipe. */
+	.phone-body :global(.scores.chips .note) {
+		order: -1;
 	}
 	.phone-body :global(.scores.chips > *),
 	.phone-body :global(.scores.chips .entry) {

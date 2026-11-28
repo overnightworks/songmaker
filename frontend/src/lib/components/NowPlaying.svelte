@@ -330,18 +330,20 @@
 {/snippet}
 
 {#snippet subtitle()}
-	<span class="subtitle">
+	<span class="subtitle" class:with-source={stackedLayout && source}>
 		{#if stackedLayout && source}
-			<span class="take-label">{takeLabel}</span>
-			<button
-				type="button"
-				class="from-link"
-				data-hitbox="text"
-				onclick={source.open}
-				aria-label={pageText(SOURCE_OPEN_LABEL_KEYS[source.kind], { title: source.title })}
-			>
-				{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
-			</button>
+			<span class="source-line">
+				<button
+					type="button"
+					class="from-link"
+					data-hitbox="text"
+					onclick={source.open}
+					aria-label={pageText(SOURCE_OPEN_LABEL_KEYS[source.kind], { title: source.title })}
+				>
+					{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
+				</button>
+				<span class="take-label"><span aria-hidden="true">·</span> {takeLabel}</span>
+			</span>
 		{:else}
 			<span class="subtitle-text">{[albumLine, takeLabel].filter(Boolean).join(' · ')}</span>
 		{/if}
@@ -407,6 +409,21 @@
 		font-size: var(--label-font-size);
 		color: var(--text-muted);
 	}
+	/* The source and the take share the first line, the notice takes the next, so
+	   the source is cut only when it cannot sit beside the take part. */
+	.subtitle.with-source {
+		height: auto;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0;
+	}
+	.source-line {
+		display: flex;
+		line-height: 1.2;
+		align-items: center;
+		gap: 0.4rem;
+		max-width: 100%;
+	}
 	.from-link {
 		min-width: 0;
 		padding: 0;
@@ -421,6 +438,7 @@
 	}
 	.take-label {
 		flex: none;
+		white-space: nowrap;
 	}
 	.subtitle-text {
 		min-width: 0;

@@ -120,7 +120,7 @@
 		</button>
 		{#if gen.is_archived}
 			<button class="menu-item" onclick={() => runAndClose(onrestore)}>
-				<Icon name="refresh-cw" size={14} />
+				<Icon name="archive-restore" size={14} />
 				{pageText('takeMenu.restore')}
 			</button>
 		{:else}
