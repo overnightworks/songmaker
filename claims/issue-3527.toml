@@ -1,0 +1,8 @@
+claim_id = "76fe8b1e7bb94d53a833ac06b6d4f681"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "af2f5c464f5858c2e7f901058b1be912de191ead"
+branch = "claude/issue-3527-playlist-order-lock"
+scope = ["src/songmaker_cli/db/queries/playlists.py", "tests/songmaker_cli/test_playlist_api.py", "tests/songmaker_cli/test_playlist_api_album_add_lock_postgres.py", "tests/songmaker_cli/test_playlist_api_playlist_add.py", "tests/songmaker_cli/test_playlist_order_lock_postgres.py", "tests/support/postgres_lock_harness.py"]
+opened_commit = "d888c1e96252723c612a76e50f43ede5cba9f862"
+whole_reason = "One lock owner for a playlist's order, taken by its four appenders, its removal and its move, with the tests that pin it."
