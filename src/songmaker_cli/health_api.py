@@ -310,7 +310,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         scoring_queue_depth = count_queued_jobs(session, *JobQueue.SCORE.job_types)
 
     redis = ctx.async_redis
-    background_loop_metrics = request.app.state.background_loop_registry.loop_health()
+    background_loop_metrics = request.app.state.ctx.background_loops.loop_health()
     workers_online = 0
     workers_loading = 0
     workers_offline = 0
@@ -424,7 +424,7 @@ async def _read_health_signals(request: Request) -> HealthSignals:
         workers_lm_failed=workers_lm_failed,
         queue_depth_cap_reached=queue_depth_cap_reached,
         uptime_seconds=uptime,
-        background_loops=request.app.state.background_loop_registry.loop_health(),
+        background_loops=request.app.state.ctx.background_loops.loop_health(),
         release=ReleaseInfo.from_settings(config),
     )
 

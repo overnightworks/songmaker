@@ -68,8 +68,8 @@ def _loop_app(async_redis, db, audio_dir: Path, leases=None) -> SimpleNamespace:
             owner_leases=leases or owner_leases(async_redis),
             kind_leases=every_worker_kind_leases(async_redis),
             owner_id=OWNER, db=db, audio_dir=audio_dir, redis=make_fake_redis(),
+            background_loops=BackgroundLoopRegistry(tuple(BackgroundLoopName)),
         ),
-        background_loop_registry=BackgroundLoopRegistry(tuple(BackgroundLoopName)),
     ))
 
 
@@ -95,7 +95,7 @@ def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
     app = _loop_app(_UnreachableRedis(), pg_factory, tmp_path)
 
     statuses = run_ticks_observing_status(
-        monkeypatch, owner_gone_reaper_loop(app), app.state.background_loop_registry,
+        monkeypatch, owner_gone_reaper_loop(app), app.state.ctx.background_loops,
         BackgroundLoopName.OWNER_GONE_REAPER, BACKGROUND_LOOP_FAILURE_THRESHOLD,
     )
 
@@ -105,7 +105,7 @@ def test_the_owner_pass_keeps_ticking_and_shows_failing_while_redis_is_down(
 def _own_lease_status_after_the_ticks(monkeypatch, server, pg_factory, tmp_path):
     app = _loop_app(server, pg_factory, tmp_path)
     return run_ticks_observing_status(
-        monkeypatch, owner_gone_reaper_loop(app), app.state.background_loop_registry,
+        monkeypatch, owner_gone_reaper_loop(app), app.state.ctx.background_loops,
         BackgroundLoopName.OWNER_LEASE, BACKGROUND_LOOP_FAILURE_THRESHOLD,
     )[-1]
 
@@ -282,7 +282,7 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
             _LeasesThatRunBeforeAnswering(leases, start_again_and_write_a_job),
         )
         await _run_one_pass(owner_pass, app, monkeypatch, pauses_before=pauses_before)
-        loop_health = app.state.background_loop_registry.loop_health()
+        loop_health = app.state.ctx.background_loops.loop_health()
         pass_failure = (
             (0, None) if loop_name is None
             else (loop_health[loop_name].consecutive_failures, loop_health[loop_name].last_error)

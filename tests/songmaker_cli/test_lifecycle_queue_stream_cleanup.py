@@ -54,7 +54,7 @@ def test_periodic_loop_runs_resource_event_cleanup_every_tick(ctx, monkeypatch) 
     monkeypatch.setattr(lifecycle, "cleanup_expired_resource_events", calls.append)
     monkeypatch.setattr(queue_streams, "cleanup_expired_queue_streams", lambda _ctx: None)
     app = SimpleNamespace(
-        state=SimpleNamespace(ctx=ctx, background_loop_registry=BackgroundLoopRegistry()),
+        state=SimpleNamespace(ctx=ctx),
     )
 
     _run_loop_for_n_ticks(monkeypatch, app, n=3)
@@ -73,7 +73,7 @@ def test_periodic_loop_runs_queue_stream_cleanup_on_its_own_slower_interval(
         queue_streams, "cleanup_expired_queue_streams", queue_stream_calls.append,
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(ctx=ctx, background_loop_registry=BackgroundLoopRegistry()),
+        state=SimpleNamespace(ctx=ctx),
     )
     every_n_ticks = lifecycle._QUEUE_STREAM_CLEANUP_EVERY_N_TICKS
     assert every_n_ticks > 1, "test assumes the queue-stream interval is a slower multiple"
@@ -97,7 +97,7 @@ def test_periodic_loop_survives_a_failing_queue_stream_cleanup(ctx, monkeypatch)
 
     monkeypatch.setattr(queue_streams, "cleanup_expired_queue_streams", _broken_cleanup)
     app = SimpleNamespace(
-        state=SimpleNamespace(ctx=ctx, background_loop_registry=BackgroundLoopRegistry()),
+        state=SimpleNamespace(ctx=ctx),
     )
 
     _run_loop_for_n_ticks(
@@ -114,8 +114,8 @@ def test_periodic_loop_reads_failing_while_the_resource_event_sweep_keeps_raisin
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(lifecycle, "cleanup_expired_resource_events", _broken_sweep)
-    registry = BackgroundLoopRegistry()
-    app = SimpleNamespace(state=SimpleNamespace(ctx=ctx, background_loop_registry=registry))
+    registry = ctx.background_loops
+    app = SimpleNamespace(state=SimpleNamespace(ctx=ctx))
 
     _run_loop_for_n_ticks(monkeypatch, app, n=BACKGROUND_LOOP_FAILURE_THRESHOLD)
 

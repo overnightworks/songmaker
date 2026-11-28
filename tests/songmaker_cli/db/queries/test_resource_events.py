@@ -188,8 +188,7 @@ def test_lifecycle_cleanup_enforces_retention(db_factory, tmp_path: Path) -> Non
 def test_resource_event_cleanup_loop_runs_named_cleanup() -> None:
     app = SimpleNamespace(
         state=SimpleNamespace(
-            ctx=MagicMock(),
-            background_loop_registry=BackgroundLoopRegistry(),
+            ctx=MagicMock(background_loops=BackgroundLoopRegistry()),
         ),
     )
 

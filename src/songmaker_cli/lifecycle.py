@@ -72,10 +72,6 @@ def tick_locks(redis: Client) -> Locks:
     )
 
 
-def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
-    return app.state.background_loop_registry
-
-
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
     """Delete delivered event history beyond retention, preserving cursors."""
     from songmaker_cli.db.queries.resource_events import delete_resource_events_before
@@ -101,7 +97,7 @@ async def resource_event_cleanup_loop(app: FastAPI) -> None:
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = app.state.ctx.background_loops
     tick = 0
     while True:
         await asyncio.sleep(RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS)
@@ -259,7 +255,7 @@ async def score_backfill_loop(app: FastAPI) -> None:
     from songmaker_cli.constants import SCORE_BACKFILL_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = app.state.ctx.background_loops
     locks = tick_locks(ctx.async_redis)
     while True:
         await asyncio.sleep(SCORE_BACKFILL_INTERVAL_SECONDS)
@@ -403,7 +399,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
     tandem lock as ``score_backfill_loop`` so one web replica handles each tick.
     """
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = app.state.ctx.background_loops
     locks = tick_locks(ctx.async_redis)
     while True:
         await asyncio.sleep(JOB_REAPER_INTERVAL_SECONDS)
@@ -475,7 +471,7 @@ async def owner_lapse_loop(app: FastAPI) -> None:
     worker kind's family are served beside them, so each family's state ends with its leases.
     """
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = app.state.ctx.background_loops
 
     async def fail_jobs_of_lapsed_owner(_lapse: Lapse) -> None:
         try:
@@ -527,7 +523,7 @@ async def owner_gone_reaper_loop(app: FastAPI) -> None:
     this process's own lease into the ``owner_lease`` health.
     """
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = app.state.ctx.background_loops
     while True:
         await asyncio.sleep(OWNER_GONE_CHECK_INTERVAL_SECONDS)
         await record_own_owner_lease_health(ctx, registry)
@@ -556,7 +552,7 @@ async def session_cleanup_loop(
     from songmaker_cli.constants import SESSION_CLEANUP_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = app.state.ctx.background_loops
 
     while True:
         await wait(SESSION_CLEANUP_INTERVAL_SECONDS)
