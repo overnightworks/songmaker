@@ -17,6 +17,7 @@ from support.redis_clock import Window, until
 from support.redis_server import settle_the_real_servers_epoch
 from support.reference_rows import a_reference
 from support.worker_http_peer import WorkerScenario
+from support.worker_settings import worker_settings
 
 import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.acestep_state import download_locks, worker_state_key
@@ -35,7 +36,7 @@ from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
-from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import utcnow
 
 FOREVER_SECONDS = 3600
@@ -56,15 +57,6 @@ def _make_worker(worker: MusicWorker | None = None) -> MusicWorker:
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
     return worker
-
-
-def _settings() -> Settings:
-    return Settings(
-        database_url="postgresql://example",
-        redis_url="redis://example",
-        session_secret="session-secret",
-        songmaker_internal_token="internal-token",
-    )
 
 
 def _claimed(payload, job_id: str = "j1") -> ClaimedJob:
@@ -284,7 +276,7 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.commit()
-    settings = _settings().model_copy(update={"audio_dir": str(audio_dir)})
+    settings = worker_settings().model_copy(update={"audio_dir": str(audio_dir)})
     worker = MusicWorker(settings)
     # init_db checks a live PostgreSQL database.
     worker.get_db_factory = MagicMock(return_value=factory)
@@ -304,7 +296,7 @@ def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
         session.flush()
         a_reference(session, "u1", name="r1.wav", reference_id="r1")
         session.commit()
-    worker = MusicWorker(_settings())
+    worker = MusicWorker(worker_settings())
     worker.get_db_factory = MagicMock(return_value=factory)
 
     changed = _run(worker.reference_unused_cron())
@@ -336,7 +328,7 @@ def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_delet
     monkeypatch.setattr(reference_audio, "reconcile_unused_stamps", reconcile)
     monkeypatch.setattr(reference_audio, "delete_announced_references", delete)
     monkeypatch.setattr(mw_mod, "utcnow", lambda: now)
-    worker = MusicWorker(_settings().model_copy(
+    worker = MusicWorker(worker_settings().model_copy(
         update={"audio_dir": str(tmp_path), "final_deletion_days": 17},
     ))
     worker.get_db_factory = MagicMock()
@@ -359,7 +351,7 @@ def test_the_audit_log_retention_cron_deletes_the_entries_older_than_the_setting
             ))
         session.add(User(id="old", username="old", created_at=now - timedelta(days=800)))
         session.commit()
-    worker = MusicWorker(_settings().model_copy(update={"audit_log_retention_days": 7}))
+    worker = MusicWorker(worker_settings().model_copy(update={"audit_log_retention_days": 7}))
     worker.get_db_factory = MagicMock(return_value=pg_factory)
 
     deleted = _run(worker.cron_bodies()[Cron.AUDIT_LOG_RETENTION]())
@@ -387,7 +379,7 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
             return {cron: partial(record, cron) for cron in Cron}
 
     worker = RecordingMusicWorker(
-        _settings().model_copy(update={"redis_url": redis_url}),
+        worker_settings().model_copy(update={"redis_url": redis_url}),
         readiness_file=readiness_file,
     )
     worker.get_db_factory = MagicMock()

@@ -118,6 +118,7 @@ class MusicWorker(WorkerBase):
             Cron.GENERATION_RETENTION: self.generation_retention_cron,
             Cron.REFERENCE_REMNANT: self.reference_remnant_cron,
             Cron.REFERENCE_UNUSED: self.reference_unused_cron,
+            Cron.VOICE_PURGE: self.voice_purge_cron,
         }
 
     async def cleanup_files_cron(self) -> None:
@@ -143,6 +144,13 @@ class MusicWorker(WorkerBase):
             run_generation_retention, self.get_db_factory(), self.audio_dir(),
         )
         return report.archived_count + report.deleted_count
+
+    async def voice_purge_cron(self) -> int:
+        from songmaker_cli.cleanup import run_voice_purge
+
+        return await asyncio.to_thread(
+            run_voice_purge, self.get_db_factory(), self.audio_dir(), now=utcnow(),
+        )
 
     async def reference_remnant_cron(self) -> int:
         from songmaker_cli.reference_audio import reconcile_reference_remnants

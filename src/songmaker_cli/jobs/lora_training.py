@@ -17,14 +17,19 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.audio_paths import confined_under
+from songmaker_cli.audio_paths import (
+    all_loras_root,
+    confined_under,
+    lora_owner_root,
+    lora_relative_root,
+    lora_root,
+)
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORA_TRAINING_TMP_DIRNAME,
-    USER_LORAS_DIRNAME,
     AuditAction,
     LoraStatus,
     ResourceType,
@@ -207,24 +212,20 @@ def _worker_training_started_at(value: object) -> datetime | None:
     return training_started_at
 
 
-def _lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return audio_dir / USER_LORAS_DIRNAME / user_id / lora_id
-
-
 def _dataset_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_DATASET_DIRNAME
+    return lora_root(audio_dir, user_id, lora_id) / USER_LORA_DATASET_DIRNAME
 
 
 def _output_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME
+    return lora_root(audio_dir, user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME
 
 
 def _tmp_training_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
+    return lora_root(audio_dir, user_id, lora_id) / USER_LORA_TRAINING_TMP_DIRNAME
 
 
 def _completed_training_mode_path(audio_dir: Path, user_id: str, lora_id: str) -> Path:
-    return _lora_root(audio_dir, user_id, lora_id) / _COMPLETED_TRAINING_MODE_FILENAME
+    return lora_root(audio_dir, user_id, lora_id) / _COMPLETED_TRAINING_MODE_FILENAME
 
 
 def _completed_training_mode_tmp_path(audio_dir: Path, user_id: str, lora_id: str) -> Path:
@@ -863,7 +864,7 @@ def log_orphaned_lora_work_dirs(
     audio_dir: Path,
 ) -> None:
     """Log disposable LoRA work dirs whose LoRA is missing or no longer active."""
-    loras_root = audio_dir / USER_LORAS_DIRNAME
+    loras_root = all_loras_root(audio_dir)
     if not loras_root.exists():
         return
 
@@ -1013,7 +1014,7 @@ def _persist_crashed_lora_reconciliation(
             error_message=error_message,
         )
         return
-    storage_rel = str(Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME)
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     update_user_lora(
         session,
         lora_id,
@@ -1276,7 +1277,7 @@ def _validated_lora_adapter_handoff(
     audio_dir: Path, user_id: str, tmp_output: Path, worker_result: TrainLoraTaskResultDTO
 ) -> Path:
     reported = worker_result.adapter_dir
-    adapter_src = confined_under(audio_dir / USER_LORAS_DIRNAME / user_id, Path(reported))
+    adapter_src = confined_under(lora_owner_root(audio_dir, user_id), Path(reported))
     if adapter_src is None or adapter_src != tmp_output.resolve():
         raise RuntimeError(f"Worker reported unexpected training handoff path: {reported}")
     if not adapter_src.is_dir():
@@ -1354,9 +1355,7 @@ def _mark_lora_training_complete(
     completed_model_mode: str,
     sample_count: int,
 ) -> None:
-    storage_rel = str(
-        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-    )
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     with db_factory() as session:
         update_user_lora(
             session,
@@ -1415,9 +1414,7 @@ def _keep_restored_lora_adapter(
     log.exception("LoRA training job %s kept its previous adapter: %s", job_id, exc)
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
         _log_failed_lora_cleanup(db_factory, audio_dir)
-    storage_rel = str(
-        Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
-    )
+    storage_rel = str(lora_relative_root(user_id, lora_id) / USER_LORA_OUTPUT_DIRNAME)
     with db_factory() as session:
         update_user_lora(
             session,

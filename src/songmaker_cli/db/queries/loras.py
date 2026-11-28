@@ -143,6 +143,35 @@ def soft_delete_user_lora(session: Session, lora_id: str) -> datetime:
     return now
 
 
+def list_expired_user_loras(session: Session, cutoff: datetime) -> list[tuple[str, str]]:
+    """The (id, owner) of every voice deleted before ``cutoff`` that no training job still holds."""
+    return [
+        (lora_id, user_id)
+        for lora_id, user_id in session.execute(
+            select(UserLora.id, UserLora.user_id)
+            .where(*_expired_user_lora_conditions(cutoff))
+            .order_by(UserLora.id),
+        )
+    ]
+
+
+def delete_expired_user_loras(session: Session, lora_ids: list[str], cutoff: datetime) -> int:
+    """Delete the listed voices that are still expired at ``cutoff``, their samples with them;
+    returns how many went."""
+    return (
+        session.query(UserLora)
+        .filter(UserLora.id.in_(lora_ids), *_expired_user_lora_conditions(cutoff))
+        .delete(synchronize_session=False)
+    )
+
+
+def _expired_user_lora_conditions(cutoff: datetime) -> tuple:
+    return (
+        UserLora.deleted_at < cutoff,
+        UserLora.status.notin_(LORA_ACTIVE_STATUSES),
+    )
+
+
 def list_active_user_loras(
     session: Session,
     *,

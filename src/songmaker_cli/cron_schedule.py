@@ -48,6 +48,7 @@ class Cron(StrEnum):
     GENERATION_RETENTION = "generation_retention_cron"
     REFERENCE_REMNANT = "reference_remnant_cron"
     REFERENCE_UNUSED = "reference_unused_cron"
+    VOICE_PURGE = "voice_purge_cron"
 
 
 def next_tick(cron: Cron, now: datetime) -> datetime:

@@ -1625,8 +1625,10 @@ SIGKILLed and even the values the run did produce would be lost.
   `AUDIT_LOG_RETENTION_DAYS`, applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed. They are keys of one tandem `Deadlines` of kind `worker-crons`
-  (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
+  has passed, and removes the voices deleted more than `FINAL_DELETION_DAYS` ago with their
+  rows and their directory (the directory first, the rows once it is gone, so a directory that
+  stays keeps its rows for the next run). They are keys of one tandem `Deadlines` of kind
+  `worker-crons` (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
   once across all workers, extends the claim while the body runs and calls `done` after it. Redis
   TIME is the only clock: a run ends with `recur`, which arms the key for the next tick
   (`next_tick`) computed from it. Each round arms every cron absent from Redis due now, so a
