@@ -1,6 +1,6 @@
 // Spec: REQ-PLAYER-04 -- every take has one menu: Open version (Go to song for an imported take), Repaint, Cover, Use seed, Re-score, Add to… and Share, plus Delete in the editor; Now Playing carries it in its title row. Re-score is disabled while the take re-scores; the Scores carry no control and no Rating; the frame has no Go to song button, so nothing in the docked panel covers another control.
 //
-// Both shells walk the menu in Now Playing and in the editor; the desktop also walks the docked panel.
+// Both shells walk the menu in Now Playing and in the editor; the desktop also walks the docked panel. The phone cases cover the pending word leading the score chips and the subtitle's album name beside the version and the take.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import {
