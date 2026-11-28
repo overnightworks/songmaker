@@ -170,6 +170,16 @@ def set_playlist_cover_key(
     return playlist
 
 
+def _lock_playlist_order(session: Session, playlist_id: str) -> None:
+    """Hold the playlist's row until the transaction ends, so one writer at a time reads and
+    shifts its positions.
+
+    Taken before any take lock, so a writer that also locks takes never waits on a take while
+    holding a take another writer needs.
+    """
+    session.execute(select(Playlist.id).where(Playlist.id == playlist_id).with_for_update())
+
+
 def _next_position(session: Session, playlist_id: str) -> int:
     max_pos = (
         session.query(PlaylistEntry.position)
@@ -194,6 +204,7 @@ def _append_entry(session: Session, playlist_id: str, gen: Generation) -> Playli
 def add_generation_to_playlist(
     session: Session, playlist_id: str, generation_id: str,
 ) -> PlaylistEntry:
+    _lock_playlist_order(session, playlist_id)
     return _append_entry(session, playlist_id, lock_unarchived_generation(session, generation_id))
 
 
@@ -273,11 +284,13 @@ def _candidate(
 def _append_candidates(
     session: Session, playlist_id: str, candidates: Sequence[_Candidate],
 ) -> PlaylistAddResult:
-    """Lock the candidates' takes in id order, then append each one still playable, in order.
+    """Lock the playlist, then the candidates' takes in id order, then append each one still
+    playable, in order.
 
     A take archived or deleted before its lock is granted is skipped like one that was
     never playable.
     """
+    _lock_playlist_order(session, playlist_id)
     locked = {
         gen.id: gen
         for gen in lock_takes(
@@ -302,6 +315,7 @@ def _append_candidates(
 def remove_from_playlist(
     session: Session, playlist_id: str, entry_id: str,
 ) -> None:
+    _lock_playlist_order(session, playlist_id)
     entry = (
         session.query(PlaylistEntry)
         .filter_by(id=entry_id, playlist_id=playlist_id)
@@ -321,6 +335,8 @@ def remove_from_playlist(
 def reorder_playlist_entry(
     session: Session, playlist_id: str, entry_id: str, new_position: int,
 ) -> None:
+    """Move an entry to ``new_position``; a position past the last entry means the last place."""
+    _lock_playlist_order(session, playlist_id)
     entry = (
         session.query(PlaylistEntry)
         .filter_by(id=entry_id, playlist_id=playlist_id)
@@ -330,6 +346,7 @@ def reorder_playlist_entry(
         raise ValueError(f"Playlist entry not found: {entry_id}")
 
     old_pos = entry.position
+    new_position = min(new_position, _next_position(session, playlist_id) - 1)
     if old_pos == new_position:
         return
 

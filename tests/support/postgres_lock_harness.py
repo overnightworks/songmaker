@@ -41,6 +41,11 @@ def after_the_take_locks(statement: str) -> bool:
     return "FROM generations" in statement and "FOR UPDATE" in statement
 
 
+def after_the_playlist_lock(statement: str) -> bool:
+    """True for the statement that locks a playlist row, so a paused writer holds its order."""
+    return "FROM playlists" in statement and "FOR UPDATE" in statement
+
+
 def wrote_song_data(session: Session) -> bool:
     """True once the session's transaction inserted, updated or deleted a song or a version."""
     return wrote_to_tables(session, "songs", "versions")
