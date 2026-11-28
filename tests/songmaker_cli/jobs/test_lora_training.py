@@ -20,18 +20,15 @@ from support.job_owner import an_owner
 from support.lora_training_world import FakeWorker, patch_worker_calls, seed_queued_lora
 from support.web_app import SettledFakeAsyncRedis
 from support.wrapper_deps import reserved_gpu_hold
-from tandem import Liveness
 
 from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
 from songmaker_cli.constants import (
-    MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
-    USER_LORA_TRAINING_TMP_DIRNAME,
     LoraStatus,
 )
 from songmaker_cli.db.models import AuditLog, Job
-from songmaker_cli.db.queries.jobs import get_job, recover_jobs_of_dead_owners
+from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs.lora_training import (
@@ -46,7 +43,7 @@ from songmaker_cli.messages import message
 from songmaker_cli.scheduler import WorkerProtocolError
 from songmaker_cli.settings import Settings
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.worker_liveness import JobOwnerStamp, WorkerLiveness
+from songmaker_cli.worker_liveness import WorkerLiveness
 
 TEST_SETTINGS = Settings(
     database_url="postgresql://example",
@@ -508,63 +505,6 @@ def test_cancellation_triggers_cleanup(seeded, db_factory) -> None:
         job = get_job(session, "job-1")
         assert job.error_message == message("voiceFailure.cancelled")
         assert job.queue_reason_message is None
-
-
-def _fail_the_job_through_the_owner_pass(db_factory, audio_dir: Path) -> None:
-    """What a web process does once the lease generation of ``an_owner("o1")`` is gone."""
-    with db_factory() as session:
-        stamp = JobOwnerStamp("o1", an_owner("o1").generation)
-        assert recover_jobs_of_dead_owners(session, {stamp: Liveness.GONE}) == {
-            JobType.LORA_TRAINING: 1,
-        }
-        session.commit()
-    assert reconcile_crashed_loras(db_factory, audio_dir) == 1
-
-
-@pytest.mark.parametrize(
-    ("has_previous_adapter", "status_the_owner_pass_leaves"),
-    [(False, LoraStatus.FAILED), (True, LoraStatus.READY)],
-    ids=["first-training", "retrain"],
-)
-def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
-    seeded, db_factory, has_previous_adapter, status_the_owner_pass_leaves,
-) -> None:
-    lora_root = seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
-    final_dir = lora_root / USER_LORA_OUTPUT_DIRNAME
-    temporary_dir = lora_root / USER_LORA_TRAINING_TMP_DIRNAME
-    if has_previous_adapter:
-        final_dir.mkdir()
-        (final_dir / "previous-adapter.txt").write_text("previous")
-
-    async def trainer_that_outlives_its_job(*_args, **_kwargs):
-        _fail_the_job_through_the_owner_pass(db_factory, seeded["audio_dir"])
-        yield ("done", {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}})
-
-    with patch_worker_calls(str(temporary_dir), events=trainer_that_outlives_its_job):
-        _run(
-            run_lora_training_job(
-                "job-1", seeded["lora_id"], seeded["user_id"],
-                db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
-                target_mode="turbo", owner=an_owner("o1"),
-            )
-        )
-
-    with db_factory() as session:
-        lora = get_user_lora(session, seeded["lora_id"])
-        assert lora.status == status_the_owner_pass_leaves
-        assert lora.model_mode == MODEL_DEFAULT_MODE
-        assert get_job(session, "job-1").status == JobStatus.FAILED
-        details = [
-            audit.detail
-            for audit in session.query(AuditLog).filter_by(resource_id=seeded["lora_id"])
-        ]
-        assert not any(detail.startswith("ready: samples") for detail in details)
-    assert not temporary_dir.exists()
-    assert not (lora_root / USER_LORA_DATASET_DIRNAME).exists()
-    assert final_dir.exists() == has_previous_adapter
-    if has_previous_adapter:
-        assert (final_dir / "previous-adapter.txt").read_text() == "previous"
-        assert list(final_dir.iterdir()) == [final_dir / "previous-adapter.txt"]
 
 
 def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:

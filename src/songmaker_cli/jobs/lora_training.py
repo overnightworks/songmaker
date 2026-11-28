@@ -1271,16 +1271,16 @@ def _complete_lora_training(
     A row that has ended lands nothing: the owner pass that ended it already decided the voice.
     """
     worker_result, dataset_dir, tmp_output = submitted
-    completed_model_mode = _validate_completed_training_model_mode(
-        requested_mode=target_mode,
-        worker_mode=worker_result.mode,
-    )
-    _validated_lora_adapter_handoff(audio_dir, user_id, tmp_output, worker_result)
     with db_factory() as session:
         if lock_active_job(session, job_id) is None:
             log.warning("LoRA training job %s ended before its result landed; dropping it", job_id)
             _remove_unlanded_lora_output(tmp_output)
             return
+        completed_model_mode = _validate_completed_training_model_mode(
+            requested_mode=target_mode,
+            worker_mode=worker_result.mode,
+        )
+        _validated_lora_adapter_handoff(audio_dir, user_id, tmp_output, worker_result)
         _record_completed_training_model_mode(
             audio_dir,
             user_id,
@@ -1306,6 +1306,8 @@ def _complete_lora_training(
 
 
 def _remove_unlanded_lora_output(tmp_output: Path) -> None:
+    if not tmp_output.exists():
+        return
     try:
         shutil.rmtree(tmp_output)
     except OSError:
@@ -1438,17 +1440,15 @@ def _fail_lora_training(
     user_id: str,
 ) -> None:
     failure = _sanitize_training_error(exc, job_id)
-    cleanup_failed_lora_with_factory(
-        lora_id=lora_id,
-        user_id=user_id,
-        audio_dir=audio_dir,
-        db_factory=db_factory,
-        error_message=failure,
-    )
-    _update_job(
-        db_factory,
-        job_id,
-        JobStatus.FAILED,
-        error_message=failure,
-        error_type=error_type,
-    )
+    with db_factory() as session:
+        if lock_active_job(session, job_id) is None:
+            log.warning("LoRA training job %s ended before its failure landed; dropping it", job_id)
+            return
+        cleanup_failed_lora(
+            session=session, lora_id=lora_id, user_id=user_id, error_message=failure,
+        )
+        failed = JobStatusUpdate(JobStatus.FAILED, error_message=failure, error_type=error_type)
+        update_job_status(session, job_id, failed)
+        session.commit()
+    if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
+        _log_failed_lora_cleanup(db_factory, audio_dir)
