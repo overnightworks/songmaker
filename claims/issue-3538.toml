@@ -3,6 +3,6 @@ agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
 role = "builder"
 base = "af661a04608794a5e36f68ea0c5a8b26c3005f7b"
 branch = "claude/issue-3538-one-stream-slot-owner"
-scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "tests/songmaker_cli/test_redis_client_stream_slots.py"]
+scope = ["src/songmaker_cli/api_helpers.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/queue_streams.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/shared_access.py", "tests/songmaker_cli/test_redis_client_stream_slots.py", "tests/test_packaging_boundary.py"]
 opened_commit = "ec649ad13b88b27eeb6fcaadfe1a1edcbb12d277"
 whole_reason = "One owner of a stream slot's take, refusal and release, its two callers and the prefix constant that moves beside its siblings."
