@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import signal
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -124,6 +125,7 @@ def test_sigterm_ends_the_streams_and_bounds_the_turn(
 
     assert closed_after < STREAM_CLOSE_SECONDS
     assert exited_after < DRAIN_SECONDS + TEARDOWN_SECONDS
-    assert web_process.process.returncode == 0
+    # uvicorn ends by the signal it was sent once it has shut down; a kill would read -9.
+    assert web_process.process.returncode == -signal.SIGTERM
     assert stored == (final_status, failure)
     assert bool(frames and frames[-1]["type"] == "final") is released_before_the_bound

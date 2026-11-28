@@ -38,7 +38,7 @@ from songmaker_cli.db.queries.auth import create_session as create_db_session
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
-from songmaker_cli.server import create_app, run_server
+from songmaker_cli.server import _DrainingServer, create_app, run_server
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 from songmaker_cli.worker_liveness import WORKER_KINDS
 
@@ -333,15 +333,17 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, pg_factory) -> None:
 # ── run_server ──────────────────────────────────────────────────────
 
 
-def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
+def test_run_server_serves_through_the_draining_server(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run") as mock_uvicorn,
+        patch("uvicorn.Config") as mock_uvicorn,
+        patch.object(_DrainingServer, "run") as serve,
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         run_server(project_root=tmp_path, port=9999)
 
+    serve.assert_called_once()
     mock_uvicorn.assert_called_once()
     call_kwargs = mock_uvicorn.call_args
     assert call_kwargs.kwargs.get("port") == 9999
@@ -353,7 +355,8 @@ def test_run_server_writes_its_lines_under_the_web_service_name(
 ) -> None:
     with (
         configured("restored-after-the-test"),
-        patch("uvicorn.run"),
+        patch("uvicorn.Config"),
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=MagicMock()),
     ):
         run_server(project_root=tmp_path, port=9999)
@@ -368,7 +371,8 @@ def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run") as mock_uvicorn,
+        patch("uvicorn.Config") as mock_uvicorn,
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         run_server(project_root=tmp_path, port=8080)
@@ -381,7 +385,8 @@ def test_run_server_opens_browser(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
+        patch("uvicorn.Config"),
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("webbrowser.open") as mock_browser,
     ):
@@ -397,7 +402,8 @@ def test_run_server_creates_dirs(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
+        patch("uvicorn.Config"),
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         run_server(project_root=tmp_path)
@@ -413,7 +419,8 @@ def test_run_server_infers_dirs_from_project_root(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
+        patch("uvicorn.Config"),
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app) as mock_create,
         patch("songmaker_cli.server.find_project_root", return_value=tmp_path),
     ):
@@ -615,7 +622,8 @@ def test_run_server_infers_project_root(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch("uvicorn.run"),
+        patch("uvicorn.Config"),
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("songmaker_cli.server.find_project_root", return_value=None),
     ):
@@ -626,7 +634,8 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
     """Uvicorn's own proxy-header handling would rewrite the peer address and
     the scheme from any peer, ahead of the TrustedProxies decision."""
     with (
-        patch("uvicorn.run") as mock_run,
+        patch("uvicorn.Config") as mock_run,
+        patch.object(_DrainingServer, "run"),
         patch("songmaker_cli.server.create_app", return_value=MagicMock()),
         patch("songmaker_cli.server.find_project_root", return_value=None),
     ):
