@@ -780,10 +780,8 @@
 	.now-playing.docked .np-header {
 		padding: 0.9rem 1rem 0;
 	}
-	/* The docked body stays inside the dock. Its rows are the cover column, the
-	   words, the scores, the tabs and the tab panel: the words and the tab panel
-	   share the free space, each scrolling inside down to its own min-height, and
-	   the body scrolls only when even those floors do not fit. */
+	/* Rows: cover column, words, scores, tabs, tab panel. The words and the panel share
+	   the free space down to their min-height; only then does the body scroll. */
 	.now-playing.docked .np-body {
 		grid-template-columns: 1fr;
 		grid-template-rows: auto 1fr auto auto 1fr;
@@ -802,9 +800,8 @@
 		--cover-width: 100%;
 		align-items: stretch;
 	}
-	/* The cover shrinks with the viewport height, so a short dock keeps room for the words. */
 	.now-playing.docked .cover-art {
-		width: min(220px, 70%, 17vh);
+		width: min(220px, 70%, 17vh); /* a short dock keeps room for the words */
 		box-shadow: 0 12px 30px color-mix(in srgb, #000 35%, transparent);
 	}
 	.now-playing.docked .cover-title {
