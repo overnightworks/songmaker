@@ -172,6 +172,19 @@ def test_remove_reference_file_fails_for_a_path_of_another_owner(
     assert own.exists()
 
 
+@pytest.mark.parametrize("owner_id", ["/", "//", "..", ".", "a/b"])
+def test_remove_reference_file_fails_for_an_owner_id_that_is_not_one_plain_name(
+    tmp_path: Path, owner_id: str,
+) -> None:
+    audio_dir = tmp_path / "audio"
+
+    stored = str(Path(owner_id) / REFERENCE_AUDIO_DIR / "x.wav")
+
+    outcome = remove_reference_file(audio_dir, owner_id, stored)
+
+    assert outcome is RemovalOutcome.FAILED
+
+
 def test_remove_reference_file_fails_through_a_symlinked_ancestor(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     foreign = _write_ref(audio_dir, "user-b", "clip.wav")

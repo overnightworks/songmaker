@@ -377,7 +377,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
 
 
 async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
-    """Fail the active jobs whose lease generation is gone, then clean their covers.
+    """Fail the active jobs whose lease generation is gone, then clean their covers and voices.
 
     A job fails only when the lease generation it names is gone: its owner's lease ended, or
     started anew under another generation. A job that names no generation fails with its owner.
@@ -417,6 +417,7 @@ def _fail_jobs_of_gone_owners(
     recovered_count = sum(recovered.values())
     if recovered_count:
         reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
+        reconcile_crashed_loras(ctx)
     return recovered_count
 
 
