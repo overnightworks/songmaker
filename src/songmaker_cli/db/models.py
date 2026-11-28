@@ -405,7 +405,6 @@ class Job(Base):
         String(SESSION_ID_LENGTH), ForeignKey("user_sessions.id", ondelete=SET_NULL),
         nullable=True, index=True,
     )
-    worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     owner_generation: Mapped[str | None] = mapped_column(Text, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
