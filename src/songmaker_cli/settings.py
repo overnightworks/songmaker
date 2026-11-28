@@ -323,6 +323,9 @@ class Settings(BaseSettings):
     # ── HTTP server ───────────────────────────────────────────────────
     host: str = "127.0.0.1"
     request_timeout_seconds: int = Field(default=30, alias="REQUEST_TIMEOUT")
+    # How long a web process that got SIGTERM lets its running co-writer turns finish; it stays
+    # below the platform's 30 s grace period with the teardown that follows.
+    web_drain_seconds: int = Field(default=20, gt=0)
     allowed_hosts: str = ""
     cors_origin: str | None = None
     # Comma list of the `azp` values of the OAuth clients whose access tokens

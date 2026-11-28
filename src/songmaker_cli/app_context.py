@@ -16,6 +16,7 @@ from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_queue import app_wake_channel
 from songmaker_cli.redis_client import SlotReleases
 from songmaker_cli.worker_liveness import JobOwner, every_worker_kind_leases, owner_leases
@@ -59,6 +60,10 @@ class AppContext:
     """The same channel on the client that follows it: where this process hears a wake."""
     slot_releases: SlotReleases = field(default_factory=SlotReleases)
     """The stream slot releases still running; the lifespan drains them before its loop closes."""
+    background_loops: BackgroundLoopRegistry = field(
+        default_factory=lambda: BackgroundLoopRegistry(tuple(BackgroundLoopName)),
+    )
+    """The background loops' health and the process's one shutting-down state."""
 
     def __post_init__(self) -> None:
         self.owner_leases = owner_leases(self.async_redis)

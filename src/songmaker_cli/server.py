@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import time
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
@@ -17,6 +18,7 @@ from dataclasses import replace
 from functools import partial
 from pathlib import Path
 
+import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,6 +56,7 @@ from songmaker_cli.constants import (
     HTTP_NOT_FOUND,
     PWA_ICON_PATHS,
 )
+from songmaker_cli.conversation_api import end_running_chat_turns
 from songmaker_cli.cover_runner import cover_runner_loop, reconcile_reaped_cover_jobs
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
@@ -153,7 +156,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
-    registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
+    registry = ctx.background_loops
     app.state.background_loop_registry = registry
     await asyncio.to_thread(cleanup_expired_queue_streams, ctx)
     with ctx.db() as session:
@@ -180,6 +183,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     yield
             finally:
                 registry.begin_shutdown()
+                await end_running_chat_turns(
+                    get_settings().web_drain_seconds - registry.seconds_since_shutdown_began(),
+                )
                 for _name, task in loop_tasks:
                     task.cancel()
                 await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
@@ -457,13 +463,27 @@ def _cors_middleware_kwargs(cors_origin: str | None) -> dict:
     return cors_kwargs
 
 
+class _DrainingServer(uvicorn.Server):
+    """A uvicorn server that begins the app's shutdown before it closes its connections.
+
+    uvicorn waits for every open connection, and a stream ignores its request to close; the
+    streams end and the turns drain on the app's shutting-down state, which this sets first.
+    """
+
+    def __init__(self, config: uvicorn.Config, background_loops: BackgroundLoopRegistry) -> None:
+        super().__init__(config)
+        self._background_loops = background_loops
+
+    async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+        self._background_loops.begin_shutdown()
+        await super().shutdown(sockets)
+
+
 def run_server(
     project_root: Path | None = None,
     port: int = DEFAULT_SERVER_PORT,
     open_browser: bool = False,
 ) -> None:
-    import uvicorn
-
     if project_root is None:
         project_root = find_project_root(Path.cwd()) or Path.cwd()
 
@@ -494,11 +514,13 @@ def run_server(
     # them, from *any* peer unless forwarded_allow_ips is kept in sync with
     # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (webauth's
     # client-address writer applies it), so uvicorn must hand over the connection as it is.
-    uvicorn.run(
+    config = uvicorn.Config(
         app,
         host=settings.host,
         port=port,
         timeout_keep_alive=settings.request_timeout_seconds,
+        timeout_graceful_shutdown=settings.web_drain_seconds,
         proxy_headers=False,
         log_config=None,
     )
+    _DrainingServer(config, app.state.ctx.background_loops).run()

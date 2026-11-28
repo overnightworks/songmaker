@@ -1266,6 +1266,7 @@ export type Words = {
     readonly "jobFailure.tookTooLong": string;
     readonly "jobFailure.queuedTooLong": string;
     readonly "chatFailure.clientCancelled": string;
+    readonly "chatFailure.serverRestarted": string;
     readonly "chatFailure.requestCancelled": string;
     readonly "chatFailure.setupFailed": string;
     readonly "chatFailure.requestFailed": string;
@@ -2953,6 +2954,7 @@ export const words: Words = {
     "jobFailure.tookTooLong": "Took too long to finish — please retry.",
     "jobFailure.queuedTooLong": "Queued too long — please retry.",
     "chatFailure.clientCancelled": "Turn cancelled by the client.",
+    "chatFailure.serverRestarted": "The reply stopped because songmaker restarted. Try again.",
     "chatFailure.requestCancelled": "Chat request cancelled",
     "chatFailure.setupFailed": "Chat setup failed",
     "chatFailure.requestFailed": "Chat request failed",

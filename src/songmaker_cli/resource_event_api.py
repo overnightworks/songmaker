@@ -447,14 +447,16 @@ def api_stream_resource_events(
     cursor = parse_last_event_id(request.headers.get("last-event-id") or last_event_id)
     slots, slot_token = _take_stream_slot(request, user.id)
     return StreamingResponse(
-        _held_resource_event_generator(
-            ctx,
-            slots,
-            slot_token,
-            user.id,
-            cursor,
-            high_water_mark,
-            oldest_retained,
+        ctx.background_loops.ending_at_shutdown(
+            _held_resource_event_generator(
+                ctx,
+                slots,
+                slot_token,
+                user.id,
+                cursor,
+                high_water_mark,
+                oldest_retained,
+            ),
         ),
         media_type="text/event-stream",
         headers=_SSE_HEADERS,
