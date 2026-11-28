@@ -5,12 +5,11 @@ from __future__ import annotations
 import importlib
 
 import sqlalchemy as sa
-from alembic import command
 from sqlalchemy import inspect
 from support.migration_chain import (
-    column_names,
+    assert_column_nullable_empty_and_job_kept,
+    assert_downgrade_drops_indexed_column_and_keeps_job,
     insert_bare_job,
-    job_count,
     seeded_then_upgraded,
 )
 from support.reference_link_migration import execute, seed_users
@@ -75,7 +74,7 @@ def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
 
 def test_upgrade_keeps_an_existing_job_without_a_version(reference_link_database):
     engine = _upgraded_with_a_job(reference_link_database)
-    assert _job_versions(engine) == [None]
+    assert_column_nullable_empty_and_job_kept(engine, COLUMN)
 
 
 def test_deleting_a_version_sets_its_jobs_key_to_null(reference_link_database):
@@ -87,13 +86,7 @@ def test_deleting_a_version_sets_its_jobs_key_to_null(reference_link_database):
 
 
 def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
-    config, _ = reference_link_database
-    engine = _upgraded_with_a_job(reference_link_database)
-    command.downgrade(config, PREVIOUS_REVISION)
-    assert COLUMN not in column_names(engine, "jobs")
-    assert not any(
-        index["column_names"] == [COLUMN] for index in inspect(engine).get_indexes("jobs")
+    _upgraded_with_a_job(reference_link_database)
+    assert_downgrade_drops_indexed_column_and_keeps_job(
+        reference_link_database, COLUMN, PREVIOUS_REVISION, MIGRATION.revision,
     )
-    assert job_count(engine) == 1
-    command.upgrade(config, MIGRATION.revision)
-    assert COLUMN in column_names(engine, "jobs")

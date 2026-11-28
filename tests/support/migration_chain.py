@@ -10,6 +10,8 @@ from alembic.config import Config
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
+BARE_JOB_ID = "job"
+
 
 def seeded_then_upgraded(
     database: tuple[Config, Engine],
@@ -41,6 +43,32 @@ def stored_values(engine: Engine, table: str, column: str) -> dict[str, object]:
         return dict(connection.execute(sa.select(rows.c.id, rows.c[column])).all())
 
 
+def assert_column_nullable_empty_and_job_kept(engine: Engine, column: str) -> None:
+    """`column` of ``jobs`` is nullable and empty, and the job `BARE_JOB_ID` is its only row."""
+    [stored] = [c for c in inspect(engine).get_columns("jobs") if c["name"] == column]
+    assert (stored["nullable"], stored_values(engine, "jobs", column)) == (
+        True, {BARE_JOB_ID: None},
+    )
+
+
+def assert_downgrade_drops_indexed_column_and_keeps_job(
+    database: tuple[Config, Engine], column: str, previous_revision: str, revision: str,
+) -> None:
+    """Downgrading to `previous_revision` drops `column` of ``jobs`` and its index, keeps the job.
+
+    The upgrade to `revision` then restores the column.
+    """
+    config, engine = database
+    command.downgrade(config, previous_revision)
+    assert column not in column_names(engine, "jobs")
+    assert not any(
+        index["column_names"] == [column] for index in inspect(engine).get_indexes("jobs")
+    )
+    assert job_count(engine) == 1
+    command.upgrade(config, revision)
+    assert column in column_names(engine, "jobs")
+
+
 def job_count(engine: Engine) -> int:
     with engine.connect() as connection:
         return connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
@@ -49,7 +77,7 @@ def job_count(engine: Engine) -> int:
 def insert_bare_job(
     engine: Engine, *, job_type: str = "generate", status: str = "queued",
 ) -> None:
-    """Insert the job ``job`` with only the columns every revision's ``jobs`` table has.
+    """Insert the job `BARE_JOB_ID` with only the columns every revision's ``jobs`` table has.
 
     Older revisions' ``jobs`` tables lack the timestamp columns, so they join only where
     they exist.
@@ -60,6 +88,6 @@ def insert_bare_job(
     jobs = sa.table("jobs", *(sa.column(name) for name in names))
     with engine.begin() as connection:
         connection.execute(sa.insert(jobs).values(
-            id="job", type=job_type, status=status, progress=0.0,
+            id=BARE_JOB_ID, type=job_type, status=status, progress=0.0,
             **{name: sa.func.current_timestamp() for name in timestamps},
         ))
