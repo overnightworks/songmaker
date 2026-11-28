@@ -62,4 +62,4 @@ def test_downgrade_adds_the_column_back_nullable_and_empty_and_keeps_the_job(
 
     command.downgrade(config, MIGRATION.down_revision)
 
-    assert_column_nullable_empty_and_job_kept(engine, "jobs", COLUMN, BARE_JOB_ID)
+    assert_column_nullable_empty_and_job_kept(engine, COLUMN)

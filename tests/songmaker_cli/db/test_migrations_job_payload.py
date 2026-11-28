@@ -8,7 +8,6 @@ import pytest
 from alembic import command
 from sqlalchemy import inspect
 from support.migration_chain import (
-    BARE_JOB_ID,
     assert_column_nullable_empty_and_job_kept,
     column_names,
     insert_bare_job,
@@ -35,7 +34,7 @@ def test_upgrade_adds_a_nullable_column_and_keeps_an_existing_job_without_a_valu
 ):
     engine = _upgraded_with_a_job_of_the_old_shape(reference_link_database)
 
-    assert_column_nullable_empty_and_job_kept(engine, "jobs", column, BARE_JOB_ID)
+    assert_column_nullable_empty_and_job_kept(engine, column)
 
 
 def test_upgrade_stores_the_payload_as_binary_json_and_the_wait_with_its_zone(

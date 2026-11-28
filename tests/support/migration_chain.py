@@ -43,12 +43,12 @@ def stored_values(engine: Engine, table: str, column: str) -> dict[str, object]:
         return dict(connection.execute(sa.select(rows.c.id, rows.c[column])).all())
 
 
-def assert_column_nullable_empty_and_job_kept(
-    engine: Engine, table: str, column: str, job_id: str,
-) -> None:
-    """`column` of `table` is nullable and empty, and the job `job_id` is its only row."""
-    [stored] = [c for c in inspect(engine).get_columns(table) if c["name"] == column]
-    assert (stored["nullable"], stored_values(engine, table, column)) == (True, {job_id: None})
+def assert_column_nullable_empty_and_job_kept(engine: Engine, column: str) -> None:
+    """`column` of ``jobs`` is nullable and empty, and the job `BARE_JOB_ID` is its only row."""
+    [stored] = [c for c in inspect(engine).get_columns("jobs") if c["name"] == column]
+    assert (stored["nullable"], stored_values(engine, "jobs", column)) == (
+        True, {BARE_JOB_ID: None},
+    )
 
 
 def job_count(engine: Engine) -> int:

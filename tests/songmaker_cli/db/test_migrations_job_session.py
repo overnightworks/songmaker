@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import importlib
 
-import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect
 from support.migration_chain import (
-    BARE_JOB_ID,
     assert_column_nullable_empty_and_job_kept,
     column_names,
     insert_bare_job,
@@ -69,7 +67,7 @@ def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
 
 def test_upgrade_keeps_an_existing_job_without_a_session(reference_link_database):
     engine = _upgraded_with_a_cover_job(reference_link_database)
-    assert_column_nullable_empty_and_job_kept(engine, "jobs", COLUMN, BARE_JOB_ID)
+    assert_column_nullable_empty_and_job_kept(engine, COLUMN)
 
 
 def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
@@ -80,8 +78,7 @@ def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
     assert not any(
         index["column_names"] == [COLUMN] for index in inspect(engine).get_indexes("jobs")
     )
-    with engine.connect() as connection:
-        assert connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one() == 1
+    assert job_count(engine) == 1
     command.upgrade(config, MIGRATION.revision)
     assert COLUMN in column_names(engine, "jobs")
 
@@ -90,7 +87,7 @@ def test_the_wait_upgrade_adds_a_nullable_column_and_keeps_the_job_without_a_wai
     reference_link_database,
 ):
     engine = _upgraded_with_a_cover_job(reference_link_database, WAIT_MIGRATION)
-    assert_column_nullable_empty_and_job_kept(engine, "jobs", WAIT_COLUMN, BARE_JOB_ID)
+    assert_column_nullable_empty_and_job_kept(engine, WAIT_COLUMN)
 
 
 def test_the_wait_downgrade_drops_the_column_keeps_the_job_and_upgrades_again(

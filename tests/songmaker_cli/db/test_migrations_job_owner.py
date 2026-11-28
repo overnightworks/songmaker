@@ -9,7 +9,6 @@ from types import ModuleType
 import pytest
 from alembic import command
 from support.migration_chain import (
-    BARE_JOB_ID,
     assert_column_nullable_empty_and_job_kept,
     column_names,
     insert_bare_job,
@@ -58,7 +57,7 @@ def test_upgrade_adds_a_nullable_column_and_keeps_an_existing_job_without_an_own
 ):
     engine = _upgraded_with_an_unowned_job(reference_link_database, migration)
 
-    assert_column_nullable_empty_and_job_kept(engine, "jobs", migration.column, BARE_JOB_ID)
+    assert_column_nullable_empty_and_job_kept(engine, migration.column)
 
 
 def test_downgrade_drops_the_column_and_keeps_the_job(reference_link_database, migration):
