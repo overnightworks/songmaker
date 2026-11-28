@@ -1,8 +1,0 @@
-claim_id = "ea15aa9866c54ff8afe0b1879834b873"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "9a859f5587ad423e457be7d7613232c18b80d911"
-branch = "claude/issue-3253-ended-training-lands-nothing"
-scope = ["docs/architecture.md", "src/songmaker_cli/jobs/lora_training.py", "tests/songmaker_cli/jobs/conftest.py", "tests/songmaker_cli/jobs/test_lora_training.py", "tests/songmaker_cli/jobs/test_lora_training_ended_job.py", "tests/songmaker_cli/jobs/test_lora_training_recovery.py", "tests/support/lora_training_world.py"]
-opened_commit = "635831865fb24febbc05e2836f638bfa79ed1f2c"
-whole_reason = "One fence on voice training's landing, with its tests, the fake trainer's hold and the sentence that states the fence."
