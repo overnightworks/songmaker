@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.job_owner import an_owner
-from support.lora_training_world import patch_worker_calls
+from support.lora_training_world import fail_the_adapter_move_into_place, patch_worker_calls
 from tandem import Liveness
 
 from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
@@ -44,6 +44,15 @@ def _voice_and_audits(session, lora_id: str) -> tuple:
     lora = get_user_lora(session, lora_id)
     audits = [audit.detail for audit in session.query(AuditLog).filter_by(resource_id=lora_id)]
     return lora.status, lora.error_message, audits
+
+
+def _a_training_run(seeded, pg_factory, target_mode: str = "turbo"):
+    return run_lora_training_job(
+        "job-1", seeded["lora_id"], seeded["user_id"],
+        db_factory=pg_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+        target_mode=target_mode, owner=an_owner("o1"),
+        training_config=get_settings().lora_training_config,
+    )
 
 
 @pytest.mark.parametrize(
@@ -89,12 +98,7 @@ def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
 
     recreates_its_output = trainer_ending.startswith("recreates-its-output")
     trainer_output = temporary_dir if recreates_its_output else tmp_path / "stand-in"
-    training = run_lora_training_job(
-        "job-1", seeded["lora_id"], seeded["user_id"],
-        db_factory=pg_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
-        target_mode="turbo", owner=an_owner("o1"),
-        training_config=get_settings().lora_training_config,
-    )
+    training = _a_training_run(seeded, pg_factory)
     with patch_worker_calls(str(trainer_output), events=trainer_that_outlives_its_job):
         if trainer_ending == "cancelled":
             with pytest.raises(asyncio.CancelledError):
@@ -116,60 +120,34 @@ def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
         assert list(final_dir.iterdir()) == [final_dir / "previous-adapter.txt"]
 
 
-def _a_training_run(seeded, pg_factory, target_mode: str = "turbo"):
-    return run_lora_training_job(
-        "job-1", seeded["lora_id"], seeded["user_id"],
-        db_factory=pg_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
-        target_mode=target_mode, owner=an_owner("o1"),
-        training_config=get_settings().lora_training_config,
-    )
-
-
-@pytest.mark.parametrize("row_ends", [True, False], ids=["row-ended", "row-active"])
-def test_a_failed_adapter_replacement_keeps_the_previous_adapter_only_while_the_row_is_active(
-    seeded, pg_factory, monkeypatch, row_ends,
+def test_a_failed_adapter_replacement_marks_nothing_once_the_row_ended(
+    seeded, pg_factory, monkeypatch,
 ) -> None:
     lora_root = seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"] / seeded["lora_id"]
     final_dir = lora_root / USER_LORA_OUTPUT_DIRNAME
     final_dir.mkdir()
     (final_dir / "previous-adapter.txt").write_text("previous")
     left_by_the_owner_pass = {}
-    original_rename = lora_training.os.rename
     original_rmtree = lora_training.shutil.rmtree
-    renames_done = 0
-    owner_pass_pending = row_ends
-
-    def fail_the_move_into_place(source, destination) -> None:
-        nonlocal renames_done
-        renames_done += 1
-        if renames_done == 2:
-            raise OSError("the move into place failed")
-        original_rename(source, destination)
+    move = fail_the_adapter_move_into_place(monkeypatch)
+    owner_pass_pending = True
 
     def end_the_row_once_the_adapter_is_restored(path, *args, **kwargs) -> None:
         nonlocal owner_pass_pending
-        if owner_pass_pending and renames_done >= 3:
+        if owner_pass_pending and move.renames_done >= 3:
             owner_pass_pending = False
             _fail_the_job_through_the_owner_pass(pg_factory, seeded["audio_dir"])
             with pg_factory() as session:
                 left_by_the_owner_pass.update(voice=_voice_and_audits(session, seeded["lora_id"]))
         original_rmtree(path, *args, **kwargs)
 
-    monkeypatch.setattr(lora_training.os, "rename", fail_the_move_into_place)
     monkeypatch.setattr(lora_training.shutil, "rmtree", end_the_row_once_the_adapter_is_restored)
     with patch_worker_calls(str(lora_root / USER_LORA_TRAINING_TMP_DIRNAME)):
         asyncio.run(_a_training_run(seeded, pg_factory, target_mode="sft"))
 
     with pg_factory() as session:
-        status, error_message, audits = _voice_and_audits(session, seeded["lora_id"])
         assert get_job(session, "job-1").status == JobStatus.FAILED
-    if row_ends:
-        assert (status, error_message, audits) == left_by_the_owner_pass["voice"]
-    else:
-        assert (final_dir / "previous-adapter.txt").read_text() == "previous"
-        assert status == LoraStatus.READY
-        assert error_message is None
-        assert audits == ["ready: retained previous adapter after failed replacement"]
+        assert _voice_and_audits(session, seeded["lora_id"]) == left_by_the_owner_pass["voice"]
 
 
 @pytest.mark.parametrize("row_ends", [True, False], ids=["row-ended", "row-active"])

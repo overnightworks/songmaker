@@ -13,6 +13,7 @@ from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
 from songmaker_cli.constants import LoraStatus
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 from songmaker_cli.job_types import JobType
+from songmaker_cli.jobs import lora_training
 
 
 def seed_queued_lora(db_factory: sessionmaker[Session], tmp_path: Path) -> dict:
@@ -141,3 +142,23 @@ def patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=None
             yield
 
     return _cm()
+
+
+class FailedMoveIntoPlace:
+    """The adapter swap of a training, whose second rename fails; ``renames_done`` counts them."""
+
+    renames_done = 0
+
+
+def fail_the_adapter_move_into_place(monkeypatch) -> FailedMoveIntoPlace:
+    move = FailedMoveIntoPlace()
+    original_rename = lora_training.os.rename
+
+    def rename_that_fails_the_second_time(source, destination) -> None:
+        move.renames_done += 1
+        if move.renames_done == 2:
+            raise OSError("the move into place failed")
+        original_rename(source, destination)
+
+    monkeypatch.setattr(lora_training.os, "rename", rename_that_fails_the_second_time)
+    return move
