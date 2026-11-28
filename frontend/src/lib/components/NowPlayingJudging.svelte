@@ -83,10 +83,6 @@
 			class:on={generation.is_picked}
 			onclick={() => togglePick(song.id, generation)}
 			aria-pressed={generation.is_picked}
-			aria-label={pageText(
-				generation.is_picked ? 'nowPlayingJudging.unpick' : 'nowPlayingJudging.pick'
-			)}
-			title={pageText(generation.is_picked ? 'nowPlayingJudging.unpick' : 'nowPlayingJudging.pick')}
 		>
 			<Icon name={generation.is_picked ? 'star-filled' : 'star'} size={18} />
 			{pageText('nowPlayingJudging.pick')}
@@ -98,10 +94,6 @@
 			class:on={generation.is_kept}
 			onclick={() => toggleKeep(song.id, generation)}
 			aria-pressed={generation.is_kept}
-			aria-label={pageText(
-				generation.is_kept ? 'nowPlayingJudging.unkeep' : 'nowPlayingJudging.keep'
-			)}
-			title={pageText(generation.is_kept ? 'nowPlayingJudging.unkeep' : 'nowPlayingJudging.keep')}
 		>
 			<Icon name={generation.is_kept ? 'heart-filled' : 'heart'} size={18} />
 			{pageText('nowPlayingJudging.keep')}
@@ -163,6 +155,11 @@
 		color: var(--text-muted);
 		cursor: pointer;
 	}
+	/* The frequent hitbox's fine-pointer height (24 px) would shrink the pill
+	   below the card's own; touch keeps the larger target. */
+	:global(html[data-pointer='fine']) .badge-btn {
+		min-height: 36px;
+	}
 	.badge-btn:hover {
 		color: var(--text);
 		background: var(--surface-hover);
@@ -170,7 +167,7 @@
 	.badge-btn.on {
 		color: var(--accent);
 		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+		background: var(--accent-wash);
 	}
 	.rating-label {
 		font-size: var(--label-font-size);
@@ -198,6 +195,10 @@
 		font-family: var(--font-body);
 		padding: 0.4rem 0.55rem;
 		resize: vertical;
+	}
+	.rating-notes::placeholder {
+		color: var(--text-subtle);
+		opacity: 1;
 	}
 	.rating-notes:focus {
 		outline: none;

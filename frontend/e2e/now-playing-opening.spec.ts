@@ -135,19 +135,19 @@ test('the album menu lists six rows and none picks album takes', async ({ page }
 
 test.describe('the P and K keys judge the playing take', () => {
 	const judgements = [
-		{ key: 'p', on: 'nowPlayingJudging.unpick', off: 'nowPlayingJudging.pick' },
-		{ key: 'k', on: 'nowPlayingJudging.unkeep', off: 'nowPlayingJudging.keep' }
+		{ key: 'p', label: 'nowPlayingJudging.pick' },
+		{ key: 'k', label: 'nowPlayingJudging.keep' }
 	] as const;
 
-	for (const { key, on, off } of judgements) {
-		test(`${key} flips the playing take's ${off} and flips it back`, async ({ page }, testInfo) => {
+	for (const { key, label } of judgements) {
+		test(`${key} flips the playing take's ${label} and flips it back`, async ({
+			page
+		}, testInfo) => {
 			const library = readSeededLibrary();
 			await page.goto(`/album/${library.albumId}`);
 			await playCollection(page, 'album');
 			await openNowPlayingFromBar(page, shellOf(testInfo), library.albumTracks[0].songTitle);
-			const badge = page.getByRole('button', {
-				name: new RegExp(`^(${words[on]}|${words[off]})$`)
-			});
+			const badge = page.getByRole('button', { name: words[label], exact: true });
 			const before = await badge.getAttribute('aria-pressed');
 			const flipped = before === 'true' ? 'false' : 'true';
 

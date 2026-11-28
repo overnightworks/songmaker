@@ -694,9 +694,7 @@ export type Words = {
     readonly "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => string;
     readonly "nowPlayingJudging.label": string;
     readonly "nowPlayingJudging.pick": string;
-    readonly "nowPlayingJudging.unpick": string;
     readonly "nowPlayingJudging.keep": string;
-    readonly "nowPlayingJudging.unkeep": string;
     readonly "nowPlayingTake.scores": string;
     readonly "nowPlayingTake.scoresEmpty": string;
     readonly "nowPlayingTake.scoreRating": string;
@@ -2306,9 +2304,7 @@ export const words: Words = {
     "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => "Open v" + gaps.number,
     "nowPlayingJudging.label": "Judge this take",
     "nowPlayingJudging.pick": "Pick",
-    "nowPlayingJudging.unpick": "Unpick",
     "nowPlayingJudging.keep": "Keep",
-    "nowPlayingJudging.unkeep": "Unkeep",
     "nowPlayingTake.scores": "Scores",
     "nowPlayingTake.scoresEmpty": "No scores yet",
     "nowPlayingTake.scoreRating": "Rating",
