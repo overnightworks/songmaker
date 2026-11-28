@@ -22,7 +22,7 @@ import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from 
 import { openNowPlayingFromBar } from './play-album';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
-import { TAKE_MENU_ROWS } from './take-menu-rows';
+import { takeMenuRows } from './take-menu-rows';
 
 const VIEWPORT_HEIGHT_PX = 844;
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
@@ -32,11 +32,12 @@ const MIDDLE_TAKE_INDEX = TAKE_COUNT / 2;
 const FIRST_TAKE_SEED = 4127730;
 const FOOT_OF_LIST_REACH_PX = HITBOX_FREQUENT_PX;
 const SAME_PLACE_TOLERANCE_PX = 0.5;
+// The album-form cells seed imported takes (no version, no seed), the Use seed cells versioned ones.
 const ROW_LABELS_IN_ORDER = [
-	...TAKE_MENU_ROWS.filter((label) => label !== words['takeMenu.useSeed']),
+	...takeMenuRows(false).filter((label) => label !== words['takeMenu.useSeed']),
 	words['takeMenu.delete']
 ];
-const USE_SEED_ROW_INDEX = TAKE_MENU_ROWS.indexOf(words['takeMenu.useSeed']);
+const USE_SEED_ROW_INDEX = takeMenuRows(true).indexOf(words['takeMenu.useSeed']);
 
 /**
  * Own album and song per flow, seeded straight into the database with
