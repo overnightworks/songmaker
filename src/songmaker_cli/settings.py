@@ -448,6 +448,8 @@ class Settings(BaseSettings):
 
     # ── workers ─────────────────────────────────────────────────────
     worker_job_timeout: int = 1000
+    # Platform's grace period for music-worker and scoring-worker must stay above this drain plus
+    # the stop work, or a stop kills running jobs; a change here moves both.
     worker_drain_timeout: int = 300
     max_user_loras: int = Field(default=10, ge=1)
     max_queued_lora_training_jobs: int = Field(default=2, ge=1)

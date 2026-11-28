@@ -277,7 +277,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml ps -a
 
 ### Deploys and generation jobs
 
-A deploy recreates the acestep-worker and music-worker containers, which kills whatever ACE-Step subprocess call is in flight: the affected jobs surface as `error_type=worker_unreachable`, as in [Restart procedure](#restart-procedure). No guard in this repository defers a deploy while a job is queued or running, so songmaker's head releases when the queue is idle.
+A deploy stops music-worker and scoring-worker with a signal, and each drains its running jobs within its grace period ([Worker Architecture](architecture.md#worker-architecture)). Recreating acestep-worker, with its default 30 s grace, still kills whatever ACE-Step subprocess call is in flight: the affected jobs surface as `error_type=worker_unreachable`, as in [Restart procedure](#restart-procedure). No guard in this repository defers a deploy while a generation runs, so songmaker's head releases only while no generation runs on acestep-worker.
 
 ### pin_model semantics
 
