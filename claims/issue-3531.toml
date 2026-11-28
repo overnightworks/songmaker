@@ -1,7 +1,0 @@
-claim_id = "bd18213d9ed841d59ff377f776dc4ae2"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "148620bd770ad3410f3cef745c4ef4df1ead5210"
-branch = "claude/issue-3531-drain-test-no-wall-clock"
-scope = ["tests/songmaker_cli/test_conversation_api_shutdown_drain.py"]
-opened_commit = "c79fe9603201238cdd028104cb48353120228c3b"
