@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator, Collection
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from time import monotonic
+from typing import Any
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 
@@ -72,7 +73,7 @@ class BackgroundLoopRegistry:
         self, frames: AsyncGenerator[str, None],
     ) -> AsyncGenerator[str, None]:
         """Relay ``frames`` until the shutdown begins, then close them at once."""
-        begun = asyncio.ensure_future(self._shutdown_begun.wait())
+        begun: asyncio.Future[Any] = asyncio.ensure_future(self._shutdown_begun.wait())
         next_frame: asyncio.Future[str] = asyncio.ensure_future(anext(frames))
         try:
             while True:
