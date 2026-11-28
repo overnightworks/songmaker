@@ -348,6 +348,7 @@ def get_shared_playlist_audio(
     responses={
         404: {"description": QUEUE_STREAM_NOT_FOUND_DETAIL},
         416: {"description": QUEUE_STREAM_AUDIO_RANGE_DETAIL},
+        503: {"description": "The object store cannot be reached"},
     },
     openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )

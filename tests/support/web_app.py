@@ -328,11 +328,13 @@ def make_test_app(
     factory: sessionmaker[Session],
     issuer: FakeIssuer | None = None,
     redis: Redis | None = None,
+    object_store: ObjectStore | None = None,
 ) -> tuple:
     """Create a full test app with real middleware on the required ``factory``.
 
     The caller passes its database; no default builds one. ``redis`` replaces the
-    fake sync client, for a test that needs a Redis that fails. ``issuer`` is the realm the
+    fake sync client, for a test that needs a Redis that fails; ``object_store`` replaces the
+    test run's store. ``issuer`` is the realm the
     app's relying party talks to; without it the realm is unreachable.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
@@ -359,6 +361,7 @@ def make_test_app(
     ctx = make_app_context(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         redis=make_fake_redis() if redis is None else redis, async_redis=SettledFakeAsyncRedis(),
+        object_store=object_store,
     )
     slot = IssuerSlot()
     app = create_app(

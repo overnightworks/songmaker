@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
-from support.web_app import make_test_app, seed_session, web_client
+from support.object_store import an_unreachable_object_store
+from support.queue_stream_audio import stub_audio_build
+from support.web_app import make_test_app, refusal_body, seed_session, web_client
 
 from songmaker_cli import audio_files, queue_streams
-from songmaker_cli.db.models import Album, Generation, Song, User, Version
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    Playlist,
+    PlaylistEntry,
+    Song,
+    User,
+    Version,
+)
 
 
 def _seed_takes(session, *, take_count: int) -> None:
@@ -67,3 +78,36 @@ def test_library_pool_queue_names_the_scan_window_when_it_held_only_unplayable_t
 
     assert response.status_code == 422
     assert response.json()["detail"] == "No playable takes in scanned library window"
+
+
+def test_shared_stream_routes_answer_503_while_the_object_store_cannot_be_reached(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
+) -> None:
+    stub_audio_build(monkeypatch)
+
+    def seed(session) -> None:
+        _seed_takes(session, take_count=1)
+        session.add(Playlist(id="pl1", title="Mix", created_by="user-a"))
+        session.flush()
+        session.add(PlaylistEntry(id="pe1", playlist_id="pl1", generation_id="g1", position=0))
+
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=seed,
+        object_store=an_unreachable_object_store(monkeypatch),
+    )
+    audio_dir = tmp_path / "audio" / "user-a"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "g1.mp3").write_bytes(b"source")
+    seed_session(client, "usera")
+    album_slug = client.post("/api/albums/a1/share").json()["share_slug"]
+    playlist_slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    anonymous = web_client(client.app, cookies={})
+
+    answers = [
+        anonymous.post(f"/shared/{album_slug}/stream"),
+        anonymous.post(f"/shared/playlist/{playlist_slug}/stream"),
+        anonymous.get(f"/shared/queue-streams/{uuid.uuid4().hex}/audio"),
+    ]
+
+    unavailable = refusal_body("objectStoreRefusal.unavailable")
+    assert [(answer.status_code, answer.json()) for answer in answers] == [(503, unavailable)] * 3

@@ -747,6 +747,10 @@ msgctxt "takeRefusal.archived"
 msgid "Restore this take first."
 msgstr ""
 
+msgctxt "objectStoreRefusal.unavailable"
+msgid "The file store is not reachable right now. Try again in a moment."
+msgstr ""
+
 msgctxt "modelRefusal.unavailable"
 msgid "Model '{model}' is not currently available"
 msgstr ""

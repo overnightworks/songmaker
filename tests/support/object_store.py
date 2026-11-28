@@ -9,11 +9,16 @@ queue-stream cache names a key prefix of its own first.
 from __future__ import annotations
 
 import os
+import socket
+import socketserver
+import threading
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import timedelta
 
+import boto3
 import pytest
 
 from songmaker_cli import queue_streams
@@ -30,6 +35,46 @@ def configured_bucket() -> str:
 
 def an_object_store() -> ObjectStore:
     return ObjectStore(configured_bucket())
+
+
+def _point_at_loopback_port(monkeypatch: pytest.MonkeyPatch, port: int) -> ObjectStore:
+    # boto3 caches its credentials in the default session; a fresh one reads this case's variables.
+    monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)
+    monkeypatch.setenv("AWS_ENDPOINT_URL_S3", f"http://127.0.0.1:{port}")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "garage")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "unreachable")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "unreachable")
+    return ObjectStore(UNCONFIGURED_BUCKET)
+
+
+def an_unreachable_object_store(monkeypatch: pytest.MonkeyPatch) -> ObjectStore:
+    """A store whose endpoint is a loopback port nothing listens on: every call is refused."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        port = reserved.getsockname()[1]
+    return _point_at_loopback_port(monkeypatch, port)
+
+
+class _TruncatedAnswer(socketserver.StreamRequestHandler):
+    def handle(self) -> None:
+        while self.rfile.readline() not in (b"\r\n", b""):
+            pass
+        self.wfile.write(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n" + b"x" * 10)
+
+
+@contextmanager
+def a_store_that_drops_the_connection_mid_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[ObjectStore]:
+    """A store answering every GET with 100 announced bytes, sending 10 and closing."""
+    with socketserver.ThreadingTCPServer(("127.0.0.1", 0), _TruncatedAnswer) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield _point_at_loopback_port(monkeypatch, server.server_address[1])
+        finally:
+            server.shutdown()
+            thread.join()
 
 
 class AgedObjectStore(ObjectStore):

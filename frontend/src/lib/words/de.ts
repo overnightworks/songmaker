@@ -215,6 +215,7 @@ const translated = {
     "referenceMenu.inUse": "In Verwendung",
     "newPlace.heading": (gaps: { readonly library: string }): readonly (string | { readonly marker: "strong"; readonly text: string })[] => ["Neu in ", { marker: "strong", text: gaps.library }],
     "takeRefusal.archived": "Stell diesen Take zuerst wieder her.",
+    "objectStoreRefusal.unavailable": "Der Dateispeicher ist gerade nicht erreichbar. Versuch es gleich noch einmal.",
     "modelRefusal.unavailable": (gaps: { readonly model: string }) => "Das Modell „" + gaps.model + "“ ist gerade nicht verfügbar",
     "songMenu.label": "Song-Menü",
     "songMenu.close": "Menü schließen",
