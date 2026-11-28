@@ -166,6 +166,23 @@ def test_a_voice_that_names_its_owners_own_directory_leaves_every_voice_of_the_o
     assert OWNERS_OWN_DIRECTORY in world.voices_left()
 
 
+def test_a_voice_whose_id_reaches_into_another_voices_directory_leaves_that_voice(
+    world: _World, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nested_id = "never-deleted/samples"
+    with world.pg_factory() as session:
+        session.add(UserLora(
+            id=nested_id, user_id=OWNER, name=nested_id, slug="nested", status=LoraStatus.READY,
+            deleted_at=NOW - timedelta(days=_window() + 1),
+        ))
+        session.commit()
+
+    world.run_the_daily_purge(monkeypatch)
+
+    assert (world.directory("never-deleted") / "samples" / "take.wav").read_bytes() == b"audio"
+    assert nested_id in world.voices_left()
+
+
 def test_a_voice_of_a_linked_owner_directory_leaves_the_directory_it_links_to_with_its_rows(
     world: _World, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
