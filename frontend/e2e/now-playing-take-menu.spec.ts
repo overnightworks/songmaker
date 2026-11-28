@@ -319,11 +319,12 @@ test(
 
 		const source = surface.locator('.subtitle .from-link');
 		await expect(source).toContainText(albumTitle);
-		const [sourceBox, takeBox] = await Promise.all([
-			source.boundingBox(),
-			surface.locator('.subtitle .take-label').boundingBox()
-		]);
-		expect(sourceBox!.x + sourceBox!.width).toBeLessThanOrEqual(takeBox!.x);
+		const [sourceBox, takeBox] = await Promise.all(
+			[source, surface.locator('.subtitle .take-label')].map((part) =>
+				part.evaluate((own) => own.getBoundingClientRect().toJSON() as DOMRect)
+			)
+		);
+		expect(sourceBox.right).toBeLessThanOrEqual(takeBox.left);
 		expect(
 			await source.evaluate((link) => link.scrollWidth - link.clientWidth)
 		).toBeLessThanOrEqual(0);
