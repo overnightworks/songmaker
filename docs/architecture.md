@@ -1627,8 +1627,9 @@ SIGKILLed and even the values the run did produce would be lost.
   `LORA_TRAINING_JOB_TIMEOUT`
 - Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`. The
   claiming loop and the crons are the tasks of one `asyncio.TaskGroup`, so a stop signal ends both
-  (a running job drains within `WORKER_DRAIN_TIMEOUT`), and one that raises ends the worker
-  process loudly while the lease is released.
+  (a running job drains within `WORKER_DRAIN_TIMEOUT`, which platform's grace period for
+  music-worker and scoring-worker must stay above, together with the stop work, so a change moves
+  both), and one that raises ends the worker process loudly while the lease is released.
 - Crons: audits orphaned audio files and applies file-expiry cleanup every even minute; once a
   day (`DAILY_CLEANUP_HOUR_UTC`) it deletes audit-log entries older than
   `AUDIT_LOG_RETENTION_DAYS`, applies generation retention and removes
