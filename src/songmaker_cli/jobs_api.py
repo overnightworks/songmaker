@@ -138,7 +138,9 @@ def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
         session.commit()
     slots, slot_token = _take_job_stream_slot(request, user.id)
     return StreamingResponse(
-        _held_job_event_generator(ctx, slots, slot_token, job_id),
+        ctx.background_loops.ending_at_shutdown(
+            _held_job_event_generator(ctx, slots, slot_token, job_id),
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

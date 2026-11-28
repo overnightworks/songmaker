@@ -122,8 +122,11 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
     free_lock = ScriptedTickLock(SCORE_BACKFILL_LOCK_NAME, ["generation"])
     app = SimpleNamespace(
         state=SimpleNamespace(
-            background_loop_registry=registry,
-            ctx=SimpleNamespace(db=lambda: nullcontext(), async_redis=free_lock.async_redis),
+            ctx=SimpleNamespace(
+                db=lambda: nullcontext(),
+                async_redis=free_lock.async_redis,
+                background_loops=registry,
+            ),
         ),
     )
     tick_started = False
@@ -164,8 +167,7 @@ def _run_score_backfill_ticks(
     tick_lock = ScriptedTickLock(SCORE_BACKFILL_LOCK_NAME, lock_results)
     app = SimpleNamespace(
         state=SimpleNamespace(
-            background_loop_registry=registry,
-            ctx=SimpleNamespace(async_redis=tick_lock.async_redis),
+            ctx=SimpleNamespace(async_redis=tick_lock.async_redis, background_loops=registry),
         ),
     )
     monkeypatch.setattr(lifecycle, "backfill_unscored_generations", backfill)
@@ -290,7 +292,6 @@ class _TickingProcess:
         self, monkeypatch, server: fakeredis.FakeServer, factory, tmp_path,
         loop_name: BackgroundLoopName, work_numbers: Iterator[int],
     ):
-        self.registry = BackgroundLoopRegistry()
         self.loop_name = loop_name
         self._monkeypatch = monkeypatch
         self._factory = factory
@@ -299,8 +300,9 @@ class _TickingProcess:
             db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
             redis=make_fake_redis(), async_redis=fakeredis.FakeAsyncRedis(server=server),
         )
+        self.registry = self._ctx.background_loops
         self._app = SimpleNamespace(
-            state=SimpleNamespace(background_loop_registry=self.registry, ctx=self._ctx),
+            state=SimpleNamespace(ctx=self._ctx),
         )
 
     def run_one_tick(self) -> bool:
@@ -466,7 +468,7 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
-        registry = client.app.state.background_loop_registry
+        registry = client.app.state.ctx.background_loops
 
     assert all(
         health.status is BackgroundLoopStatus.OK

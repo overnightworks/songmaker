@@ -12,7 +12,6 @@ from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.health_types import (
     BackgroundLoopName,
-    BackgroundLoopRegistry,
     BackgroundLoopStatus,
 )
 from songmaker_cli.lifecycle import _cleanup_sessions, session_cleanup_loop
@@ -89,8 +88,7 @@ def test_cleanup_loop_runs_without_redis_and_recovers_after_database_failure(
     """defect:#1590: failed ticks remain observable and the next tick retries."""
     app = FastAPI()
     app.state.ctx = cleanup_context
-    registry = BackgroundLoopRegistry()
-    app.state.background_loop_registry = registry
+    registry = cleanup_context.background_loops
     factory = cleanup_context.db
     seed_cleanup_sessions()
 
@@ -126,8 +124,7 @@ def test_cleanup_loop_keeps_a_live_session_and_resets_a_failing_loop_when_nothin
 ):
     app = FastAPI()
     app.state.ctx = cleanup_context
-    registry = BackgroundLoopRegistry()
-    app.state.background_loop_registry = registry
+    registry = cleanup_context.background_loops
     for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
         registry.record_failure(BackgroundLoopName.SESSION_CLEANUP, RuntimeError("earlier"))
     seed_cleanup_sessions(
@@ -154,8 +151,7 @@ def test_cleanup_loop_keeps_a_live_session_and_resets_a_failing_loop_when_nothin
 def test_cleanup_loop_reads_failing_after_the_threshold_of_failed_ticks(cleanup_context, caplog):
     app = FastAPI()
     app.state.ctx = cleanup_context
-    registry = BackgroundLoopRegistry()
-    app.state.background_loop_registry = registry
+    registry = cleanup_context.background_loops
 
     def unavailable_database():
         raise RuntimeError("database unavailable")
