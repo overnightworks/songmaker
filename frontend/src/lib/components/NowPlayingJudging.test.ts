@@ -11,7 +11,6 @@ vi.mock('#lib/stores/takeActions.ts', () => ({
 
 import { rate, toggleKeep, togglePick } from '#lib/stores/takeActions.ts';
 import { reactiveProps } from '#lib/test-utils/reactive-props.svelte.ts';
-import { queryButtonByLabel } from '#lib/test-utils/accessible-name.ts';
 import { words } from '#lib/words/en.ts';
 import NowPlayingJudging, { NOTE_SAVE_PAUSE_MS } from './NowPlayingJudging.svelte';
 
@@ -58,18 +57,23 @@ function typeNote(text: string): void {
 
 describe('NowPlayingJudging', () => {
 	it.each([
-		{ name: 'Pick', field: 'is_picked', off: 'pick', on: 'unpick', toggle: togglePick },
-		{ name: 'Keep', field: 'is_kept', off: 'keep', on: 'unkeep', toggle: toggleKeep }
-	] as const)('$name flips the take it shows', async ({ field, off, on, toggle }) => {
-		const take = generation({ [field]: true });
-		await renderJudging(take);
+		{ name: 'Pick', field: 'is_picked', label: 'pick', toggle: togglePick },
+		{ name: 'Keep', field: 'is_kept', label: 'keep', toggle: toggleKeep }
+	] as const)(
+		'$name flips the take it shows and keeps its name',
+		async ({ field, label, toggle }) => {
+			const take = generation({ [field]: true });
+			await renderJudging(take);
 
-		queryButtonByLabel(target, words[`nowPlayingJudging.${on}`])?.click();
+			const button = [...target.querySelectorAll('button')].find(
+				(candidate) => candidate.textContent?.trim() === words[`nowPlayingJudging.${label}`]
+			);
+			button?.click();
 
-		expect(toggle).toHaveBeenCalledWith('s1', take);
-		expect(queryButtonByLabel(target, words[`nowPlayingJudging.${on}`])?.ariaPressed).toBe('true');
-		expect(queryButtonByLabel(target, words[`nowPlayingJudging.${off}`])).toBeNull();
-	});
+			expect(toggle).toHaveBeenCalledWith('s1', take);
+			expect(button?.ariaPressed).toBe('true');
+		}
+	);
 
 	it.each(['pick', 'keep', 'rating'] as const)('writes the word %s on the card', async (word) => {
 		await renderJudging();
