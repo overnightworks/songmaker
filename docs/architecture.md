@@ -1295,6 +1295,15 @@ ledger.
 
 ### Web background loops
 
+On SIGTERM `run_server`'s `_DrainingServer` first sets the shutting-down state of
+`ctx.background_loops` and then runs uvicorn's own shutdown, whose
+`timeout_graceful_shutdown` is `WEB_DRAIN_SECONDS` (default 20, below the platform's
+30 s grace with the teardown after it). The job and resource-event streams end at once and
+reconnect from the store; the co-writer reply stays open. `server._lifespan` then gives the
+running co-writer turns what is left of the bound, counted from the signal, and cancels the
+rest: such a turn is stored as failed with `chatFailure.serverRestarted`, not
+`chatFailure.clientCancelled`.
+
 After stopping its background loops, `server._lifespan` awaits
 `ctx.slot_releases.drain()` so pending stream-slot releases finish before
 the event loop closes.
