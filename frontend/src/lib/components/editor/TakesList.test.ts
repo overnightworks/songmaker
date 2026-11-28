@@ -118,11 +118,7 @@ const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {
 
 vi.mock('#lib/stores/playlists.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/playlists.ts')>();
-	return {
-		...actual,
-		addGenerationToPlaylist: vi.fn(() => Promise.resolve()),
-		ensurePlaylistsLoaded: vi.fn(async () => undefined)
-	};
+	return { ...actual, addGenerationToPlaylist: vi.fn(), ensurePlaylistsLoaded: vi.fn() };
 });
 
 const VRAM_CAUSE =

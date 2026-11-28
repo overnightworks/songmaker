@@ -23,10 +23,10 @@
 "frontend/src/lib/components/NowPlaying.test.ts" = 1010
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1035
 "frontend/src/lib/components/PlayerBar.test.ts" = 1615
-"frontend/src/lib/components/SongDetailView.svelte" = 919
+"frontend/src/lib/components/SongDetailView.svelte" = 915
 "frontend/src/lib/components/SongDetailView.test.ts" = 1419
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 919
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1055
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1054
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1646
