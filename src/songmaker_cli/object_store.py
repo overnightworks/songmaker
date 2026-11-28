@@ -71,13 +71,15 @@ class ObjectBody:
 
     def chunks(self) -> Iterator[bytes]:
         try:
-            yield from self._body.iter_chunks(STREAM_CHUNK_BYTES)
+            with _unavailable_as_error():
+                yield from self._body.iter_chunks(STREAM_CHUNK_BYTES)
         finally:
             self._body.close()
 
     def read(self) -> bytes:
         try:
-            return self._body.read()
+            with _unavailable_as_error():
+                return self._body.read()
         finally:
             self._body.close()
 

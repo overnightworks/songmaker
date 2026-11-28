@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -12,7 +13,8 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
+from botocore.response import StreamingBody
 from logline import unit_trace
 from logline.testing import configured
 from pydantic import ValidationError
@@ -233,6 +235,19 @@ def test_a_store_that_cannot_be_reached_is_named_unavailable(
         call(store)
 
 
+def test_a_connection_that_drops_while_the_body_is_read_is_named_unavailable() -> None:
+    store = ObjectStore("b")
+    body = StreamingBody(io.BytesIO(b""), 1)
+    answer = {"Body": body, "ContentLength": 1}
+
+    with (
+        patch.object(store._client, "get_object", return_value=answer),
+        patch.object(body, "read", side_effect=ReadTimeoutError(endpoint_url="http://x")),
+        pytest.raises(ObjectStoreUnavailableError),
+    ):
+        store.get_bytes("k")
+
+
 def test_missing_credentials_reach_the_caller_unchanged(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
@@ -241,6 +256,8 @@ def test_missing_credentials_reach_the_caller_unchanged(
         monkeypatch.delenv(variable)
     monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "none"))
     monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "none"))
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
     monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)
 
     with pytest.raises(NoCredentialsError):
