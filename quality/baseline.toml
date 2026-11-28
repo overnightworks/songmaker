@@ -44,12 +44,12 @@
 "frontend/src/routes/settings/users/+page.svelte" = 918
 "src/songmaker_acestep_worker/wrapper.py" = 1057
 "src/songmaker_cli/jobs/generation.py" = 1036
-"src/songmaker_cli/jobs/lora_training.py" = 1468
+"src/songmaker_cli/jobs/lora_training.py" = 1455
 "src/songmaker_cli/queue_streams.py" = 825
 "tests/songmaker_acestep_engine/test_client.py" = 818
 "tests/songmaker_acestep_worker/test_wrapper.py" = 1496
 "tests/songmaker_acestep_worker/test_wrapper_train_lora.py" = 1177
-"tests/songmaker_cli/jobs/test_lora_training.py" = 1802
+"tests/songmaker_cli/jobs/test_lora_training.py" = 1781
 "tests/songmaker_cli/test_admin_api.py" = 908
 "tests/songmaker_cli/test_api.py" = 4343
 "tests/songmaker_cli/test_db.py" = 2404
