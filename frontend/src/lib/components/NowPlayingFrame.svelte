@@ -780,11 +780,11 @@
 	.now-playing.docked .np-header {
 		padding: 0.9rem 1rem 0;
 	}
-	/* The words keep a floor of their own, so the column's rows never shrink
-	   under the scores and the tabs below them. */
+	/* The words' row never shrinks below its content (the lyrics box and every
+	   line of scores), so the scores stay clear of the tabs. */
 	.now-playing.docked .np-body {
 		grid-template-columns: 1fr;
-		grid-template-rows: auto minmax(10rem, auto) auto;
+		grid-template-rows: auto minmax(min-content, auto) auto;
 		gap: 1.1rem;
 		padding: 0.9rem 1rem 1.2rem;
 		overflow-y: auto;

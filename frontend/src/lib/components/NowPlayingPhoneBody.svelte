@@ -66,6 +66,9 @@
 		display: flex;
 		flex-direction: column;
 	}
+	.lyrics-region :global(.np-lyrics) {
+		min-height: 0;
+	}
 	/* The chips stay one row high, however many scores the take has; the row
 	   swipes sideways instead of taking a second line from the words. */
 	.phone-body :global(.scores.chips) {
