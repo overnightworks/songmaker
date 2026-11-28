@@ -35,14 +35,18 @@ def confined_under(root: Path, path: Path) -> Path | None:
     return resolved_path
 
 
+def _lora_owner_relative_root(user_id: str) -> PurePosixPath:
+    return PurePosixPath(USER_LORAS_DIRNAME) / user_id
+
+
 def lora_owner_root(audio_dir: Path, user_id: str) -> Path:
     """The directory holding every voice of one person."""
-    return audio_dir / USER_LORAS_DIRNAME / user_id
+    return audio_dir / _lora_owner_relative_root(user_id)
 
 
 def lora_relative_root(user_id: str, lora_id: str) -> PurePosixPath:
     """One voice's directory relative to the audio root, as its rows store it."""
-    return PurePosixPath(USER_LORAS_DIRNAME) / user_id / lora_id
+    return _lora_owner_relative_root(user_id) / lora_id
 
 
 def lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
