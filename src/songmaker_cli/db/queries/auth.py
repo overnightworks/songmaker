@@ -225,3 +225,11 @@ def record_audit(
     session.flush()
     return entry
 
+
+def delete_audit_entries_before(session: Session, cutoff: datetime) -> int:
+    deleted = session.query(AuditLog).filter(AuditLog.created_at < cutoff).delete(
+        synchronize_session=False,
+    )
+    session.flush()
+    return deleted
+

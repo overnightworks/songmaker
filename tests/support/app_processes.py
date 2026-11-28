@@ -242,8 +242,11 @@ class WebProcesses:
         )
         return process, log, log_path
 
-    def start(self, name: str) -> WebProcess:
-        """Start one web process and return it once `/health` answers."""
+    def start(self, name: str, *, environment: dict[str, str] | None = None) -> WebProcess:
+        """Start one web process and return it once `/health` answers.
+
+        ``environment`` adds to what the process reads its settings from.
+        """
         worker_id = f"{name}-{uuid.uuid4().hex[:8]}"
         port = free_port()
         process, log, log_path = self._launch(
@@ -252,7 +255,10 @@ class WebProcesses:
                 "-m", "songmaker_cli.main", "server",
                 "--port", str(port), "--root", str(self.root / name),
             ],
-            environment={environment_name(WorkerSettings, "worker_id"): worker_id},
+            environment={
+                environment_name(WorkerSettings, "worker_id"): worker_id,
+                **(environment or {}),
+            },
         )
         web_process = WebProcess(name, process, log, log_path, port, worker_id)
         self._processes.append(web_process)
@@ -338,7 +344,7 @@ def _ended_lines(workers: list[WorkerProcess], event: str) -> list[dict]:
 
 
 def times_run(workers: list[WorkerProcess], job_id: str) -> int:
-    """How many of the workers' ``arq_job.ended`` lines name the job: one per run."""
+    """How many of the workers' ``queued_job.ended`` lines name the job: one per run."""
     return sum(1 for entry in _ended_lines(workers, JOB_ENDED_EVENT)
                if entry.get("job_id") == job_id)
 

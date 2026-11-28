@@ -152,7 +152,10 @@ def _public_queue_stream(
 
 @router.post(
     "/shared/{slug}/stream",
-    responses={404: {"description": "Shared album not found"}},
+    responses={
+        404: {"description": "Shared album not found"},
+        503: {"description": "The object store cannot be reached"},
+    },
     openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_album_stream(
@@ -337,7 +340,10 @@ def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
 
 @router.post(
     "/shared/playlist/{slug}/stream",
-    responses={404: {"description": "Shared playlist not found"}},
+    responses={
+        404: {"description": "Shared playlist not found"},
+        503: {"description": "The object store cannot be reached"},
+    },
     openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_playlist_stream(

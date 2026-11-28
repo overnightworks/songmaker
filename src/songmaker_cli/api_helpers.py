@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Final, NoReturn, Protocol
 
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from slugify import slugify as _slugify
 from sqlalchemy import text
@@ -692,25 +692,6 @@ def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:
 
 
 # ── Rate limiting ────────────────────────────────────────────────────
-
-def get_cached_limiter[LimiterT](
-    request: Request,
-    state_attr: str,
-    build: Callable[[], LimiterT],
-) -> LimiterT:
-    """Return the limiter cached on ``request.app.state``, building it via
-    ``build`` on first use.
-
-    One limiter instance lives per FastAPI app process (cached on
-    ``app.state`` rather than a module global, so tests that create a fresh
-    app per case get a fresh limiter too), avoiding the Redis connection
-    setup ``build`` does on every request.
-    """
-    limiter = getattr(request.app.state, state_attr, None)
-    if limiter is None:
-        limiter = build()
-        setattr(request.app.state, state_attr, limiter)
-    return limiter
 
 
 class RateLimitRejected(Exception):

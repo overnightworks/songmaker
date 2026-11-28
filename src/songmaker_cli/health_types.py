@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+import asyncio
+from collections.abc import AsyncGenerator, Collection
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from time import monotonic
+from typing import Any
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 
@@ -48,14 +51,47 @@ class BackgroundLoopRegistry:
             name: BackgroundLoopHealth(name=name)
             for name in (loop_names or BackgroundLoopName)
         }
-        self._shutting_down = False
+        self._shutdown_began_at: float | None = None
+        self._shutdown_begun = asyncio.Event()
 
     @property
     def shutting_down(self) -> bool:
-        return self._shutting_down
+        return self._shutdown_began_at is not None
 
     def begin_shutdown(self) -> None:
-        self._shutting_down = True
+        """Start the process's shutdown; a second call keeps the first one's start."""
+        if self._shutdown_began_at is None:
+            self._shutdown_began_at = monotonic()
+            self._shutdown_begun.set()
+
+    def seconds_since_shutdown_began(self) -> float:
+        if self._shutdown_began_at is None:
+            return 0.0
+        return monotonic() - self._shutdown_began_at
+
+    async def ending_at_shutdown(
+        self, frames: AsyncGenerator[str, None],
+    ) -> AsyncGenerator[str, None]:
+        """Relay ``frames`` until the shutdown begins, then close them at once."""
+        begun: asyncio.Future[Any] = asyncio.ensure_future(self._shutdown_begun.wait())
+        next_frame: asyncio.Future[str] = asyncio.ensure_future(anext(frames))
+        try:
+            while True:
+                await asyncio.wait({next_frame, begun}, return_when=asyncio.FIRST_COMPLETED)
+                if not next_frame.done():
+                    return
+                try:
+                    frame = next_frame.result()
+                except StopAsyncIteration:
+                    return
+                yield frame
+                next_frame = asyncio.ensure_future(anext(frames))
+        finally:
+            begun.cancel()
+            if not next_frame.done():
+                next_frame.cancel()
+                await asyncio.wait({next_frame})
+            await frames.aclose()
 
     def record_success(self, name: BackgroundLoopName) -> None:
         health = self._loops[name]

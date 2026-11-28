@@ -50,7 +50,7 @@ def test_pid_one_start_ticks_read_field_22_whatever_the_command_name_holds(
     tmp_path: Path,
 ) -> None:
     stat_file = tmp_path / "stat"
-    stat_file.write_text(_stat_line("arq (worker) 1", "987654"))
+    stat_file.write_text(_stat_line("songmaker-worker (worker) 1", "987654"))
 
     assert pid_one_start_ticks(stat_file) == "987654"
 

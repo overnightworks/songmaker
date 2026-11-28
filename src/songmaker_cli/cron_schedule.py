@@ -43,10 +43,12 @@ type CronBody = Callable[[], Awaitable[object]]
 class Cron(StrEnum):
     """The recurring jobs; each value is the deadline's key and names the job on its line."""
 
+    AUDIT_LOG_RETENTION = "audit_log_retention_cron"
     CLEANUP_FILES = "cleanup_files_cron"
     GENERATION_RETENTION = "generation_retention_cron"
     REFERENCE_REMNANT = "reference_remnant_cron"
     REFERENCE_UNUSED = "reference_unused_cron"
+    VOICE_PURGE = "voice_purge_cron"
 
 
 def next_tick(cron: Cron, now: datetime) -> datetime:

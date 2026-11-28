@@ -294,18 +294,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_job_timeout_orders(self) -> Settings:
-        """Keep scheduler, reaper, and arq's silent-worker bounds ordered."""
+        """Keep scheduler, reaper, and worker silent-worker bounds ordered."""
         sse_read_timeout = acestep_sse_read_timeout_seconds(
             EngineSettings().acestep_poll_timeout,
         )
         generate_reaper_threshold = generate_job_heartbeat_stale_threshold_seconds(
             sse_read_timeout,
         )
-        if not sse_read_timeout < generate_reaper_threshold < self.arq_job_timeout:
+        if not sse_read_timeout < generate_reaper_threshold < self.worker_job_timeout:
             raise ValueError(
-                "Generation timeout order must be SSE read < reaper < arq "
+                "Generation timeout order must be SSE read < reaper < worker job timeout "
                 f"({sse_read_timeout} < {generate_reaper_threshold} < "
-                f"{self.arq_job_timeout})",
+                f"{self.worker_job_timeout})",
             )
         if not (
             self.lora_training_poll_interval_seconds
@@ -313,7 +313,7 @@ class Settings(BaseSettings):
             < self.lora_training_job_timeout
         ):
             raise ValueError(
-                "LoRA training timeout order must be progress poll < reaper < arq "
+                "LoRA training timeout order must be progress poll < reaper < worker job timeout "
                 f"({self.lora_training_poll_interval_seconds} < "
                 f"{LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
                 f"{self.lora_training_job_timeout})",
@@ -323,6 +323,9 @@ class Settings(BaseSettings):
     # ── HTTP server ───────────────────────────────────────────────────
     host: str = "127.0.0.1"
     request_timeout_seconds: int = Field(default=30, alias="REQUEST_TIMEOUT")
+    # How long a web process that got SIGTERM lets its running co-writer turns finish; it stays
+    # below the platform's 30 s grace period with the teardown that follows.
+    web_drain_seconds: int = Field(default=20, gt=0)
     allowed_hosts: str = ""
     cors_origin: str | None = None
     # Comma list of the `azp` values of the OAuth clients whose access tokens
@@ -446,9 +449,11 @@ class Settings(BaseSettings):
     job_stream_lease_max_per_user: int = 10
     job_stream_lease_max_global: int = 40
 
-    # ── arq workers ───────────────────────────────────────────────────
-    arq_job_timeout: int = 1000
-    arq_drain_timeout: int = 300
+    # ── workers ─────────────────────────────────────────────────────
+    worker_job_timeout: int = 1000
+    # Platform's grace period for music-worker and scoring-worker must stay above this drain plus
+    # the stop work, or a stop kills running jobs; a change here moves both.
+    worker_drain_timeout: int = 300
     max_user_loras: int = Field(default=10, ge=1)
     max_queued_lora_training_jobs: int = Field(default=2, ge=1)
     lora_training_job_timeout: int = Field(default=3600, gt=0)
@@ -505,6 +510,11 @@ class Settings(BaseSettings):
     # (files + row) and until an unused, unkept reference recording is deleted.
     final_deletion_days: int = Field(
         default=30, ge=1, alias="FINAL_DELETION_DAYS",
+    )
+
+    # Days until an audit-log entry is deleted.
+    audit_log_retention_days: int = Field(
+        default=90, ge=1, alias="AUDIT_LOG_RETENTION_DAYS",
     )
 
     # ── Generation retention ──────────────────────────────────────────

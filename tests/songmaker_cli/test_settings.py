@@ -50,7 +50,7 @@ def _required_settings() -> dict[str, str]:
     ("setting", "value"),
     [
         ("ACESTEP_POLL_TIMEOUT", "1200"),
-        ("ARQ_JOB_TIMEOUT", "760"),
+        ("WORKER_JOB_TIMEOUT", "760"),
     ],
 )
 def test_rejects_an_invalid_generation_timeout_order(
@@ -59,7 +59,7 @@ def test_rejects_an_invalid_generation_timeout_order(
     monkeypatch.setenv(setting, value)
     required = _required_settings()
 
-    with pytest.raises(ValidationError, match="SSE read < reaper < arq"):
+    with pytest.raises(ValidationError, match="SSE read < reaper < worker job timeout"):
         Settings(**required)
 
 
@@ -76,7 +76,7 @@ def test_rejects_an_invalid_lora_training_timeout_order(
     monkeypatch.setenv(setting, value)
     required = _required_settings()
 
-    with pytest.raises(ValidationError, match="progress poll < reaper < arq"):
+    with pytest.raises(ValidationError, match="progress poll < reaper < worker job timeout"):
         Settings(**required)
 
 
@@ -164,14 +164,15 @@ def test_retention_preview_reports_the_final_deletion_setting(
     assert response.json()["hard_delete_days"] == expected_days
 
 
+@pytest.mark.parametrize("variable", ["FINAL_DELETION_DAYS", "AUDIT_LOG_RETENTION_DAYS"])
 @pytest.mark.parametrize("value", ["0", "-1", "soon", "1.5"])
-def test_rejects_an_invalid_final_deletion_days(
-    monkeypatch: pytest.MonkeyPatch, value: str,
+def test_rejects_an_invalid_retention_period(
+    monkeypatch: pytest.MonkeyPatch, variable: str, value: str,
 ) -> None:
-    monkeypatch.setenv("FINAL_DELETION_DAYS", value)
+    monkeypatch.setenv(variable, value)
     required = _required_settings()
 
-    with pytest.raises(ValidationError, match="final_deletion_days|FINAL_DELETION_DAYS"):
+    with pytest.raises(ValidationError, match=f"{variable.lower()}|{variable}"):
         Settings(**required)
 
 

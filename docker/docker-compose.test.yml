@@ -23,7 +23,7 @@ x-web-image-build: &web-image-build
 
 services:
   postgres:
-    image: postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    image: postgres:17.12-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-songmaker}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
@@ -256,7 +256,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       FINAL_DELETION_DAYS:
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
-      ARQ_JOB_TIMEOUT: "${ARQ_JOB_TIMEOUT:-1000}"
+      WORKER_JOB_TIMEOUT: "${WORKER_JOB_TIMEOUT:-1000}"
       LORA_TRAINING_JOB_TIMEOUT: "${LORA_TRAINING_JOB_TIMEOUT:-3600}"
       LORA_TRAINING_EPOCHS: "${LORA_TRAINING_EPOCHS:-500}"
       LORA_TRAINING_BATCH_SIZE: "${LORA_TRAINING_BATCH_SIZE:-1}"

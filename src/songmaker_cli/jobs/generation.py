@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_acestep_engine.models import AceStepConfig
 from songmaker_acestep_engine.progress import NOT_STARTED, AceStepPhase
 from songmaker_cli import audio_files, jobs
-from songmaker_cli.acestep_state import decr_queue_depth
+from songmaker_cli.acestep_state import release_admission
 from songmaker_cli.api_models import (
     CoverTaskParams,
     RepaintTaskParams,
@@ -826,7 +826,7 @@ async def run_generation_job(
             _remove_temporary_generation_audio(tmp_copies)
 
     except asyncio.CancelledError:
-        log.warning("Generation job %s cancelled (arq timeout or worker shutdown)", job_id)
+        log.warning("Generation job %s cancelled (job timeout or worker shutdown)", job_id)
         _update_job(
             db_factory,
             job_id,
@@ -847,7 +847,7 @@ async def run_generation_job(
         )
     finally:
         if admitted_worker is not None:
-            await decr_queue_depth(redis, admitted_worker.id)
+            await release_admission(redis, admitted_worker.id, job_id)
 
 
 async def _admit_generation_worker_or_requeue(
@@ -860,7 +860,7 @@ async def _admit_generation_worker_or_requeue(
         return None
     try:
         return await jobs.admit_generation_worker(
-            target_mode=request.target_model,
+            target_mode=request.target_model, job_id=request.job_id,
             redis=redis,
             db_factory=db_factory,
         )

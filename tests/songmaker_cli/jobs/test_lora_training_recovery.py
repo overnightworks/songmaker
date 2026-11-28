@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 
 import pytest
-from support.lora_training_world import seed_queued_lora
 
-from songmaker_cli.constants import (
-    USER_LORA_DATASET_DIRNAME,
-    USER_LORAS_DIRNAME,
-)
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
+from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME
 from songmaker_cli.jobs.lora_training import (
     cleanup_failed_lora_with_factory,
     log_orphaned_lora_work_dirs,
@@ -20,11 +16,6 @@ from songmaker_cli.jobs.lora_training import (
 from songmaker_cli.messages import message
 
 ORPHAN_WARNING = "orphaned LoRA work dir"
-
-
-@pytest.fixture
-def seeded(pg_factory, tmp_path: Path) -> dict:
-    return seed_queued_lora(pg_factory, tmp_path)
 
 
 def _warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -84,6 +75,8 @@ def test_failed_cleanup_audits_the_work_dirs_it_could_not_remove(
                 audio_dir=seeded["audio_dir"],
                 db_factory=pg_factory,
                 error_message=message("voiceFailure.recorded", cause="testing"),
+                job_id="job-1",
+                error_type="lora_training_error",
             )
     finally:
         dataset_dir.chmod(0o700)

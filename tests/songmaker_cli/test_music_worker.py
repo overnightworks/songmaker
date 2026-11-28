@@ -3,26 +3,29 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import os
-import signal
-import subprocess
-import sys
 from datetime import datetime, timedelta, timezone
 from functools import partial
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from logline.testing import configured
-from support.job_owner import an_owner
+from support.job_owner import an_owner, given_owner_redis
 from support.redis_clock import Window, until
+from support.redis_server import settle_the_real_servers_epoch
 from support.reference_rows import a_reference
+from support.worker_http_peer import WorkerScenario
+from support.worker_settings import worker_settings
 
 import songmaker_cli.music_worker as mw_mod
+from songmaker_cli.acestep_state import download_locks, worker_state_key
 from songmaker_cli.api_models import RepaintTaskParams
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.cron_schedule import Cron, CronBody
-from songmaker_cli.db.models import Album, Job, ReferenceRecording, User
+from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User
+from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.job_payloads import (
     DownloadModelPayload,
     GeneratePayload,
@@ -33,7 +36,8 @@ from songmaker_cli.job_queue import ClaimedJob
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.redis_client import create_async_redis
-from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import utcnow
 
 FOREVER_SECONDS = 3600
 RUN_WITHIN_SECONDS = 30
@@ -44,28 +48,15 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _mock_ctx():
-    return {"redis": AsyncMock()}
-
-
 def _make_worker(worker: MusicWorker | None = None) -> MusicWorker:
-    """A worker with DB / dirs stubbed and the context a started worker's jobs run with."""
+    """A worker with DB / dirs stubbed and the Redis client a started worker owns."""
     worker = worker or MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._job_context = _mock_ctx()
+    given_owner_redis(worker)
     worker.audio_dir = MagicMock(return_value="audio")
     worker.data_dir = MagicMock(return_value="data")
     worker.get_db_factory = MagicMock(return_value=MagicMock())
     return worker
-
-
-def _settings() -> Settings:
-    return Settings(
-        database_url="postgresql://example",
-        redis_url="redis://example",
-        session_secret="session-secret",
-        songmaker_internal_token="internal-token",
-    )
 
 
 def _claimed(payload, job_id: str = "j1") -> ClaimedJob:
@@ -119,8 +110,44 @@ def test_a_claimed_generation_runs_with_the_arguments_of_its_row() -> None:
     assert work.await_args.args == ("j1", "s1", "v1", 2, "u1")
     kwargs = work.await_args.kwargs
     assert (kwargs["seed"], kwargs["target_model"], kwargs["redis"]) == (
-        42, "xl-sft", worker._job_context["redis"],
+        42, "xl-sft", worker._owner_redis,
     )
+
+
+def test_a_claimed_download_holds_its_modes_download_lock_on_the_workers_redis_client(
+    seeded_db, workers_on_db, redis_url, generation_worker_peer,
+) -> None:
+    mode = A_MODEL_DOWNLOAD.mode
+    with seeded_db() as session:
+        job_id = create_job(session, JobType.DOWNLOAD_MODEL_ON_WORKER).id
+        session.commit()
+    seen = {}
+    settle_the_real_servers_epoch(redis_url)
+
+    async def run() -> None:
+        client = create_async_redis(redis_url)
+        try:
+            async with generation_worker_peer(WorkerScenario(), db_factory=seeded_db) as peer:
+                await client.set(
+                    worker_state_key(peer.settings.worker_id),
+                    json.dumps({"loaded": [], "gpu_healthy": True}),
+                )
+
+                async def transfer(repo_id: str, local_dir: Path) -> None:
+                    second_taker = await download_locks(client).acquire(mode)
+                    seen["a_second_taker_is_refused"] = second_taker is None
+
+                peer.deps.download_fn = transfer
+                await given_owner_redis(MusicWorker(), client).run_claimed(
+                    _claimed(A_MODEL_DOWNLOAD, job_id),
+                )
+            seen["the_lock_is_free_after"] = await download_locks(client).acquire(mode) is not None
+        finally:
+            await client.aclose()
+
+    _run(run())
+
+    assert seen == {"a_second_taker_is_refused": True, "the_lock_is_free_after": True}
 
 
 def test_a_claimed_repaint_runs_with_the_task_of_its_row() -> None:
@@ -138,7 +165,7 @@ def test_a_claimed_voice_training_runs_with_its_configuration_and_target_mode() 
 
     work = _run_claimed(worker, _claimed(A_LORA_TRAINING))
 
-    assert work.await_args.args[1:] == ("j1", "l1", "u1")
+    assert work.await_args.args == ("j1", "l1", "u1")
     assert work.await_args.kwargs["training_config"] == worker._settings.lora_training_config
     assert work.await_args.kwargs["target_mode"] == "turbo"
 
@@ -146,8 +173,8 @@ def test_a_claimed_voice_training_runs_with_its_configuration_and_target_mode() 
 @pytest.mark.parametrize(
     ("payload", "own_limit", "other_limit"),
     [
-        (A_GENERATE, "arq_job_timeout", "lora_training_job_timeout"),
-        (A_LORA_TRAINING, "lora_training_job_timeout", "arq_job_timeout"),
+        (A_GENERATE, "worker_job_timeout", "lora_training_job_timeout"),
+        (A_LORA_TRAINING, "lora_training_job_timeout", "worker_job_timeout"),
     ],
     ids=lambda value: value.job_type if hasattr(value, "job_type") else value,
 )
@@ -249,7 +276,7 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.commit()
-    settings = _settings().model_copy(update={"audio_dir": str(audio_dir)})
+    settings = worker_settings().model_copy(update={"audio_dir": str(audio_dir)})
     worker = MusicWorker(settings)
     # init_db checks a live PostgreSQL database.
     worker.get_db_factory = MagicMock(return_value=factory)
@@ -269,7 +296,7 @@ def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
         session.flush()
         a_reference(session, "u1", name="r1.wav", reference_id="r1")
         session.commit()
-    worker = MusicWorker(_settings())
+    worker = MusicWorker(worker_settings())
     worker.get_db_factory = MagicMock(return_value=factory)
 
     changed = _run(worker.reference_unused_cron())
@@ -301,7 +328,7 @@ def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_delet
     monkeypatch.setattr(reference_audio, "reconcile_unused_stamps", reconcile)
     monkeypatch.setattr(reference_audio, "delete_announced_references", delete)
     monkeypatch.setattr(mw_mod, "utcnow", lambda: now)
-    worker = MusicWorker(_settings().model_copy(
+    worker = MusicWorker(worker_settings().model_copy(
         update={"audio_dir": str(tmp_path), "final_deletion_days": 17},
     ))
     worker.get_db_factory = MagicMock()
@@ -313,12 +340,34 @@ def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_delet
     assert changed == 2 + 1 + 4
 
 
+def test_the_audit_log_retention_cron_deletes_the_entries_older_than_the_setting_and_counts_them(
+    pg_factory,
+) -> None:
+    now = utcnow()
+    with pg_factory() as session:
+        for entry_id, age in [("old", timedelta(days=8)), ("young", timedelta(days=6))]:
+            session.add(AuditLog(
+                id=entry_id, action="login", resource_type="session", created_at=now - age,
+            ))
+        session.add(User(id="old", username="old", created_at=now - timedelta(days=800)))
+        session.commit()
+    worker = MusicWorker(worker_settings().model_copy(update={"audit_log_retention_days": 7}))
+    worker.get_db_factory = MagicMock(return_value=pg_factory)
+
+    deleted = _run(worker.cron_bodies()[Cron.AUDIT_LOG_RETENTION]())
+
+    with pg_factory() as session:
+        remaining = {entry.id for entry in session.query(AuditLog)}
+        people = session.query(User).count()
+    assert (deleted, remaining, people) == (1, {"young"}, 1)
+
+
 def test_the_music_worker_has_a_body_for_every_cron() -> None:
     assert set(MusicWorker().cron_bodies()) == set(Cron)
 
 
 def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
-    redis_url, readiness_file, stop_signal_handlers,
+    redis_url, readiness_file, send_stop_signal,
 ) -> None:
     runs: list[str] = []
 
@@ -330,7 +379,7 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
             return {cron: partial(record, cron) for cron in Cron}
 
     worker = RecordingMusicWorker(
-        _settings().model_copy(update={"redis_url": redis_url}),
+        worker_settings().model_copy(update={"redis_url": redis_url}),
         readiness_file=readiness_file,
     )
     worker.get_db_factory = MagicMock()
@@ -338,33 +387,24 @@ def test_a_running_music_worker_runs_each_cron_once_and_ends_on_a_stop_signal(
 
     window = Window()
 
-    async def run_until_every_cron_ran_then_stop() -> None:
+    async def run_until_every_cron_ran_then_stop() -> bool:
         redis = create_async_redis(redis_url)
         try:
             async with window.observing(redis):
                 running = asyncio.create_task(worker.run())
                 async with asyncio.timeout(RUN_WITHIN_SECONDS):
                     await until(lambda: len(runs) >= len(Cron))
-                    os.kill(os.getpid(), signal.SIGTERM)
+                    signal_reached_run = send_stop_signal(running)
                     await running
         finally:
             await redis.aclose()
+        return signal_reached_run
 
     with configured("restored-after-the-test"):
-        _run(run_until_every_cron_ran_then_stop())
+        signal_reached_run = _run(run_until_every_cron_ran_then_stop())
+
+    assert signal_reached_run
 
     once_each = dict.fromkeys(Cron, 1)
     ran = {cron: runs.count(cron.value) for cron in Cron}
     assert window.without_the_runs_its_ticks_explain(ran, once_each) == once_each
-
-
-@pytest.mark.parametrize("module", ["music_worker", "scoring_worker", "server", "admin_api"])
-def test_a_module_imports_no_arq(module: str) -> None:
-    imported = subprocess.run(
-        [sys.executable, "-c",
-         f"import sys, songmaker_cli.{module};"
-         " print(sorted(name for name in sys.modules if name.split('.')[0] == 'arq'))"],
-        capture_output=True, text=True, check=True,
-    )
-
-    assert imported.stdout.strip() == "[]"

@@ -31,7 +31,7 @@ People sign in through the operator's Keycloak realm (OpenID Connect, authorizat
 - **Session cookies of the old login**: the 0.14 library's cookies are refused (`401`); the migration also deletes every session row.
 - **Frontend auth-check classification**: A non-public 401 navigates the whole page to `/login/oidc?next=…`; the public paths (`/shared/*`, `/share/*`) never redirect. A 429, a 5xx or a network error on the SPA's startup `GET /api/auth/me` is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a sign-out.
 
-**Platform's live check.** After each release platform's live check signs in a test person, `live-check`, with the realm's `/apps/songmaker` group only: no admin group and no MCP group, and the account is disabled in Keycloak between runs. It drives four routes: `GET /login/oidc` and `GET /auth/callback` sign the person in, `GET /api/auth/me` answers 200, `POST /auth/logout` with an allowed `Origin` signs the person out, and `GET /api/auth/me` then answers 401. A first sign-in leaves that person's account row, its resource-event cursor and one audit row (the account creation); they stay as the person's own data, and the session row goes with the logout. Moving or renaming any of the four routes is agreed with platform's head before it lands. Their paths have one owner each, `OIDC_START_PATH`, `OIDC_CALLBACK_PATH` and `LOGOUT_PATH` in `constants.py` and the `/me` route in `auth_api.py`.
+**Platform's live check.** After each release platform's live check signs in a test person, `live-check`, with the realm's `/apps/songmaker` group only: no admin group and no MCP group, and the account is disabled in Keycloak between runs. It drives four routes: `GET /login/oidc` and `GET /auth/callback` sign the person in, `GET /api/auth/me` answers 200, `POST /auth/logout` with an allowed `Origin` signs the person out, and `GET /api/auth/me` then answers 401. A first sign-in leaves that person's account row, its resource-event cursor and one audit row (the account creation); they stay as the person's own data (the audit row until the audit-log retention deletes it), and the session row goes with the logout. Moving or renaming any of the four routes is agreed with platform's head before it lands. Their paths have one owner each, `OIDC_START_PATH`, `OIDC_CALLBACK_PATH` and `LOGOUT_PATH` in `constants.py` and the `/me` route in `auth_api.py`.
 
 ### Keycloak outage
 
@@ -606,14 +606,14 @@ A compromised acestep-worker container has:
 - The model-weights volume mount (read/write, but only its own checkpoints directory).
 - The `audiofiles` volume, read-write at `/app/data/audio`: every musician's audio files.
 - The container network the services share, so network access to every service on it, including Redis, the web container and the music-worker container.
-- Redis without authentication, through the same `REDIS_URL` every service uses: every key is readable and writable, arq queues and rate-limit state included.
+- Redis without authentication, through the same `REDIS_URL` every service uses: every key is readable and writable, the worker leases, cron deadlines, wake channel, locks, tandem slots and rate-limit state included. Redis holds no queued job; the queue is PostgreSQL rows.
 
 It does **not** have:
 
 - A direct database connection (the worker has no `DATABASE_URL`; it only calls `/api/internal/workers/register`, which writes a single identity row).
 - The session secret (the acestep worker has no `SESSION_SECRET`).
 
-A compromised worker can overwrite or delete any stored audio file, enqueue or alter arq jobs, rewrite rate-limit state, publish bogus state to Redis, register with a wrong host/port, or refuse to load models. User audio integrity and queue contents are within its reach. It has no direct database connection, but the jobs it forges or alters run in workers that hold `DATABASE_URL` (for example, a scoring job for a chosen generation writes that generation's scores), so database rows are reachable indirectly. The session secret is not.
+A compromised worker can overwrite or delete any stored audio file, register with a wrong host/port, or refuse to load models. Through Redis it cannot enqueue, forge or alter a job: no worker runs a job read from Redis, and workers claim jobs only from PostgreSQL rows. It can still harm availability and publish false state: forge or delete worker leases, which flip the web's worker signals and make the web fail the running jobs of an owner whose lease it finds gone, or keep the jobs of a dead owner alive; move a cron deadline, which can delay or repeat an idempotent cron (the audit-log retention included, whose cutoff comes from the worker's own clock, so it deletes nothing extra); publish a wake, which only makes a running cover or a worker's claim loop re-read PostgreSQL and cancels or claims nothing by itself; and rewrite locks, tandem slots and rate-limit state. Audio integrity is within its reach. No job can be enqueued or forged, and no payload runs from Redis. The session secret is not.
 
 ### How a take reaches music
 
@@ -682,6 +682,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
 - **Read access**: none over HTTP — `GET /api/admin/audit-log` answers 404 because no admin surface shows the trail; the rows stay in the database and are read there.
+- **Retention**: rows older than `AUDIT_LOG_RETENTION_DAYS` (default 90) are deleted by the daily audit-log retention cron.
 
 ## Deployment
 
@@ -707,23 +708,6 @@ The platform owns the deploy and its backup: it applies a release through Flux a
 
 
 
-### arq JSON queue codec
-
-The web producer and both workers use
-one UTF-8 JSON codec (`arq_codec.py`) for jobs and results. Unsupported objects,
-non-string object keys and nonfinite numbers are rejected. No class is imported
-or reconstructed, and there is no pickle fallback. The wire tests in
-[`test_arq_codec.py`](../tests/songmaker_cli/test_arq_codec.py) cover the configured entry points.
-The codec is not Redis access control or network isolation; those are separate requirements.
-
-arq 0.27 cannot JSON-encode exception objects in failed or cancelled results. It
-logs one serialization warning and stores inert `r="unable to serialize result"`
-with `s=False`; its public result reader raises `SerializationError`. The app
-does not read arq results. A leftover pickle job is rejected visibly with its job
-ID, executes nothing and leaves a readable failed result. A legacy pickle result
-read fails explicitly. Preserve that evidence and reconcile the application job
-before retrying; never purge or silently retry these entries.
-
 ### Secrets
 
 - `OIDC_ISSUER`: Required, with no default; every `docker compose --project-directory . -f docker/docker-compose.test.yml` command refuses without it. The test stack sets the `REALM_` keys itself, `REALM_CLIENT_ID` defaulting to `songmaker`. A leftover `OIDC_CLIENT_ID`, `ADMIN_USERNAME` or `ADMIN_PASSWORD` in `.env` stops startup (`Settings` rejects unknown keys), so remove them when deploying the Keycloak sign-in. A leftover `AGENT__MCP_CLIENT_ID`, `AGENT__MCP_SCOPE`, `AGENT__MCP_AGENT_GROUP` or `AGENT__API_GROUP` in the environment stops web at startup too (the `agent` section forbids extra keys), so the platform removes them from `apps/songmaker/web.yaml`.
@@ -745,8 +729,7 @@ All request models use Pydantic with strict constraints:
 - Role fields: `Literal["admin", "user"]` — no arbitrary role injection
 - No raw SQL — 100% SQLAlchemy ORM with parameterized queries
 - No Python `eval` or `exec`, `shell=True`, or `yaml.load` in `src/`.
-- Untrusted arq data uses the JSON boundary above; trusted local scorer-process
-  serialization is a separate boundary, not a queue decoder.
+- Trusted local scorer-process serialization is a separate boundary, not a queue decoder.
 
 ## Path Traversal Protection
 

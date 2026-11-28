@@ -1,6 +1,6 @@
 """Scheduler — routes generation jobs to ACE-Step workers.
 
-Stateless picker that lives inside the music-worker arq job. Reads worker
+Stateless picker that lives inside the music worker's generation job. Reads worker
 identity from PG and ephemeral state from Redis, picks the worker with the
 lowest queue_depth, then dispatches via HTTP/SSE to the chosen worker. The
 generation admission Lua script atomically rejects a LoRA hold and increments
@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import BinaryIO, Final
 
 import httpx
-from logline import outgoing_headers
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
@@ -243,10 +242,7 @@ async def pick_any_online_worker(
 
 
 def worker_request_headers() -> dict[str, str]:
-    return {
-        INTERNAL_TOKEN_HEADER: get_settings().songmaker_internal_token.get_secret_value(),
-        **outgoing_headers(),
-    }
+    return {INTERNAL_TOKEN_HEADER: get_settings().songmaker_internal_token.get_secret_value()}
 
 
 async def _maybe_invoke(callback: Callable | None, *args) -> None:
@@ -726,12 +722,13 @@ async def consume_download_task_stream(
 async def admit_generation_worker(
     *,
     target_mode: str,
+    job_id: str,
     redis: Redis,
     db_factory: sessionmaker[Session],
 ) -> _PickedWorker:
     with db_factory() as session:
         worker = await pick_worker(session, redis, target_mode)
-    if not await admit_generation_occupancy(redis, worker.id):
+    if not await admit_generation_occupancy(redis, worker.id, job_id):
         raise AllWorkersHeld("ACE-Step worker became held before generation admission")
     return worker
 

@@ -65,10 +65,8 @@ function generationActionMocks(): GenerationActions {
 		pick: vi.fn(),
 		keep: vi.fn(),
 		del: vi.fn(),
-		rate: vi.fn(),
 		share: vi.fn(),
 		unshare: vi.fn(),
-		addToPlaylist: vi.fn(),
 		useSeed: vi.fn(),
 		clickVersion: vi.fn()
 	} as unknown as GenerationActions;

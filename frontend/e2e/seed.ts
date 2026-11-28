@@ -679,26 +679,26 @@ function takeId(takes: Map<string, string>, songTitle: string): string {
 }
 
 /**
- * A song of its own, seeded with `takeCount` takes directly against the
- * database (`scripts/seed_e2e_song_takes.py`) rather than through API calls:
- * the server's IP rate limiter counts every request regardless of which
- * Playwright context sent it, and those calls exercise no API
- * semantics worth that budget. Its own song rather than extra generations on
- * one of the base seed's `SONG_TITLES`: those are shared across every flow in
- * the run, and `library.spec.ts`'s `takeLabel` and `takeId` above depend on
- * their one-take-per-song count. Used by a flow that needs many takes.
+ * A song of its own, seeded with `takeCount` takes directly against the database
+ * (`scripts/seed_e2e_song_takes.py`) rather than through API calls: the server's IP rate limiter
+ * counts every request regardless of which Playwright context sent it, and those calls exercise
+ * no API semantics worth that budget. Its own song rather than extra generations on one of the
+ * base seed's `SONG_TITLES`: those are shared across every flow in the run, and `library.spec.ts`'s
+ * `takeLabel` and `takeId` above depend on their one-take-per-song count. `lyrics` add a version.
  */
 export async function seedTakeStripSong(
 	albumId: string,
 	title: string,
-	takeCount: number
+	takeCount: number,
+	lyrics = ''
 ): Promise<string> {
 	try {
 		return await runTakeSeeder(
 			['--album-id', albumId, '--title', title],
 			takeCount,
 			requiredAdminUsername(),
-			readFileSync(TAKE_FIXTURE)
+			readFileSync(TAKE_FIXTURE),
+			lyrics ? ['--lyrics', lyrics] : []
 		);
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);

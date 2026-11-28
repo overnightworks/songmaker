@@ -1,26 +1,32 @@
 """Hard-delete soft-deleted Albums/Songs older than the soft-delete retention window.
 
-Scheduled as an arq cron job. Reuses the existing delete_album/delete_song
+The music worker runs it as a cron. Reuses the existing delete_album/delete_song
 query functions (which already collect mp3/wav paths before ORM cascade
-fires) so file unlinks happen post-commit, exactly like the synchronous
-DELETE endpoints used to.
+fires) so file unlinks happen post-commit.
 
 Also runs generation retention: archives expired unpicked/unkept
 generations and hard-deletes archived generations after a second window.
+
+run_audit_log_retention deletes audit-log entries older than the audit-log
+retention period.
 """
 
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from songmaker_cli.api_helpers import cleanup_generation_files
+from songmaker_cli.audio_paths import is_plain_path_component, lora_root
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
+from songmaker_cli.db.queries.auth import delete_audit_entries_before
 from songmaker_cli.db.queries.generations import (
     archive_generation,
     delete_expired_generation,
@@ -29,6 +35,7 @@ from songmaker_cli.db.queries.generations import (
     lock_songs,
 )
 from songmaker_cli.db.queries.jobs import ActiveJobError
+from songmaker_cli.db.queries.loras import delete_expired_user_loras, list_expired_user_loras
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
 from songmaker_cli.db.soft_delete import soft_delete_cutoff
@@ -158,6 +165,56 @@ def run_cleanup_expired(
     return album_count, song_count
 
 
+def _remove_voice_directory(audio_dir: Path, user_id: str, lora_id: str) -> bool:
+    """Remove one voice's directory whole; report whether it is gone.
+
+    A voice whose owner or own id is not one plain path component, or whose directory does
+    not resolve to its own place below its owner's voice directory (a symlink anywhere on
+    its path), is not touched, and a removal that fails is logged: the voice's rows stay for
+    the next run.
+    """
+    directory = lora_root(audio_dir, user_id, lora_id)
+    in_own_place = (
+        is_plain_path_component(user_id)
+        and is_plain_path_component(lora_id)
+        and directory.resolve() == lora_root(audio_dir.resolve(), user_id, lora_id)
+    )
+    if not in_own_place:
+        log.warning("voice_purge: voice %s has a directory outside its own place, kept", lora_id)
+        return False
+    try:
+        if directory.exists():
+            shutil.rmtree(directory)
+    except OSError:
+        log.warning("voice_purge: voice %s has a directory that stays", lora_id, exc_info=True)
+        return False
+    return True
+
+
+def run_voice_purge(db_factory, audio_dir: Path, *, now: datetime) -> int:
+    """Hard-delete the voices deleted before the final-deletion cutoff; returns their count.
+
+    Files go before rows: a voice whose directory stays keeps its rows, so the next run
+    retries it, and a crash between the removals and the commit leaves rows the next run
+    finishes. The rows of every voice whose directory is gone are deleted in one transaction
+    this run commits. A voice a training job still holds is left alone.
+    """
+    cutoff = soft_delete_cutoff(now)
+    with db_factory() as session:
+        expired = list_expired_user_loras(session, cutoff)
+    removed_ids = [
+        lora_id for lora_id, user_id in expired
+        if _remove_voice_directory(audio_dir, user_id, lora_id)
+    ]
+    if not removed_ids:
+        return 0
+    with db_factory() as session:
+        deleted = delete_expired_user_loras(session, removed_ids, cutoff)
+        session.commit()
+    log.info("voice_purge: hard-deleted %d voice(s)", deleted)
+    return deleted
+
+
 def _delete_expired_takes(
     db_factory, audio_dir, reference_by_take: dict[str, str | None], cutoff: datetime,
 ) -> list[str]:
@@ -232,3 +289,11 @@ def run_generation_retention(
             report.archived_count, report.deleted_count,
         )
     return report
+
+
+def run_audit_log_retention(db_factory, *, days: int, now: datetime) -> int:
+    """Delete the audit-log entries created before ``now`` minus ``days``; returns their count."""
+    with db_factory() as session:
+        deleted = delete_audit_entries_before(session, now - timedelta(days=days))
+        session.commit()
+    return deleted

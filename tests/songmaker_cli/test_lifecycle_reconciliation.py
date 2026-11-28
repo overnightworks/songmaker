@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from support.web_app import make_app_context, make_fake_redis
+from support.job_owner import an_owner, create_job_of_owner
+from support.web_app import (
+    make_app_context,
+    make_fake_async_redis,
+    make_fake_redis,
+    settle_owner_leases,
+)
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME, USER_LORAS_DIRNAME, LoraStatus
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
+from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME, LoraStatus
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import JobStatus, JobType
-from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
+from songmaker_cli.lifecycle import (
+    _run_stale_job_reaper_tick,
+    fail_jobs_of_dead_owners,
+    reconcile_crashed_loras,
+)
 from songmaker_cli.messages import message
+from songmaker_cli.worker_liveness import owner_leases
 
 
 @pytest.fixture
@@ -34,16 +47,20 @@ def _create_stuck_lora(
     ctx: AppContext, *,
     lora_id: str, status: LoraStatus,
     job_status: str | None,
+    owner_name: str | None = None,
 ) -> None:
     with ctx.db() as session:
         if session.query(User).filter_by(id="u1").first() is None:
             session.add(User(id="u1", username="u1"))
         job_id = None
         if job_status is not None:
-            session.add(
-                Job(id=f"job-{lora_id}", type=JobType.LORA_TRAINING, status=job_status),
-            )
-            job_id = f"job-{lora_id}"
+            if owner_name is None:
+                job = Job(id=f"job-{lora_id}", type=JobType.LORA_TRAINING, status=job_status)
+                session.add(job)
+            else:
+                job = create_job_of_owner(session, JobType.LORA_TRAINING, an_owner(owner_name))
+                job.status = job_status
+            job_id = job.id
         session.add(
             UserLora(
                 id=lora_id, user_id="u1", name=lora_id, slug=lora_id,
@@ -240,3 +257,20 @@ def test_reaper_tick_reconciles_when_worker_process_died_without_terminalizing_t
         assert get_user_lora(s, "L6", include_deleted_rows=True).status == LoraStatus.FAILED
         job = s.query(Job).filter_by(id="job-L6").first()
         assert job.status == JobStatus.FAILED
+
+
+def test_owner_pass_fails_the_voice_whose_training_job_it_failed(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L7", status=LoraStatus.TRAINING,
+        job_status=JobStatus.RUNNING, owner_name="gone-process",
+    )
+    server = make_fake_async_redis()
+
+    async def run_the_owner_pass() -> int:
+        await settle_owner_leases(server)
+        ctx.owner_leases = owner_leases(server)
+        return await fail_jobs_of_dead_owners(ctx)
+
+    assert asyncio.run(run_the_owner_pass()) == 1
+    with ctx.db() as s:
+        assert get_user_lora(s, "L7", include_deleted_rows=True).status == LoraStatus.FAILED

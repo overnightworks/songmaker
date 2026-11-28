@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import os
-import signal
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -36,7 +34,7 @@ def _run(coro):
 
 
 def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease_end(
-    stop_signal_handlers, installed_scorer_restored, redis_url, readiness_file,
+    send_stop_signal, installed_scorer_restored, redis_url, readiness_file,
 ) -> None:
     job_started, job_may_finish = asyncio.Event(), asyncio.Event()
     ended: list[str | tuple[str, set[str]]] = []
@@ -62,22 +60,23 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease
 
         worker.run_claimed = run_claimed
 
-        async def scenario() -> bool:
+        async def scenario() -> tuple[bool, bool]:
             running = asyncio.create_task(worker.run())
             async with asyncio.timeout(STOP_WITHIN_SECONDS):
                 await job_started.wait()
-                os.kill(os.getpid(), signal.SIGTERM)
+                signal_reached_run = send_stop_signal(running)
                 done, _ = await asyncio.wait([running], timeout=SHUTDOWN_HOLD_SECONDS)
                 ended_with_job_running = bool(done)
                 job_may_finish.set()
                 await running
-            return ended_with_job_running
+            return signal_reached_run, ended_with_job_running
 
         with configured("restored-after-the-test"):
-            ended_with_job_running = _run(scenario())
+            signal_reached_run, ended_with_job_running = _run(scenario())
 
         leases_after = leased_owner_ids(reader)
 
+    assert signal_reached_run
     assert ended_with_job_running is False
     assert ended == ["job", ("scorer", {worker.owner_id})]
     assert leases_after == set()
@@ -87,7 +86,7 @@ def test_a_stop_signal_lets_a_running_job_finish_before_the_scorer_and_the_lease
 def scoring_worker_on_pg(workers_on_db, readiness_file: Path, tmp_path: Path):
     """A scoring worker with a short time limit, on this test's database."""
     settings = get_settings().model_copy(
-        update={"audio_dir": str(tmp_path), "arq_job_timeout": TIME_LIMIT_SECONDS},
+        update={"audio_dir": str(tmp_path), "worker_job_timeout": TIME_LIMIT_SECONDS},
     )
     return ScoringWorker(settings, readiness_file=readiness_file)
 

@@ -57,19 +57,6 @@ wheels = [
 ]
 
 [[package]]
-name = "arq"
-version = "0.28.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "redis", extra = ["hiredis"] },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/81/7f9db65a89c29ba374000309b9dd95509500045df5c7e22f26c3731b7380/arq-0.28.0.tar.gz", hash = "sha256:a458188aefc2d7ee17d136f80d8fa8df1d6eba4ceebdead87e9f172d027dc311", size = 416141, upload-time = "2026-04-16T10:50:23.893Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/48/32/66b616976c5058d434ca2017979bfffd784888177b16b5038abcec93954a/arq-0.28.0-py3-none-any.whl", hash = "sha256:b1696bf5614d60f4172a2c0cbdc177e23ba03a5eb9acc29bd8181f4ea71fff94", size = 26061, upload-time = "2026-04-16T10:50:22.321Z" },
-]
-
-[[package]]
 name = "ast-serialize"
 version = "0.13.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1456,8 +1443,8 @@ catalogs = [
 
 [[package]]
 name = "overnightworks-logline"
-version = "1.9.0"
-source = { git = "https://github.com/overnightworks/logline?rev=v1.9.0#cca495315f8fb25dae85851592a2c42376052c58" }
+version = "1.14.0"
+source = { git = "https://github.com/overnightworks/logline?rev=v1.14.0#a6b40ac6e9437dcb0b92d875234be332bffd4b44" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "structlog" },
@@ -2301,7 +2288,6 @@ scoring = [
 ]
 server = [
     { name = "alembic" },
-    { name = "arq" },
     { name = "boto3" },
     { name = "fastapi" },
     { name = "mutagen" },
@@ -2332,7 +2318,6 @@ whisper = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", marker = "extra == 'server'", specifier = ">=1.13,<2" },
-    { name = "arq", marker = "extra == 'server'", specifier = ">=0.26,<1" },
     { name = "audiobox-aesthetics", marker = "extra == 'scoring'", specifier = ">=0.0.4,<1" },
     { name = "boto3", marker = "extra == 'server'", specifier = ">=1.36,<2" },
     { name = "cyclopts", specifier = ">=4.0,<6" },
@@ -2353,8 +2338,8 @@ requires-dist = [
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.71.1" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.71.1" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", git = "https://github.com/overnightworks/design?rev=v0.33.1" },
-    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
-    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v1.9.0" },
+    { name = "overnightworks-logline", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/logline?rev=v1.14.0" },
+    { name = "overnightworks-logline", marker = "extra == 'server'", git = "https://github.com/overnightworks/logline?rev=v1.14.0" },
     { name = "overnightworks-tandem", marker = "extra == 'acestep-worker'", git = "https://github.com/overnightworks/tandem?rev=v0.17.0" },
     { name = "overnightworks-tandem", marker = "extra == 'server'", git = "https://github.com/overnightworks/tandem?rev=v0.17.0" },
     { name = "overnightworks-webauth", extras = ["postgres", "redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.46.0" },

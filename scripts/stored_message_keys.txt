@@ -3,6 +3,7 @@ chatFailure.completionFailed
 chatFailure.problem
 chatFailure.requestCancelled
 chatFailure.requestFailed
+chatFailure.serverRestarted
 chatFailure.setupFailed
 coverProblem.budgetSpent
 coverProblem.busy

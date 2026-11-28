@@ -1,20 +1,10 @@
 <script lang="ts">
 	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 	import { takeVersion } from '#lib/constants/now-playing.ts';
-	import {
-		appPageAddress,
-		followAppPageLink,
-		openTakeVersion,
-		revealPlayingSong
-	} from '#lib/stores/navigation.ts';
-	import { closeNowPlaying } from '#lib/stores/player.ts';
-	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
-	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '#lib/stores/takeActions.ts';
+	import { appPageAddress, followAppPageLink } from '#lib/stores/navigation.ts';
 	import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
-	import { pageLanguage } from '#lib/utils/page-language.ts';
-	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { formatTime } from '#lib/utils/format.ts';
-	import { formatScore, scoreColor, scoreReadings, type ScoreKey } from '#lib/utils/scores.ts';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -24,98 +14,6 @@
 		generation: GenerationItem;
 		song: SongItem;
 	} = $props();
-
-	const SCORE_LABEL_KEYS: Record<ScoreKey, TextKey> = {
-		user_rating: 'nowPlayingTake.scoreRating',
-		text_accuracy: 'nowPlayingTake.scoreLyricsSung',
-		dynamics: 'nowPlayingTake.scoreDynamics',
-		audiobox_quality: 'nowPlayingTake.scoreQuality',
-		audiobox_enjoyment: 'nowPlayingTake.scoreEnjoyment',
-		lyrical_coherence: 'nowPlayingTake.scoreCoherence'
-	};
-
-	interface ScoreEntry {
-		label: string;
-		value: string;
-		color: string;
-	}
-
-	const scores = $derived(generation.scores);
-	// #141/9: without cues the lyrics cannot follow the audio — the panel says
-	// so instead of leaving the listener to wonder why nothing highlights, and
-	// the sentence is the button that fixes it.
-	const hasCues = $derived((generation.whisper_cues?.length ?? 0) > 0);
-	const rescoring = $derived($rescoringTakeIds.has(generation.id));
-
-	// One table, both take surfaces: the same metrics under the same names and
-	// in the same order as the editor row's score pill (utils/scores.ts). The
-	// panel has room for each scorer's own scale, so it keeps it.
-	const scoreEntries = $derived.by((): ScoreEntry[] => {
-		const entries: ScoreEntry[] = scoreReadings(scores).map(({ metric, value }) => ({
-			label: pageText(SCORE_LABEL_KEYS[metric.key]),
-			value: formatScore(metric, value, 'panel'),
-			color: scoreColor(metric.key, value)
-		}));
-		// BPM colours itself from how far the take drifted from the requested
-		// tempo, not from a score threshold, so it stays the panel's own entry.
-		if (scores?.bpm_detected !== undefined) {
-			const dev = scores.bpm_deviation ?? 0;
-			entries.push({
-				label: pageText('nowPlayingTake.scoreBpm'),
-				value: new Intl.NumberFormat(pageLanguage(), { maximumFractionDigits: 0 }).format(
-					scores.bpm_detected
-				),
-				color: dev < 5 ? 'good' : dev < 15 ? 'ok' : 'bad'
-			});
-		}
-		return entries;
-	});
-
-	let ratingValue = $state(50);
-	let ratingNotes = $state('');
-	let ratingSaving = $state(false);
-
-	const savedRating = $derived(generation.scores?.user_rating ?? 50);
-	const savedNotes = $derived(generation.scores?.user_notes ?? '');
-	const ratingDirty = $derived(ratingValue !== savedRating || ratingNotes !== savedNotes);
-
-	$effect(() => {
-		ratingValue = savedRating;
-		ratingNotes = savedNotes;
-	});
-
-	async function onTogglePick(): Promise<void> {
-		await setPick(song.id, generation.id, !generation.is_picked);
-	}
-
-	async function onToggleKeep(): Promise<void> {
-		await setKeep(song.id, generation.id, !generation.is_kept);
-	}
-
-	async function onSaveRating(): Promise<void> {
-		if (ratingSaving) return;
-		ratingSaving = true;
-		try {
-			await rate(song.id, generation.id, ratingValue, ratingNotes);
-		} finally {
-			ratingSaving = false;
-		}
-	}
-
-	function onRescore(): void {
-		void rescore(song.id, generation.id);
-	}
-
-	function useOnSong(use: TakeUse): void {
-		pendingTakeUse.set({ generation, use });
-		closeNowPlaying();
-		void revealPlayingSong(song, generation.id);
-	}
-
-	function openVersion(versionId: string): void {
-		closeNowPlaying();
-		void openTakeVersion(song, generation.id, versionId);
-	}
 
 	const openableVersion = $derived(takeVersion(generation.version_id, generation.version_number));
 	// "v · take · duration · mode": the duration shows only when the take has
@@ -145,78 +43,7 @@
 >
 	<div class="take-heading-row">
 		<h3 class="take-heading">{takeHeading}</h3>
-		{#if openableVersion}
-			{@const versionId = openableVersion.versionId}
-			<button
-				type="button"
-				class="open-version"
-				data-hitbox="text"
-				onclick={() => openVersion(versionId)}
-			>
-				{pageText('nowPlayingTake.openVersion', {
-					number: String(openableVersion.versionNumber)
-				})}<Icon name="chevron-right" size={14} />
-			</button>
-		{/if}
-		<div class="take-badges">
-			<button
-				type="button"
-				class="badge-btn"
-				data-hitbox="frequent"
-				class:on={generation.is_picked}
-				onclick={onTogglePick}
-				aria-pressed={generation.is_picked}
-				aria-label={pageText(
-					generation.is_picked ? 'nowPlayingTake.unpick' : 'nowPlayingTake.pick'
-				)}
-				title={pageText(generation.is_picked ? 'nowPlayingTake.unpick' : 'nowPlayingTake.pick')}
-			>
-				<Icon name={generation.is_picked ? 'star-filled' : 'star'} size={18} />
-			</button>
-			<button
-				type="button"
-				class="badge-btn"
-				data-hitbox="frequent"
-				class:on={generation.is_kept}
-				onclick={onToggleKeep}
-				aria-pressed={generation.is_kept}
-				aria-label={pageText(generation.is_kept ? 'nowPlayingTake.unkeep' : 'nowPlayingTake.keep')}
-				title={pageText(generation.is_kept ? 'nowPlayingTake.unkeep' : 'nowPlayingTake.keep')}
-			>
-				<Icon name={generation.is_kept ? 'heart-filled' : 'heart'} size={18} />
-			</button>
-		</div>
 	</div>
-
-	<section class="take-section">
-		<h4 class="section-title">{pageText('nowPlayingTake.scores')}</h4>
-		{#if scoreEntries.length > 0}
-			<div class="scores-grid">
-				{#each scoreEntries as entry (entry.label)}
-					<div class="score-cell {entry.color}">
-						<span class="score-label">{entry.label}</span>
-						<span class="score-value">{entry.value}</span>
-					</div>
-				{/each}
-			</div>
-		{:else}
-			<p class="empty-note">{pageText('nowPlayingTake.scoresEmpty')}</p>
-		{/if}
-	</section>
-
-	{#if !hasCues}
-		<section class="take-section">
-			<button
-				type="button"
-				class="rescore-hint"
-				data-hitbox="frequent"
-				disabled={rescoring}
-				onclick={onRescore}
-			>
-				{pageText(rescoring ? 'nowPlayingTake.rescoring' : 'nowPlayingTake.rescoreAction')}
-			</button>
-		</section>
-	{/if}
 
 	{#if recipeGroups.length > 0}
 		<section class="take-section">
@@ -261,77 +88,6 @@
 			</details>
 		</section>
 	{/if}
-
-	<section class="take-section">
-		<div class="rating-row">
-			<span class="section-title">{pageText('nowPlayingTake.rating')}</span>
-			<input
-				type="range"
-				class="rating-slider"
-				min="0"
-				max="100"
-				step="1"
-				bind:value={ratingValue}
-			/>
-			<span class="rating-number">{ratingValue}</span>
-		</div>
-		<textarea
-			class="rating-notes"
-			placeholder={pageText('nowPlayingTake.ratingNotes')}
-			bind:value={ratingNotes}
-			rows="2"></textarea>
-		{#if ratingDirty}
-			<button
-				type="button"
-				class="rating-save"
-				data-hitbox="frequent"
-				onclick={onSaveRating}
-				disabled={ratingSaving}
-			>
-				{pageText(ratingSaving ? 'nowPlayingTake.ratingSaving' : 'nowPlayingTake.ratingSave')}
-			</button>
-		{/if}
-	</section>
-
-	<div class="take-links">
-		{#if generation.seed != null}
-			<button
-				type="button"
-				class="use-seed"
-				data-hitbox="frequent"
-				onclick={() => useOnSong('seed')}
-			>
-				<Icon name="pin" size={12} />
-				{pageText('nowPlayingTake.useSeed')}
-				<span class="use-seed-hint">{generation.seed}</span>
-			</button>
-		{/if}
-		<button
-			type="button"
-			class="take-source-action repaint"
-			data-hitbox="frequent"
-			onclick={() => useOnSong('repaint')}
-		>
-			{pageText('nowPlayingTake.repaint')}
-		</button>
-		<button
-			type="button"
-			class="take-source-action cover"
-			data-hitbox="frequent"
-			onclick={() => useOnSong('cover')}
-		>
-			{pageText('nowPlayingTake.cover')}
-		</button>
-		<button
-			type="button"
-			class="rescore"
-			data-hitbox="frequent"
-			disabled={rescoring}
-			onclick={onRescore}
-		>
-			{pageText(rescoring ? 'nowPlayingTake.rescoring' : 'nowPlayingTake.rescore')}
-		</button>
-	</div>
 </div>
 
 <style>
@@ -354,45 +110,6 @@
 		text-transform: uppercase;
 		color: var(--text-muted);
 	}
-	.open-version {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.15rem;
-		padding: 0 0.55rem;
-		border: 1px solid var(--border);
-		border-radius: 18px;
-		background: var(--surface);
-		color: var(--accent);
-		font-size: 0.78rem;
-		white-space: nowrap;
-		cursor: pointer;
-	}
-	.take-badges {
-		display: flex;
-		gap: 0.4rem;
-		margin-left: auto;
-	}
-	.badge-btn {
-		width: 32px;
-		height: 32px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		border: 1px solid var(--border);
-		border-radius: 50%;
-		background: transparent;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-	.badge-btn:hover {
-		color: var(--text);
-		background: var(--surface-hover);
-	}
-	.badge-btn.on {
-		color: var(--accent);
-		border-color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-	}
 	.take-section {
 		display: flex;
 		flex-direction: column;
@@ -404,12 +121,6 @@
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		color: var(--text-subtle);
-	}
-	.empty-note {
-		margin: 0;
-		font-size: 0.78rem;
-		color: var(--text-subtle);
-		font-style: italic;
 	}
 	.recipe-section {
 		display: flex;
@@ -476,145 +187,5 @@
 	}
 	.recipe-link :global(.recipe-link-chevron) {
 		flex: none;
-	}
-	.rescore-hint {
-		align-self: flex-start;
-		margin: 0;
-		padding: 0;
-		border: none;
-		background: none;
-		text-align: left;
-		font-family: var(--font-body);
-		font-size: 0.78rem;
-		color: var(--accent);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-		cursor: pointer;
-	}
-	.rescore-hint:hover:not(:disabled) {
-		color: var(--text);
-	}
-	.rescore-hint:disabled {
-		color: var(--text-subtle);
-		text-decoration: none;
-		cursor: default;
-	}
-	.scores-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 0.5rem;
-	}
-	.score-cell {
-		display: flex;
-		flex-direction: column;
-		padding: 0.5rem 0.6rem;
-		border-radius: 4px;
-		background: var(--surface);
-	}
-	.score-cell.good {
-		border-left: 3px solid var(--score-good);
-	}
-	.score-cell.ok {
-		border-left: 3px solid var(--score-ok);
-	}
-	.score-cell.bad {
-		border-left: 3px solid var(--score-bad);
-	}
-	.score-label {
-		font-size: 0.66rem;
-		color: var(--text-subtle);
-		text-transform: uppercase;
-		font-family: var(--font-display);
-		letter-spacing: 0.4px;
-	}
-	.score-value {
-		font-size: 1.05rem;
-		font-family: var(--font-display);
-		color: var(--text);
-	}
-	.rating-row {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-	}
-	.rating-notes {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		font-size: 0.8rem;
-		font-family: var(--font-body);
-		padding: 0.4rem 0.55rem;
-		resize: vertical;
-	}
-	.rating-notes:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-	.rating-slider {
-		flex: 1;
-		accent-color: var(--accent);
-		cursor: pointer;
-	}
-	.rating-number {
-		font-size: 1rem;
-		font-family: var(--font-display);
-		color: var(--text);
-		min-width: 28px;
-		text-align: right;
-	}
-	.rating-save {
-		align-self: flex-end;
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--accent);
-		border-radius: var(--btn-radius-sm);
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-		color: var(--accent);
-		font-size: 0.72rem;
-		font-family: var(--font-display);
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-	}
-	.rating-save:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-	.take-links {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-	.use-seed,
-	.take-source-action,
-	.rescore {
-		align-self: flex-start;
-		padding: 0.3rem 0.7rem;
-		border-radius: var(--btn-radius-pill);
-		border: 1px solid var(--border);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.72rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
-		cursor: pointer;
-	}
-	.use-seed:hover,
-	.take-source-action:hover,
-	.rescore:hover:not(:disabled) {
-		border-color: var(--accent);
-		color: var(--text);
-	}
-	.use-seed {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-	}
-	.use-seed-hint {
-		color: var(--text-subtle);
-	}
-	.rescore:disabled {
-		color: var(--text-subtle);
-		cursor: default;
 	}
 </style>

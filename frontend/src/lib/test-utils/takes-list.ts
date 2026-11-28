@@ -66,14 +66,11 @@ export const useSeed = vi.fn();
 
 export const clickVersion = vi.fn(() => Promise.resolve(true));
 
-export const addToPlaylist = vi.fn(() => Promise.resolve());
-
 export function mockActions(): GenerationActions {
 	return {
 		pick,
 		keep,
 		del: vi.fn(),
-		rate: vi.fn(() => Promise.resolve()),
 		share: vi.fn(() =>
 			Promise.resolve({
 				status: 'ok',
@@ -83,7 +80,6 @@ export function mockActions(): GenerationActions {
 			})
 		),
 		unshare: vi.fn(() => Promise.resolve()),
-		addToPlaylist,
 		useSeed,
 		clickVersion
 	};

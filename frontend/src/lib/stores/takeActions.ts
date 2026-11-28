@@ -7,12 +7,16 @@ import {
 	pickGeneration,
 	rateGeneration,
 	scoreGeneration,
+	shareGeneration,
 	unarchiveGeneration,
 	unkeepGeneration,
-	unpickGeneration
+	unpickGeneration,
+	unshareGeneration
 } from '#lib/api/client.ts';
+import type { GenerationItem, ShareResult } from '#lib/api/types.ts';
 import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
-import { upsertSongInList } from '#lib/stores/libraryData.ts';
+import { updateGenerationInList, upsertSongInList } from '#lib/stores/libraryData.ts';
+import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
 import { addToast } from '#lib/stores/toast.ts';
 import { pageText } from '#lib/utils/page-words.ts';
 
@@ -48,6 +52,16 @@ export async function setKeep(songId: string, genId: string, kept: boolean): Pro
 	}
 }
 
+// The pick and keep toggles every judging surface shares: the judging card and
+// Now Playing's P and K keys flip whatever the take shows now.
+export function togglePick(songId: string, take: GenerationItem): Promise<void> {
+	return setPick(songId, take.id, !take.is_picked);
+}
+
+export function toggleKeep(songId: string, take: GenerationItem): Promise<void> {
+	return setKeep(songId, take.id, !take.is_kept);
+}
+
 export async function restoreTake(songId: string, genId: string): Promise<void> {
 	try {
 		await unarchiveGeneration(genId);
@@ -66,7 +80,6 @@ export async function rate(
 	try {
 		await rateGeneration(genId, rating, notes);
 		await refreshSong(songId);
-		addToast(pageText('takeActions.ratingSaved'), 'success');
 	} catch (e) {
 		addToast(describeFailure(e, pageText('takeActions.ratingFailed')), 'error');
 	}
@@ -121,3 +134,29 @@ export const rescoringTakeIds = derived(
 		return ids;
 	}
 );
+
+// Sharing and playlists are the take menu's, wherever it stands: the editor
+// reaches them through its actions context, Now Playing directly.
+export async function shareTake(genId: string): Promise<ShareResult> {
+	const result = await shareGeneration(genId);
+	updateGenerationInList(genId, (take) => ({
+		...take,
+		is_shared: true,
+		share_slug: result.share_slug
+	}));
+	return result;
+}
+
+export async function unshareTake(genId: string): Promise<void> {
+	await unshareGeneration(genId);
+	updateGenerationInList(genId, (take) => ({ ...take, is_shared: false, share_slug: null }));
+}
+
+export async function addTakeToPlaylist(playlistId: string, genId: string): Promise<void> {
+	try {
+		await addGenerationToPlaylist(playlistId, genId);
+		addToast(pageText('takesList.addedToPlaylist'), 'success');
+	} catch (e) {
+		addToast(describeFailure(e, pageText('takesList.addFailed')), 'error');
+	}
+}

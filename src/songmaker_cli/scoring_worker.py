@@ -51,8 +51,8 @@ class ScoringWorker(WorkerBase):
         writes nothing, because the row has ended.
         """
         try:
-            async with asyncio.timeout(self._settings.arq_job_timeout):
-                await self._run_logged(None, claimed.job_id, claimed.payload)
+            async with asyncio.timeout(self._settings.worker_job_timeout):
+                await self._run_logged(claimed.job_id, claimed.payload)
         except TimeoutError:
             log.error("Scoring job %s outlasted its time limit", claimed.job_id)
             await asyncio.to_thread(
@@ -60,7 +60,7 @@ class ScoringWorker(WorkerBase):
                 TIMEOUT_ERROR_TYPE,
             )
 
-    async def _run_payload(self, _ctx, job_id: str, payload) -> None:
+    async def _run_payload(self, job_id: str, payload) -> None:
         if not isinstance(payload, ScorePayload):
             await asyncio.to_thread(self.fail_job_without_payload, job_id)
             return

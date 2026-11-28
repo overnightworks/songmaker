@@ -5,11 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import signal
 import time
 from collections.abc import Callable, Coroutine, Iterator
 from pathlib import Path
+from typing import NamedTuple
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -38,38 +37,41 @@ class _DummyWorker(WorkerBase):
     job_types = ("dummy",)
 
 
+class DatabaseEngine(NamedTuple):
+    init_db: MagicMock
+    engine: MagicMock
+
+
+@pytest.fixture
+def database_engine() -> Iterator[DatabaseEngine]:
+    """The ``init_db`` the worker calls and its engine, to see whether the pool is disposed."""
+    engine = MagicMock()
+    with patch("songmaker_cli.worker_base.init_db") as init_db:
+        init_db.return_value.kw = {"bind": engine}
+        yield DatabaseEngine(init_db, engine)
+
+
 # ── get_db_factory caches per instance ────────────────────────────
 
 
-def test_get_db_factory_caches() -> None:
+def test_get_db_factory_caches(database_engine: DatabaseEngine) -> None:
     worker = _DummyWorker()
-    mock_engine = MagicMock()
-    mock_factory = MagicMock()
-    mock_factory.kw = {"bind": mock_engine}
 
-    with patch(
-        "songmaker_cli.worker_base.init_db", return_value=mock_factory,
-    ) as mock_init:
-        result1 = worker.get_db_factory()
-        result2 = worker.get_db_factory()
+    result1 = worker.get_db_factory()
+    result2 = worker.get_db_factory()
 
     assert result1 is result2
-    mock_init.assert_called_once()
+    database_engine.init_db.assert_called_once()
 
 
-def test_get_db_factory_independent_per_instance() -> None:
+def test_get_db_factory_independent_per_instance(database_engine: DatabaseEngine) -> None:
     a = _DummyWorker()
     b = _DummyWorker()
-    mock_factory = MagicMock()
-    mock_factory.kw = {"bind": MagicMock()}
 
-    with patch(
-        "songmaker_cli.worker_base.init_db", return_value=mock_factory,
-    ) as mock_init:
-        a.get_db_factory()
-        b.get_db_factory()
+    a.get_db_factory()
+    b.get_db_factory()
 
-    assert mock_init.call_count == 2
+    assert database_engine.init_db.call_count == 2
 
 
 def _settings_on(redis_url: str) -> Settings:
@@ -192,7 +194,8 @@ def _serving_worker_on(redis_url: str, readiness_file: Path, *servings) -> _Serv
 
 
 def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its_servings(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
+    restored_logging: None, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    redis_url: str, readiness_file: Path,
 ) -> None:
     serving, held_while_stopping = asyncio.Event(), []
 
@@ -210,7 +213,7 @@ def test_run_holds_the_lease_while_it_serves_and_ends_on_a_stop_signal_after_its
         running = asyncio.create_task(worker.run())
         await serving.wait()
         held_while_serving = await _held_leases(redis_url)
-        os.kill(os.getpid(), signal.SIGTERM)
+        assert send_stop_signal(running)
         async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
             await running
         return held_while_serving, await _held_leases(redis_url)
@@ -324,13 +327,13 @@ class _QueueServingWorker(_DummyWorker):
 
 
 def _queue_serving_worker_on(redis_url: str, readiness_file: Path) -> _QueueServingWorker:
-    worker = _QueueServingWorker(_settings_on(redis_url), readiness_file)
-    worker.get_db_factory = MagicMock()
-    return worker
+    return _QueueServingWorker(_settings_on(redis_url), readiness_file)
 
 
 def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
+    restored_logging: None, database_engine: DatabaseEngine,
+    send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
         worker = _queue_serving_worker_on(proxy.url, readiness_file)
@@ -353,7 +356,7 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
                         await asyncio.sleep(0.1)
                 return not running.done(), before, after, worker.claimed_rows
             finally:
-                os.kill(os.getpid(), signal.SIGTERM)
+                send_stop_signal(running)
                 await asyncio.gather(running, return_exceptions=True)
 
         still_serving, before, after, claimed = _run(cut_restore_and_queue_a_row())
@@ -362,8 +365,10 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
     assert after != before
 
 
-def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
-    restored_logging: None, stop_signal_handlers: None, redis_url: str, readiness_file: Path,
+def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds_with_its_database_pool_disposed(
+    restored_logging: None, database_engine: DatabaseEngine,
+    send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
         worker = _queue_serving_worker_on(proxy.url, readiness_file)
@@ -375,12 +380,13 @@ def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
             proxy.refuse()
             await asyncio.sleep(1)
             started = time.monotonic()
-            os.kill(os.getpid(), signal.SIGTERM)
+            assert send_stop_signal(running), "run() ended on its own during the outage"
             async with asyncio.timeout(WORKER_STOP_BOUND_SECONDS):
                 await running
             return time.monotonic() - started
 
         assert _run(stop_during_the_outage()) < WORKER_STOP_BOUND_SECONDS
+        database_engine.engine.dispose.assert_called_once_with()
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:

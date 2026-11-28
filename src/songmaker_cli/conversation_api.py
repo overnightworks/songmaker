@@ -71,6 +71,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
+from songmaker_cli.health_types import BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.messages import Message, message
 from songmaker_cli.refusals import Refusal
@@ -101,6 +102,7 @@ class ChatTurnLifecycle:
     session: Session
     job_id: str
     heartbeat_task: asyncio.Task[None]
+    background_loops: BackgroundLoopRegistry
 
     async def finish(self, *, cancelled: bool) -> None:
         from songmaker_cli.jobs._runtime import (
@@ -109,7 +111,14 @@ class ChatTurnLifecycle:
         )
 
         if cancelled:
-            await _cancel_chat_job(self.session, self.heartbeat_task, self.job_id)
+            # A turn cancelled during the shutdown was cut by the restart, not by its client.
+            if self.background_loops.shutting_down:
+                failure, error_type = message("chatFailure.serverRestarted"), "server_restarted"
+            else:
+                failure, error_type = message("chatFailure.clientCancelled"), "cancelled"
+            await _cancel_chat_job(
+                self.session, self.heartbeat_task, self.job_id, failure, error_type,
+            )
             return
         await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
 
@@ -151,6 +160,18 @@ def _start_chat_turn(
     _running_chat_turns.add(turn)
     turn.add_done_callback(_forget_chat_turn)
     return frames
+
+
+async def end_running_chat_turns(within_seconds: float) -> None:
+    """Give the running turns up to ``within_seconds`` to finish, then cancel the rest."""
+    running = set(_running_chat_turns)
+    if not running:
+        return
+    _, unfinished = await asyncio.wait(running, timeout=max(within_seconds, 0))
+    for turn in unfinished:
+        turn.cancel()
+    if unfinished:
+        await asyncio.wait(unfinished)
 
 
 def _forget_chat_turn(turn: asyncio.Task[None]) -> None:
@@ -196,6 +217,7 @@ async def _stream_chat_turn(
             session,
             prepared.job_id,
             asyncio.create_task(_keep_chat_job_heartbeat(db_factory, prepared.job_id)),
+            caller.app.state.ctx.background_loops,
         )
         async for frame in _chat_event_generator(req, caller, session, prepared, lifecycle):
             frames.publish(frame)

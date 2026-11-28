@@ -296,7 +296,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     })
     publish_worker_heartbeat(client, "w1", json.loads(payload))
     hold_a_worker_lease(client.app.state.ctx.async_redis)
-    client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
+    client.app.state.ctx.background_loops = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health/details", "/metrics"):
         response = client.get(path, headers=monitoring_headers)
@@ -370,13 +370,13 @@ def test_list_workers_offline_when_gpu_broken(client: TestClient) -> None:
 def test_list_workers_includes_queue_depth(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.acestep_state import queue_depth_key, worker_state_key
+    from songmaker_cli.acestep_state import admitted_key, worker_state_key
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
     pool = _worker_redis(client)
     pool.store[worker_state_key("w1")] = json.dumps({"loaded": [{"mode": "sft", "size_gb": 0}]})
-    pool.store[queue_depth_key("w1")] = "3"
+    pool.store.add_members(admitted_key("w1"), "job-1", "job-2", "job-3")
 
     resp = client.get("/api/admin/workers")
     assert resp.json()["workers"][0]["state"]["queue_depth"] == 3

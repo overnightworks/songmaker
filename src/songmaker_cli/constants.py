@@ -164,6 +164,7 @@ REDIS_RL_IP_PREFIX = "rl:ip"
 REDIS_RL_SHARED_PREFIX = "rl:shared"
 REDIS_RL_SHARED_STREAM_PREFIX = "rl:shared-stream"
 REDIS_RL_QUEUE_STREAM_PREFIX = "rl:queue-stream"
+REDIS_RL_RESOURCE_STREAM_PREFIX = "rl:resource-stream"
 SESSION_CLEANUP_INTERVAL_SECONDS = 300
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
 STORE_STARTUP_WAIT_SECONDS: Final[int] = 300
@@ -297,7 +298,6 @@ COVER_VERSION_QUERY: Final[str] = "v"
 COVER_NOT_FOUND: Final[str] = "Cover not found"
 
 # User LoRA training
-USER_LORAS_DIRNAME: Final[str] = "user_loras"
 USER_LORA_SAMPLES_DIRNAME: Final[str] = "samples"
 USER_LORA_DATASET_DIRNAME: Final[str] = "dataset"
 USER_LORA_TRAINING_TMP_DIRNAME: Final[str] = "training_tmp"

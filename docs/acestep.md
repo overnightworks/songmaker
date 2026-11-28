@@ -160,7 +160,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **FFmpeg is a system dependency of the ACE-Step worker image.** The `gpu-torch-base` stage installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
-The Python settings and the test stack (`docker/docker-compose.test.yml`) both default `ARQ_JOB_TIMEOUT` to
+The Python settings and the test stack (`docker/docker-compose.test.yml`) both default `WORKER_JOB_TIMEOUT` to
 1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` is a separate setting, 540
 seconds in the Python default and in the platform's `apps/songmaker/acestep-worker.yaml`: a load now
 includes the eager DiT and LM init, which takes 5-8 minutes for a cold xl-turbo
@@ -198,9 +198,9 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 | Key pattern | Set by | Read by | TTL | Purpose |
 |---|---|---|---|---|
 | `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, the health routes, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `training_hold_seconds`, `last_heartbeat_at` |
-| `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
+| `songmaker:acestep:admitted:{worker_id}` | Scheduler generation admission; the job's own release; the owner pass and the stale-job reaper for ended jobs; the worker at its start | `admin_api`, `scheduler.pick_worker`, `/metrics`, the worker's GPU hold | none | Set of the job ids admitted on the worker; its size is the queue depth |
 | `songmaker:acestep:lm-failure:{worker_id}` | `acestep-worker` when a load comes up without its LM | `acestep-worker` at start, the health routes (existence only) | none | The mode whose LM failed to initialise; the restarted worker loads it before registering, then clears the key |
-| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | none; read only while the lock is held; deleted after the hold ends | The label of the download lock: the job_id of the arq job that holds it. It excludes nothing; the lock does. A crashed holder's label stays, unread, until the next holder overwrites it |
+| `songmaker:acestep:download:{mode}` | `download_model_on_worker` job, while it holds the mode's download lock | admin endpoint pre-check, the refusal of a duplicate job | none; read only while the lock is held; deleted after the hold ends | The label of the download lock: the job_id of the job that holds it. It excludes nothing; the lock does. A crashed holder's label stays, unread, until the next holder overwrites it |
 
 The Worker Pool panel mirrors a live hold as Training with the remaining hold lease; this projection never owns, renews, or releases the hold.
 
@@ -214,7 +214,7 @@ Three single-flights are [tandem](https://github.com/overnightworks/tandem) `Loc
 | `download` | mode | `download_model_on_worker` | 15 s, extended every 5 s by tandem's `held` | One download per mode |
 | `tick` | `job-reaper`, `score-backfill` | the web process that runs the tick | 60 s, never released | Throttles each periodic tick to one web process |
 
-The generation of a lock is its token. A reserve reads the queue depth, takes the lock, reads the depth again and gives the lock back when a generation was admitted in between; the reserve's generation is the token that `renew`, `release` and `handover` carry. The scheduler admits a generation with a script that reads the lock (`tandem.lock_state`) and raises the depth in one step, and `pick_worker` reads the lock with `Locks.state`. There is no forced release: a worker that starts ends the hold it finds, with the generation it reads, and a crashed holder's lock runs out after its span.
+The generation of a lock is its token. A reserve reads the queue depth (the size of the admitted set), takes the lock, reads the depth again and gives the lock back when a generation was admitted in between; the reserve's generation is the token that `renew`, `release` and `handover` carry. The scheduler admits a generation with a script that reads the lock (`tandem.lock_state`) and adds the job id to the admitted set in one step, and `pick_worker` reads the lock with `Locks.state`. There is no forced release: a worker that starts ends the hold it finds, with the generation it reads, and a crashed holder's lock runs out after its span.
 
 After a Redis restart, and on the very first use, `acquire` returns None and a lock reads unknown until the span has passed since tandem's epoch, so two holders are never live together. No job fails in that window: a reserve answers 409 as for a busy GPU, a generation the scheduler may not admit waits in the queue as for a hold, a worker refuses `/generate` with the same 409, which the music worker answers by queueing the takes still missing again as for a hold, and a download waits for the span; only a live holder fails a download as a duplicate. The worker's Redis client, like the web's, retries and replays a lost reply (`retry_on_error`) and times out, as tandem requires.
 
@@ -277,7 +277,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml ps -a
 
 ### Deploys and generation jobs
 
-A deploy recreates the acestep-worker and music-worker containers, which kills whatever ACE-Step subprocess call is in flight: the affected jobs surface as `error_type=worker_unreachable`, as in [Restart procedure](#restart-procedure). No guard in this repository defers a deploy while a job is queued or running, so the operator releases when the queue is idle.
+A deploy stops music-worker and scoring-worker with a signal, and each drains its running jobs within its grace period ([Worker Architecture](architecture.md#worker-architecture)). Recreating acestep-worker, with its default 30 s grace, still kills whatever ACE-Step subprocess call is in flight: the affected jobs surface as `error_type=worker_unreachable`, as in [Restart procedure](#restart-procedure). No guard in this repository defers a deploy while a generation runs, so songmaker's head releases only while no generation runs on acestep-worker.
 
 ### pin_model semantics
 

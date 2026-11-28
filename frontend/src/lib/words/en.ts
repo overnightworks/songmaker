@@ -187,6 +187,7 @@ export type Words = {
     readonly "referenceMenu.inUse": string;
     readonly "newPlace.heading": (gaps: { readonly library: string }) => readonly (string | { readonly marker: "strong"; readonly text: string })[];
     readonly "takeRefusal.archived": string;
+    readonly "objectStoreRefusal.unavailable": string;
     readonly "modelRefusal.unavailable": (gaps: { readonly model: string }) => string;
     readonly "songMenu.label": string;
     readonly "songMenu.close": string;
@@ -201,6 +202,9 @@ export type Words = {
     readonly "takeMenu.close": string;
     readonly "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => string;
     readonly "takeMenu.heading": (gaps: { readonly take: string }) => string;
+    readonly "takeMenu.openVersion": string;
+    readonly "takeMenu.goToSong": string;
+    readonly "takeMenu.rescore": string;
     readonly "takeMenu.repaint": string;
     readonly "takeMenu.cover": string;
     readonly "takeMenu.useSeed": string;
@@ -681,7 +685,6 @@ export type Words = {
     readonly "takeActions.pickFailed": string;
     readonly "takeActions.keepFailed": string;
     readonly "takeActions.restoreFailed": string;
-    readonly "takeActions.ratingSaved": string;
     readonly "takeActions.ratingFailed": string;
     readonly "takeActions.rescoreQueued": string;
     readonly "takeActions.rescoreFailed": string;
@@ -692,31 +695,21 @@ export type Words = {
     readonly "nowPlayingTake.headingDuration": (gaps: { readonly duration: string; readonly take: string; readonly version: string }) => string;
     readonly "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => string;
     readonly "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => string;
-    readonly "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => string;
-    readonly "nowPlayingTake.pick": string;
-    readonly "nowPlayingTake.unpick": string;
-    readonly "nowPlayingTake.keep": string;
-    readonly "nowPlayingTake.unkeep": string;
-    readonly "nowPlayingTake.scores": string;
-    readonly "nowPlayingTake.scoresEmpty": string;
-    readonly "nowPlayingTake.scoreRating": string;
-    readonly "nowPlayingTake.scoreLyricsSung": string;
-    readonly "nowPlayingTake.scoreDynamics": string;
-    readonly "nowPlayingTake.scoreQuality": string;
-    readonly "nowPlayingTake.scoreEnjoyment": string;
-    readonly "nowPlayingTake.scoreCoherence": string;
-    readonly "nowPlayingTake.scoreBpm": string;
-    readonly "nowPlayingTake.rescoreAction": string;
-    readonly "nowPlayingTake.rescoring": string;
-    readonly "nowPlayingTake.rescore": string;
+    readonly "nowPlayingJudging.label": string;
+    readonly "nowPlayingJudging.pick": string;
+    readonly "nowPlayingJudging.keep": string;
+    readonly "nowPlayingScores.heading": string;
+    readonly "nowPlayingScores.empty": string;
+    readonly "nowPlayingScores.lyricsSung": string;
+    readonly "nowPlayingScores.dynamics": string;
+    readonly "nowPlayingScores.quality": string;
+    readonly "nowPlayingScores.enjoyment": string;
+    readonly "nowPlayingScores.coherence": string;
+    readonly "nowPlayingScores.bpm": string;
+    readonly "nowPlayingScores.rescoring": string;
     readonly "nowPlayingTake.recipe": string;
-    readonly "nowPlayingTake.rating": string;
-    readonly "nowPlayingTake.ratingNotes": string;
-    readonly "nowPlayingTake.ratingSave": string;
-    readonly "nowPlayingTake.ratingSaving": string;
-    readonly "nowPlayingTake.useSeed": string;
-    readonly "nowPlayingTake.repaint": string;
-    readonly "nowPlayingTake.cover": string;
+    readonly "nowPlayingJudging.rating": string;
+    readonly "nowPlayingJudging.ratingNotes": string;
     readonly "takeRecipe.groupModel": string;
     readonly "takeRecipe.groupReproducibility": string;
     readonly "takeRecipe.groupVersion": string;
@@ -1270,6 +1263,7 @@ export type Words = {
     readonly "jobFailure.tookTooLong": string;
     readonly "jobFailure.queuedTooLong": string;
     readonly "chatFailure.clientCancelled": string;
+    readonly "chatFailure.serverRestarted": string;
     readonly "chatFailure.requestCancelled": string;
     readonly "chatFailure.setupFailed": string;
     readonly "chatFailure.requestFailed": string;
@@ -1355,7 +1349,6 @@ export type Words = {
     readonly "nowPlaying.close": string;
     readonly "nowPlaying.expand": string;
     readonly "nowPlaying.collapse": string;
-    readonly "nowPlaying.goToSong": string;
     readonly "nowPlaying.playAgain": string;
     readonly "nowPlaying.previousSong": string;
     readonly "nowPlaying.nextSong": string;
@@ -1633,6 +1626,7 @@ export const words: Words = {
     "referenceMenu.inUse": "In use",
     "newPlace.heading": (gaps: { readonly library: string }): readonly (string | { readonly marker: "strong"; readonly text: string })[] => ["New in ", { marker: "strong", text: gaps.library }],
     "takeRefusal.archived": "Restore this take first.",
+    "objectStoreRefusal.unavailable": "The file store is not reachable right now. Try again in a moment.",
     "modelRefusal.unavailable": (gaps: { readonly model: string }) => "Model '" + gaps.model + "' is not currently available",
     "songMenu.label": "Song menu",
     "songMenu.close": "Close menu",
@@ -1647,6 +1641,9 @@ export const words: Words = {
     "takeMenu.close": "Close menu",
     "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => "Take · v" + gaps.version + " · " + gaps.take,
     "takeMenu.heading": (gaps: { readonly take: string }) => "Take · " + gaps.take,
+    "takeMenu.openVersion": "Open version",
+    "takeMenu.goToSong": "Go to song",
+    "takeMenu.rescore": "Re-score",
     "takeMenu.repaint": "Repaint",
     "takeMenu.cover": "Cover",
     "takeMenu.useSeed": "Use seed",
@@ -2295,7 +2292,6 @@ export const words: Words = {
     "takeActions.pickFailed": "Pick failed",
     "takeActions.keepFailed": "Keep failed",
     "takeActions.restoreFailed": "Restore failed",
-    "takeActions.ratingSaved": "Rating saved",
     "takeActions.ratingFailed": "Rating failed",
     "takeActions.rescoreQueued": "Re-scoring this take…",
     "takeActions.rescoreFailed": "Re-score failed",
@@ -2306,31 +2302,21 @@ export const words: Words = {
     "nowPlayingTake.headingDuration": (gaps: { readonly duration: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration,
     "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.mode,
     "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration + " · " + gaps.mode,
-    "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => "Open v" + gaps.number,
-    "nowPlayingTake.pick": "Pick",
-    "nowPlayingTake.unpick": "Unpick",
-    "nowPlayingTake.keep": "Keep",
-    "nowPlayingTake.unkeep": "Unkeep",
-    "nowPlayingTake.scores": "Scores",
-    "nowPlayingTake.scoresEmpty": "No scores yet",
-    "nowPlayingTake.scoreRating": "Rating",
-    "nowPlayingTake.scoreLyricsSung": "Lyrics sung",
-    "nowPlayingTake.scoreDynamics": "Dynamics",
-    "nowPlayingTake.scoreQuality": "Quality",
-    "nowPlayingTake.scoreEnjoyment": "Enjoyment",
-    "nowPlayingTake.scoreCoherence": "Coherence",
-    "nowPlayingTake.scoreBpm": "BPM",
-    "nowPlayingTake.rescoreAction": "Re-score this take to follow the lyrics.",
-    "nowPlayingTake.rescoring": "Re-scoring…",
-    "nowPlayingTake.rescore": "Re-score",
+    "nowPlayingJudging.label": "Judge this take",
+    "nowPlayingJudging.pick": "Pick",
+    "nowPlayingJudging.keep": "Keep",
+    "nowPlayingScores.heading": "Scores",
+    "nowPlayingScores.empty": "No scores yet",
+    "nowPlayingScores.lyricsSung": "Lyrics sung",
+    "nowPlayingScores.dynamics": "Dynamics",
+    "nowPlayingScores.quality": "Quality",
+    "nowPlayingScores.enjoyment": "Enjoyment",
+    "nowPlayingScores.coherence": "Coherence",
+    "nowPlayingScores.bpm": "BPM",
+    "nowPlayingScores.rescoring": "Re-scoring…",
     "nowPlayingTake.recipe": "Recipe",
-    "nowPlayingTake.rating": "Your rating",
-    "nowPlayingTake.ratingNotes": "Notes (optional)",
-    "nowPlayingTake.ratingSave": "Save rating",
-    "nowPlayingTake.ratingSaving": "Saving…",
-    "nowPlayingTake.useSeed": "Use seed",
-    "nowPlayingTake.repaint": "Repaint",
-    "nowPlayingTake.cover": "Cover",
+    "nowPlayingJudging.rating": "Rating",
+    "nowPlayingJudging.ratingNotes": "Notes (optional)",
     "takeRecipe.groupModel": "Model & Sampling",
     "takeRecipe.groupReproducibility": "Reproducibility",
     "takeRecipe.groupVersion": "Version",
@@ -2949,7 +2935,7 @@ export const words: Words = {
     "jobFailure.referenceAudioNotFound": "Reference audio not found",
     "jobFailure.referenceDeletedDuringTake": "The reference track was deleted while this take was generating.",
     "jobFailure.voiceUnavailable": "Selected voice is unavailable for this generation",
-    "jobFailure.generationCancelled": "Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+    "jobFailure.generationCancelled": "Job cancelled: it ran past the time limit or the worker shut down.",
     "jobFailure.partialTakes": (gaps: { readonly cause: string; readonly completed: string; readonly count: number; readonly failed: string }) => gaps.completed + "/" + numberFormat.format(gaps.count) + " completed, " + gaps.failed + " failed: " + gaps.cause,
     "jobFailure.scoringWorkerDown": "Scoring worker not running",
     "jobFailure.scoringEnqueueFailed": "Failed to enqueue auto-score job",
@@ -2961,6 +2947,7 @@ export const words: Words = {
     "jobFailure.tookTooLong": "Took too long to finish — please retry.",
     "jobFailure.queuedTooLong": "Queued too long — please retry.",
     "chatFailure.clientCancelled": "Turn cancelled by the client.",
+    "chatFailure.serverRestarted": "The reply stopped because songmaker restarted. Try again.",
     "chatFailure.requestCancelled": "Chat request cancelled",
     "chatFailure.setupFailed": "Chat setup failed",
     "chatFailure.requestFailed": "Chat request failed",
@@ -3046,7 +3033,6 @@ export const words: Words = {
     "nowPlaying.close": "Close",
     "nowPlaying.expand": "Expand",
     "nowPlaying.collapse": "Collapse",
-    "nowPlaying.goToSong": "Go to song",
     "nowPlaying.playAgain": "Play again",
     "nowPlaying.previousSong": "Previous song",
     "nowPlaying.nextSong": "Next song",

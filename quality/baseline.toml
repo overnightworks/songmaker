@@ -17,22 +17,22 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1202
+"frontend/e2e/back-closes-overlay.spec.ts" = 1201
 "frontend/e2e/helpers.ts" = 819
 "frontend/e2e/library.spec.ts" = 1231
 "frontend/e2e/seed.ts" = 1173
-"frontend/e2e/song-versions.spec.ts" = 839
+"frontend/e2e/song-versions.spec.ts" = 837
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1310
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1799
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
 "frontend/src/lib/components/LoraDetail.svelte" = 952
-"frontend/src/lib/components/NowPlaying.test.ts" = 1011
-"frontend/src/lib/components/NowPlayingFrame.svelte" = 1087
+"frontend/src/lib/components/NowPlaying.test.ts" = 1010
+"frontend/src/lib/components/NowPlayingFrame.svelte" = 1033
 "frontend/src/lib/components/PlayerBar.test.ts" = 1615
-"frontend/src/lib/components/SongDetailView.svelte" = 936
+"frontend/src/lib/components/SongDetailView.svelte" = 915
 "frontend/src/lib/components/SongDetailView.test.ts" = 1419
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 919
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1055
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1054
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1646
@@ -50,12 +50,12 @@
 "frontend/src/routes/settings/users/+page.svelte" = 918
 "src/songmaker_acestep_worker/wrapper.py" = 1057
 "src/songmaker_cli/jobs/generation.py" = 1036
-"src/songmaker_cli/jobs/lora_training.py" = 1472
+"src/songmaker_cli/jobs/lora_training.py" = 1449
 "src/songmaker_cli/queue_streams.py" = 825
 "tests/songmaker_acestep_engine/test_client.py" = 818
 "tests/songmaker_acestep_worker/test_wrapper.py" = 1496
 "tests/songmaker_acestep_worker/test_wrapper_train_lora.py" = 1177
-"tests/songmaker_cli/jobs/test_lora_training.py" = 1821
+"tests/songmaker_cli/jobs/test_lora_training.py" = 1713
 "tests/songmaker_cli/test_admin_api.py" = 908
 "tests/songmaker_cli/test_api.py" = 4343
 "tests/songmaker_cli/test_db.py" = 2404
@@ -67,7 +67,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 1929
 "tests/songmaker_cli/test_resource_event_api.py" = 1103
 "tests/songmaker_cli/test_scheduler.py" = 1278
-"tests/songmaker_cli/test_server.py" = 1632
+"tests/songmaker_cli/test_server.py" = 1631
 "tests/songmaker_cli/test_sharing_api.py" = 2385
 
 [function_lines."frontend/e2e/helpers.ts"]
@@ -153,7 +153,6 @@
 
 [function_lines."src/songmaker_cli/jobs/model_lifecycle.py"]
 "_run_download_attempt" = 80
-"load_model_on_worker" = 60
 
 [function_lines."src/songmaker_cli/jobs/scoring.py"]
 "run_scoring_job" = 90
@@ -175,11 +174,11 @@
 
 [function_lines."tests/songmaker_cli/jobs/test_lora_training.py"]
 "test_happy_path_transitions_and_persists" = 81
-"test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 70
+"test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 61
 "test_unknown_handover_probe_does_not_release_a_worker_owned_hold" = 64
 
 [function_lines."tests/songmaker_cli/jobs/test_lora_training_worker_auth.py"]
-"test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 66
+"test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 65
 
 [function_lines."tests/songmaker_cli/test_api.py"]
 "test_s8_live_stream_during_second_take" = 93

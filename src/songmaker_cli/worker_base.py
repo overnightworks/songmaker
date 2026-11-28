@@ -23,7 +23,6 @@ from logline import StepTimer, configure, unit_trace
 from redis.asyncio import Redis as AsyncRedis
 from tandem import WakeChannel
 
-from songmaker_cli.arq_codec import TRACEPARENT_KWARG
 from songmaker_cli.constants import WORKER_READINESS_FILE
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
@@ -33,6 +32,7 @@ from songmaker_cli.db.queries.jobs import (
     get_job,
     update_job_status,
 )
+from songmaker_cli.job_payloads import JobPayload
 from songmaker_cli.job_queue import (
     QUEUE_POLL_INTERVAL_SECONDS,
     ClaimedJob,
@@ -56,7 +56,8 @@ from songmaker_cli.worker_liveness import (
 
 log = logging.getLogger(__name__)
 
-JOB_ENDED_EVENT = "arq_job.ended"
+JOB_ENDED_EVENT = "queued_job.ended"
+JOB_STATUS_UNREADABLE_EVENT = "queued_job.status_unreadable"
 CRON_ENDED_EVENT = "cron_job.ended"
 JOB_FAILED_REASON = "job_failed"
 JOB_STATUS_UNREADABLE_REASON = "status_unreadable"
@@ -69,34 +70,31 @@ class WorkerStopRequested(Exception):
 
 def logged_job[Result](
     job_name: str,
-    job: Callable[..., Awaitable[Result]],
+    job: Callable[[str, JobPayload | None], Awaitable[Result]],
     *,
     status_of: Callable[[str], JobStatus | None] | None = None,
-) -> Callable[..., Awaitable[Result]]:
-    """Wrap an arq job so it runs in its enqueuer's trace and writes its one ``arq_job.ended`` line.
+) -> Callable[[str, JobPayload | None], Awaitable[Result]]:
+    """Wrap a claimed job so it runs in a trace of its own and writes one ``queued_job.ended`` line.
 
-    A job enqueued outside a trace, a cron job included, starts a trace of its own; the trace
-    ends with the job, so a failed job leaves nothing for the next one.
+    The trace ends with the job, so a failed job leaves nothing for the next one.
 
-    The line carries the job's function name and, for a queued job, its job id (the first
-    argument; a cron job has none): ids only, never the job's content. A job records its result
-    in its row and returns normally, so ``status_of`` names how that row reads once the job
-    returned: ``failed`` ends the line as failed (reason ``job_failed``) and ``cancelled`` as
-    cancelled; any other status, or none, leaves it ``ok``. A status that cannot be read never
-    fails the job, which finished: the line ends as failed, reason ``status_unreadable``, as a
-    warning, and a warning names the read's exception class.
+    The line carries the job's function name and its job id: ids only, never the job's content.
+    A job records its result in its row and returns normally, so ``status_of`` names how that
+    row reads once the job returned: ``failed`` ends the line as failed (reason ``job_failed``)
+    and ``cancelled`` as cancelled; any other status, or none, leaves it ``ok``. A status that
+    cannot be read never fails the job, which finished: the line ends as failed, reason
+    ``status_unreadable``, as a warning, and a warning names the read's exception class.
     """
 
     @functools.wraps(job)
-    async def run(ctx, *args, **kwargs) -> Result:
-        fields = {"job_function": job_name}
-        if args:
-            fields["job_id"] = args[0]
-        with unit_trace(kwargs.pop(TRACEPARENT_KWARG, None)):
-            async with StepTimer(JOB_ENDED_EVENT, log, **fields) as timer:
-                result = await job(ctx, *args, **kwargs)
-                if status_of is not None and args:
-                    status = await _read_status(status_of, args[0], timer)
+    async def run(job_id: str, payload: JobPayload | None) -> Result:
+        with unit_trace(None):
+            async with StepTimer(
+                JOB_ENDED_EVENT, log, job_function=job_name, job_id=job_id,
+            ) as timer:
+                result = await job(job_id, payload)
+                if status_of is not None:
+                    status = await _read_status(status_of, job_id, timer)
                     if status is JobStatus.FAILED:
                         timer.fail(JOB_FAILED_REASON)
                     elif status is JobStatus.CANCELLED:
@@ -133,7 +131,7 @@ async def _read_status(
         timer.handled()
         timer.fail(JOB_STATUS_UNREADABLE_REASON)
         log.warning(
-            "arq_job.status_unreadable",
+            JOB_STATUS_UNREADABLE_EVENT,
             extra={"job_id": job_id, "error_type": type(error).__name__},
         )
         return None
@@ -166,7 +164,7 @@ class WorkerBase:
         self._db_lock = threading.Lock()
         self.owner_id = str(uuid.uuid4())
         self.owner: JobOwner
-        self._owner_redis: AsyncRedis | None = None
+        self._owner_redis: AsyncRedis
         self.wake_channel: WakeChannel
         self._lease_stack: AsyncExitStack | None = None
         self._stop_requested = threading.Event()
@@ -236,7 +234,7 @@ class WorkerBase:
             self.wake_channel, self.queue,
             claim=self.claim_next_job, run=self.run_claimed,
             places=self._places, poll_interval=QUEUE_POLL_INTERVAL_SECONDS,
-            drain_seconds=self._settings.arq_drain_timeout,
+            drain_seconds=self._settings.worker_drain_timeout,
         )
 
     def servings(self) -> tuple[Coroutine[None, None, None], ...]:

@@ -1,7 +1,7 @@
 import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { SongItem } from '#lib/api/types.ts';
+import type { ShareResult, SongItem } from '#lib/api/types.ts';
 
 vi.mock('#lib/api/client.ts', () => ({
 	fetchSong: vi.fn(),
@@ -11,8 +11,11 @@ vi.mock('#lib/api/client.ts', () => ({
 	unkeepGeneration: vi.fn(),
 	unarchiveGeneration: vi.fn(),
 	rateGeneration: vi.fn(),
-	scoreGeneration: vi.fn()
+	scoreGeneration: vi.fn(),
+	shareGeneration: vi.fn(),
+	unshareGeneration: vi.fn()
 }));
+vi.mock('#lib/stores/playlists.ts', () => ({ addGenerationToPlaylist: vi.fn() }));
 
 import type { JobStatus } from '#lib/api/client.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
@@ -22,15 +25,29 @@ import {
 	pickGeneration,
 	rateGeneration,
 	scoreGeneration,
+	shareGeneration,
 	unarchiveGeneration,
 	unkeepGeneration,
 	unpickGeneration
 } from '#lib/api/client.ts';
 import { songList } from '#lib/stores/libraryData.ts';
+import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { words } from '#lib/words/en.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
-import { rate, rescore, rescoringTakeIds, restoreTake, setKeep, setPick } from './takeActions';
+import {
+	addTakeToPlaylist,
+	rate,
+	rescore,
+	rescoringTakeIds,
+	restoreTake,
+	setKeep,
+	setPick,
+	shareTake,
+	toggleKeep,
+	togglePick,
+	unshareTake
+} from './takeActions';
 
 const unreachableServer = () =>
 	new NetworkError('/api/generations/g1', new TypeError('Failed to fetch'));
@@ -191,17 +208,50 @@ describe('restoreTake', () => {
 	});
 });
 
+describe.each([
+	{
+		name: 'togglePick',
+		toggle: togglePick,
+		field: 'is_picked',
+		on: pickGeneration,
+		off: unpickGeneration
+	},
+	{
+		name: 'toggleKeep',
+		toggle: toggleKeep,
+		field: 'is_kept',
+		on: keepGeneration,
+		off: unkeepGeneration
+	}
+] as const)('$name', ({ toggle, field, on, off }) => {
+	it('sets a take that is not yet set', async () => {
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
+
+		await toggle('s1', generation({ [field]: false }));
+
+		expect(on).toHaveBeenCalledWith('g1');
+		expect(off).not.toHaveBeenCalled();
+	});
+
+	it('clears a take that is already set', async () => {
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
+
+		await toggle('s1', generation({ [field]: true }));
+
+		expect(off).toHaveBeenCalledWith('g1');
+		expect(on).not.toHaveBeenCalled();
+	});
+});
+
 describe('rate', () => {
-	it('rates a generation, refreshes songList, and confirms via toast', async () => {
+	it('rates a generation and refreshes songList without a success toast', async () => {
 		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
 
 		await rate('s1', 'g1', 80, 'great take');
 
 		expect(rateGeneration).toHaveBeenCalledWith('g1', 80, 'great take');
 		expect(get(songList)).toEqual([song(actionSongDefaults())]);
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: words['takeActions.ratingSaved'], type: 'success' })
-		]);
+		expect(get(toasts)).toEqual([]);
 	});
 
 	it('defaults notes to an empty string', async () => {
@@ -344,4 +394,47 @@ describe('a failed take action', () => {
 			]);
 		}
 	);
+});
+
+describe('the take menu shared actions', () => {
+	const shareResult: ShareResult = {
+		status: 'ok',
+		share_url: 'https://example.com/share/gen/tide',
+		share_slug: 'tide',
+		songs_without_playable_take: []
+	};
+
+	function takeInList() {
+		return get(songList)[0].generations[0];
+	}
+
+	beforeEach(() => {
+		songList.set([song(actionSongDefaults())]);
+	});
+
+	it('marks the take shared in the library once it is shared, and unshared once it is not', async () => {
+		vi.mocked(shareGeneration).mockResolvedValue(shareResult);
+		const { id } = takeInList();
+
+		await shareTake(id);
+		expect(takeInList()).toMatchObject({ is_shared: true, share_slug: 'tide' });
+
+		await unshareTake(id);
+		expect(takeInList()).toMatchObject({ is_shared: false, share_slug: null });
+	});
+
+	it('toasts that a take was added to a playlist, and why it was not', async () => {
+		await addTakeToPlaylist('p1', 'g1');
+		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: words['takesList.addedToPlaylist'], type: 'success' })
+		]);
+
+		toasts.set([]);
+		vi.mocked(addGenerationToPlaylist).mockRejectedValue(new Error('refused'));
+		await addTakeToPlaylist('p1', 'g1');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: words['takesList.addFailed'], type: 'error' })
+		]);
+	});
 });

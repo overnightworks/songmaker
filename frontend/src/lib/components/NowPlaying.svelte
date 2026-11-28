@@ -1,17 +1,25 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import type { GenerationItem } from '#lib/api/types.ts';
+	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 	import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		type NowPlayingSource,
 		type PlaybackSource,
+		nowPlayingFromLabel,
+		nowPlayingTakeLabel,
+		SOURCE_OPEN_LABEL_KEYS,
 		takeVersion
 	} from '#lib/constants/now-playing.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { albumList, songList } from '#lib/stores/libraryData.ts';
-	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
+	import {
+		openAlbum,
+		openPlaylist,
+		openTakeVersion,
+		revealPlayingSong
+	} from '#lib/stores/navigation.ts';
 	import {
 		canPlayNextSong,
 		canPlayPrevSong,
@@ -40,14 +48,27 @@
 		queueContext
 	} from '#lib/stores/queue.ts';
 	import { libraryTakePool, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
-	import { setKeep, setPick } from '#lib/stores/takeActions.ts';
+	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
+	import {
+		addTakeToPlaylist,
+		rescore,
+		restoreTake,
+		shareTake,
+		toggleKeep,
+		togglePick,
+		unshareTake
+	} from '#lib/stores/takeActions.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { isEditableElement } from '#lib/utils/escape-level-up.ts';
+	import AiNotice from './AiNotice.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
+	import NowPlayingJudging from './NowPlayingJudging.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
+	import NowPlayingScores from './NowPlayingScores.svelte';
 	import NowPlayingTake from './NowPlayingTake.svelte';
+	import TakeMenu from './editor/TakeMenu.svelte';
 
 	// The app's Now Playing surface owns its own transport and navigation
 	// wiring — every one of its actions is a player-store action, so the mount
@@ -66,6 +87,10 @@
 	const mobileTriggerLabel = $derived(
 		pageText(rightPanelTab === 'take' ? 'nowPlaying.takeTab' : 'nowPlaying.queueTab')
 	);
+
+	// The frame reports which layout it chose, so the scores and the subtitle
+	// take the narrow form where it stacks.
+	let stackedLayout = $state(false);
 
 	// 'closed' never reaches here: the layout only mounts this surface while
 	// Now Playing is open.
@@ -91,6 +116,12 @@
 		return playing ? { ...playing, open: () => leaveFor(() => openSource(playing)) } : null;
 	});
 
+	const albumLine = $derived(
+		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
+	);
+	const takeLabel = $derived(
+		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
+	);
 	const coverUrl = $derived.by(() => {
 		const song = songs.find((item) => item.id === info.songId);
 		const album = song ? $albumList.find((item) => item.id === song.album_id) : undefined;
@@ -184,16 +215,27 @@
 		leaveFor(navigateToPlaying);
 	}
 
-	// P and K judge the playing take like the Take tab's Pick and Keep do, from
+	function useOnSong(take: GenerationItem, owner: SongItem, use: TakeUse): void {
+		pendingTakeUse.set({ generation: take, use });
+		closeNowPlaying();
+		void revealPlayingSong(owner, take.id);
+	}
+
+	function openVersion(take: GenerationItem, owner: SongItem, versionId: string): void {
+		closeNowPlaying();
+		void openTakeVersion(owner, take.id, versionId);
+	}
+
+	// P and K judge the playing take like the judging card's Pick and Keep do, from
 	// anywhere in the surface (docked or full, whichever tab is open) and never
-	// while a text field has focus (the rating notes textarea, an editable title
+	// while a text field has focus (the judging card's note, an editable title
 	// elsewhere on the page). isEditableElement is the same check the app's own
 	// global Escape handling uses (utils/escape-level-up), so it also yields to a
 	// contenteditable, not just input/textarea. They act on the resolved take,
 	// not info.generation, whose snapshot goes stale once a pick or keep lands.
 	const JUDGING_KEY_HANDLERS: Record<string, (songId: string, take: GenerationItem) => unknown> = {
-		p: (songId, take) => setPick(songId, take.id, !take.is_picked),
-		k: (songId, take) => setKeep(songId, take.id, !take.is_kept)
+		p: togglePick,
+		k: toggleKeep
 	};
 
 	function onJudgingKeydown(event: KeyboardEvent): void {
@@ -267,13 +309,71 @@
 	</div>
 {/snippet}
 
+{#snippet takeMenu()}
+	{#if playingGeneration && song}
+		{@const take = playingGeneration}
+		{@const owner = song}
+		<TakeMenu
+			gen={take}
+			onopenversion={(versionId) => openVersion(take, owner, versionId)}
+			ongotosong={goToSong}
+			onrepaint={() => useOnSong(take, owner, 'repaint')}
+			oncover={() => useOnSong(take, owner, 'cover')}
+			onuseseed={() => useOnSong(take, owner, 'seed')}
+			onrescore={() => void rescore(owner.id, take.id)}
+			onshare={() => shareTake(take.id)}
+			onunshare={() => unshareTake(take.id)}
+			onaddto={(playlistId) => void addTakeToPlaylist(playlistId, take.id)}
+			onrestore={() => void restoreTake(owner.id, take.id)}
+		/>
+	{/if}
+{/snippet}
+
+{#snippet subtitle()}
+	<span class="subtitle" class:with-source={stackedLayout && source}>
+		{#if stackedLayout && source}
+			<span class="source-line">
+				<button
+					type="button"
+					class="from-link"
+					data-hitbox="text"
+					onclick={source.open}
+					aria-label={pageText(SOURCE_OPEN_LABEL_KEYS[source.kind], { title: source.title })}
+				>
+					{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
+				</button>
+				<span aria-hidden="true">·</span>
+				<span class="take-label">{takeLabel}</span>
+			</span>
+		{:else}
+			<span class="subtitle-text">{[albumLine, takeLabel].filter(Boolean).join(' · ')}</span>
+		{/if}
+		<AiNotice look="badge" />
+	</span>
+{/snippet}
+
+{#snippet scores()}
+	{#if playingGeneration}
+		<NowPlayingScores
+			generation={playingGeneration}
+			look={stackedLayout || surface === 'docked' ? 'chips' : 'footer'}
+		/>
+	{/if}
+{/snippet}
+
+{#snippet judging()}
+	{#if playingGeneration && song}
+		<NowPlayingJudging generation={playingGeneration} {song} />
+	{/if}
+{/snippet}
+
 <svelte:window onkeydown={onJudgingKeydown} />
 
 <NowPlayingFrame
 	{info}
 	{coverUrl}
-	{source}
 	{surface}
+	bind:stacked={stackedLayout}
 	onclose={closeNowPlaying}
 	onExpand={expandNowPlaying}
 	onCollapse={$nowPlayingDockable ? dockNowPlaying : undefined}
@@ -284,7 +384,6 @@
 	{shuffle}
 	shuffleLabel={$shuffleLabel}
 	onToggleShuffle={() => toggleShuffle()}
-	onGoToSong={goToSong}
 	upNextTitle={queueVm.upNext?.songTitle ?? null}
 	rightPanelLabel={mobileTriggerLabel}
 	sheetLabel={pageText('nowPlaying.rightPanel')}
@@ -293,9 +392,62 @@
 	lyricsCues={playingGeneration?.whisper_cues ?? null}
 	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}
+	{judging}
+	{scores}
+	{subtitle}
+	{takeMenu}
 />
 
 <style>
+	/* The line keeps a compact target's height: a coarse pointer's taller target
+	   for the source link overflows it above and below instead of taking that
+	   height from the phone's lyrics window. */
+	.subtitle {
+		height: var(--hitbox-compact);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: var(--label-font-size);
+		color: var(--text-muted);
+	}
+	/* The source and the take share the first line, the notice takes the next, so
+	   the source is cut only when it cannot sit beside the take part. */
+	.subtitle.with-source {
+		height: auto;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0;
+	}
+	.source-line {
+		display: flex;
+		height: var(--hitbox-compact);
+		line-height: 1.2;
+		align-items: center;
+		gap: 0.4rem;
+		max-width: 100%;
+	}
+	.from-link {
+		min-width: 0;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent);
+		font: inherit;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.take-label {
+		flex: none;
+		white-space: nowrap;
+	}
+	.subtitle-text {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.panel-toggle {
 		display: flex;
 		gap: 0.3rem;
@@ -319,8 +471,9 @@
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
+	/* The floor a short dock shrinks it to: the Queue heading and its first row. */
 	.panel-content {
-		min-height: 0;
+		min-height: 4.5rem;
 		overflow-y: auto;
 	}
 </style>

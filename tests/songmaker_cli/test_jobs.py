@@ -16,7 +16,7 @@ from support.generation_job_world import (
     persist_via_post_process,
     run_async,
 )
-from support.job_owner import an_owner
+from support.job_owner import an_owner, given_owner_redis
 from support.score_jobs import ScoringRedis
 from support.web_app import SettledFakeAsyncRedis
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
@@ -270,7 +270,7 @@ def test_a_generation_the_hold_requeues_twice_keeps_the_arguments_of_its_row(
         session.commit()
     worker = MusicWorker()
     worker.owner = an_owner(worker.owner_id)
-    worker._job_context = {"redis": MagicMock()}
+    given_owner_redis(worker, MagicMock())
     with (
         patch.object(worker, "get_db_factory", return_value=seeded_db),
         patch.object(worker, "audio_dir", return_value=tmp_path / "audio"),
@@ -301,7 +301,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
     with (
         patch("songmaker_cli.jobs.admit_generation_worker", admitted),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -494,7 +494,7 @@ def test_generation_series_keeps_its_admission_until_the_third_take(
     with (
         patch("songmaker_cli.jobs.admit_generation_worker", admitted),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", released),
+        patch("songmaker_cli.jobs.generation.release_admission", released),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -636,7 +636,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
             "songmaker_cli.jobs.admit_generation_worker",
             AsyncMock(return_value=MagicMock(id="w1")),
         ),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
     ):
         run_async(
             run_generation_job(
@@ -664,7 +664,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
             "songmaker_cli.jobs.admit_generation_worker",
             AsyncMock(return_value=MagicMock(id="w1")),
         ),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
     ):
         run_async(
             run_generation_job(
@@ -1013,7 +1013,7 @@ def test_generation_event_failure_rolls_back_generation(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_with_artifacts),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch(
@@ -1305,7 +1305,7 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
@@ -1336,7 +1336,7 @@ def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Pat
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -1415,7 +1415,7 @@ def test_generation_job_cancelled_after_setup_does_not_dispatch_or_persist(
             AsyncMock(return_value=MagicMock(id="w1")),
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.generation._update_job", side_effect=mark_running_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -1467,7 +1467,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -1511,7 +1511,7 @@ def test_generation_job_cancel_after_worker_skips_persist(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch(
             "songmaker_cli.jobs.post_process_generation",
             side_effect=persist_via_post_process,
@@ -2412,7 +2412,7 @@ def test_load_model_on_worker_success(seeded_db, internal_token: str) -> None:
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        run_async(load_model_on_worker({}, "w1-job", "w1", "sft",
+        run_async(load_model_on_worker("w1-job", "w1", "sft",
             db_factory=seeded_db, owner=an_owner("o1")))
 
     with seeded_db() as session:
@@ -2434,7 +2434,7 @@ def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
         session.add(Job(id="job1", type="load_model_on_worker", status="queued"))
         session.commit()
 
-    run_async(load_model_on_worker({}, "job1", "missing", "sft",
+    run_async(load_model_on_worker("job1", "missing", "sft",
         db_factory=seeded_db, owner=an_owner("o1")))
 
     with seeded_db() as session:
@@ -2460,7 +2460,7 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        run_async(load_model_on_worker({}, "w1-job", "w1", "sft",
+        run_async(load_model_on_worker("w1-job", "w1", "sft",
             db_factory=seeded_db, owner=an_owner("o1")))
 
     with seeded_db() as session:
@@ -2487,7 +2487,7 @@ def test_load_model_on_worker_returns_5xx(seeded_db, response_format: str) -> No
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        run_async(load_model_on_worker({}, "w1-job", "w1", "sft",
+        run_async(load_model_on_worker("w1-job", "w1", "sft",
             db_factory=seeded_db, owner=an_owner("o1")))
 
     with seeded_db() as session:
@@ -2514,7 +2514,7 @@ def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, capl
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("httpx.AsyncClient", return_value=fake_client):
-        run_async(load_model_on_worker({}, "w1-job", "w1", "sft",
+        run_async(load_model_on_worker("w1-job", "w1", "sft",
             db_factory=seeded_db, owner=an_owner("o1")))
 
     assert "w1-job" in caplog.text
@@ -2563,8 +2563,8 @@ def test_download_model_on_worker_unknown_mode(seeded_db) -> None:
 
     _seed_download_job(seeded_db, "dl1")
     redis = _FakeRedis()
-    run_async(download_model_on_worker({"redis": redis}, "dl1", "ghost",
-        db_factory=seeded_db, owner=an_owner("o1")))
+    run_async(download_model_on_worker("dl1", "ghost",
+        db_factory=seeded_db, owner=an_owner("o1"), redis=redis))
 
     with seeded_db() as session:
         job = get_job(session, "dl1")
@@ -2579,7 +2579,7 @@ def test_download_model_on_worker_no_online_workers(seeded_db) -> None:
     _seed_download_job(seeded_db, "dl2")
     redis = _FakeRedis()
     run_async(download_model_on_worker(
-        {"redis": redis}, "dl2", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+        "dl2", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
     ))
 
     with seeded_db() as session:
@@ -2608,7 +2608,7 @@ def test_download_model_on_worker_unreachable(seeded_db) -> None:
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl3", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl3", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2635,7 +2635,7 @@ def test_download_model_on_worker_returns_5xx(seeded_db, response_format: str) -
 
     with patch("httpx.AsyncClient", return_value=fake_client):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl4", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl4", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2676,7 +2676,7 @@ def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> 
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl5", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl5", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2727,7 +2727,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl6", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl6", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2767,7 +2767,7 @@ def test_download_model_on_worker_sse_transport_error(seeded_db) -> None:
         ),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl7", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl7", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2802,7 +2802,7 @@ def test_download_model_on_worker_clears_redis_flag_on_success(seeded_db) -> Non
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl8", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl8", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     assert download_key("sft") not in redis.store
@@ -2817,7 +2817,7 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
 
     run_async(download_model_on_worker(
 
-        {"redis": redis}, "dl9", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+        "dl9", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
 
     ))
 
@@ -2835,7 +2835,7 @@ def test_download_model_on_worker_aborts_when_another_job_holds_the_download(see
 
     run_async(download_model_on_worker(
 
-        {"redis": redis}, "dl10", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+        "dl10", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
 
     ))
 
@@ -2884,7 +2884,7 @@ def test_download_retries_on_worker_task_failed_then_succeeds(seeded_db) -> None
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-retry-1", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl-retry-1", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2930,7 +2930,7 @@ def test_download_retries_on_sse_drop_then_succeeds(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-retry-2", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl-retry-2", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -2972,7 +2972,7 @@ def test_download_does_not_retry_on_connect_error(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-noretry", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl-noretry", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     with seeded_db() as session:
@@ -3016,7 +3016,7 @@ def test_download_redis_flag_held_across_retries(seeded_db) -> None:
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         run_async(download_model_on_worker(
-            {"redis": redis}, "dl-flag", "sft", db_factory=seeded_db, owner=an_owner("o1"),
+            "dl-flag", "sft", db_factory=seeded_db, owner=an_owner("o1"), redis=redis
         ))
 
     assert seen_during_retries == [True, True, True]

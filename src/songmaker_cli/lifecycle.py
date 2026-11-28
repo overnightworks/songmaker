@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
 
 from fastapi import FastAPI
 from redis.asyncio import Redis as AsyncRedis
+from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
 from tandem import Client, Lapse, Liveness, Locks, Roster, StoreError
 
-from songmaker_cli.acestep_state import decode_redis_text
+from songmaker_cli.acestep_state import decode_redis_text, remove_admissions_of_ended_jobs
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
@@ -71,10 +72,6 @@ def tick_locks(redis: Client) -> Locks:
     )
 
 
-def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
-    return app.state.background_loop_registry
-
-
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
     """Delete delivered event history beyond retention, preserving cursors."""
     from songmaker_cli.db.queries.resource_events import delete_resource_events_before
@@ -100,7 +97,7 @@ async def resource_event_cleanup_loop(app: FastAPI) -> None:
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = ctx.background_loops
     tick = 0
     while True:
         await asyncio.sleep(RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS)
@@ -258,7 +255,7 @@ async def score_backfill_loop(app: FastAPI) -> None:
     from songmaker_cli.constants import SCORE_BACKFILL_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = ctx.background_loops
     locks = tick_locks(ctx.async_redis)
     while True:
         await asyncio.sleep(SCORE_BACKFILL_INTERVAL_SECONDS)
@@ -301,6 +298,17 @@ def reap_stale_jobs(
     ``rosters`` is what the caller read of each worker kind's leases (``read_kind_rosters``); it
     matters only when ``worker_liveness`` is not given.
     """
+    recovered_count = _recover_stale_jobs(ctx, now, worker_liveness, rosters)
+    reconcile_admitted_generations(ctx)
+    return recovered_count
+
+
+def _recover_stale_jobs(
+    ctx: AppContext,
+    now: datetime | None,
+    worker_liveness: Mapping[JobType, WorkerLiveness] | None,
+    rosters: Mapping[WorkerLivenessSignal, Roster | None] | None,
+) -> int:
     from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
 
     if worker_liveness is None:
@@ -316,11 +324,42 @@ def reap_stale_jobs(
     return recovered_count
 
 
+def reconcile_admitted_generations(ctx: AppContext) -> int:
+    """Remove from every ACE-Step worker's queue depth the admissions whose job has ended.
+
+    A generation killed after its admission never releases it, whichever path then failed its job.
+    Run after the recovery has committed, it removes exactly the ids the database calls terminal,
+    so an admission made meanwhile stays. A Redis that cannot be reached leaves the depth for the
+    next pass, so the database clean-ups and the start of the server never wait on it. Returns the
+    number of ids removed.
+    """
+    from songmaker_cli.db.queries.jobs import terminal_job_ids
+    from songmaker_cli.db.queries.workers import list_worker_identities
+
+    def ended_among(job_ids: Collection[str]) -> set[str]:
+        with ctx.db() as session:
+            return terminal_job_ids(session, job_ids)
+
+    with ctx.db() as session:
+        worker_ids = [worker.id for worker in list_worker_identities(session)]
+    try:
+        removed = sum(
+            remove_admissions_of_ended_jobs(ctx.redis, worker_id, ended_among)
+            for worker_id in worker_ids
+        )
+    except RedisError:
+        log.warning("The queue depth could not be reconciled; the next pass retries", exc_info=True)
+        return 0
+    if removed:
+        log.warning("Removed %d admission(s) of ended generation(s) from the queue depth", removed)
+    return removed
+
+
 def reconcile_crashed_loras(ctx: AppContext) -> int:
     """Mark LoRAs stuck in active statuses as FAILED when their job is terminal.
 
     Runs at web-process startup and on every :func:`stale_job_reaper_loop`
-    tick. If the ARQ worker crashed mid-training, the LoRA row stays in
+    tick. If the music worker crashed mid-training, the LoRA row stays in
     PREPROCESSING / TRAINING / EXPORTING even though no job is running. It
     delegates locked, per-LoRA database reconciliation and post-commit
     filesystem cleanup to the LoRA job owner after the lifecycle reaper has
@@ -346,9 +385,10 @@ def _run_stale_job_reaper_tick(
 
     Returns ``(jobs_recovered, loras_reconciled)``.
     """
-    recovered_jobs = reap_stale_jobs(ctx, now=now, rosters=rosters)
+    recovered_jobs = _recover_stale_jobs(ctx, now, None, rosters)
     reconciled_loras = reconcile_crashed_loras(ctx)
     reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
+    reconcile_admitted_generations(ctx)
     return recovered_jobs, reconciled_loras
 
 
@@ -359,7 +399,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
     tandem lock as ``score_backfill_loop`` so one web replica handles each tick.
     """
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = ctx.background_loops
     locks = tick_locks(ctx.async_redis)
     while True:
         await asyncio.sleep(JOB_REAPER_INTERVAL_SECONDS)
@@ -377,7 +417,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
 
 
 async def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
-    """Fail the active jobs whose lease generation is gone, then clean their covers.
+    """Fail the active jobs whose lease generation is gone, then clean their covers and voices.
 
     A job fails only when the lease generation it names is gone: its owner's lease ended, or
     started anew under another generation. A job that names no generation fails with its owner.
@@ -417,6 +457,8 @@ def _fail_jobs_of_gone_owners(
     recovered_count = sum(recovered.values())
     if recovered_count:
         reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
+        reconcile_crashed_loras(ctx)
+    reconcile_admitted_generations(ctx)
     return recovered_count
 
 
@@ -429,7 +471,7 @@ async def owner_lapse_loop(app: FastAPI) -> None:
     worker kind's family are served beside them, so each family's state ends with its leases.
     """
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = ctx.background_loops
 
     async def fail_jobs_of_lapsed_owner(_lapse: Lapse) -> None:
         try:
@@ -481,7 +523,7 @@ async def owner_gone_reaper_loop(app: FastAPI) -> None:
     this process's own lease into the ``owner_lease`` health.
     """
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = ctx.background_loops
     while True:
         await asyncio.sleep(OWNER_GONE_CHECK_INTERVAL_SECONDS)
         await record_own_owner_lease_health(ctx, registry)
@@ -510,7 +552,7 @@ async def session_cleanup_loop(
     from songmaker_cli.constants import SESSION_CLEANUP_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
-    registry = background_loop_registry(app)
+    registry = ctx.background_loops
 
     while True:
         await wait(SESSION_CLEANUP_INTERVAL_SECONDS)

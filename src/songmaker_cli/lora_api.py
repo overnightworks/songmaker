@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -38,6 +38,7 @@ from songmaker_cli.audio_paths import (
     AudioFileNotFoundError,
     AudioPathRejectedError,
     canonical_audio_path,
+    lora_relative_root,
     resolve_audio_path,
 )
 from songmaker_cli.auth_dependencies import get_current_user
@@ -49,7 +50,6 @@ from songmaker_cli.constants import (
     USER_LORA_MIN_SAMPLES_FOR_TRAINING,
     USER_LORA_SAMPLE_MAX_BYTES,
     USER_LORA_SAMPLES_DIRNAME,
-    USER_LORAS_DIRNAME,
     AuditAction,
     LoraStatus,
     ResourceType,
@@ -87,9 +87,7 @@ router = APIRouter()
 
 def _sample_relative_path(user_id: str, lora_id: str, sample_id: str, suffix: str) -> str:
     return (
-        PurePosixPath(USER_LORAS_DIRNAME)
-        / user_id
-        / lora_id
+        lora_relative_root(user_id, lora_id)
         / USER_LORA_SAMPLES_DIRNAME
         / f"{sample_id}{suffix}"
     ).as_posix()

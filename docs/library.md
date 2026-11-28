@@ -38,6 +38,8 @@ For anyone building or reviewing library playback pools, shuffle and the player:
 
 ### REQ-PLAYER-03: In the signed-in player's Now Playing the written lyrics stay intact; a word sung differently or not at all carries a dotted underline, and a tap or hover on it shows one "Sung" line with what was sung under that lyric line; there is no switch, no strike-through and no second printout.
 
+### REQ-PLAYER-04: In the signed-in player's Now Playing, a judging card in the take column holds Pick, Keep, the rating slider and the note on the full, docked and phone surfaces; it saves without a Save button, the rating when the slider is released and the note after a pause in typing and when the field is left, shows no toast on success, and keeps the typed text when a save fails.
+
 ### REQ-PLAYER-20: A take or a queue stream that is loaded without saying whether to play starts playing.
 
 ### REQ-PLAYER-21: Where the continuous stream holds no take at the playhead, the position shown follows the audio clock, and a load of another take starts a fresh stream.

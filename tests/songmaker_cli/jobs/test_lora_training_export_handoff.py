@@ -6,10 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from songmaker_cli.constants import (
-    USER_LORA_TRAINING_TMP_DIRNAME,
-    USER_LORAS_DIRNAME,
-)
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
+from songmaker_cli.constants import USER_LORA_TRAINING_TMP_DIRNAME
 from songmaker_cli.jobs.lora_training import (
     TrainLoraTaskResultDTO,
     _sanitize_training_error,
