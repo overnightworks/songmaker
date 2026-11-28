@@ -1,8 +1,0 @@
-claim_id = "c6ac4ae2dd7f49a5a4162729f0dee9de"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "ff24b3b53788de4fa32a86edc725b51959f36159"
-branch = "claude/issue-3215-jobs-lose-worker-pid"
-scope = ["src/songmaker_cli/db/models.py"]
-opened_commit = "dadfa05ef7963ed016df7d91ca5907b42c0f31c0"
-whole_reason = "One column drop: its migration, the model field and the migration test that proves it."
