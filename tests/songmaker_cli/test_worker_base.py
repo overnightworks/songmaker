@@ -44,7 +44,7 @@ class DatabaseEngine(NamedTuple):
 
 @pytest.fixture
 def database_engine() -> Iterator[DatabaseEngine]:
-    """The ``init_db`` the worker calls and the engine it returns, so a test sees whether its pool is disposed."""
+    """The ``init_db`` the worker calls and its engine, to see whether the pool is disposed."""
     engine = MagicMock()
     with patch("songmaker_cli.worker_base.init_db") as init_db:
         init_db.return_value.kw = {"bind": engine}
