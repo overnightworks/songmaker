@@ -13,7 +13,7 @@ import {
 	workspace
 } from './helpers';
 import { showTab } from './foldedSong';
-import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
+import { openNowPlayingFromBar, playOpenAlbum, scoreTheTakes } from './play-album';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
 import { takeMenuRows } from './take-menu-rows';
@@ -84,26 +84,6 @@ async function rowWords(menu: Locator): Promise<string[]> {
 	return rows.map((row) => known.find((word) => row.trim().startsWith(word)) ?? row.trim());
 }
 
-/** Every take of the song carries scores, a Rating among them, beside its own, as the song loads. */
-async function scoreTheTakes(page: Page, scoredSongId = songId): Promise<void> {
-	await page.route(new RegExp(`/api/songs/${scoredSongId}$`), async (route) => {
-		const response = await route.fetch();
-		const song = (await response.json()) as { generations: { scores?: object }[] };
-		const scores = {
-			user_rating: 72,
-			text_accuracy: 86,
-			dynamics: 55,
-			audiobox_quality: 7.4,
-			audiobox_enjoyment: 6.8
-		};
-		song.generations = song.generations.map((take) => ({
-			...take,
-			scores: { ...take.scores, ...scores }
-		}));
-		await route.fulfill({ response, json: song });
-	});
-}
-
 const MENU_ROWS = takeMenuRows(true);
 
 /** Whether a click at the element's centre reaches it, with nothing laid over it. */
@@ -156,7 +136,7 @@ test('Re-score is disabled while the take re-scores and the Scores show the pend
 		await answered;
 		await route.fulfill({ status: 409, json: { detail: 'No scoring in this test' } });
 	});
-	await scoreTheTakes(page);
+	await scoreTheTakes(page, songId);
 	const surface = await openNowPlaying(page, shellOf(testInfo), {
 		refusalsExpectedOn: [{ statuses: [409], path: '/api/generations/' }]
 	});
@@ -182,7 +162,7 @@ test('Re-score is disabled while the take re-scores and the Scores show the pend
 test('the Scores carry no control and no Rating, and the frame has no Go to song', async ({
 	page
 }, testInfo) => {
-	await scoreTheTakes(page);
+	await scoreTheTakes(page, songId);
 	const surface = await openNowPlaying(page, shellOf(testInfo));
 
 	const scores = surface.getByRole('region', { name: words['nowPlayingScores.heading'] });
@@ -197,7 +177,7 @@ test(
 	'nothing in the docked panel covers another control or a score',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
-		await scoreTheTakes(page);
+		await scoreTheTakes(page, songId);
 		await openNowPlaying(page, 'desktop');
 		const docked = page.getByRole('complementary');
 		const scores = docked.getByRole('region', { name: words['nowPlayingScores.heading'] });
@@ -280,7 +260,7 @@ test(
 		await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height: 664 });
 		// A next song gives the Queue row its Up next line.
 		await seedSongPhoneSong(albumId, `Take menu second song ${Date.now()}`, 1, 1);
-		await scoreTheTakes(page);
+		await scoreTheTakes(page, songId);
 		const surface = await openNowPlaying(page, 'mobile');
 
 		await expect(

@@ -396,7 +396,11 @@
 />
 
 <style>
+	/* The line keeps a compact target's height: a coarse pointer's taller target
+	   for the source link overflows it above and below instead of taking that
+	   height from the phone's lyrics window. */
 	.subtitle {
+		height: var(--hitbox-compact);
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;

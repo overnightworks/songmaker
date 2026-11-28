@@ -2,7 +2,7 @@
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { FlowGuard, MOBILE_VIEWPORT, ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
-import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
+import { openNowPlayingFromBar, playOpenAlbum, scoreTheTakes } from './play-album';
 import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
 
@@ -25,11 +25,12 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 		guard.assertClean();
 	});
 
-	/** Runs the flow in Now Playing of a song with a two-line title, in an album of its own. */
+	/** Runs the flow in Now Playing of a song with a two-line title, in an album of its own; a scored song's takes carry scores. */
 	async function onTwoLineSong(
 		page: Page,
 		viewport: { width: number; height: number },
-		flow: (surface: Locator) => Promise<void>
+		flow: (surface: Locator) => Promise<void>,
+		scored = false
 	) {
 		await page.setViewportSize(viewport);
 		const album = await page.request.post('/api/albums', {
@@ -40,8 +41,9 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 		const { id: albumId } = (await album.json()) as { id: string };
 		try {
 			// Two takes keep the take sheet shut behind the Queue row; a second song makes the album two songs.
-			await seedTakeStripSong(albumId, TWO_LINE_TITLE, 2, LONG_LYRICS);
+			const songId = await seedTakeStripSong(albumId, TWO_LINE_TITLE, 2, LONG_LYRICS);
 			await seedTakeStripSong(albumId, 'E2E Phone layout second song', 1);
+			if (scored) await scoreTheTakes(page, songId);
 			await page.goto(`/album/${albumId}`);
 			await playOpenAlbum(page);
 			await openNowPlayingFromBar(page, 'mobile', TWO_LINE_TITLE);
@@ -144,22 +146,32 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 		});
 	});
 
-	test('the lyrics window is taller than the title row, and the body does not scroll, at 390x664', async ({
-		page
-	}) => {
-		await onTwoLineSong(page, SHORT_PHONE_VIEWPORT, async (surface) => {
-			const titleRow = await surface.locator('.title-row').boundingBox();
-			const lyrics = await surface.locator('.lyrics-region').boundingBox();
-			if (!titleRow || !lyrics) throw new Error('Expected a laid out title row and lyrics');
-			expect(lyrics.height).toBeGreaterThan(titleRow.height);
-			expect(
-				await surface
-					.locator('.phone-body')
-					.evaluate((body) => body.scrollHeight - body.clientHeight)
-			).toBeLessThanOrEqual(0);
-			await expect(
-				surface.locator('.title-row').getByRole('button', { name: words['takeMenu.label'] })
-			).toBeVisible();
+	for (const scored of [false, true]) {
+		test(`the lyrics window is taller than the title row, and the body does not scroll, at 390x664 for ${scored ? 'a scored' : 'an unscored'} take`, async ({
+			page
+		}) => {
+			await onTwoLineSong(
+				page,
+				SHORT_PHONE_VIEWPORT,
+				async (surface) => {
+					const chips = surface.locator('.scores.chips .entry');
+					if (scored) await expect(chips.first()).toBeVisible();
+					else await expect(chips).toHaveCount(0);
+					const titleRow = await surface.locator('.title-row').boundingBox();
+					const lyrics = await surface.locator('.lyrics-region').boundingBox();
+					if (!titleRow || !lyrics) throw new Error('Expected a laid out title row and lyrics');
+					expect(lyrics.height).toBeGreaterThan(titleRow.height);
+					expect(
+						await surface
+							.locator('.phone-body')
+							.evaluate((body) => body.scrollHeight - body.clientHeight)
+					).toBeLessThanOrEqual(0);
+					await expect(
+						surface.locator('.title-row').getByRole('button', { name: words['takeMenu.label'] })
+					).toBeVisible();
+				},
+				scored
+			);
 		});
-	});
+	}
 });
