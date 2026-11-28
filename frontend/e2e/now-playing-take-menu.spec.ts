@@ -33,7 +33,8 @@ test.beforeEach(async ({ page }) => {
 	});
 	expect(album.ok()).toBe(true);
 	albumId = ((await album.json()) as { id: string }).id;
-	songTitle = `Take menu song ${Date.now()}`;
+	// Long enough to wrap onto a second line on a phone and onto several in the dock.
+	songTitle = `Wrapping take menu song ${Date.now()}`;
 	songId = await seedSongPhoneSong(albumId, songTitle, 1, 2, TAKE_SEED);
 });
 
@@ -87,6 +88,7 @@ async function scoreTheTakes(page: Page): Promise<void> {
 		const scores = {
 			user_rating: 72,
 			text_accuracy: 86,
+			dynamics: 55,
 			audiobox_quality: 7.4,
 			audiobox_enjoyment: 6.8
 		};
@@ -176,16 +178,22 @@ test('the Scores carry no control and no Rating, and the frame has no Go to song
 });
 
 test(
-	'nothing in the docked panel covers another control',
+	'nothing in the docked panel covers another control or a score',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
+		await scoreTheTakes(page);
 		await openNowPlaying(page, 'desktop');
 		const docked = page.getByRole('complementary');
-		await expect(docked).toBeVisible();
+		const scores = docked.getByRole('region', { name: words['nowPlayingScores.heading'] });
+		await expect(scores).toBeVisible();
 
-		const controls = await docked.getByRole('button').all();
+		const controls = [
+			...(await docked.getByRole('button').all()),
+			...(await scores.locator('li').all())
+		];
 		expect(controls.length).toBeGreaterThan(0);
 		for (const control of controls) {
+			await control.scrollIntoViewIfNeeded();
 			if (!(await control.isVisible())) continue;
 			const reachable = await control.evaluate((element) => {
 				const box = element.getBoundingClientRect();
@@ -202,6 +210,8 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height: 664 });
+		// A next song gives the Queue row its Up next line.
+		await seedSongPhoneSong(albumId, `Take menu second song ${Date.now()}`, 1, 1);
 		await scoreTheTakes(page);
 		const surface = await openNowPlaying(page, 'mobile');
 
@@ -211,5 +221,6 @@ test(
 		expect(
 			await surface.locator('.phone-body').evaluate((body) => body.scrollHeight - body.clientHeight)
 		).toBeLessThanOrEqual(0);
+		await expect(surface.getByRole('button', { name: words['transport.pause'] })).toBeInViewport();
 	}
 );

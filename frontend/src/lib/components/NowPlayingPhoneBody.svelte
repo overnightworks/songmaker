@@ -62,8 +62,23 @@
 	   the body scrolls instead, so the lyrics never spill over the transport. */
 	.lyrics-region {
 		flex: 1 1 0;
-		min-height: 6rem;
+		min-height: 5rem;
 		display: flex;
 		flex-direction: column;
+	}
+	/* The chips stay one row high, however many scores the take has; the row
+	   swipes sideways instead of taking a second line from the words. */
+	.phone-body :global(.scores.chips) {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.phone-body :global(.scores.chips .entries) {
+		flex-wrap: nowrap;
+	}
+	.phone-body :global(.scores.chips > *),
+	.phone-body :global(.scores.chips .entry) {
+		flex: none;
+		white-space: nowrap;
 	}
 </style>
