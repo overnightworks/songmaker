@@ -1,8 +1,0 @@
-claim_id = "d891fd0d860148968ac0879cd3ecba53"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "515154282a280d4f83d020d8fbc0f7d84338346b"
-branch = "claude/issue-3505-phone-transport-first-screen"
-scope = ["frontend/e2e/contrast.ts", "frontend/e2e/now-playing-judging.spec.ts", "frontend/e2e/now-playing-opening.spec.ts", "frontend/e2e/now-playing-phone-layout.spec.ts", "frontend/e2e/seed.ts", "frontend/src/lib/catalogs/de.po", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingFrame.test.ts", "frontend/src/lib/components/NowPlayingJudging.svelte", "frontend/src/lib/components/NowPlayingJudging.test.ts", "frontend/src/lib/components/NowPlayingPhoneBody.svelte", "frontend/src/lib/words", "quality/baseline.toml", "scripts/style-literals.txt", "src/songmaker_cli/words.py"]
-opened_commit = "ec3cae92b8ed6f5713f89b2d4942811411c8b7f8"
-whole_reason = "One surface's layout and its card: the Now Playing frame, the judging card, their tests and their catalog words, which change together."
