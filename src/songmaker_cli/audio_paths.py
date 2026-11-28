@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path, PurePosixPath
-
-from songmaker_cli.constants import USER_LORAS_DIRNAME
+from typing import Final
 
 log = logging.getLogger(__name__)
+
+USER_LORAS_DIRNAME: Final[str] = "user_loras"
 
 
 class AudioPathRejectedError(Exception):
@@ -37,6 +38,11 @@ def confined_under(root: Path, path: Path) -> Path | None:
 
 def _lora_owner_relative_root(user_id: str) -> PurePosixPath:
     return PurePosixPath(USER_LORAS_DIRNAME) / user_id
+
+
+def all_loras_root(audio_dir: Path) -> Path:
+    """The directory holding the voice directories of every person."""
+    return audio_dir / USER_LORAS_DIRNAME
 
 
 def lora_owner_root(audio_dir: Path, user_id: str) -> Path:

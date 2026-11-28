@@ -297,7 +297,6 @@ COVER_VERSION_QUERY: Final[str] = "v"
 COVER_NOT_FOUND: Final[str] = "Cover not found"
 
 # User LoRA training
-USER_LORAS_DIRNAME: Final[str] = "user_loras"
 USER_LORA_SAMPLES_DIRNAME: Final[str] = "samples"
 USER_LORA_DATASET_DIRNAME: Final[str] = "dataset"
 USER_LORA_TRAINING_TMP_DIRNAME: Final[str] = "training_tmp"

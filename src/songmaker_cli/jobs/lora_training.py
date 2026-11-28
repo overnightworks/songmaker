@@ -17,14 +17,19 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.audio_paths import confined_under, lora_owner_root, lora_relative_root, lora_root
+from songmaker_cli.audio_paths import (
+    all_loras_root,
+    confined_under,
+    lora_owner_root,
+    lora_relative_root,
+    lora_root,
+)
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORA_TRAINING_TMP_DIRNAME,
-    USER_LORAS_DIRNAME,
     AuditAction,
     LoraStatus,
     ResourceType,
@@ -859,7 +864,7 @@ def log_orphaned_lora_work_dirs(
     audio_dir: Path,
 ) -> None:
     """Log disposable LoRA work dirs whose LoRA is missing or no longer active."""
-    loras_root = audio_dir / USER_LORAS_DIRNAME
+    loras_root = all_loras_root(audio_dir)
     if not loras_root.exists():
         return
 

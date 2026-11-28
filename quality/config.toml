@@ -157,9 +157,9 @@ reason = "prettier wraps the longer #lib import specifiers; the rewrite changes 
 
 [[gate.loosened]]
 what = "import contract \"The application's layers point downward and routes stay apart\" changes layers"
-item = "#3507"
-date = 2026-11-28
-reason = "acestep_state (the Redis key prefix for its tandem locks, #3226) and audio_paths (the voice directory name for the voice layout, #3507) read constants, so each leaves the bottom siblings for its own layer above constants; each gains the right to import constants and the modules below, and no module above it loses a layer"
+item = "#3226"
+date = 2026-11-16
+reason = "acestep_state reads the Redis key prefix of constants for its tandem locks, so it leaves the bottom siblings for its own layer above constants; it gains the right to import constants and the modules below, and no module above it loses a layer"
 
 [[gate.loosened]]
 what = 'mandatory job "PostgreSQL contract (serial)" removed'

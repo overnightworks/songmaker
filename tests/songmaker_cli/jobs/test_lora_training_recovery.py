@@ -9,10 +9,8 @@ from pathlib import Path
 import pytest
 from support.lora_training_world import seed_queued_lora
 
-from songmaker_cli.constants import (
-    USER_LORA_DATASET_DIRNAME,
-    USER_LORAS_DIRNAME,
-)
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
+from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME
 from songmaker_cli.jobs.lora_training import (
     cleanup_failed_lora_with_factory,
     log_orphaned_lora_work_dirs,

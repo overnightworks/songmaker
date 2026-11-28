@@ -15,7 +15,8 @@ import pytest
 from support.worker_settings import worker_settings
 
 import songmaker_cli.music_worker as music_worker_module
-from songmaker_cli.constants import USER_LORAS_DIRNAME, LoraStatus
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
+from songmaker_cli.constants import LoraStatus
 from songmaker_cli.cron_schedule import Cron
 from songmaker_cli.db.models import User, UserLora, UserLoraSample
 from songmaker_cli.music_worker import MusicWorker
