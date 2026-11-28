@@ -21,7 +21,7 @@ from support.session_ids import a_session_id
 from tandem.testing import aged_epoch, settle_epoch
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key, worker_state_key
+from songmaker_cli.acestep_state import admitted_key, lm_failure_key, worker_state_key
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import REDIS_KEY_PREFIX
 from songmaker_cli.job_types import WorkerLivenessSignal
@@ -58,6 +58,9 @@ class _KeyView:
 
     def __setitem__(self, key: str, value: str) -> None:
         self._view.set(key, value)
+
+    def add_members(self, key: str, *members: str) -> None:
+        self._view.sadd(key, *members)
 
 
 class SettledFakeAsyncRedis(fakeredis.FakeAsyncRedis):
@@ -148,8 +151,8 @@ def publish_worker_heartbeat(
             await redis.delete(worker_state_key(worker_id))
         else:
             await redis.set(worker_state_key(worker_id), json.dumps(dict(state)))
-        if queue_depth is not None:
-            await redis.set(queue_depth_key(worker_id), queue_depth)
+        if queue_depth:
+            await redis.sadd(admitted_key(worker_id), *(f"job-{n}" for n in range(queue_depth)))
 
     arrange_fake_async_redis(target, publish)
 

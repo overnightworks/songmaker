@@ -9,15 +9,18 @@ from unittest.mock import MagicMock
 
 import pytest
 import sqlalchemy as sa
+from redis.exceptions import ConnectionError as RedisConnectionError
 from support.loop_ticks import ScriptedTickLock, run_ticks_observing_status
 from support.web_app import make_app_context, make_fake_redis
 from tandem import Roster
 
 import songmaker_cli.cover_runner as cover_runner
+from songmaker_cli.acestep_state import admitted_key
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD, LoraStatus
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
 from songmaker_cli.job_timing import (
     JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
@@ -87,6 +90,49 @@ def _add_job(
 def _job_status(ctx: AppContext, job_id: str) -> str:
     with ctx.db() as session:
         return session.query(Job).filter_by(id=job_id).first().status
+
+
+@pytest.fixture
+def admitted_jobs(ctx) -> None:
+    """A worker whose queue depth holds a job the reaper fails, one it fails not, and one already
+    terminal, by job id."""
+    now = datetime.now(timezone.utc)
+    stale = _dead_process_time(now, QUEUED_JOB_STALE_THRESHOLD_SECONDS)
+    _add_job(ctx, job_id="stale", job_type=JobType.CHAT, status=JobStatus.QUEUED,
+             started_at=stale, heartbeat_at=stale)
+    _add_job(ctx, job_id="live", job_type=JobType.GENERATE, status=JobStatus.RUNNING)
+    _add_job(ctx, job_id="failed-by-submission", job_type=JobType.GENERATE,
+             status=JobStatus.FAILED)
+    with ctx.db() as session:
+        register_worker(
+            session, worker_id="w1", host="h", port=8001, gpu_id=0, vram_total_gb=24.0,
+        )
+        session.commit()
+    ctx.redis.sadd(admitted_key("w1"), "stale", "live", "failed-by-submission")
+
+
+@pytest.mark.parametrize(
+    "reap", [reap_stale_jobs, _run_stale_job_reaper_tick], ids=["startup-reap", "reaper-tick"],
+)
+def test_the_reaper_removes_the_admissions_of_ended_jobs_and_keeps_the_running_one(
+    ctx, admitted_jobs, reap,
+) -> None:
+    reap(ctx)
+
+    assert ctx.redis.smembers(admitted_key("w1")) == {"live"}
+
+
+def test_the_reaper_recovers_the_jobs_while_the_queue_depth_cannot_be_read(
+    ctx, admitted_jobs,
+) -> None:
+    class _UnreachableRedis:
+        def smembers(self, _key):
+            raise RedisConnectionError("down")
+
+    ctx.redis = _UnreachableRedis()
+
+    assert reap_stale_jobs(ctx, worker_liveness={}) == 1
+    assert _job_status(ctx, "stale") == JobStatus.FAILED
 
 
 class TestLifecycleReaper:

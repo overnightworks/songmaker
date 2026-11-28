@@ -301,7 +301,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
     with (
         patch("songmaker_cli.jobs.admit_generation_worker", admitted),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -494,7 +494,7 @@ def test_generation_series_keeps_its_admission_until_the_third_take(
     with (
         patch("songmaker_cli.jobs.admit_generation_worker", admitted),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", released),
+        patch("songmaker_cli.jobs.generation.release_admission", released),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -636,7 +636,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
             "songmaker_cli.jobs.admit_generation_worker",
             AsyncMock(return_value=MagicMock(id="w1")),
         ),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
     ):
         run_async(
             run_generation_job(
@@ -664,7 +664,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
             "songmaker_cli.jobs.admit_generation_worker",
             AsyncMock(return_value=MagicMock(id="w1")),
         ),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
     ):
         run_async(
             run_generation_job(
@@ -1013,7 +1013,7 @@ def test_generation_event_failure_rolls_back_generation(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_with_artifacts),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch(
@@ -1305,7 +1305,7 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
@@ -1336,7 +1336,7 @@ def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Pat
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -1415,7 +1415,7 @@ def test_generation_job_cancelled_after_setup_does_not_dispatch_or_persist(
             AsyncMock(return_value=MagicMock(id="w1")),
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.generation._update_job", side_effect=mark_running_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -1467,7 +1467,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
@@ -1511,7 +1511,7 @@ def test_generation_job_cancel_after_worker_skips_persist(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
+        patch("songmaker_cli.jobs.generation.release_admission", AsyncMock()),
         patch(
             "songmaker_cli.jobs.post_process_generation",
             side_effect=persist_via_post_process,
