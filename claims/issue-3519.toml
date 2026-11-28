@@ -1,0 +1,8 @@
+claim_id = "daf9ec5af2b84689b2dbf679fe8f5114"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "9a859f5587ad423e457be7d7613232c18b80d911"
+branch = "claude/issue-3519-queue-depth-as-set"
+scope = ["docs/acestep.md", "docs/architecture.md", "src/songmaker_acestep_worker/heartbeat.py", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/scheduler.py", "tests/songmaker_acestep_worker/test_heartbeat.py", "tests/songmaker_acestep_worker/test_wrapper.py", "tests/songmaker_cli/jobs/test_lora_training.py", "tests/songmaker_cli/test_acestep_state.py", "tests/songmaker_cli/test_acestep_state_redis.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_jobs.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_lifecycle_owner_loops.py", "tests/songmaker_cli/test_scheduler.py", "tests/support/generation_job_world.py", "tests/support/web_app.py"]
+opened_commit = "359bfb608603913936ed3ffe8566e1c2a8eb335e"
+whole_reason = "One change of the queue depth's shape: its writer, its readers and the reconcile that heals it move together with the fakes and documents that model the depth."
