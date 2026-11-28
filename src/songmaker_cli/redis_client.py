@@ -6,12 +6,18 @@ import asyncio
 import logging
 import socket
 import time
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from anyio import from_thread
+from fastapi import HTTPException, Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from tandem import Slots
 
 from songmaker_cli.constants import (
+    REDIS_KEY_PREFIX,
     REDIS_METRICS_DURATION_KEY,
     REDIS_METRICS_HTTP_KEY,
     REDIS_METRICS_TOTAL_KEY,
@@ -24,7 +30,6 @@ from songmaker_cli.constants import (
 if TYPE_CHECKING:
     from redis import Redis
     from redis.asyncio import Redis as AsyncRedis
-    from tandem import Slots
 
 log = logging.getLogger(__name__)
 
@@ -137,6 +142,75 @@ async def take_stream_slot(
     return await slots.take({GLOBAL_SLOT_POOL: global_cap, f"person:{user_id}": per_person_cap})
 
 
+def get_cached_limiter[LimiterT](
+    request: Request,
+    state_attr: str,
+    build: Callable[[], LimiterT],
+) -> LimiterT:
+    """Return the limiter cached on ``request.app.state``, building it via
+    ``build`` on first use.
+
+    One limiter instance lives per FastAPI app process (cached on
+    ``app.state`` rather than a module global, so tests that create a fresh
+    app per case get a fresh limiter too), avoiding the Redis connection
+    setup ``build`` does on every request.
+    """
+    limiter = getattr(request.app.state, state_attr, None)
+    if limiter is None:
+        limiter = build()
+        setattr(request.app.state, state_attr, limiter)
+    return limiter
+
+
+STREAM_SLOT_RETRY_AFTER_SECONDS = "5"
+
+
+@dataclass(frozen=True)
+class StreamSlotFamily:
+    """What one kind of stream says and keeps for its slots."""
+
+    family: str
+    lasts: timedelta
+    cache_attribute: str
+    subject: str
+    limit_detail: str
+    unavailable_detail: str
+
+
+def open_stream_slot(
+    request: Request,
+    user_id: str,
+    stream: StreamSlotFamily,
+    caps: Callable[[], tuple[int, int]],
+) -> tuple[Slots, str]:
+    """Take a slot of ``stream`` for the person, failing closed.
+
+    ``caps`` yields the per-person and the global cap and may raise ``HTTPException``,
+    which passes through. A limiter that errors answers 503, a pool at its cap 429.
+    """
+    try:
+        per_person_cap, global_cap = caps()
+        slots = get_cached_limiter(request, stream.cache_attribute, lambda: Slots(
+            request.app.state.ctx.async_redis,
+            key_prefix=REDIS_KEY_PREFIX,
+            family=stream.family,
+            lasts=stream.lasts,
+        ))
+        token = from_thread.run(take_stream_slot, slots, user_id, per_person_cap, global_cap)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.warning("%s limiter unavailable", stream.subject)
+        raise HTTPException(503, stream.unavailable_detail) from exc  # unread: sse
+    if token is None:
+        raise HTTPException(  # unread: sse
+            429,
+            stream.limit_detail,
+            headers={"Retry-After": STREAM_SLOT_RETRY_AFTER_SECONDS},
+        )
+    return slots, token
+
+
 async def _release_slot(slots: Slots, token: str, *, subject: str) -> None:
     try:
         released = await slots.release(token)
@@ -163,6 +237,21 @@ class SlotReleases:
             pending = tuple(self._tasks)
             await asyncio.gather(*pending)
             self._tasks.difference_update(pending)
+
+
+async def hold_stream_slot(
+    slot_releases: SlotReleases,
+    slots: Slots,
+    token: str,
+    subject: str,
+    frames: AsyncIterator[str],
+) -> AsyncGenerator[str, None]:
+    """Yield the stream's frames and release its slot when the stream ends, however it ends."""
+    try:
+        async for frame in frames:
+            yield frame
+    finally:
+        slot_releases.release_in_background(slots, token, subject=subject)
 
 
 class RedisHttpMetrics:

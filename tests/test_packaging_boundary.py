@@ -447,20 +447,37 @@ sys.meta_path.insert(0, BlockedOptionalImport())
     )
 
 
-def test_health_api_models_import_without_server_runtime() -> None:
+def _assert_import_loads_none_of(
+    module: str, forbidden: frozenset[str], timeout: int,
+) -> None:
     result = subprocess.run(
         [
             sys.executable, "-c",
-            "import sys; import songmaker_cli.api_models; "
-            "assert not {'sqlalchemy'} & sys.modules.keys()",
+            f"import sys; import {module}; "
+            f"assert not {set(forbidden)!r} & sys.modules.keys()",
         ],
         env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=timeout,
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_health_api_models_import_without_server_runtime() -> None:
+    _assert_import_loads_none_of(
+        "songmaker_cli.api_models", frozenset({"sqlalchemy"}), timeout=30,
+    )
+
+
+def test_redis_client_imports_without_the_http_layer() -> None:
+    """The workers and the worker health probe import it within the probe's timeout."""
+    _assert_import_loads_none_of(
+        "songmaker_cli.redis_client",
+        frozenset({"songmaker_cli.api_helpers"}),
+        timeout=60,
+    )
 
 
 @pytest.mark.parametrize(
