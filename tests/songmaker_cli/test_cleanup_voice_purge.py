@@ -23,6 +23,7 @@ from songmaker_cli.settings import get_settings
 
 NOW = datetime(2026, 11, 28, 3, 0, tzinfo=UTC)
 OWNER = "owner-1"
+OWNERS_OWN_DIRECTORY = "."
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ def _voices() -> list[_Voice]:
         _Voice("still-training", _window() + 1, LoraStatus.TRAINING),
         _Voice("stuck-directory", _window() + 1),
         _Voice("outside-directory", _window() + 1),
+        _Voice("sibling-directory", _window() + 1),
+        _Voice(OWNERS_OWN_DIRECTORY, _window() + 1),
     ]
 
 
@@ -78,10 +81,17 @@ class _World:
             id=f"s-{voice.id}", user_lora_id=voice.id,
             audio_path=f"{USER_LORAS_DIRNAME}/{OWNER}/{voice.id}/samples/take.wav",
         ))
-        target = self.outside if voice.id == "outside-directory" else self.directory(voice.id)
-        (target / "samples").mkdir(parents=True)
-        (target / "samples" / "take.wav").write_bytes(b"audio")
-        if target is self.outside:
+        if voice.id == OWNERS_OWN_DIRECTORY:
+            return
+        linked_to = {
+            "outside-directory": self.outside,
+            "sibling-directory": self.directory("never-deleted"),
+        }.get(voice.id)
+        target = linked_to or self.directory(voice.id)
+        if voice.id != "sibling-directory":
+            (target / "samples").mkdir(parents=True)
+            (target / "samples" / "take.wav").write_bytes(b"audio")
+        if linked_to:
             self.directory(voice.id).parent.mkdir(parents=True, exist_ok=True)
             self.directory(voice.id).symlink_to(target, target_is_directory=True)
 
@@ -126,8 +136,9 @@ ROOT_IGNORES_PERMISSIONS = "root removes files from a read-only directory"
 
 KEPT = {
     "exactly-at-the-cutoff", "deleted-recently", "never-deleted", "still-training",
-    "stuck-directory", "outside-directory",
+    "stuck-directory", "outside-directory", "sibling-directory", OWNERS_OWN_DIRECTORY,
 }
+KEPT_DIRECTORIES = KEPT - {OWNERS_OWN_DIRECTORY}
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason=ROOT_IGNORES_PERMISSIONS)
@@ -139,7 +150,7 @@ def test_the_daily_purge_removes_voices_deleted_before_the_window_with_samples_a
     assert purged == 1
     assert world.voices_left() == KEPT
     assert world.sample_voices_left() == KEPT
-    assert world.directories_left() == KEPT
+    assert world.directories_left() == KEPT_DIRECTORIES
 
 
 def test_a_directory_outside_the_owners_voices_is_left_with_its_rows(
@@ -149,6 +160,50 @@ def test_a_directory_outside_the_owners_voices_is_left_with_its_rows(
 
     assert (world.outside / "samples" / "take.wav").read_bytes() == b"audio"
     assert "outside-directory" in world.voices_left()
+
+
+def test_a_directory_linked_to_another_voice_leaves_both_voices_with_their_rows(
+    world: _World, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    world.run_the_daily_purge(monkeypatch)
+
+    assert (world.directory("never-deleted") / "samples" / "take.wav").read_bytes() == b"audio"
+    assert {"sibling-directory", "never-deleted"} <= world.voices_left()
+    assert {"sibling-directory", "never-deleted"} <= world.sample_voices_left()
+
+
+def test_a_voice_that_names_its_owners_own_directory_leaves_every_voice_of_the_owner(
+    world: _World, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    world.run_the_daily_purge(monkeypatch)
+
+    assert (world.directory("never-deleted") / "samples" / "take.wav").read_bytes() == b"audio"
+    assert OWNERS_OWN_DIRECTORY in world.voices_left()
+
+
+def test_a_voice_of_a_linked_owner_directory_leaves_the_directory_it_links_to_with_its_rows(
+    world: _World, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    linked_owner, voice_id = "owner-2", "linked-owner-voice"
+    elsewhere = world.audio_dir / "elsewhere"
+    (elsewhere / voice_id / "samples").mkdir(parents=True)
+    (elsewhere / voice_id / "samples" / "take.wav").write_bytes(b"audio")
+    (world.audio_dir / USER_LORAS_DIRNAME / linked_owner).symlink_to(
+        elsewhere, target_is_directory=True,
+    )
+    with world.pg_factory() as session:
+        session.add(User(id=linked_owner, username=linked_owner))
+        session.flush()
+        session.add(UserLora(
+            id=voice_id, user_id=linked_owner, name=voice_id, slug=voice_id,
+            status=LoraStatus.READY, deleted_at=NOW - timedelta(days=_window() + 1),
+        ))
+        session.commit()
+
+    world.run_the_daily_purge(monkeypatch)
+
+    assert (elsewhere / voice_id / "samples" / "take.wav").read_bytes() == b"audio"
+    assert voice_id in world.voices_left()
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason=ROOT_IGNORES_PERMISSIONS)
@@ -178,7 +233,7 @@ def test_the_next_daily_purge_removes_a_voice_whose_directory_could_not_be_remov
 
     assert purged == 1
     assert world.voices_left() == KEPT - {"stuck-directory"}
-    assert world.directories_left() == KEPT - {"stuck-directory"}
+    assert world.directories_left() == KEPT_DIRECTORIES - {"stuck-directory"}
 
 
 def test_the_daily_purge_finishes_a_voice_whose_directory_a_crashed_run_already_removed(
