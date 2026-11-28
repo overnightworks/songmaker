@@ -167,7 +167,7 @@ import {
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
 } from '#lib/stores/playlists.ts';
-import { openCollection } from '#lib/stores/collection.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { words } from '#lib/words/en.ts';
 
 type PlaylistQueueSource = Pick<PlaylistDetailItem, 'id' | 'title'>;
@@ -258,6 +258,7 @@ function albumQueueTakeIds(): string[] {
 }
 
 beforeEach(() => {
+	setLibraryTakePool('mix');
 	vi.mocked(fetchSongs).mockResolvedValue({
 		items: [],
 		total: 0,
@@ -265,7 +266,8 @@ beforeEach(() => {
 		limit: 200,
 		has_more: false
 	});
-	vi.mocked(fetchSong).mockReset();
+	for (const fetcher of [fetchSong, fetchLibraryPoolQueue, fetchPlaylist])
+		vi.mocked(fetcher).mockReset();
 	vi.mocked(fetchLastFailedGeneration).mockResolvedValue({ job: null });
 	vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 		audioPlayer.current = info;
@@ -275,10 +277,9 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetConnectivityForTests();
-	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now: the
-	// module-level vi.fn() stubs from the vi.mock('#lib/api/client.ts', ...)
-	// factory above need an explicit clear or their call history from one
-	// test leaks a "was it called" assertion into the next.
+	resetLibraryOrderForTests();
+	resetCollectionForTests();
+	// restoreAllMocks rewinds only spies; the client mock's vi.fn() stubs keep their calls.
 	vi.clearAllMocks();
 	vi.restoreAllMocks();
 	audioPlayer.current = null;
@@ -290,7 +291,6 @@ afterEach(() => {
 	queueContext.set({ type: 'library' });
 	selectedPlaylistDetail.set(null);
 	setShuffle(false);
-	setLibraryTakePool('mix');
 	playStartNotice.set('idle');
 	libraryQueueSkipped.set([]);
 	libraryQueueSkippedComplete.set(true);
@@ -735,10 +735,10 @@ describe('playback dispatch', () => {
 			await ensureLastPlayedRead();
 			const listen = Promise.withResolvers<undefined>();
 			vi.mocked(recordSongListen).mockReturnValueOnce(listen.promise);
-			const song = makeSong({ ...queuedSongDefaults(), id: 's-ranking-outdated' });
+			const song = makeSong({ ...queuedSongDefaults(), id: `s-ranking-${listenRecorded}` });
 			audioPlayer.status = 'playing';
 			audioPlayer.current = makePlayback(
-				makeGen({ ...genDefaults, id: 'g-ranking-outdated', song_id: song.id }),
+				makeGen({ ...genDefaults, id: `g-ranking-${listenRecorded}`, song_id: song.id }),
 				song
 			);
 

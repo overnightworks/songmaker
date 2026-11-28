@@ -5,6 +5,7 @@ import {
 	restoreLibraryHistoryOnRouterStart,
 	libraryHistoryEntry,
 	openLibraryAddress,
+	resetLibraryContextForTests,
 	type LibraryHistoryState
 } from '#lib/stores/libraryContext.ts';
 import {
@@ -73,6 +74,12 @@ export function pushHistoryEntry(url: string, entry: unknown = null): void {
 	writeHistoryEntry(entry, url, 'push');
 }
 
+// A test that ended on a Back leaves entries above the one it stood on; a push
+// drops them, so the test after it starts on the top of the tab's history.
+export function startOnTopOfHistory(url: string): void {
+	pushHistoryEntry(url);
+}
+
 // The entry history stands on, as the library reads it. Tests that expect no
 // library entry at all compare it with what they seeded.
 export function historyEntry(): LibraryHistoryState {
@@ -110,6 +117,23 @@ export interface BackWatch {
 export function watchBack(): BackWatch {
 	const back = vi.spyOn(history, 'back').mockImplementation(() => undefined);
 	return { presses: () => back.mock.calls.length, stop: () => back.mockRestore() };
+}
+
+// A layer a teardown closes steps back off its entry, and the test browser would land that
+// Back tasks later, in the next test; that test starts on a library entry with no library,
+// navigation or session state the teardown's test left.
+export async function tearDownOntoRestingHistory(teardown: () => Promise<void>): Promise<void> {
+	const back = watchBack();
+	try {
+		await teardown();
+		await historyComesToRest();
+	} finally {
+		back.stop();
+	}
+	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
+	sessionStorage.clear();
+	resetLibraryContextForTests();
+	resetNavigationForTests();
 }
 
 async function traverseHistory(step: () => void): Promise<void> {

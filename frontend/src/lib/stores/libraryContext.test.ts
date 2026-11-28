@@ -8,7 +8,8 @@ import {
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry,
-	standingHistoryEntry
+	standingHistoryEntry,
+	startOnTopOfHistory
 } from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
@@ -200,10 +201,8 @@ beforeEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
-	replaceHistoryEntry('/');
-	vi.mocked(goto).mockClear();
-	vi.mocked(pushState).mockClear();
-	vi.mocked(replaceState).mockClear();
+	startOnTopOfHistory('/');
+	for (const navigate of [goto, pushState, replaceState]) vi.mocked(navigate).mockClear();
 	installHistoryController();
 	attachLandingHandler(() => undefined);
 });

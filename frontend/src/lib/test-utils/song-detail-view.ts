@@ -6,6 +6,8 @@ import { COMPACT_LAYOUT_MEDIA, LIBRARY_NARROW_MEDIA } from '#lib/constants/media
 import SongDetailView from '#lib/components/SongDetailView.svelte';
 import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import { resetSongDetailApi } from '#lib/test-utils/song-detail-mocks.ts';
+import { resetHistoryControllerForTests } from '#lib/history/historyController.ts';
+import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { clearHitboxStyles, clearPointer } from '#lib/test-utils/hitbox.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
 import { discardDraft, pendingVersionLoad, versionDeleteRequest } from '#lib/stores/editor.ts';
@@ -113,6 +115,9 @@ export function resetSongDetailState(): void {
 	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
 	discardDraft();
 	resetNavigationForTests();
+	// The app bar names ‹ from where history stands, so a test starts on a root page.
+	history.replaceState(null, '', LIBRARY_ROUTE_PATH);
+	resetHistoryControllerForTests();
 	pendingTakeUse.set(null);
 	seedFromTake.set(null);
 	recipeOpen.set(false);

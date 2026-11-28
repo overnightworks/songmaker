@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthUser, PresetItem } from '#lib/api/types.ts';
 import { currentUser } from '#lib/stores/auth.ts';
+import { activeModels, builtinDefaults, defaultConfig, presets } from '#lib/stores/presets.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
 import { words } from '#lib/words/en.ts';
@@ -112,6 +113,10 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	currentUser.set(null);
+	presets.set([]);
+	builtinDefaults.set({});
+	defaultConfig.set(null);
+	activeModels.set([]);
 	vi.unstubAllGlobals();
 	clearHitboxStyles();
 	clearPointer();

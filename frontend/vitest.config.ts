@@ -8,6 +8,7 @@ export default defineConfig({
 		conditions: ['browser']
 	},
 	test: {
+		sequence: { shuffle: true },
 		// The setup file and jsdom belong to the component tests; the coverage
 		// report's test runs in plain Node.
 		projects: [

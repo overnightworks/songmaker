@@ -11,6 +11,7 @@ import {
 	reloadLibraryPage,
 	replaceHistoryEntry,
 	standingHistoryEntry,
+	startOnTopOfHistory,
 	watchBack
 } from '#lib/test-utils/library-history.ts';
 import {
@@ -254,12 +255,11 @@ beforeEach(() => {
 	songList.set([song({ ...navigableSongDefaults(), slug: 's1' })]);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
-	// Must run after selectedSongId is cleared: the album/song-list reset
-	// above briefly recomputes `selectedSong` against the previous test's
-	// stale selectedSongId and re-derives openCollection through the
-	// selectedSong subscription in navigation.ts before this line clears it.
+	// Must run after selectedSongId is cleared: the list resets above briefly recompute
+	// `selectedSong` against the previous test's stale selectedSongId and re-derive
+	// openCollection through navigation.ts's selectedSong subscription before this line clears it.
 	resetCollectionForTests();
-	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
+	startOnTopOfHistory(LIBRARY_ROUTE_PATH);
 	startFakeRouter();
 	installHistoryController();
 	vi.mocked(goto).mockClear();

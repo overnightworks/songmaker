@@ -3,6 +3,7 @@ import {
 	pressBack,
 	replaceHistoryEntry,
 	standingHistoryEntry,
+	tearDownOntoRestingHistory,
 	watchBack
 } from '#lib/test-utils/library-history.ts';
 import {
@@ -55,6 +56,7 @@ import {
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetNavigationForTests } from '#lib/stores/navigation.ts';
 import { songList } from '#lib/stores/libraryData.ts';
+import { setDesktopNowPlayingSurface } from '#lib/stores/playbackSettings.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {
 	closeNowPlaying,
@@ -157,19 +159,23 @@ const children = createRawSnippet(() => ({
 	render: () => `<main><button data-testid="workspace-focus">Workspace action</button></main>`
 }));
 
+function mediaQueryList(matches: boolean, media: string) {
+	return {
+		matches,
+		media,
+		onchange: null,
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+		addListener: vi.fn(),
+		removeListener: vi.fn(),
+		dispatchEvent: vi.fn()
+	};
+}
+
 function stubMatchMedia(matches: boolean): void {
 	vi.stubGlobal(
 		'matchMedia',
-		vi.fn(() => ({
-			matches,
-			media: COMPACT_LAYOUT_MEDIA,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			addListener: vi.fn(),
-			removeListener: vi.fn(),
-			dispatchEvent: vi.fn()
-		}))
+		vi.fn(() => mediaQueryList(matches, COMPACT_LAYOUT_MEDIA))
 	);
 }
 
@@ -244,12 +250,16 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	await unmountCurrentLayout();
+	await tearDownOntoRestingHistory(unmountCurrentLayout);
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
+	delete document.documentElement.dataset.transportBar;
 	openCollection.set(null);
 	selectedSongId.set(null);
 	closeNowPlaying();
+	nowPlayingSurface.set('closed');
+	nowPlayingDockable.set(false);
+	setDesktopNowPlayingSurface('docked');
 	audioPlayer.current = null;
 	songList.set([]);
 	currentUser.set(null);
@@ -257,9 +267,8 @@ afterEach(async () => {
 	authCheckError.set(null);
 	phoneAppBar.set(null);
 	railCollapsed.set(false);
-	localStorage.removeItem('songmaker.rail-collapsed');
 	railWidth.set(264);
-	localStorage.removeItem('songmaker.rail-width');
+	localStorage.clear();
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
@@ -306,16 +315,7 @@ function stubMatchMediaAtWidth(width: number): void {
 		'matchMedia',
 		vi.fn((query: string) => {
 			const maxWidth = /max-width:\s*(\d+)px/.exec(query);
-			return {
-				matches: maxWidth !== null && width <= Number(maxWidth[1]),
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				dispatchEvent: vi.fn()
-			};
+			return mediaQueryList(maxWidth !== null && width <= Number(maxWidth[1]), query);
 		})
 	);
 }

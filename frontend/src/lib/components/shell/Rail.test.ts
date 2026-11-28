@@ -10,7 +10,7 @@ import { goto } from '$app/navigation';
 import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
 import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
-import { albumList } from '#lib/stores/libraryData.ts';
+import { albumList, resetLibraryDataForTests } from '#lib/stores/libraryData.ts';
 import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
 import {
@@ -133,6 +133,7 @@ beforeEach(() => {
 	resetLibraryContextForTests();
 	selectedSongId.set(null);
 	railTreeQuery.set('');
+	resetLibraryDataForTests();
 	albumList.set([]);
 	replaceHistoryEntry('/');
 });
@@ -257,16 +258,17 @@ describe('Rail', () => {
 			librarySurface.set('home');
 			openCollection.set({ kind: 'album', id: 'a1' });
 			const target = await render();
-			const links = target.querySelectorAll<HTMLAnchorElement>(
-				'.rail-scroll > a, .rail-scroll a.page-link'
+			const links = () =>
+				target.querySelectorAll<HTMLAnchorElement>('.rail-scroll > a, .rail-scroll a.page-link');
+			await vi.waitFor(() =>
+				expect(Array.from(links(), (link) => link.textContent?.trim())).toEqual([
+					words['places.home'],
+					'Library 0',
+					`${words['places.playlists']} 0`
+				])
 			);
-			expect(Array.from(links, (link) => link.textContent?.trim())).toEqual([
-				words['places.home'],
-				'Library 0',
-				`${words['places.playlists']} 0`
-			]);
-			expect(links[0]?.getAttribute('href')).toBe('/');
-			expect(links[0]?.getAttribute('aria-current')).toBe(path === '/' ? 'page' : null);
+			expect(links()[0]?.getAttribute('href')).toBe('/');
+			expect(links()[0]?.getAttribute('aria-current')).toBe(path === '/' ? 'page' : null);
 		}
 	);
 
@@ -284,7 +286,7 @@ describe('Rail', () => {
 				Array.from(target.querySelectorAll('a.rail-page-link[aria-current="page"]'), (link) =>
 					link.textContent?.trim()
 				);
-			expect(currentLabels()).toEqual([label]);
+			await vi.waitFor(() => expect(currentLabels()).toEqual([label]));
 			selectedSongId.set('unresolved-song');
 			await tick();
 			expect(currentLabels()).toEqual([]);
