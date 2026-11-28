@@ -40,6 +40,7 @@
 	import { pageText } from '#lib/utils/page-words.ts';
 	import PlayingMark from '../PlayingMark.svelte';
 	import Icon from '../Icon.svelte';
+	import LoadFailure from '../LoadFailure.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_ALBUM_ITEM_CLASS, revealOpenRailItem } from './rail-item-selector';
 
@@ -213,10 +214,11 @@
 				<p class="rail-status rail-loading">{pageText('rail.libraryLoading')}</p>
 			{:else if loadFailure !== null}
 				<div class="rail-load-error">
-					<p class="rail-status" role="alert">{loadFailure}</p>
-					<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
-						{pageText('rail.retry')}
-					</button>
+					<LoadFailure
+						message={loadFailure}
+						retryLabel={pageText('libraryWorkspace.retry')}
+						onretry={() => void retryLibraryLoad()}
+					/>
 				</div>
 			{/if}
 			<ul class="album-list">
@@ -314,34 +316,9 @@
 		padding: 8px;
 	}
 
-	.rail-load-error .rail-status {
-		color: var(--fail);
-	}
-
 	.rail-load-error {
-		display: grid;
-		gap: 8px;
 		min-width: 0;
 		margin: 4px 8px 8px;
-		padding: 8px;
-		border-left: 3px solid var(--fail);
-		background: var(--fail-soft);
-	}
-
-	.rail-retry {
-		justify-self: start;
-		max-width: 100%;
-		padding: 4px 8px;
-		background: var(--surface);
-		border: 1px solid var(--accent);
-		color: var(--accent);
-		font-size: 0.75rem;
-		font-family: inherit;
-		cursor: pointer;
-	}
-
-	.rail-retry:hover {
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 
 	.row {

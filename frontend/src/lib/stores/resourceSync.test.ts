@@ -675,7 +675,8 @@ describe('resource sync owner', () => {
 			}
 		});
 		const unsubscribe = store.subscribe((state) => {
-			if (clearError && state.status === 'error' && state.error === 'transient detail') {
+			if (clearError && state.status === 'error' && state.error === SYNC_ERROR) {
+				clearError = false;
 				store.set({ ...state, error: null });
 			}
 		});
@@ -686,7 +687,7 @@ describe('resource sync owner', () => {
 
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
-		expect(get(store).error).toBe('transient detail');
+		expect(get(store).error).toBe(SYNC_ERROR);
 		clearError = true;
 		latestSource(sources).error();
 		await flush();
@@ -841,7 +842,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
 		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe('boom');
+		expect(get(store).error).toBe(SYNC_ERROR);
 		fail = false;
 		expect(await controller.retry()).toBe(true);
 		expect(get(store).status).toBe('live');
@@ -931,7 +932,7 @@ describe('resource sync owner', () => {
 			await flush();
 			await controller.waitForReady();
 			await controller.requestSongRefresh('s1');
-			expect(get(store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+			expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 
 			vi.setSystemTime(Date.now() - earlyMs);
 			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1 + earlyMs);
@@ -995,7 +996,7 @@ describe('resource sync owner', () => {
 
 			await expect(harness.controller.retry()).resolves.toBe(false);
 			expect(harness.fetchCalls).toEqual(['s1']);
-			expect(get(harness.store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+			expect(get(harness.store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 
 			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000);
 			expect(harness.fetchCalls).toEqual(['s1', 's1']);
@@ -1045,7 +1046,7 @@ describe('resource sync owner', () => {
 			await flush();
 			await controller.waitForReady();
 			await controller.requestSongRefresh('s1');
-			expect(get(store)).toMatchObject({ status: 'error', error: 'Refused' });
+			expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 
 			await vi.advanceTimersByTimeAsync(60_000);
 			latestSource(sources).error();
@@ -1055,7 +1056,7 @@ describe('resource sync owner', () => {
 			await flush();
 
 			expect(fetchCalls).toEqual(['s1']);
-			expect(get(store)).toMatchObject({ status: 'error', error: 'Refused' });
+			expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 			controller.stop();
 		}
 	);
@@ -1795,14 +1796,13 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['an API detail', new ApiError(500, 'server detail', '/api/songs/s1'), 'server detail'],
+		['its fallback for an API detail', new ApiError(500, 'detail', '/api/songs/s1'), SYNC_ERROR],
 		[
-			'its named fallback for a server answer without a reason',
+			'its fallback for an answer with no reason',
 			new ApiError(500, '', '/api/songs/s1'),
 			SYNC_ERROR
 		],
-		['its fallback for a browser error', new TypeError('undefined is not a function'), SYNC_ERROR],
-		['its named fallback for an unknown failure', null, SYNC_ERROR]
+		['its fallback for a browser error', new TypeError('undefined is not a function'), SYNC_ERROR]
 	])('shows %s from a live refresh failure', async (_caseName, failure, error) => {
 		const { controller, sources, store } = setup({
 			fetchSong: async () => Promise.reject(failure)

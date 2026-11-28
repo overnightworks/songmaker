@@ -609,9 +609,9 @@ describe('ensureAllAlbumsLoaded', () => {
 			shown: words['rail.libraryLoadError']
 		},
 		{
-			failure: 'a server reason',
+			failure: 'a server reason it withholds',
 			err: new ApiError(503, 'Library is migrating', '/api/x'),
-			shown: 'Library is migrating'
+			shown: words['rail.libraryLoadError']
 		}
 	])(
 		'records a retryable error naming $failure readably when albums fail to load',

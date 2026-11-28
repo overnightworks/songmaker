@@ -226,8 +226,15 @@ describe('the library workspace', () => {
 		}));
 		await tick();
 
-		expect(target.textContent).toContain('Lost the stream');
+		const alert = target.querySelector('[role="alert"]');
+		expect(alert?.textContent).toContain('Lost the stream');
+		expect(alert?.querySelector('svg')).not.toBeNull();
 		expect(target.querySelector('.library-root')).not.toBeNull();
+
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['libraryWorkspace.retry']}"]`)
+			?.click();
+		expect(retryResourceSync).toHaveBeenCalled();
 	});
 
 	it('starts song and take content at the editor header without a sibling collection row', async () => {
