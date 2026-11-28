@@ -39,7 +39,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		padding: 0.5rem 1rem 0.8rem;
+		padding: 0.5rem 1rem 0.5rem;
 		overflow-y: auto;
 	}
 	.title-row {
