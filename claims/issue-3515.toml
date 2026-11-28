@@ -1,0 +1,7 @@
+claim_id = "3a22b9fa83664ab5aa1dfb883a695651"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "bd9329d1d0dfbbb065d54761e2743bddb146688b"
+branch = "claude/issue-3515-release-docs-name-the-head"
+scope = ["README.md", "docs/architecture.md"]
+opened_commit = "4fde59640665b992255cef3191d300a74abf5190"
