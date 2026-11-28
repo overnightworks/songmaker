@@ -21,12 +21,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    if op.get_bind().dialect.name == "sqlite":
-        return
-    op.drop_column("jobs", "worker_pid")
+    if not _is_sqlite():
+        op.drop_column("jobs", "worker_pid")
 
 
 def downgrade() -> None:
-    if op.get_bind().dialect.name == "sqlite":
-        return
-    op.add_column("jobs", sa.Column("worker_pid", sa.Integer(), nullable=True))
+    if not _is_sqlite():
+        op.add_column("jobs", sa.Column("worker_pid", sa.Integer(), nullable=True))
+
+
+def _is_sqlite() -> bool:
+    return op.get_bind().dialect.name == "sqlite"

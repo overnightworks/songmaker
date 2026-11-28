@@ -10,7 +10,6 @@ from alembic.config import Config
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
-
 BARE_JOB_ID = "job"
 
 
@@ -48,8 +47,8 @@ def assert_column_nullable_empty_and_job_kept(
     engine: Engine, table: str, column: str, job_id: str,
 ) -> None:
     """`column` of `table` is nullable and empty, and the job `job_id` is its only row."""
-    nullable = next(c for c in inspect(engine).get_columns(table) if c["name"] == column)["nullable"]
-    assert (nullable, stored_values(engine, table, column)) == (True, {job_id: None})
+    [stored] = [c for c in inspect(engine).get_columns(table) if c["name"] == column]
+    assert (stored["nullable"], stored_values(engine, table, column)) == (True, {job_id: None})
 
 
 def job_count(engine: Engine) -> int:
