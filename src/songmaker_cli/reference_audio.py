@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.audio_files import read_audio_duration
+from songmaker_cli.audio_paths import is_plain_path_component
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
 from songmaker_cli.db.advisory_locks import lock_until_transaction_ends
 from songmaker_cli.db.models import ReferenceRecording
@@ -167,7 +168,7 @@ def _open_component(stack: ExitStack, parent: int, part: str, *, create: bool) -
 def _walk_reference_directory(
     stack: ExitStack, audio_dir: Path, user_id: str, *, create: bool,
 ) -> int:
-    if Path(user_id).name != user_id or user_id in {"", ".", ".."}:
+    if not is_plain_path_component(user_id):
         raise ReferenceAudioStorageError("invalid owner")
     root = owner_reference_audio_root(audio_dir.absolute(), user_id)
     descriptor = os.open(root.anchor, os.O_RDONLY | os.O_DIRECTORY)

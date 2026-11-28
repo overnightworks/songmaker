@@ -9,7 +9,8 @@ import pytest
 from support.web_app import make_app_context, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME, USER_LORAS_DIRNAME, LoraStatus
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
+from songmaker_cli.constants import USER_LORA_DATASET_DIRNAME, LoraStatus
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS

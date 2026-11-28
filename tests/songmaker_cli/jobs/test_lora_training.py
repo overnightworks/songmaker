@@ -22,10 +22,10 @@ from support.lora_training_world import seed_queued_lora
 from support.web_app import SettledFakeAsyncRedis
 from support.wrapper_deps import reserved_gpu_hold
 
+from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
 from songmaker_cli.constants import (
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
-    USER_LORAS_DIRNAME,
     LoraStatus,
 )
 from songmaker_cli.db.models import AuditLog, Job

@@ -1625,8 +1625,10 @@ SIGKILLed and even the values the run did produce would be lost.
   `AUDIT_LOG_RETENTION_DAYS`, applies generation retention and removes
   reference-audio files that no row names, reconciles the reference
   `unused_since` stamps and then deletes the references whose announced date
-  has passed. They are keys of one tandem `Deadlines` of kind `worker-crons`
-  (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
+  has passed, and removes the voices deleted more than `FINAL_DELETION_DAYS` ago with their
+  rows and their directory (the directory first, the rows once it is gone, so a directory that
+  stays keeps its rows for the next run). They are keys of one tandem `Deadlines` of kind
+  `worker-crons` (`cron_schedule.py`), and tandem's `serve_due` is the claiming loop: it claims each due key
   once across all workers, extends the claim while the body runs and calls `done` after it. Redis
   TIME is the only clock: a run ends with `recur`, which arms the key for the next tick
   (`next_tick`) computed from it. Each round arms every cron absent from Redis due now, so a
@@ -2093,6 +2095,6 @@ A songmaker process holds at most `DATABASE_POOL_SIZE` + `DATABASE_MAX_OVERFLOW`
 
 ## Deploy
 
-The platform deploys songmaker through Flux from a release tag `vYYYY.MM.DD.N`; a merge to `main` alone deploys nothing. The operator dispatches the Release workflow (`.github/workflows/release.yml`) with a version: it gates main's head through quality, pushes the web, music worker, scoring worker and acestep worker images privately to GHCR with a signed provenance, and then sets the tag and the release; a pushed `v*` tag can never be moved or deleted.
+The platform deploys songmaker through Flux from a release tag `vYYYY.MM.DD.N`; a merge to `main` alone deploys nothing. After agreeing the deployment with platform's head, songmaker's head dispatches the Release workflow (`.github/workflows/release.yml`) with a version: it gates main's head through quality, pushes the web, music worker, scoring worker and acestep worker images privately to GHCR with a signed provenance, and then sets the tag and the release; a pushed `v*` tag can never be moved or deleted.
 
 Migrations have one owner: the migrate init container, which runs `alembic upgrade head` before any app process starts (the test stack's `songmaker-migrate` service, platform's init container in the deployment). The advisory lock `env.py` takes serialises concurrent upgrades, so two surge pods never migrate at once; it has no `lock_timeout`, so a hung migration blocks every other upgrade. Every app process (web, music and scoring worker) runs `init_db` at start, which waits for the database and compares its stored Alembic revision with the script head; it raises `DatabaseNotAtHeadError`, naming both revisions, when they differ or the database is unversioned, never migrates and never stamps, and the orchestrator restarts the process until the head matches. A migration that fails leaves the old processes serving and the new ones restarting; the data is safe, because a failed migration rolls back fully, and recovery is a fixed release. Migrations stay expand-then-contract, so the old processes run against the migrated schema.

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path, PurePosixPath
+from typing import Final
 
 log = logging.getLogger(__name__)
+
+USER_LORAS_DIRNAME: Final[str] = "user_loras"
 
 
 class AudioPathRejectedError(Exception):
@@ -31,6 +34,39 @@ def confined_under(root: Path, path: Path) -> Path | None:
     if resolved_path == resolved_root or not resolved_path.is_relative_to(resolved_root):
         return None
     return resolved_path
+
+
+def is_plain_path_component(name: str) -> bool:
+    """Whether ``name`` is exactly one ordinary path component.
+
+    Joining anything else onto a directory can leave it: an absolute name replaces the
+    directory, and ``.``, ``..``, a slash or a leading ``./`` reach a sibling or a parent.
+    """
+    return name not in {"", ".", ".."} and "/" not in name
+
+
+def _lora_owner_relative_root(user_id: str) -> PurePosixPath:
+    return PurePosixPath(USER_LORAS_DIRNAME) / user_id
+
+
+def all_loras_root(audio_dir: Path) -> Path:
+    """The directory holding the voice directories of every person."""
+    return audio_dir / USER_LORAS_DIRNAME
+
+
+def lora_owner_root(audio_dir: Path, user_id: str) -> Path:
+    """The directory holding every voice of one person."""
+    return audio_dir / _lora_owner_relative_root(user_id)
+
+
+def lora_relative_root(user_id: str, lora_id: str) -> PurePosixPath:
+    """One voice's directory relative to the audio root, as its rows store it."""
+    return _lora_owner_relative_root(user_id) / lora_id
+
+
+def lora_root(audio_dir: Path, user_id: str, lora_id: str) -> Path:
+    """The directory holding one voice's samples, work directories and adapter."""
+    return audio_dir / lora_relative_root(user_id, lora_id)
 
 
 def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:
