@@ -1816,7 +1816,7 @@ for any terminal job. When its lease starts anew, `keep_owner_lease` sees the ch
 generation of tandem's `Hold`, logs it as a start and, in a web process, removes what every
 cover whose stored status has ended left behind (`lifecycle.reconcile_ended_covers`). A job a process wrote under the new
 generation names a stamp the pass that read the old one does not know, so it keeps running, and
-the stored job status still fences every write to a job that was failed. A cover's staging directory is named by its job id alone, so it
+the stored job status still fences every write to a job that was failed. A process keeps running its old-generation jobs after a renewal, and each job lands its result only while its row is active: a voice training takes the lock of its row (`lock_active_job`) before it moves the adapter, saves the model mode and marks the voice ready, and a training whose row has ended lands nothing and removes its own temporary output. A cover's staging directory is named by its job id alone, so it
 is removed also when the album was deleted. A crashed LoRA training leaves its voice in
 training until the next stale-job reaper tick reconciles it.
 
