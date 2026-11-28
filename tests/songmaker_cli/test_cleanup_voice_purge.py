@@ -277,7 +277,7 @@ def test_a_voice_whose_ids_join_to_a_directory_that_is_not_its_own_leaves_that_d
         pytest.param(OWNER, "//", id="double-slash-voice-id"),
     ],
 )
-def test_a_voice_whose_id_is_made_of_slashes_is_removed_nowhere_and_keeps_its_rows(
+def test_a_voice_with_slash_ids_removes_nothing_outside_the_audio_directory_and_keeps_its_rows(
     world: _World, monkeypatch: pytest.MonkeyPatch, owner_id: str, voice_id: str,
 ) -> None:
     """These ids join to the filesystem root, so a regression must not reach a real removal."""
