@@ -623,11 +623,7 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
     ],
 )
 def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
-    seeded,
-    db_factory,
-    monkeypatch,
-    crash_point: str,
-    reconciled_count: int,
+    seeded, db_factory, monkeypatch, crash_point: str, reconciled_count: int
 ) -> None:
     from songmaker_cli.jobs import lora_training
 
@@ -638,43 +634,30 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
     (final_dir / "adapter.txt").write_text("old")
     temporary_dir = lora_root / "training_tmp"
 
-    original_rename = lora_training.os.rename
-    rename_count = 0
+    def crash_after_call(owner, name: str, nth_call: int, path: Path | None = None) -> None:
+        original = getattr(owner, name)
+        calls = 0
 
-    def crash_during_adoption(source, destination) -> None:
-        nonlocal rename_count
-        original_rename(source, destination)
-        rename_count += 1
-        if (crash_point == "after_first_rename" and rename_count == 1) or (
-            crash_point == "after_second_rename" and rename_count == 2
-        ):
-            raise SystemExit("simulated process crash")
+        def crashing(*args, **kwargs) -> None:
+            nonlocal calls
+            original(*args, **kwargs)
+            if path is None or Path(args[0]) == path:
+                calls += 1
+                if calls == nth_call:
+                    raise SystemExit("simulated process crash")
 
-    monkeypatch.setattr(lora_training.os, "rename", crash_during_adoption)
-    original_rmtree = lora_training.shutil.rmtree
+        monkeypatch.setattr(owner, name, crashing)
 
-    def crash_after_previous_cleanup(path, *args, **kwargs) -> None:
-        original_rmtree(path, *args, **kwargs)
-        if crash_point == "after_previous_cleanup" and Path(path) == previous_dir:
-            raise SystemExit("simulated process crash")
-
-    monkeypatch.setattr(lora_training.shutil, "rmtree", crash_after_previous_cleanup)
-    original_clear_record = lora_training._clear_completed_training_model_mode
-
-    def crash_after_record_clear(*args, **kwargs) -> None:
-        original_clear_record(*args, **kwargs)
-        if crash_point == "after_record_clear":
-            raise SystemExit("simulated process crash")
-
-    monkeypatch.setattr(
-        lora_training, "_clear_completed_training_model_mode", crash_after_record_clear
-    )
+    crash_targets = {
+        "after_first_rename": (lora_training.os, "rename", 1),
+        "after_second_rename": (lora_training.os, "rename", 2),
+        "after_previous_cleanup": (lora_training.shutil, "rmtree", 1, previous_dir),
+        "after_record_clear": (lora_training, "_clear_completed_training_model_mode", 1),
+    }
+    crash_after_call(*crash_targets[crash_point])
 
     async def turbo_training_events(*_args, **_kwargs):
-        yield (
-            "done",
-            {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}},
-        )
+        yield ("done", {"result": {"mode": "turbo", "adapter_dir": "", "num_samples": 3}})
 
     with patch_worker_calls(str(temporary_dir), events=turbo_training_events):
         training = run_lora_training_job(
@@ -690,9 +673,7 @@ def test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash(
             _run(training)
 
     with db_factory() as session:
-        lora = get_user_lora(session, seeded["lora_id"])
-        job = get_job(session, "job-1")
-        job.status = JobStatus.FAILED
+        get_job(session, "job-1").status = JobStatus.FAILED
         session.commit()
 
     assert reconcile_crashed_loras(db_factory, seeded["audio_dir"]) == reconciled_count
