@@ -1,8 +1,0 @@
-claim_id = "0e5446780306404085a215d6a63e48f3"
-agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
-role = "builder"
-base = "dd19f5dd8637a9ffef22a764949ec403af7ba303"
-branch = "claude/issue-3543-three-dead-residues"
-scope = ["Dockerfile", "docker/music-worker.Dockerfile", "docs/mockups/move-song.html", "docs/security.md", "docs/testing.md", "sonar-project.properties", "src/songmaker_cli/acestep_state.py", "tests/conftest.py", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/support/fake_cli_process.py"]
-opened_commit = "a822f1aabbbdbfe303f3809eacd21dd864b76879"
-whole_reason = "Three dead residues the architecture audit found under one parent, bundled: a built surface's mockup, an uncalled test helper and the agent-CLI mount leftovers."
