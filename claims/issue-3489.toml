@@ -1,0 +1,8 @@
+claim_id = "d3576a8081c04d888d6d8a7b6516b4ad"
+agent = "Claude dc8f2010-3db0-49a6-8e62-d9a061a8f699"
+role = "builder"
+base = "daff072dd38e638ea50fb4e757941ac0daeea426"
+branch = "claude/issue-3489-take-agents-v0-85-0"
+scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/agent/backend.py", "src/songmaker_cli/album_api.py", "tests/songmaker_cli/agent/test_backend_cowriter_agent.py", "tests/songmaker_cli/test_cover_suggestions_ended_session.py", "uv.lock"]
+opened_commit = "a948363d120a0c843214dda2c500dba003fa47ca"
+whole_reason = "The pin and the one call it lets cover_admission make change together: the old pin lacks backend.admission, and the new call reaches the cover route, which may become async."
