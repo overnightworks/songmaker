@@ -3,6 +3,6 @@ agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
 role = "builder"
 base = "71bc52796408f1b1b3463048f01fd38756aa986c"
 branch = "claude/issue-3533-voice-writes-check-row"
-scope = ["docs/architecture.md", "src/songmaker_cli/jobs/lora_training.py", "tests/songmaker_cli/jobs/conftest.py", "tests/songmaker_cli/jobs/test_lora_training_ended_job.py", "tests/support/lora_training_world.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/jobs/_runtime.py", "src/songmaker_cli/jobs/lora_training.py", "tests/songmaker_cli/jobs/conftest.py", "tests/songmaker_cli/jobs/test_lora_training.py", "tests/songmaker_cli/jobs/test_lora_training_ended_job.py", "tests/support/lora_training_world.py"]
 opened_commit = "a2683be01c9e7bddfb175ff492a8b08ece7b2878"
 whole_reason = "The two remaining unfenced voice writes of a training, with the tests that share the ended-row world and the one sentence that states the fence."
