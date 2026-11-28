@@ -1,0 +1,7 @@
+claim_id = "0dcad605a28b42fb8f7c0e14130eb2c5"
+agent = "Claude ee0d1c09-f992-42f3-afe9-e3b840c100ee"
+role = "builder"
+base = "55a978717ab7b09ebae219eab08965816efd0b89"
+branch = "claude/issue-3221-owner-pass-fails-voice"
+scope = ["src/songmaker_cli/lifecycle.py", "tests/songmaker_cli/test_lifecycle_reconciliation.py"]
+opened_commit = "9b77c14374e0fe484fc9667fff0bc4dabed8f875"
