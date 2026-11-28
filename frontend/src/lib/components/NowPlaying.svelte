@@ -62,6 +62,7 @@
 	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { isEditableElement } from '#lib/utils/escape-level-up.ts';
+	import AiNotice from './AiNotice.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
 	import NowPlayingJudging from './NowPlayingJudging.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
@@ -331,6 +332,7 @@
 {#snippet subtitle()}
 	<span class="subtitle">
 		{#if stackedLayout && source}
+			<span class="take-label">{takeLabel}</span>
 			<button
 				type="button"
 				class="from-link"
@@ -340,10 +342,10 @@
 			>
 				{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
 			</button>
-			<span class="subtitle-text">{takeLabel}</span>
 		{:else}
 			<span class="subtitle-text">{[albumLine, takeLabel].filter(Boolean).join(' · ')}</span>
 		{/if}
+		<AiNotice look="badge" />
 	</span>
 {/snippet}
 
@@ -402,16 +404,19 @@
 		color: var(--text-muted);
 	}
 	.from-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.2rem;
-		padding: 0 0.5rem;
+		min-width: 0;
+		padding: 0;
 		border: none;
 		background: none;
 		color: var(--accent);
 		font: inherit;
-		font-size: 0.8rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		cursor: pointer;
+	}
+	.take-label {
+		flex: none;
 	}
 	.subtitle-text {
 		min-width: 0;

@@ -11,8 +11,11 @@ vi.mock('#lib/api/client.ts', () => ({
 	unkeepGeneration: vi.fn(),
 	unarchiveGeneration: vi.fn(),
 	rateGeneration: vi.fn(),
-	scoreGeneration: vi.fn()
+	scoreGeneration: vi.fn(),
+	shareGeneration: vi.fn(),
+	unshareGeneration: vi.fn()
 }));
+vi.mock('#lib/stores/playlists.ts', () => ({ addGenerationToPlaylist: vi.fn() }));
 
 import type { JobStatus } from '#lib/api/client.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
@@ -22,23 +25,29 @@ import {
 	pickGeneration,
 	rateGeneration,
 	scoreGeneration,
+	shareGeneration,
 	unarchiveGeneration,
 	unkeepGeneration,
-	unpickGeneration
+	unpickGeneration,
+	unshareGeneration
 } from '#lib/api/client.ts';
 import { songList } from '#lib/stores/libraryData.ts';
+import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { words } from '#lib/words/en.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import {
+	addTakeToPlaylist,
 	rate,
 	rescore,
 	rescoringTakeIds,
 	restoreTake,
 	setKeep,
 	setPick,
+	shareTake,
 	toggleKeep,
-	togglePick
+	togglePick,
+	unshareTake
 } from './takeActions';
 
 const unreachableServer = () =>
@@ -386,4 +395,47 @@ describe('a failed take action', () => {
 			]);
 		}
 	);
+});
+
+describe('the take menu shared actions', () => {
+	const shareResult = {
+		status: 'ok',
+		share_url: 'https://example.com/share/gen/tide',
+		share_slug: 'tide',
+		songs_without_playable_take: []
+	} as const;
+
+	function takeInList() {
+		return get(songList)[0].generations[0];
+	}
+
+	beforeEach(() => {
+		songList.set([song(actionSongDefaults())]);
+	});
+
+	it('marks the take shared in the library once it is shared, and unshared once it is not', async () => {
+		vi.mocked(shareGeneration).mockResolvedValue(shareResult);
+		const { id } = takeInList();
+
+		await shareTake(id);
+		expect(takeInList()).toMatchObject({ is_shared: true, share_slug: 'tide' });
+
+		await unshareTake(id);
+		expect(takeInList()).toMatchObject({ is_shared: false, share_slug: null });
+	});
+
+	it('toasts that a take was added to a playlist, and why it was not', async () => {
+		await addTakeToPlaylist('p1', 'g1');
+		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: words['takesList.addedToPlaylist'], type: 'success' })
+		]);
+
+		toasts.set([]);
+		vi.mocked(addGenerationToPlaylist).mockRejectedValue(new Error('refused'));
+		await addTakeToPlaylist('p1', 'g1');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: words['takesList.addFailed'], type: 'error' })
+		]);
+	});
 });

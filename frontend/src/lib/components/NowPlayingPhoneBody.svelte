@@ -38,7 +38,7 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.7rem;
+		gap: 0.5rem;
 		padding: 0.5rem 1rem 0.8rem;
 		overflow-y: auto;
 	}
@@ -57,6 +57,9 @@
 		flex: 1;
 		min-width: 0;
 		width: auto;
+	}
+	.title-row :global(.cover-title) {
+		font-size: 1.15rem;
 	}
 	/* The words take what the rest leaves and scroll inside it; below the floor
 	   the body scrolls instead, so the lyrics never spill over the transport. */

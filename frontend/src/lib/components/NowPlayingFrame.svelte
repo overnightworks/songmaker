@@ -55,7 +55,6 @@
 		rightPanelLabel,
 		sheetLabel = pageText('nowPlaying.rightPanel'),
 		rightPanelOpenOnMount = false,
-		showTakeLabel = true,
 		lyricsEmptyLabel = pageText('nowPlaying.noLyrics'),
 		// The fully-resolved take's cues/transcript; `info`'s generation can still
 		// be a thin library-pool stub. Null means no cues yet: static lyrics.
@@ -123,11 +122,6 @@
 		// so the dialog's aria-label stays a stable description.
 		sheetLabel?: string;
 		rightPanelOpenOnMount?: boolean;
-		// Take/version numbering is an internal editing concept — the app's
-		// NowPlaying shows it, a public share listener never sees "Take N"
-		// (share's classic-mode playback has no real take number to show
-		// anyway; see trackPlaybackInfo()).
-		showTakeLabel?: boolean;
 		lyricsEmptyLabel?: string;
 		lyricsCues?: WhisperCue[] | null;
 		whisperText?: string | null;
@@ -155,7 +149,7 @@
 	const albumLine = $derived(
 		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
 	);
-	const noticeLead = $derived(showTakeLabel ? '' : albumLine);
+	const noticeLead = $derived(albumLine);
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
 	const duration = $derived(
@@ -235,7 +229,7 @@
 			{@render takeMenu?.()}
 		</div>
 		{@render subtitle?.()}
-		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
+		{#if !subtitle}<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>{/if}
 	</div>
 {/snippet}
 
@@ -811,6 +805,9 @@
 	}
 	.now-playing.docked .cover-title {
 		font-size: 1.1rem;
+	}
+	.now-playing.docked .cover-meta {
+		width: min(220px, 70%);
 	}
 
 	.now-playing.stacked .np-body {

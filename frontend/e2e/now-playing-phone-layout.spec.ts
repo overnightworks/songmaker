@@ -1,4 +1,4 @@
-// Spec: REQ-PLAYER-04 -- phone Now Playing shows, on its first screen and without scrolling, the title row, the lyrics in a region that scrolls on its own, the judging card, the progress bar, the whole transport and the Queue row; the header names the surface, not the song.
+// Spec: REQ-PLAYER-04 -- phone Now Playing shows, on its first screen and without scrolling, the title row (cover thumbnail, title, one subtitle line and the take menu, the AI notice under the title), the lyrics in a region that scrolls on its own, the judging card, the progress bar, the whole transport and the Queue row; the header names the surface, not the song.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { FlowGuard, MOBILE_VIEWPORT, ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
@@ -39,8 +39,9 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 		expect(album.ok()).toBe(true);
 		const { id: albumId } = (await album.json()) as { id: string };
 		try {
-			// Two takes keep the take sheet shut behind the Queue row.
+			// Two takes keep the take sheet shut behind the Queue row; a second song makes the album two songs.
 			await seedTakeStripSong(albumId, TWO_LINE_TITLE, 2, LONG_LYRICS);
+			await seedTakeStripSong(albumId, 'E2E Phone layout second song', 1);
 			await page.goto(`/album/${albumId}`);
 			await playOpenAlbum(page);
 			await openNowPlayingFromBar(page, 'mobile', TWO_LINE_TITLE);
@@ -72,7 +73,7 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 					surface.getByRole('button', { name: words['nowPlaying.nextSong'] }),
 					surface.getByRole('slider', { name: words['transport.seek'] }),
 					surface.getByRole('region', { name: words['nowPlayingJudging.label'] }),
-					surface.locator('button[aria-haspopup="dialog"]')
+					surface.locator('.mobile-panel-trigger')
 				];
 
 				for (const control of controls) {
@@ -107,7 +108,7 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 					page,
 					surface.getByRole('button', { name: words['transport.pause'] })
 				);
-				await expectInsideViewport(page, surface.locator('button[aria-haspopup="dialog"]'));
+				await expectInsideViewport(page, surface.locator('.mobile-panel-trigger'));
 			});
 		});
 	}
@@ -140,6 +141,25 @@ test.describe('phone Now Playing first screen', { tag: ONLY_IN_SHELL.mobile }, (
 				const box = await control.boundingBox();
 				expect(box?.y).toBeGreaterThanOrEqual(lyrics.y + lyrics.height);
 			}
+		});
+	});
+
+	test('the lyrics window is taller than the title row, and the body does not scroll, at 390x664', async ({
+		page
+	}) => {
+		await onTwoLineSong(page, SHORT_PHONE_VIEWPORT, async (surface) => {
+			const titleRow = await surface.locator('.title-row').boundingBox();
+			const lyrics = await surface.locator('.lyrics-region').boundingBox();
+			if (!titleRow || !lyrics) throw new Error('Expected a laid out title row and lyrics');
+			expect(lyrics.height).toBeGreaterThan(titleRow.height);
+			expect(
+				await surface
+					.locator('.phone-body')
+					.evaluate((body) => body.scrollHeight - body.clientHeight)
+			).toBeLessThanOrEqual(0);
+			await expect(
+				surface.locator('.title-row').getByRole('button', { name: words['takeMenu.label'] })
+			).toBeVisible();
 		});
 	});
 });

@@ -69,7 +69,7 @@
 	</ul>
 	{#if rescoring}
 		<p class="note" role="status">{pageText('nowPlayingScores.rescoring')}</p>
-	{:else if entries.length === 0}
+	{:else if look === 'footer' && entries.length === 0}
 		<p class="note">{pageText('nowPlayingScores.empty')}</p>
 	{/if}
 </section>
