@@ -67,7 +67,7 @@ container with its own GPU; the live shape is the platform Deployment `acestep-w
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
 Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
 claimed `generate` job calls the scheduler (`scheduler.py`), which picks an
-online worker, INCRs queue depth atomically, dispatches via HTTP, and
+online worker, adds the job id to the worker's admitted set atomically, dispatches via HTTP, and
 consumes the worker's task SSE stream until `done`. A stream that stays silent
 for 630 seconds retains `Worker stream went silent` as its logged diagnosis; transport
 drops still use the scheduler's bounded reconnect policy. Failed model loading,
@@ -1618,8 +1618,9 @@ SIGKILLed and even the values the run did produce would be lost.
   `LORA_TRAINING_JOB_TIMEOUT`
 - Started as `python -m songmaker_cli.music_worker`, which runs `MusicWorker().run()`. The
   claiming loop and the crons are the tasks of one `asyncio.TaskGroup`, so a stop signal ends both
-  (a running job drains within `WORKER_DRAIN_TIMEOUT`), and one that raises ends the worker
-  process loudly while the lease is released.
+  (a running job drains within `WORKER_DRAIN_TIMEOUT`, which platform's grace period for
+  music-worker and scoring-worker must stay above, together with the stop work, so a change moves
+  both), and one that raises ends the worker process loudly while the lease is released.
 - Crons: audits orphaned audio files and applies file-expiry cleanup every even minute; once a
   day (`DAILY_CLEANUP_HOUR_UTC`) it deletes audit-log entries older than
   `AUDIT_LOG_RETENTION_DAYS`, applies generation retention and removes
@@ -1796,8 +1797,10 @@ process reads leases, so a worker's jobs end while a web process runs. A start o
 either kind leaves a live sibling's jobs alone; a clean stop ends the stopped
 process's jobs within one tick after its lifespan or its worker shutdown ends, a
 crash within the lease span plus a tick. A worker that is cancelled at its shutdown
-ends its running generation and LoRA jobs itself. A killed generation never decrements the admitted ACE-Step worker's queue depth, which
-the scheduler reads, and it stays raised until that worker restarts. After a clean restart the
+ends its running generation and LoRA jobs itself. A killed generation never releases its admission on the ACE-Step worker, so the
+owner pass and the stale-job reaper, after each has committed, remove the admitted job ids whose job is
+terminal from every registered worker's set (`reconcile_admitted_generations`). A Redis that cannot be read
+skips that removal until the next pass or tick. After a clean restart the
 panel shows "Try again" at once; after a crash within 20 s.
 
 `unknown` never fails a job. A Redis that cannot be read fails the pass, which the

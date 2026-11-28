@@ -14,8 +14,8 @@ from tandem.testing import aged_epoch
 from songmaker_acestep_worker.heartbeat import (
     GPU_HOLD_LASTS,
     HeartbeatLoop,
+    admitted_key,
     gpu_hold_locks,
-    queue_depth_key,
     reserve_gpu_hold,
     worker_state_key,
 )
@@ -43,7 +43,7 @@ def _make_loop(provider=None, interval=0.05, ttl=2):
 
 def test_keys_helper() -> None:
     assert worker_state_key("a") == "songmaker:acestep:worker:a"
-    assert queue_depth_key("b") == "songmaker:acestep:queue:b"
+    assert admitted_key("b") == "songmaker:acestep:admitted:b"
 
 
 def test_publish_once_writes_to_redis() -> None:
@@ -83,19 +83,19 @@ def test_publish_once_does_not_renew_a_gpu_hold() -> None:
 def test_clear_orphaned_queue_ends_the_hold_of_a_previous_process() -> None:
     async def go():
         loop, redis = _make_loop()
-        await redis.set(queue_depth_key("acestep-worker-0"), 7)
+        await redis.sadd(admitted_key("acestep-worker-0"), "job-1")
         previous_hold = await gpu_hold_locks(redis).acquire("acestep-worker-0")
         await loop.clear_orphaned_queue()
         return (
             previous_hold,
-            await redis.get(queue_depth_key("acestep-worker-0")),
+            await redis.scard(admitted_key("acestep-worker-0")),
             await gpu_hold_locks(redis).state("acestep-worker-0"),
         )
 
     previous_hold, depth, hold = _run(go())
 
     assert previous_hold is not None
-    assert depth is None
+    assert depth == 0
     assert hold.liveness is Liveness.GONE
 
 

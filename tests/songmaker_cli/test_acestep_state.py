@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 
+import fakeredis
 import fakeredis.aioredis
 import pytest
 from support.refused_download import attempt_download_that_must_not_run
@@ -13,21 +14,22 @@ from tandem.testing import aged_epoch
 
 from songmaker_acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
 from songmaker_cli.acestep_state import (
+    ADMITTED_KEY_PREFIX,
     DOWNLOAD_KEY_PREFIX,
     LM_FAILURE_KEY_PREFIX,
-    QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
     DownloadAlreadyRunning,
     admit_generation,
-    decr_queue_depth,
+    admitted_key,
     download_key,
     gpu_hold_is_free,
     gpu_hold_locks,
     lm_failure_key,
-    queue_depth_key,
     read_download_in_progress,
     read_queue_depth,
     read_worker_state,
+    release_admission,
+    remove_admissions_of_ended_jobs,
     single_flight_download,
     worker_is_online,
     worker_state_key,
@@ -67,7 +69,7 @@ def another_process(server):
 
 def test_key_prefixes_match_worker_heartbeat(redis) -> None:
     from songmaker_acestep_worker.heartbeat import (
-        QUEUE_KEY_PREFIX as WORKER_QUEUE_PREFIX,
+        ADMITTED_KEY_PREFIX as WORKER_ADMITTED_PREFIX,
     )
     from songmaker_acestep_worker.heartbeat import (
         WORKER_KEY_PREFIX as WORKER_WORKER_PREFIX,
@@ -75,7 +77,7 @@ def test_key_prefixes_match_worker_heartbeat(redis) -> None:
     from songmaker_acestep_worker.heartbeat import gpu_hold_locks as worker_gpu_hold_locks
 
     assert WORKER_KEY_PREFIX == WORKER_WORKER_PREFIX
-    assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
+    assert ADMITTED_KEY_PREFIX == WORKER_ADMITTED_PREFIX
     assert gpu_hold_locks(redis).keys == worker_gpu_hold_locks(redis).keys
     assert gpu_hold_locks(redis).lasts == worker_gpu_hold_locks(redis).lasts
 
@@ -185,19 +187,19 @@ def test_worker_state_key_format() -> None:
     assert worker_state_key("acestep-worker-0") == "songmaker:acestep:worker:acestep-worker-0"
 
 
-def test_queue_depth_key_format() -> None:
-    assert queue_depth_key("acestep-worker-0") == "songmaker:acestep:queue:acestep-worker-0"
+def test_admitted_key_format() -> None:
+    assert admitted_key("acestep-worker-0") == "songmaker:acestep:admitted:acestep-worker-0"
 
 
 def test_reserve_wins_against_a_later_generation_admit(settled_redis, event_loop) -> None:
     assert event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
 
-    assert not event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+    assert not event_loop.run_until_complete(admit_generation(settled_redis, "w1", "job-1"))
     assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 0
 
 
 def test_generation_admit_wins_against_a_later_hold_reserve(settled_redis, event_loop) -> None:
-    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1", "job-1"))
 
     assert not event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
     assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
@@ -208,13 +210,13 @@ class _AdmittingAfterADepthRead(fakeredis.aioredis.FakeRedis):
 
     def __init__(self, *, server, worker_id: str, after_read: int, admit) -> None:
         super().__init__(server=server)
-        self._depth_key = queue_depth_key(worker_id)
+        self._depth_key = admitted_key(worker_id)
         self._after_read = after_read
         self._admit = admit
         self._depth_reads = 0
 
-    async def get(self, name, *args, **kwargs):
-        value = await super().get(name, *args, **kwargs)
+    async def scard(self, name, *args, **kwargs):
+        value = await super().scard(name, *args, **kwargs)
         if name == self._depth_key:
             self._depth_reads += 1
             if self._depth_reads == self._after_read:
@@ -229,7 +231,7 @@ def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold
     ``acquire`` shows the admission, so the reserve gives the hold back."""
     reserving = _AdmittingAfterADepthRead(
         server=server, worker_id="w1", after_read=1,
-        admit=lambda client: client.incr(queue_depth_key("w1")),
+        admit=lambda client: client.sadd(admitted_key("w1"), "job-0"),
     )
 
     async def scenario() -> tuple[str | None, bool]:
@@ -240,6 +242,18 @@ def test_a_reserve_that_finds_a_generation_admitted_in_between_releases_its_hold
     assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 1
 
 
+def test_an_admission_made_during_the_removal_of_ended_ones_survives() -> None:
+    sync_redis = fakeredis.FakeRedis(decode_responses=True)
+    sync_redis.sadd(admitted_key("w1"), "ended", "running")
+
+    def ended_among(admitted):
+        sync_redis.sadd(admitted_key("w1"), "admitted-meanwhile")
+        return {job_id for job_id in admitted if job_id == "ended"}
+
+    assert remove_admissions_of_ended_jobs(sync_redis, "w1", ended_among) == 1
+    assert sync_redis.smembers(admitted_key("w1")) == {"running", "admitted-meanwhile"}
+
+
 def test_the_generation_controls_renew_and_release(settled_redis, event_loop) -> None:
     generation = event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
     assert generation
@@ -247,7 +261,7 @@ def test_the_generation_controls_renew_and_release(settled_redis, event_loop) ->
     assert not event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", "wrong"))
     assert event_loop.run_until_complete(renew_gpu_hold(settled_redis, "w1", generation))
     assert event_loop.run_until_complete(release_gpu_hold(settled_redis, "w1", generation))
-    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1", "job-1"))
 
 
 def test_a_hold_is_free_only_while_none_is_live(settled_redis, event_loop) -> None:
@@ -262,7 +276,7 @@ def test_a_live_hold_keeps_every_reader_off_the_worker(settled_redis, event_loop
     async def scenario() -> tuple[bool, bool, int]:
         assert await reserve_gpu_hold(settled_redis, "w1")
         free = await gpu_hold_is_free(settled_redis, "w1")
-        admitted = await admit_generation(settled_redis, "w1")
+        admitted = await admit_generation(settled_redis, "w1", "job-1")
         return free, admitted, await read_queue_depth(settled_redis, "w1")
 
     assert event_loop.run_until_complete(scenario()) == (False, False, 0)
@@ -277,7 +291,7 @@ def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(
     async def scenario() -> tuple[bool, bool, str | None, int]:
         await settled_redis.flushall()
         free = await gpu_hold_is_free(settled_redis, "w1")
-        admitted = await admit_generation(settled_redis, "w1")
+        admitted = await admit_generation(settled_redis, "w1", "job-1")
         reserved = await reserve_gpu_hold(settled_redis, "w1")
         return free, admitted, reserved, await read_queue_depth(settled_redis, "w1")
 
@@ -285,7 +299,7 @@ def test_a_hold_and_an_admission_wait_out_a_redis_restart_without_failing(
 
     event_loop.run_until_complete(settled_redis.set(*aged_epoch(key_prefix=REDIS_KEY_PREFIX)))
 
-    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1"))
+    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1", "job-1"))
 
 
 def test_read_worker_state_missing(redis, event_loop) -> None:
@@ -345,10 +359,11 @@ def test_read_queue_depth_missing_returns_zero(redis, event_loop) -> None:
     assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 0
 
 
-def test_decr_queue_depth(redis, event_loop) -> None:
-    event_loop.run_until_complete(redis.set(queue_depth_key("w1"), 2))
+def test_release_admission_removes_only_its_job_and_is_idempotent(redis, event_loop) -> None:
+    event_loop.run_until_complete(redis.sadd(admitted_key("w1"), "job-1", "job-2"))
     assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 2
-    assert event_loop.run_until_complete(decr_queue_depth(redis, "w1")) == 1
+    event_loop.run_until_complete(release_admission(redis, "w1", "job-1"))
+    event_loop.run_until_complete(release_admission(redis, "w1", "job-1"))
     assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 1
 
 
