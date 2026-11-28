@@ -14,7 +14,6 @@ lib/components/ConfirmDialog.svelte 4
 lib/components/EditableTitle.svelte 4
 lib/components/LibraryTileContent.svelte 4
 lib/components/LibraryWall.svelte 3
-lib/components/LibraryWorkspace.svelte 1
 lib/components/LoraDetail.svelte 21
 lib/components/MemoryEditor.svelte 9
 lib/components/MentionDropdown.svelte 3

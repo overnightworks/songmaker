@@ -41,6 +41,7 @@ import {
 	recordRailReveals,
 	revealedTitles,
 	requireButtonContainingText,
+	requireButtonLabelled,
 	requireElement,
 	songsPage
 } from './rail-test-fixtures';
@@ -610,12 +611,15 @@ describe('RailLibraryGroup', () => {
 		await vi.waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('true'));
 		const panel = requireElement<HTMLDivElement>(target, '#rail-library-group');
 		expect(panel.inert).toBe(false);
-		expect(requireElement(target, '[role="alert"]').textContent).toBe('Backend unreachable');
+		expect(requireElement(target, '[role="alert"]').textContent).toContain(
+			words['rail.libraryLoadError']
+		);
+		expect(target.textContent).not.toContain('Backend unreachable');
 
 		fetchAlbums.mockResolvedValueOnce(
 			albumsPage({ items: [album({ id: 'a9', title: 'Recovered' })] })
 		);
-		requireButtonContainingText(target, words['rail.retry']).click();
+		requireButtonLabelled(target, words['libraryWorkspace.retry']).click();
 
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 		expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement);
@@ -632,7 +636,6 @@ describe('RailLibraryGroup', () => {
 		await tick();
 
 		expect(target.querySelector('[role="alert"]')).toBeNull();
-		expect(target.textContent).not.toContain(words['rail.retry']);
 		expect(target.querySelectorAll('.album-label')).toHaveLength(1);
 
 		fetchAlbums.mockResolvedValueOnce(
@@ -677,13 +680,13 @@ describe('RailLibraryGroup', () => {
 		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
 
 		expect(fetchAlbums).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
-		expect(requireElement(target, '[role="alert"]').textContent).toBe(
+		expect(requireElement(target, '[role="alert"]').textContent).toContain(
 			words['rail.libraryLoadError']
 		);
 		fetchAlbums.mockResolvedValueOnce(
 			albumsPage({ items: [album({ id: 'a9', title: 'Recovered' })] })
 		);
-		requireButtonContainingText(target, words['rail.retry']).click();
+		requireButtonLabelled(target, words['libraryWorkspace.retry']).click();
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(target.querySelector('[role="alert"]')).toBeNull();

@@ -289,7 +289,9 @@ function loadAllAlbums({ replace }: { replace: boolean }): Promise<boolean> {
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			allAlbumsReloads.nameLoadFailure(err, pageText('rail.libraryLoadError'));
+			allAlbumsReloads.nameLoadFailure(err, pageText('rail.libraryLoadError'), {
+				withholdServerDetail: true
+			});
 			allAlbumsLoad.set({
 				status: err instanceof NetworkError ? 'unreachable' : 'error',
 				error: null

@@ -223,10 +223,6 @@ msgctxt "rail.libraryLoading"
 msgid "Loading albums…"
 msgstr ""
 
-msgctxt "rail.retry"
-msgid "Retry"
-msgstr ""
-
 msgctxt "rail.libraryLoadError"
 msgid "Couldn't load your library"
 msgstr ""

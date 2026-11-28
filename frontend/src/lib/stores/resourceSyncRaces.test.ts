@@ -11,7 +11,10 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import type { GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
 import { EVENT_SOURCE_CLOSED } from '#lib/constants/resource-sync.ts';
 import { SSE_RECONNECT_MAX_DELAY_MS } from '#lib/constants/sse-reconnect.ts';
+import { words } from '#lib/words/en.ts';
 import { ResourceSyncController } from './resourceSync';
+
+const SYNC_ERROR = words['resourceSync.error'];
 
 type Deps = ConstructorParameters<typeof ResourceSyncController>[0];
 type Source = ReturnType<Deps['openEventStream']>;
@@ -174,19 +177,18 @@ describe('resource sync after a reconnect or a stop', () => {
 
 	it('shows the failure of the refetch when Retry fails again', async () => {
 		vi.useFakeTimers();
-		const failures = [serverError('first failure'), serverError('second failure')];
 		const world = arrange({
 			fetchSong: async () => {
-				throw failures.shift();
+				throw serverError('refused');
 			}
 		});
 		await goLive(world);
 		await world.controller.requestSongRefresh('s1');
-		expect(world.controller.state.error).toBe('first failure');
+		expect(world.controller.state.error).toBe(SYNC_ERROR);
 
 		await expect(world.controller.retry()).resolves.toBe(false);
 
-		expect(world.controller.state.error).toBe('second failure');
+		expect(world.controller.state).toMatchObject({ status: 'error', error: SYNC_ERROR });
 		world.controller.stop();
 	});
 

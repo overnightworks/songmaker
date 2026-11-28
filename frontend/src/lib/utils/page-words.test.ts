@@ -78,7 +78,7 @@ it('refuses, at type check, values for a plain key and a missing or misnamed gap
 	// @ts-expect-error a family's count is a number
 	void (() => pageText('rail.trackTakes', 'two'));
 	// @ts-expect-error a plain key takes no count
-	void (() => pageText('rail.retry', 1));
+	void (() => pageText('libraryWorkspace.retry', 1));
 	// @ts-expect-error parts are read for a marked sentence only
 	void (() => pageParts('homeWrite.label'));
 	// @ts-expect-error a marked sentence requires its gaps

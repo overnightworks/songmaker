@@ -9,7 +9,7 @@ import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
 import {
 	albumsPage,
 	createComponentMount,
-	requireButtonContainingText,
+	requireButtonLabelled,
 	requireElement,
 	songsPage
 } from './rail-test-fixtures';
@@ -68,7 +68,9 @@ async function renderWithFailedRail(): Promise<HTMLElement> {
 		.mockRejectedValueOnce(new ApiError(503, 'Backend unreachable', '/api/albums'));
 	const target = await render();
 	await vi.waitFor(() =>
-		expect(requireElement(target, '[role="alert"]').textContent).toBe('Backend unreachable')
+		expect(requireElement(target, '[role="alert"]').textContent).toContain(
+			words['rail.libraryLoadError']
+		)
 	);
 	return target;
 }
@@ -80,7 +82,7 @@ describe('RailLibraryGroup Retry while the library load failed', () => {
 		let settle!: (recovered: boolean) => void;
 		vi.mocked(retryResourceSync).mockReturnValue(new Promise((resolve) => (settle = resolve)));
 
-		requireButtonContainingText(target, words['rail.retry']).click();
+		requireButtonLabelled(target, words['libraryWorkspace.retry']).click();
 		await tick();
 
 		expect(requireElement(target, '.rail-loading').textContent).toBe(words['rail.libraryLoading']);
@@ -96,14 +98,16 @@ describe('RailLibraryGroup Retry while the library load failed', () => {
 		const target = await renderWithFailedRail();
 		vi.mocked(retryResourceSync).mockResolvedValue(false);
 
-		requireButtonContainingText(target, words['rail.retry']).click();
+		requireButtonLabelled(target, words['libraryWorkspace.retry']).click();
 		await tick();
 		expect(target.textContent).toContain(words['rail.libraryLoading']);
 
 		await vi.waitFor(() =>
-			expect(requireElement(target, '[role="alert"]').textContent).toBe('Backend unreachable')
+			expect(requireElement(target, '[role="alert"]').textContent).toContain(
+				words['rail.libraryLoadError']
+			)
 		);
-		expect(requireButtonContainingText(target, words['rail.retry'])).toBeInstanceOf(
+		expect(requireButtonLabelled(target, words['libraryWorkspace.retry'])).toBeInstanceOf(
 			HTMLButtonElement
 		);
 	});
@@ -113,7 +117,7 @@ describe('RailLibraryGroup Retry while the library load failed', () => {
 		resourceSync.update((state) => ({ ...state, ready: true, status: 'live' }));
 		fetchAlbums.mockResolvedValueOnce(albumsPage());
 
-		requireButtonContainingText(target, words['rail.retry']).click();
+		requireButtonLabelled(target, words['libraryWorkspace.retry']).click();
 
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 		expect(retryResourceSync).not.toHaveBeenCalled();
