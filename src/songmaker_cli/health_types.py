@@ -73,10 +73,9 @@ class BackgroundLoopRegistry:
     ) -> AsyncGenerator[str, None]:
         """Relay ``frames`` until the shutdown begins, then close them at once."""
         begun = asyncio.ensure_future(self._shutdown_begun.wait())
-        next_frame: asyncio.Future[str] | None = None
+        next_frame: asyncio.Future[str] = asyncio.ensure_future(anext(frames))
         try:
             while True:
-                next_frame = asyncio.ensure_future(anext(frames))
                 await asyncio.wait({next_frame, begun}, return_when=asyncio.FIRST_COMPLETED)
                 if not next_frame.done():
                     return
@@ -85,9 +84,10 @@ class BackgroundLoopRegistry:
                 except StopAsyncIteration:
                     return
                 yield frame
+                next_frame = asyncio.ensure_future(anext(frames))
         finally:
             begun.cancel()
-            if next_frame is not None and not next_frame.done():
+            if not next_frame.done():
                 next_frame.cancel()
                 await asyncio.wait({next_frame})
             await frames.aclose()

@@ -39,7 +39,7 @@ from songmaker_cli.db.queries.auth import create_session as create_db_session
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
-from songmaker_cli.server import _DrainingServer, create_app, run_server
+from songmaker_cli.server import create_app, run_server
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 from songmaker_cli.worker_liveness import WORKER_KINDS
 
@@ -337,7 +337,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, pg_factory) -> None:
 @pytest.fixture
 def uvicorn_stub():
     """What `run_server` builds and starts instead of a listening server: its config and run."""
-    with patch("uvicorn.Config") as config, patch.object(_DrainingServer, "run") as run:
+    with patch("uvicorn.Config") as config, patch("uvicorn.Server.run") as run:
         yield SimpleNamespace(config=config, run=run)
 
 

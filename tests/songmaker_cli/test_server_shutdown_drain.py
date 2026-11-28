@@ -34,6 +34,7 @@ class _OpenStream:
     """A stream held open by a thread of the test, and when the server ended it."""
 
     opened: threading.Event
+    closed: threading.Event
     closed_at: float | None = None
 
 
@@ -47,6 +48,7 @@ def _hold_stream(web_process: WebProcess, path: str, cookies: dict[str, str], he
                     held.opened.set()
     finally:
         held.closed_at = time.monotonic()
+        held.closed.set()
 
 
 def _turn_frames(web_process: WebProcess, cookies: dict[str, str]) -> list[dict]:
@@ -100,7 +102,7 @@ def test_sigterm_ends_the_streams_and_bounds_the_turn(
         with factory() as session:
             job_id = session.query(Job).filter_by(type=JobType.CHAT).one().id
         streams = {
-            path: _OpenStream(threading.Event())
+            path: _OpenStream(threading.Event(), threading.Event())
             for path in (f"/api/jobs/{job_id}/stream", RESOURCE_EVENT_STREAM_PATH)
         }
         for path, held in streams.items():
@@ -109,9 +111,7 @@ def test_sigterm_ends_the_streams_and_bounds_the_turn(
 
         terminated_at = time.monotonic()
         stopping = executor.submit(web_process.stop)
-        while any(held.closed_at is None for held in streams.values()):
-            assert time.monotonic() - terminated_at < DEADLINE_SECONDS
-            time.sleep(0.05)
+        assert all(held.closed.wait(DEADLINE_SECONDS) for held in streams.values())
         closed_after = max(held.closed_at for held in streams.values()) - terminated_at
         if released_before_the_bound:
             gateway.released.set()
