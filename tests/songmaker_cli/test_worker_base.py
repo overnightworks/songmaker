@@ -322,14 +322,21 @@ class _QueueServingWorker(_DummyWorker):
             await asyncio.sleep(0.1)
 
 
+@pytest.fixture
+def database_engine() -> Iterator[MagicMock]:
+    """The engine the worker gets from ``init_db``, so a test sees whether its pool is disposed."""
+    engine = MagicMock()
+    with patch("songmaker_cli.worker_base.init_db") as init_db:
+        init_db.return_value.kw = {"bind": engine}
+        yield engine
+
+
 def _queue_serving_worker_on(redis_url: str, readiness_file: Path) -> _QueueServingWorker:
-    worker = _QueueServingWorker(_settings_on(redis_url), readiness_file)
-    worker.get_db_factory = MagicMock()
-    return worker
+    return _QueueServingWorker(_settings_on(redis_url), readiness_file)
 
 
 def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_serving(
-    restored_logging: None, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+    restored_logging: None, database_engine: MagicMock, send_stop_signal: Callable[[asyncio.Task[None]], bool],
     redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
@@ -362,8 +369,8 @@ def test_a_worker_rides_out_a_redis_outage_longer_than_its_lease_and_keeps_servi
     assert after != before
 
 
-def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
-    restored_logging: None, send_stop_signal: Callable[[asyncio.Task[None]], bool],
+def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds_with_its_database_pool_disposed(
+    restored_logging: None, database_engine: MagicMock, send_stop_signal: Callable[[asyncio.Task[None]], bool],
     redis_url: str, readiness_file: Path,
 ) -> None:
     with redis_proxy(redis_url) as proxy:
@@ -382,6 +389,7 @@ def test_a_worker_stopped_during_a_redis_outage_ends_within_seconds(
             return time.monotonic() - started
 
         assert _run(stop_during_the_outage()) < WORKER_STOP_BOUND_SECONDS
+        database_engine.dispose.assert_called_once_with()
 
 
 def test_a_worker_that_never_started_shuts_down_without_a_lease() -> None:
