@@ -447,8 +447,9 @@
 		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
+	/* The floor a short dock shrinks it to: the Queue heading and its first row. */
 	.panel-content {
-		min-height: 0;
+		min-height: 4.5rem;
 		overflow-y: auto;
 	}
 </style>

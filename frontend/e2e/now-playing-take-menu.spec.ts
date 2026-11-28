@@ -14,7 +14,7 @@ import {
 } from './helpers';
 import { showTab } from './foldedSong';
 import { openNowPlayingFromBar, playOpenAlbum } from './play-album';
-import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
+import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 import { words } from '../src/lib/words/en';
 import { takeMenuRows } from './take-menu-rows';
 
@@ -26,13 +26,17 @@ let albumId: string;
 let songTitle: string;
 let songId: string;
 
-test.beforeEach(async ({ page }) => {
+async function createAlbum(page: Page): Promise<string> {
 	const album = await page.request.post('/api/albums', {
 		headers: await sameOriginHeaders(page),
 		data: { title: `E2E Take menu ${Date.now()}`, artist: '' }
 	});
 	expect(album.ok()).toBe(true);
-	albumId = ((await album.json()) as { id: string }).id;
+	return ((await album.json()) as { id: string }).id;
+}
+
+test.beforeEach(async ({ page }) => {
+	albumId = await createAlbum(page);
 	// Long enough to wrap onto a second line on a phone and onto several in the dock.
 	songTitle = `Wrapping take menu song ${Date.now()}`;
 	songId = await seedSongPhoneSong(albumId, songTitle, 1, 2, TAKE_SEED);
@@ -80,11 +84,11 @@ async function rowWords(menu: Locator): Promise<string[]> {
 	return rows.map((row) => known.find((word) => row.trim().startsWith(word)) ?? row.trim());
 }
 
-/** Every take of the seeded song carries scores, a Rating among them, as the song loads. */
-async function scoreTheTakes(page: Page): Promise<void> {
-	await page.route(new RegExp(`/api/songs/${songId}$`), async (route) => {
+/** Every take of the song carries scores, a Rating among them, beside its own, as the song loads. */
+async function scoreTheTakes(page: Page, scoredSongId = songId): Promise<void> {
+	await page.route(new RegExp(`/api/songs/${scoredSongId}$`), async (route) => {
 		const response = await route.fetch();
-		const song = (await response.json()) as { generations: object[] };
+		const song = (await response.json()) as { generations: { scores?: object }[] };
 		const scores = {
 			user_rating: 72,
 			text_accuracy: 86,
@@ -92,12 +96,24 @@ async function scoreTheTakes(page: Page): Promise<void> {
 			audiobox_quality: 7.4,
 			audiobox_enjoyment: 6.8
 		};
-		song.generations = song.generations.map((take) => ({ ...take, scores }));
+		song.generations = song.generations.map((take) => ({
+			...take,
+			scores: { ...take.scores, ...scores }
+		}));
 		await route.fulfill({ response, json: song });
 	});
 }
 
 const MENU_ROWS = takeMenuRows(true);
+
+/** Whether a click at the element's centre reaches it, with nothing laid over it. */
+async function isOnTop(element: Locator): Promise<boolean> {
+	return element.evaluate((own) => {
+		const box = own.getBoundingClientRect();
+		const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+		return hit !== null && (own === hit || own.contains(hit));
+	});
+}
 
 test("Now Playing's title row carries the take menu, with no pencil beside it", async ({
 	page
@@ -195,12 +211,64 @@ test(
 		for (const control of controls) {
 			await control.scrollIntoViewIfNeeded();
 			if (!(await control.isVisible())) continue;
-			const reachable = await control.evaluate((element) => {
-				const box = element.getBoundingClientRect();
-				const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-				return hit !== null && (element === hit || element.contains(hit));
+			expect(await isOnTop(control), await control.innerText()).toBe(true);
+		}
+	}
+);
+
+test(
+	'a judged take with long words keeps the Scores, both tabs and the first Queue row in the dock at 1440x900',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		// An album of its own, so the judged song is the one it starts with.
+		await archiveOwnedAlbum(page.request, albumId);
+		albumId = await createAlbum(page);
+		// Wraps onto two lines in the dock's title.
+		const judgedTitle = `Docked judged song whose title runs onto a second line ${Date.now()}`;
+		const lyrics = Array.from({ length: 70 }, (_, index) => `Line ${index + 1} of the words`);
+		const judgedSongId = await seedTakeStripSong(albumId, judgedTitle, 1, lyrics.join('\n'));
+		// A second song fills the Queue beyond the playing one.
+		await seedSongPhoneSong(albumId, `Take menu queued song ${Date.now()}`, 1, 1);
+		const headers = await sameOriginHeaders(page);
+		const song = await page.request.get(`/api/songs/${judgedSongId}`);
+		const [take] = ((await song.json()) as { generations: { id: string }[] }).generations;
+		for (const [path, data] of [
+			['pick', {}],
+			['keep', {}],
+			['rate', { rating: 72, notes: 'Chorus lands late, the bridge is the keeper' }]
+		] as const) {
+			const judged = await page.request.post(`/api/generations/${take.id}/${path}`, {
+				headers,
+				data
 			});
-			expect(reachable, await control.innerText()).toBe(true);
+			expect(judged.ok(), path).toBe(true);
+		}
+		await scoreTheTakes(page, judgedSongId);
+		guard = new FlowGuard(page);
+		await page.goto(`/album/${albumId}`);
+		await playOpenAlbum(page);
+		const bar = page.getByRole('contentinfo');
+		// The seeded takes last seconds: paused, the judged take stays the one playing.
+		await bar.getByRole('button', { name: words['transport.pause'], exact: true }).click();
+		await expect(bar).toContainText(judgedTitle);
+		await openNowPlayingFromBar(page, 'desktop', judgedTitle);
+		const docked = page.getByRole('complementary');
+		await expect(docked).toContainText(lyrics[lyrics.length - 1]);
+
+		const parts = [
+			docked.getByRole('region', { name: words['nowPlayingScores.heading'] }),
+			docked.getByRole('tab', { name: words['nowPlaying.queueTab'] }),
+			docked.getByRole('tab', { name: words['nowPlaying.takeTab'] }),
+			docked.getByRole('tabpanel').getByRole('listitem').first()
+		];
+		const dock = await docked.evaluate((own) => own.getBoundingClientRect().toJSON() as DOMRect);
+		for (const part of parts) {
+			await expect(part).toBeInViewport({ ratio: 1 });
+			const box = await part.evaluate((own) => own.getBoundingClientRect().toJSON() as DOMRect);
+			expect(box.top, String(part)).toBeGreaterThanOrEqual(dock.top);
+			expect(box.bottom, String(part)).toBeLessThanOrEqual(dock.bottom);
+			expect(await isOnTop(part), String(part)).toBe(true);
 		}
 	}
 );

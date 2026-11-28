@@ -780,32 +780,35 @@
 	.now-playing.docked .np-header {
 		padding: 0.9rem 1rem 0;
 	}
-	/* The words' row never shrinks below its content (the lyrics box and every
-	   line of scores), so the scores stay clear of the tabs. */
+	/* The docked body stays inside the dock. Its rows are the cover column, the
+	   words, the scores, the tabs and the tab panel: the words and the tab panel
+	   share the free space, each scrolling inside down to its own min-height, and
+	   the body scrolls only when even those floors do not fit. */
 	.now-playing.docked .np-body {
 		grid-template-columns: 1fr;
-		grid-template-rows: auto minmax(min-content, auto) auto;
-		gap: 1.1rem;
-		padding: 0.9rem 1rem 1.2rem;
+		grid-template-rows: auto 1fr auto auto 1fr;
+		gap: 0.8rem;
+		padding: 0.9rem 1rem;
 		overflow-y: auto;
 	}
-	.now-playing.docked .np-cover-col,
 	.now-playing.docked .np-lyrics-col,
 	.now-playing.docked .np-right-col {
-		justify-content: flex-start;
+		grid-row: span 2;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: subgrid;
 	}
-	.now-playing.docked .np-right-col {
-		overflow-y: visible;
+	.now-playing.docked .np-cover-col {
+		--cover-width: 100%;
+		align-items: stretch;
 	}
+	/* The cover shrinks with the viewport height, so a short dock keeps room for the words. */
 	.now-playing.docked .cover-art {
-		width: min(220px, 70%);
+		width: min(220px, 70%, 17vh);
 		box-shadow: 0 12px 30px color-mix(in srgb, #000 35%, transparent);
 	}
 	.now-playing.docked .cover-title {
 		font-size: 1.1rem;
-	}
-	.now-playing.docked .cover-meta {
-		width: min(220px, 70%);
 	}
 
 	.now-playing.stacked .np-body {
