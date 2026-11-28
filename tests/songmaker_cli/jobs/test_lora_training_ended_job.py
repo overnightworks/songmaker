@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from support.job_owner import an_owner
-from support.lora_training_world import patch_worker_calls, seed_queued_lora
+from support.lora_training_world import patch_worker_calls
 from tandem import Liveness
 
 from songmaker_cli.audio_paths import USER_LORAS_DIRNAME
@@ -26,11 +26,6 @@ from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs.lora_training import reconcile_crashed_loras, run_lora_training_job
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import JobOwnerStamp
-
-
-@pytest.fixture
-def seeded(pg_factory, tmp_path: Path) -> dict:
-    return seed_queued_lora(pg_factory, tmp_path)
 
 
 def _fail_the_job_through_the_owner_pass(pg_factory, audio_dir: Path) -> None:
@@ -57,7 +52,12 @@ def _voice_and_audits(session, lora_id: str) -> tuple:
 )
 @pytest.mark.parametrize(
     "trainer_ending",
-    ["recreates-its-output", "finds-its-output-removed", "reports-an-error"],
+    [
+        "recreates-its-output",
+        "recreates-its-output-with-another-mode",
+        "reports-an-error",
+        "cancelled",
+    ],
 )
 def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
     seeded, pg_factory, tmp_path, has_previous_adapter, status_the_owner_pass_leaves,
@@ -81,20 +81,25 @@ def test_a_training_whose_job_ended_while_it_ran_lands_nothing(
         if trainer_ending == "reports-an-error":
             yield ("error", {"error": "trainer lost its output"})
             return
-        reported = str(temporary_dir) if trainer_ending == "finds-its-output-removed" else ""
-        yield ("done", {"result": {"mode": "turbo", "adapter_dir": reported, "num_samples": 3}})
+        if trainer_ending == "cancelled":
+            raise asyncio.CancelledError
+        mode = "sft" if trainer_ending == "recreates-its-output-with-another-mode" else "turbo"
+        yield ("done", {"result": {"mode": mode, "adapter_dir": "", "num_samples": 3}})
 
-    stand_in_output = tmp_path / "stand-in"
-    trainer_output = temporary_dir if trainer_ending == "recreates-its-output" else stand_in_output
+    recreates_its_output = trainer_ending.startswith("recreates-its-output")
+    trainer_output = temporary_dir if recreates_its_output else tmp_path / "stand-in"
+    training = run_lora_training_job(
+        "job-1", seeded["lora_id"], seeded["user_id"],
+        db_factory=pg_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
+        target_mode="turbo", owner=an_owner("o1"),
+        training_config=get_settings().lora_training_config,
+    )
     with patch_worker_calls(str(trainer_output), events=trainer_that_outlives_its_job):
-        asyncio.run(
-            run_lora_training_job(
-                "job-1", seeded["lora_id"], seeded["user_id"],
-                db_factory=pg_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
-                target_mode="turbo", owner=an_owner("o1"),
-                training_config=get_settings().lora_training_config,
-            )
-        )
+        if trainer_ending == "cancelled":
+            with pytest.raises(asyncio.CancelledError):
+                asyncio.run(training)
+        else:
+            asyncio.run(training)
 
     with pg_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])

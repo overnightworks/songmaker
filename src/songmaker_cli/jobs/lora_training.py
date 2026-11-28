@@ -845,20 +845,30 @@ def cleanup_failed_lora_with_factory(
     audio_dir: Path,
     db_factory: sessionmaker[Session],
     error_message: Message,
+    job_id: str,
+    error_type: str,
 ) -> None:
-    """Persist a LoRA failure, then remove its disposable working paths.
+    """Fail a LoRA training's voice and job under one lock of the job's row, then clean up.
 
+    A row that has ended lands no failure: the owner pass that ended it already decided the voice.
     Database failures propagate to the caller.  Filesystem failures are
     logged with their traceback and followed by an orphan-work-dir audit;
     sample audio is never removed.
     """
     with db_factory() as session:
+        if lock_active_job(session, job_id) is None:
+            log.warning("LoRA training job %s ended before its failure landed; dropping it", job_id)
+            return
         cleanup_failed_lora(
             session=session,
             lora_id=lora_id,
             user_id=user_id,
             error_message=error_message,
         )
+        failed = JobStatusUpdate(
+            JobStatus.FAILED, error_message=error_message, error_type=error_type,
+        )
+        update_job_status(session, job_id, failed)
         session.commit()
 
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
@@ -1202,12 +1212,7 @@ def _defer_lora_training_for_generation(
             audio_dir=audio_dir,
             db_factory=db_factory,
             error_message=error_message,
-        )
-        _update_job(
-            db_factory,
-            job_id,
-            JobStatus.FAILED,
-            error_message=error_message,
+            job_id=job_id,
             error_type="generation_queue_timeout",
         )
         return
@@ -1391,12 +1396,7 @@ def _handle_cancelled_lora_training(
         audio_dir=audio_dir,
         db_factory=db_factory,
         error_message=error_message,
-    )
-    _update_job(
-        db_factory,
-        job_id,
-        JobStatus.FAILED,
-        error_message=error_message,
+        job_id=job_id,
         error_type="timeout",
     )
 
@@ -1439,16 +1439,12 @@ def _fail_lora_training(
     lora_id: str,
     user_id: str,
 ) -> None:
-    failure = _sanitize_training_error(exc, job_id)
-    with db_factory() as session:
-        if lock_active_job(session, job_id) is None:
-            log.warning("LoRA training job %s ended before its failure landed; dropping it", job_id)
-            return
-        cleanup_failed_lora(
-            session=session, lora_id=lora_id, user_id=user_id, error_message=failure,
-        )
-        failed = JobStatusUpdate(JobStatus.FAILED, error_message=failure, error_type=error_type)
-        update_job_status(session, job_id, failed)
-        session.commit()
-    if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
-        _log_failed_lora_cleanup(db_factory, audio_dir)
+    cleanup_failed_lora_with_factory(
+        lora_id=lora_id,
+        user_id=user_id,
+        audio_dir=audio_dir,
+        db_factory=db_factory,
+        error_message=_sanitize_training_error(exc, job_id),
+        job_id=job_id,
+        error_type=error_type,
+    )

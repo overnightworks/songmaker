@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from support.job_owner import an_owner
-from support.lora_training_world import FakeWorker, patch_worker_calls, seed_queued_lora
+from support.lora_training_world import FakeWorker, patch_worker_calls
 from support.web_app import SettledFakeAsyncRedis
 from support.wrapper_deps import reserved_gpu_hold
 
@@ -78,11 +78,6 @@ def test_worker_training_started_at_rejects_invalid_worker_values(value: object)
 @pytest.fixture
 def db_factory(pg_factory):
     return pg_factory
-
-
-@pytest.fixture
-def seeded(db_factory, tmp_path: Path) -> dict:
-    return seed_queued_lora(db_factory, tmp_path)
 
 
 def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
@@ -540,6 +535,8 @@ def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
         audio_dir=audio_dir,
         db_factory=db_factory,
         error_message=message("voiceFailure.recorded", cause="testing"),
+        job_id="job-1",
+        error_type="lora_training_error",
     )
     assert not (lora_root / USER_LORA_DATASET_DIRNAME).exists()
     assert (lora_root / USER_LORA_OUTPUT_DIRNAME).exists()
