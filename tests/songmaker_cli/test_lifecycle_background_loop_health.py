@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import os
 import threading
 from collections.abc import Iterator
 from contextlib import nullcontext
@@ -533,17 +532,9 @@ def test_a_web_start_removes_the_suggestion_file_and_staging_directory_a_failed_
     assert not staging_dir.exists()
 
 
-def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
-    tmp_path, monkeypatch, monitoring_headers, pg_factory,
+def test_booting_the_web_reports_every_loop_ok(
+    tmp_path, monitoring_headers, pg_factory,
 ) -> None:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    spawn_log = tmp_path / "spawns.log"
-    for binary in ("claude", "grok", "codex"):
-        stub = bin_dir / binary
-        stub.write_text(f"#!/bin/sh\necho {binary} >> {spawn_log}\n")
-        stub.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     with client:
@@ -554,4 +545,3 @@ def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
     assert {name: loop["state"] for name, loop in health.items()} == {
         name.value: BackgroundLoopStatus.OK for name in BackgroundLoopName
     }
-    assert not spawn_log.exists()

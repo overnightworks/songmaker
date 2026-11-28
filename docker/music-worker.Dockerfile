@@ -21,7 +21,6 @@ RUN groupadd --gid 1000 songmaker \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash songmaker
 RUN chown songmaker:songmaker /app
 USER 1000:1000
-RUN mkdir -p /home/songmaker/.codex
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-build --no-dev --no-install-project \
