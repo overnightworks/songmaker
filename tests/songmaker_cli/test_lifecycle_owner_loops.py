@@ -12,9 +12,15 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 from support.job_owner import an_owner, create_job_of_owner
 from support.loop_ticks import run_ticks_observing_status
-from support.web_app import arrange_fake_async_redis, make_fake_async_redis, settle_owner_leases
+from support.web_app import (
+    arrange_fake_async_redis,
+    make_fake_async_redis,
+    make_fake_redis,
+    settle_owner_leases,
+)
 
 from songmaker_cli import lifecycle
+from songmaker_cli.acestep_state import admitted_key
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cover_runner import cover_staging_path
 from songmaker_cli.db.models import Job
@@ -23,6 +29,7 @@ from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     update_job_status,
 )
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
@@ -60,7 +67,7 @@ def _loop_app(async_redis, db, audio_dir: Path, leases=None) -> SimpleNamespace:
         ctx=SimpleNamespace(
             owner_leases=leases or owner_leases(async_redis),
             kind_leases=every_worker_kind_leases(async_redis),
-            owner_id=OWNER, db=db, audio_dir=audio_dir,
+            owner_id=OWNER, db=db, audio_dir=audio_dir, redis=make_fake_redis(),
         ),
         background_loop_registry=BackgroundLoopRegistry(tuple(BackgroundLoopName)),
     ))
@@ -294,6 +301,32 @@ def test_a_job_the_owner_wrote_after_its_lease_was_read_gone_keeps_running_while
     )
 
 
+def test_the_owner_pass_removes_the_admission_of_the_generation_it_failed(
+    pg_factory, tmp_path,
+) -> None:
+    ended = _running_job_of(pg_factory, ANOTHER)
+    with pg_factory() as session:
+        register_worker(
+            session, worker_id="w1", host="h", port=8001, gpu_id=0, vram_total_gb=24.0,
+        )
+        session.commit()
+    server = make_fake_async_redis()
+    ctx = _loop_app(server, pg_factory, tmp_path).state.ctx
+
+    async def run_the_pass_beside_a_running_generation() -> str:
+        await settle_owner_leases(server)
+        generation = (await owner_leases(server).renew(OWNER)).generation
+        running = _running_job_of(pg_factory, an_owner(OWNER, generation))
+        ctx.redis.sadd(admitted_key("w1"), ended, running)
+        await fail_jobs_of_dead_owners(ctx)
+        return running
+
+    running = asyncio.run(run_the_pass_beside_a_running_generation())
+
+    assert _status_and_error(pg_factory, ended)[0] == JobStatus.FAILED
+    assert ctx.redis.smembers(admitted_key("w1")) == {running}
+
+
 def test_a_job_of_a_generation_this_process_lost_fails_and_its_current_ones_keep_running(
     pg_factory, tmp_path,
 ) -> None:
@@ -309,6 +342,7 @@ def test_a_job_of_a_generation_this_process_lost_fails_and_its_current_ones_keep
         current_job = _running_job_of(pg_factory, an_owner(OWNER, current))
         ctx = SimpleNamespace(
             owner_leases=leases, owner_id=OWNER, db=pg_factory, audio_dir=tmp_path,
+            redis=make_fake_redis(),
         )
         await fail_jobs_of_dead_owners(ctx)
         return (

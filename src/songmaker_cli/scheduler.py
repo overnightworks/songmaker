@@ -722,12 +722,13 @@ async def consume_download_task_stream(
 async def admit_generation_worker(
     *,
     target_mode: str,
+    job_id: str,
     redis: Redis,
     db_factory: sessionmaker[Session],
 ) -> _PickedWorker:
     with db_factory() as session:
         worker = await pick_worker(session, redis, target_mode)
-    if not await admit_generation_occupancy(redis, worker.id):
+    if not await admit_generation_occupancy(redis, worker.id, job_id):
         raise AllWorkersHeld("ACE-Step worker became held before generation admission")
     return worker
 
