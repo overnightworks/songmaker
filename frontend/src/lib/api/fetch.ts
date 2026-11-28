@@ -76,7 +76,7 @@ export class NetworkError extends Error {
 
 /** How a caller's own rulings shape the words `describeFailure` chooses. */
 // eslint-disable-next-line no-restricted-syntax -- transport internals
-interface FailureWording {
+export interface FailureWording {
 	/** Said instead of the fallback when the request got no answer at all. */
 	offline?: string;
 	/** For a caller ruled never to show the server's own detail. */

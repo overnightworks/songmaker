@@ -1,6 +1,6 @@
 import { derived, get, readable, writable, type Readable } from 'svelte/store';
 
-import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
+import { describeFailure, NetworkError, type FailureWording } from '#lib/api/fetch.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 
 /**
@@ -75,10 +75,10 @@ interface UnreachableReloads {
 	 * Records a failed load for `loadFailure` and returns the words it shows
 	 * right now: a lost network stays unnamed while the strip says it or a
 	 * reload is coming, and is named `fallback` once the backoff is spent;
-	 * any other failure stops the reloads and shows the server's reason,
-	 * else `fallback`.
+	 * any other failure stops the reloads and shows the server's reason
+	 * (unless `wording` withholds it), else `fallback`.
 	 */
-	nameLoadFailure(err: unknown, fallback: string): string | null;
+	nameLoadFailure(err: unknown, fallback: string, wording?: FailureWording): string | null;
 	/**
 	 * The words the last named failure shows, or null while it needs none.
 	 * A spent backoff hides again while the strip says the connection is
@@ -153,9 +153,9 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 	return {
 		afterNetworkFailure,
 		afterLoadFailure,
-		nameLoadFailure(err, fallback) {
+		nameLoadFailure(err, fallback, wording) {
 			if (disposed) return null;
-			const named = failureToName(afterLoadFailure(err), err, fallback);
+			const named = failureToName(afterLoadFailure(err), err, fallback, wording);
 			namedFailure.set(named);
 			return shownLoadFailure(named, get(offline));
 		},
@@ -173,9 +173,11 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 function failureToName(
 	reload: UnreachableReload | null,
 	err: unknown,
-	fallback: string
+	fallback: string,
+	wording?: FailureWording
 ): NamedLoadFailure | null {
-	if (reload === null) return { words: describeFailure(err, fallback), networkLost: false };
+	if (reload === null)
+		return { words: describeFailure(err, fallback, wording), networkLost: false };
 	return reload === 'exhausted' ? { words: fallback, networkLost: true } : null;
 }
 

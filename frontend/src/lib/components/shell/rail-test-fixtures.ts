@@ -40,6 +40,12 @@ export function requireButtonContainingText(root: ParentNode, text: string): HTM
 	return button;
 }
 
+export function requireButtonLabelled(root: ParentNode, label: string): HTMLButtonElement {
+	const button = root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+	if (!button) throw new Error(`Expected a button labelled ${label} to be rendered`);
+	return button;
+}
+
 export function findElementByRoleAndName(
 	root: ParentNode,
 	role: string,

@@ -81,11 +81,12 @@
 {:else}
 	<div class="library-root">
 		{#if sync.status === 'error' && sync.error}
-			<div class="sync-status" role="alert">
-				<p>{sync.error}</p>
-				<button class="retry-btn" onclick={() => void retryLoad()}>
-					{pageText('libraryWorkspace.retry')}
-				</button>
+			<div class="load-failure-gutter">
+				<LoadFailure
+					message={sync.error}
+					retryLabel={pageText('libraryWorkspace.retry')}
+					onretry={() => void retryLoad()}
+				/>
 			</div>
 		{/if}
 		<main class="main">
@@ -134,41 +135,5 @@
 		flex-direction: column;
 		overflow-y: auto;
 		overflow-x: hidden;
-	}
-
-	.sync-status {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex: 1;
-		color: var(--text-muted);
-		font-style: italic;
-		flex-direction: column;
-		gap: 16px;
-	}
-
-	.sync-status {
-		color: var(--fail);
-	}
-
-	.sync-status {
-		flex: 0;
-		padding: 12px 16px;
-	}
-
-	.retry-btn {
-		padding: 6px 12px;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		font-size: var(--label-font-size);
-		font-family: var(--font-body);
-		cursor: pointer;
-	}
-
-	.retry-btn:hover {
-		border-color: var(--accent);
-		color: var(--accent);
 	}
 </style>

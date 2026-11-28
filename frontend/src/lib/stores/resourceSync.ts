@@ -849,7 +849,8 @@ export class ResourceSyncController {
 	}
 
 	private showFailure(err: unknown): void {
-		const message = visibleErrorMessage(err);
+		// A ready library's banner names the failure by the catalog; the first-load card keeps the server's reason.
+		const message = visibleErrorMessage(err, this.state.ready);
 		if (message !== null) this.setVisibleError(message);
 	}
 
@@ -973,12 +974,11 @@ async function runLimited<T>(
 	);
 }
 
-// A NetworkError is not this owner's to word: the offline strip says it once
-// (#1039) while the failed work retries on its own, and its browser text
-// ("Failed to fetch") is not copy a musician should read either.
-function visibleErrorMessage(err: unknown): string | null {
+// A NetworkError is not this owner's to word: the offline strip says it once (#1039) while
+// the work retries, and its browser text ("Failed to fetch") is no copy a musician should read.
+function visibleErrorMessage(err: unknown, withholdServerDetail = false): string | null {
 	if (err instanceof NetworkError) return null;
-	return describeFailure(err, pageText('resourceSync.error'));
+	return describeFailure(err, pageText('resourceSync.error'), { withholdServerDetail });
 }
 
 function classifySongRefreshFailure(err: unknown): SongRefreshFailure {

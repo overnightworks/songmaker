@@ -60,7 +60,6 @@ const translated = {
     "rail.settingsNav": "Einstellungsbereiche",
     "rail.libraryNav": "Alben der Bibliothek",
     "rail.libraryLoading": "Alben werden geladen…",
-    "rail.retry": "Erneut versuchen",
     "rail.libraryLoadError": "Deine Bibliothek konnte nicht geladen werden",
     "rail.albumCover": (gaps: { readonly title: string }) => "Album " + gaps.title,
     "rail.trackTakes": (count: number) => ({

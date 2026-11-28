@@ -60,7 +60,6 @@ export type Words = {
     readonly "rail.settingsNav": string;
     readonly "rail.libraryNav": string;
     readonly "rail.libraryLoading": string;
-    readonly "rail.retry": string;
     readonly "rail.libraryLoadError": string;
     readonly "rail.albumCover": (gaps: { readonly title: string }) => string;
     readonly "rail.trackTakes": (count: number) => string;
@@ -1471,7 +1470,6 @@ export const words: Words = {
     "rail.settingsNav": "Settings sections",
     "rail.libraryNav": "Library albums",
     "rail.libraryLoading": "Loading albums…",
-    "rail.retry": "Retry",
     "rail.libraryLoadError": "Couldn't load your library",
     "rail.albumCover": (gaps: { readonly title: string }) => "Album " + gaps.title,
     "rail.trackTakes": (count: number) => ({

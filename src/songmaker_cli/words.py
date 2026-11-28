@@ -62,7 +62,6 @@ type Key = Literal[
     'rail.settingsNav',
     'rail.libraryNav',
     'rail.libraryLoading',
-    'rail.retry',
     'rail.libraryLoadError',
     'rail.albumCover',
     'rail.trackTakes',
@@ -1491,7 +1490,6 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'rail.settingsNav': 'Settings sections',
         'rail.libraryNav': 'Library albums',
         'rail.libraryLoading': 'Loading albums…',
-        'rail.retry': 'Retry',
         'rail.libraryLoadError': "Couldn't load your library",
         'rail.albumCover': 'Album {title}',
         'rail.trackTakes': {
@@ -3024,7 +3022,6 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'rail.settingsNav': 'Einstellungsbereiche',
         'rail.libraryNav': 'Alben der Bibliothek',
         'rail.libraryLoading': 'Alben werden geladen…',
-        'rail.retry': 'Erneut versuchen',
         'rail.libraryLoadError': 'Deine Bibliothek konnte nicht geladen werden',
         'rail.albumCover': 'Album {title}',
         'rail.trackTakes': {
