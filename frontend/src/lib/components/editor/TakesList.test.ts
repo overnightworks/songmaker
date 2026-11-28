@@ -58,10 +58,9 @@ import type { GenerateState } from '#lib/stores/generateAction.ts';
 import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
 import { playTake } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
+import { addGenerationToPlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
 	IDLE,
-	addToPlaylist,
 	clickMenuItem,
 	clickVersion,
 	keep,
@@ -119,7 +118,11 @@ const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {
 
 vi.mock('#lib/stores/playlists.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/playlists.ts')>();
-	return { ...actual, ensurePlaylistsLoaded: vi.fn(async () => undefined) };
+	return {
+		...actual,
+		addGenerationToPlaylist: vi.fn(() => Promise.resolve()),
+		ensurePlaylistsLoaded: vi.fn(async () => undefined)
+	};
 });
 
 const VRAM_CAUSE =
@@ -147,7 +150,7 @@ beforeEach(() => {
 	keep.mockReset();
 	useSeed.mockReset();
 	clickVersion.mockClear();
-	addToPlaylist.mockClear();
+	vi.mocked(addGenerationToPlaylist).mockClear();
 	playlistList.set([{ ...playlist }]);
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
@@ -709,7 +712,7 @@ describe('TakesList', () => {
 		{
 			action: 'adding a take to a playlist',
 			fallback: 'Failed to add',
-			fail: (error: Error) => addToPlaylist.mockRejectedValueOnce(error),
+			fail: (error: Error) => vi.mocked(addGenerationToPlaylist).mockRejectedValueOnce(error),
 			run: async (target: HTMLElement) => {
 				const row = target.querySelector<HTMLElement>('.take-row');
 				if (!row) throw new Error('Expected a take row');

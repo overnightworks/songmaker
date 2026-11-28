@@ -63,7 +63,6 @@
 	import { activeModels, loadActiveModels } from '#lib/stores/presets.ts';
 	import { loras, loadLoras } from '#lib/stores/loras.ts';
 	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
-	import { addGenerationToPlaylist } from '#lib/stores/playlists.ts';
 	import {
 		applyTakeUse,
 		pendingTakeUse,
@@ -318,9 +317,6 @@
 		del: onDeleteGeneration,
 		share: shareTake,
 		unshare: unshareTake,
-		// Plain mutation: the take row that asked for it owns the outcome the
-		// listener sees, success and failure alike (#163/3).
-		addToPlaylist: addGenerationToPlaylist,
 		clickVersion: onVersionClick
 	});
 
