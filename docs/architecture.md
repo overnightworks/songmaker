@@ -1786,7 +1786,8 @@ then their leases through `Leases.state` (`worker_liveness.owner_lease_liveness`
 for that lease lapsed. It fails the active jobs of every `gone` stamp, whether of a web
 process or a worker, with the one
 restart verdict `JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then
-removes the suggestion and staging directory of the covers it ended. The `owner_lapses` loop
+removes the suggestion and staging directory of the covers it ended and fails the voice of each
+training job it failed (`reconcile_crashed_loras()`). The `owner_lapses` loop
 (`Leases.serve_lapses`) runs the same pass as soon as a lease has ended or expired, on the one
 web process that claims the lapse; tandem rides out a refusal of Redis like an outage, so a refusal
 ends no loop and shows as tandem's `lapse_round.ended` warning, never in `owner_lapses`. No lock orders the processes: the failing update is
@@ -2004,8 +2005,8 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
   spurious 429.
 - The reaper terminalizes each stale candidate with a conditional update on its read status and
   heartbeat, so a concurrent heartbeat or terminal completion wins instead of being overwritten.
-- `reconcile_crashed_loras()` runs once at web startup and after the web
-  reaper; MusicWorker calls the same job-owned reconciliation after it
+- `reconcile_crashed_loras()` runs once at web startup, after the web
+  reaper and after the owner pass; MusicWorker calls the same job-owned reconciliation after it
   terminalizes a `lora_training` job. The path locks one active LoRA candidate
   with `skip_locked`, commits its FAILED status (its reason `voiceFailure.crashed`) and one audit
   entry in that transaction, then removes its working files. Every voice failure stores its reason

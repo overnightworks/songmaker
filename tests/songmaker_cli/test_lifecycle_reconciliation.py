@@ -47,16 +47,20 @@ def _create_stuck_lora(
     ctx: AppContext, *,
     lora_id: str, status: LoraStatus,
     job_status: str | None,
+    owner_name: str | None = None,
 ) -> None:
     with ctx.db() as session:
         if session.query(User).filter_by(id="u1").first() is None:
             session.add(User(id="u1", username="u1"))
         job_id = None
         if job_status is not None:
-            session.add(
-                Job(id=f"job-{lora_id}", type=JobType.LORA_TRAINING, status=job_status),
-            )
-            job_id = f"job-{lora_id}"
+            if owner_name is None:
+                job = Job(id=f"job-{lora_id}", type=JobType.LORA_TRAINING, status=job_status)
+                session.add(job)
+            else:
+                job = create_job_of_owner(session, JobType.LORA_TRAINING, an_owner(owner_name))
+                job.status = job_status
+            job_id = job.id
         session.add(
             UserLora(
                 id=lora_id, user_id="u1", name=lora_id, slug=lora_id,
@@ -256,17 +260,10 @@ def test_reaper_tick_reconciles_when_worker_process_died_without_terminalizing_t
 
 
 def test_owner_pass_fails_the_voice_whose_training_job_it_failed(ctx) -> None:
-    with ctx.db() as session:
-        session.add(User(id="u1", username="u1"))
-        job = create_job_of_owner(session, JobType.LORA_TRAINING, an_owner("gone-process"))
-        job.status = JobStatus.RUNNING
-        session.add(
-            UserLora(
-                id="L7", user_id="u1", name="L7", slug="L7",
-                status=LoraStatus.TRAINING, training_job_id=job.id,
-            ),
-        )
-        session.commit()
+    _create_stuck_lora(
+        ctx, lora_id="L7", status=LoraStatus.TRAINING,
+        job_status=JobStatus.RUNNING, owner_name="gone-process",
+    )
     server = make_fake_async_redis()
 
     async def run_the_owner_pass() -> int:
