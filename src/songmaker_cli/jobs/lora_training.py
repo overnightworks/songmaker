@@ -17,7 +17,13 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.audio_paths import all_loras_root, confined_under, lora_relative_root, lora_root
+from songmaker_cli.audio_paths import (
+    all_loras_root,
+    confined_under,
+    lora_owner_root,
+    lora_relative_root,
+    lora_root,
+)
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
@@ -1271,7 +1277,7 @@ def _validated_lora_adapter_handoff(
     audio_dir: Path, user_id: str, tmp_output: Path, worker_result: TrainLoraTaskResultDTO
 ) -> Path:
     reported = worker_result.adapter_dir
-    adapter_src = confined_under(all_loras_root(audio_dir) / user_id, Path(reported))
+    adapter_src = confined_under(lora_owner_root(audio_dir, user_id), Path(reported))
     if adapter_src is None or adapter_src != tmp_output.resolve():
         raise RuntimeError(f"Worker reported unexpected training handoff path: {reported}")
     if not adapter_src.is_dir():
