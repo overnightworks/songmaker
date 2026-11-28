@@ -16,7 +16,6 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.health_types import (
     BackgroundLoopName,
-    BackgroundLoopRegistry,
     BackgroundLoopStatus,
 )
 

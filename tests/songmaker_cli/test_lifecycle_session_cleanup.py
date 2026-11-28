@@ -12,7 +12,6 @@ from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.health_types import (
     BackgroundLoopName,
-    BackgroundLoopRegistry,
     BackgroundLoopStatus,
 )
 from songmaker_cli.lifecycle import _cleanup_sessions, session_cleanup_loop
