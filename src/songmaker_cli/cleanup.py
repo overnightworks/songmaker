@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from songmaker_cli.api_helpers import cleanup_generation_files
-from songmaker_cli.audio_paths import confined_under, lora_owner_root, lora_root
+from songmaker_cli.audio_paths import lora_root
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
@@ -168,14 +168,13 @@ def run_cleanup_expired(
 def _remove_voice_directory(audio_dir: Path, user_id: str, lora_id: str) -> bool:
     """Remove one voice's directory whole; report whether it is gone.
 
-    A directory that does not resolve strictly below its owner's voice directory is not
-    touched, and a removal that fails is logged: the voice's rows stay for the next run.
+    A directory that does not resolve to its own place under the audio root (a symlink
+    anywhere on its path) is not touched, and a removal that fails is logged: the voice's
+    rows stay for the next run.
     """
-    directory = confined_under(
-        lora_owner_root(audio_dir, user_id), lora_root(audio_dir, user_id, lora_id),
-    )
-    if directory is None:
-        log.warning("voice_purge: voice %s has a directory outside its owner's, kept", lora_id)
+    directory = lora_root(audio_dir, user_id, lora_id)
+    if directory.resolve() != lora_root(audio_dir.resolve(), user_id, lora_id):
+        log.warning("voice_purge: voice %s has a directory outside its own place, kept", lora_id)
         return False
     try:
         if directory.exists():

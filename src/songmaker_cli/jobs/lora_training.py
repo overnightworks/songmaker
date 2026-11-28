@@ -17,12 +17,7 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.audio_paths import (
-    confined_under,
-    lora_owner_root,
-    lora_relative_root,
-    lora_root,
-)
+from songmaker_cli.audio_paths import confined_under, lora_owner_root, lora_relative_root, lora_root
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
