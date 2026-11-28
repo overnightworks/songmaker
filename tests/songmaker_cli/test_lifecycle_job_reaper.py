@@ -95,7 +95,7 @@ def _job_status(ctx: AppContext, job_id: str) -> str:
 @pytest.fixture
 def admitted_jobs(ctx) -> None:
     """A worker whose queue depth holds a job the reaper fails, one it fails not, and one already
-    terminal, by job id."""
+    terminal or deleted, by job id."""
     now = datetime.now(timezone.utc)
     stale = _dead_process_time(now, QUEUED_JOB_STALE_THRESHOLD_SECONDS)
     _add_job(ctx, job_id="stale", job_type=JobType.CHAT, status=JobStatus.QUEUED,
@@ -108,7 +108,7 @@ def admitted_jobs(ctx) -> None:
             session, worker_id="w1", host="h", port=8001, gpu_id=0, vram_total_gb=24.0,
         )
         session.commit()
-    ctx.redis.sadd(admitted_key("w1"), "stale", "live", "failed-by-submission")
+    ctx.redis.sadd(admitted_key("w1"), "stale", "live", "failed-by-submission", "deleted")
 
 
 @pytest.mark.parametrize(

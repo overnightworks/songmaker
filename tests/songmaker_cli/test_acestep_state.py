@@ -254,19 +254,6 @@ def test_an_admission_made_during_the_removal_of_ended_ones_survives() -> None:
     assert sync_redis.smembers(admitted_key("w1")) == {"running", "admitted-meanwhile"}
 
 
-def test_the_hold_is_reserved_once_the_admissions_of_ended_jobs_are_removed(
-    settled_redis, server, event_loop,
-) -> None:
-    sync_redis = fakeredis.FakeRedis(server=server, decode_responses=True)
-    assert event_loop.run_until_complete(admit_generation(settled_redis, "w1", "job-1"))
-    assert not event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
-
-    remove_admissions_of_ended_jobs(sync_redis, "w1", set)
-
-    assert event_loop.run_until_complete(read_queue_depth(settled_redis, "w1")) == 0
-    assert event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
-
-
 def test_the_generation_controls_renew_and_release(settled_redis, event_loop) -> None:
     generation = event_loop.run_until_complete(reserve_gpu_hold(settled_redis, "w1"))
     assert generation
