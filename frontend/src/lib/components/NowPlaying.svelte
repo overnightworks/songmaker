@@ -342,7 +342,8 @@
 				>
 					{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span>
 				</button>
-				<span class="take-label"><span aria-hidden="true">·</span> {takeLabel}</span>
+				<span aria-hidden="true">·</span>
+				<span class="take-label">{takeLabel}</span>
 			</span>
 		{:else}
 			<span class="subtitle-text">{[albumLine, takeLabel].filter(Boolean).join(' · ')}</span>
