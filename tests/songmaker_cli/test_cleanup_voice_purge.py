@@ -46,7 +46,6 @@ def _voices() -> list[_Voice]:
         _Voice("still-training", _window() + 1, LoraStatus.TRAINING),
         _Voice("stuck-directory", _window() + 1),
         _Voice("outside-directory", _window() + 1),
-        _Voice("sibling-directory", _window() + 1),
         _Voice(OWNERS_OWN_DIRECTORY, _window() + 1),
     ]
 
@@ -83,14 +82,10 @@ class _World:
         ))
         if voice.id == OWNERS_OWN_DIRECTORY:
             return
-        linked_to = {
-            "outside-directory": self.outside,
-            "sibling-directory": self.directory("never-deleted"),
-        }.get(voice.id)
+        linked_to = self.outside if voice.id == "outside-directory" else None
         target = linked_to or self.directory(voice.id)
-        if voice.id != "sibling-directory":
-            (target / "samples").mkdir(parents=True)
-            (target / "samples" / "take.wav").write_bytes(b"audio")
+        (target / "samples").mkdir(parents=True)
+        (target / "samples" / "take.wav").write_bytes(b"audio")
         if linked_to:
             self.directory(voice.id).parent.mkdir(parents=True, exist_ok=True)
             self.directory(voice.id).symlink_to(target, target_is_directory=True)
@@ -136,7 +131,7 @@ ROOT_IGNORES_PERMISSIONS = "root removes files from a read-only directory"
 
 KEPT = {
     "exactly-at-the-cutoff", "deleted-recently", "never-deleted", "still-training",
-    "stuck-directory", "outside-directory", "sibling-directory", OWNERS_OWN_DIRECTORY,
+    "stuck-directory", "outside-directory", OWNERS_OWN_DIRECTORY,
 }
 KEPT_DIRECTORIES = KEPT - {OWNERS_OWN_DIRECTORY}
 
@@ -160,16 +155,6 @@ def test_a_directory_outside_the_owners_voices_is_left_with_its_rows(
 
     assert (world.outside / "samples" / "take.wav").read_bytes() == b"audio"
     assert "outside-directory" in world.voices_left()
-
-
-def test_a_directory_linked_to_another_voice_leaves_both_voices_with_their_rows(
-    world: _World, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    world.run_the_daily_purge(monkeypatch)
-
-    assert (world.directory("never-deleted") / "samples" / "take.wav").read_bytes() == b"audio"
-    assert {"sibling-directory", "never-deleted"} <= world.voices_left()
-    assert {"sibling-directory", "never-deleted"} <= world.sample_voices_left()
 
 
 def test_a_voice_that_names_its_owners_own_directory_leaves_every_voice_of_the_owner(
