@@ -6,6 +6,8 @@ import asyncio
 import logging
 import os
 import shutil
+import tempfile
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -206,6 +208,58 @@ def test_a_voice_of_a_linked_owner_directory_leaves_the_directory_it_links_to_wi
     world.run_the_daily_purge(monkeypatch)
 
     assert (elsewhere / voice_id / "samples" / "take.wav").read_bytes() == b"audio"
+    assert voice_id in world.voices_left()
+
+
+@pytest.fixture
+def away():
+    """A directory beside the audio root with a short absolute path, as an owner id needs."""
+    directory = Path(tempfile.mkdtemp())
+    try:
+        yield directory
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+def _hostile_absolute_owner(world: _World, away: Path) -> tuple[str, str, Path]:
+    return str(away), "x", away / "x"
+
+
+def _owner_dot_naming_another_owners_directory(world: _World, away: Path) -> tuple[str, str, Path]:
+    return ".", OWNER, world.directory("never-deleted")
+
+
+def _voice_id_dot_slash_naming_a_live_voice(world: _World, away: Path) -> tuple[str, str, Path]:
+    return OWNER, "./never-deleted", world.directory("never-deleted")
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        pytest.param(_hostile_absolute_owner, id="absolute-owner-id"),
+        pytest.param(_owner_dot_naming_another_owners_directory, id="dot-owner-id"),
+        pytest.param(_voice_id_dot_slash_naming_a_live_voice, id="dot-slash-voice-id"),
+    ],
+)
+def test_a_voice_whose_ids_join_to_a_directory_that_is_not_its_own_leaves_that_directory(
+    world: _World, away: Path, monkeypatch: pytest.MonkeyPatch, hostile,
+) -> None:
+    owner_id, voice_id, victim = hostile(world, away)
+    (victim / "kept.txt").parent.mkdir(parents=True, exist_ok=True)
+    (victim / "kept.txt").write_bytes(b"audio")
+    with world.pg_factory() as session:
+        if session.get(User, owner_id) is None:
+            session.add(User(id=owner_id, username=uuid.uuid4().hex))
+            session.flush()
+        session.add(UserLora(
+            id=voice_id, user_id=owner_id, name="hostile", slug="hostile",
+            status=LoraStatus.READY, deleted_at=NOW - timedelta(days=_window() + 1),
+        ))
+        session.commit()
+
+    world.run_the_daily_purge(monkeypatch)
+
+    assert (victim / "kept.txt").read_bytes() == b"audio"
     assert voice_id in world.voices_left()
 
 

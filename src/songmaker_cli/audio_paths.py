@@ -36,6 +36,15 @@ def confined_under(root: Path, path: Path) -> Path | None:
     return resolved_path
 
 
+def is_plain_path_component(name: str) -> bool:
+    """Whether ``name`` is exactly one ordinary path component.
+
+    Joining anything else onto a directory can leave it: an absolute name replaces the
+    directory, and ``.``, ``..``, a slash or a leading ``./`` reach a sibling or a parent.
+    """
+    return name not in {"", ".", ".."} and PurePosixPath(name).parts == (name,)
+
+
 def _lora_owner_relative_root(user_id: str) -> PurePosixPath:
     return PurePosixPath(USER_LORAS_DIRNAME) / user_id
 
